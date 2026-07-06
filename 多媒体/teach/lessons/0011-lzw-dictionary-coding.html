@@ -87,6 +87,17 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -190,6 +201,126 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
   </div>
 </div>
 
+<div class="figure"><div class="figure-body">
+<div class="fig-title">压缩:输入怎样被切成短语并吐码</div>
+<svg viewBox='0 0 600 185' xmlns='http://www.w3.org/2000/svg' style='width:100%;max-width:600px;height:auto;display:block;margin:0 auto'>
+<text x='8' y='46' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='10' fill='#7a7268'>码字</text>
+<text x='8' y='102' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='10' fill='#7a7268'>输入</text>
+<text x='8' y='154' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='10' fill='#7a7268'>新增</text>
+<rect x='62' y='78' width='34' height='36' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<text x='79.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>A</text>
+<rect x='64.0' y='30.0' width='30' height='24' rx='3' fill='#7c2233'/>
+<text x='79.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#f5efe4'>1</text>
+<line x1='79.0' y1='54.0' x2='79.0' y2='78.0' stroke='#a14958' stroke-width='1'/>
+<text x='79.0' y='154.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='11' fill='#4a6e3a'>AB=4</text>
+<line x1='79.0' y1='114.0' x2='79.0' y2='140.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='96' y='78' width='34' height='36' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='113.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>B</text>
+<rect x='98.0' y='30.0' width='30' height='24' rx='3' fill='#7c2233'/>
+<text x='113.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#f5efe4'>2</text>
+<line x1='113.0' y1='54.0' x2='113.0' y2='78.0' stroke='#a14958' stroke-width='1'/>
+<text x='113.0' y='154.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='11' fill='#4a6e3a'>BA=5</text>
+<line x1='113.0' y1='114.0' x2='113.0' y2='140.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='130' y='78' width='68' height='36' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<text x='147.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>A</text>
+<line x1='164' y1='78' x2='164' y2='114' stroke='#c9bda5' stroke-width='0.8' stroke-dasharray='2 2'/>
+<text x='181.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>B</text>
+<rect x='149.0' y='30.0' width='30' height='24' rx='3' fill='#7c2233'/>
+<text x='164.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#f5efe4'>4</text>
+<line x1='164.0' y1='54.0' x2='164.0' y2='78.0' stroke='#a14958' stroke-width='1'/>
+<text x='164.0' y='154.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='11' fill='#4a6e3a'>ABB=6</text>
+<line x1='164.0' y1='114.0' x2='164.0' y2='140.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='198' y='78' width='68' height='36' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='215.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>B</text>
+<line x1='232' y1='78' x2='232' y2='114' stroke='#c9bda5' stroke-width='0.8' stroke-dasharray='2 2'/>
+<text x='249.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>A</text>
+<rect x='217.0' y='30.0' width='30' height='24' rx='3' fill='#7c2233'/>
+<text x='232.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#f5efe4'>5</text>
+<line x1='232.0' y1='54.0' x2='232.0' y2='78.0' stroke='#a14958' stroke-width='1'/>
+<text x='232.0' y='154.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='11' fill='#4a6e3a'>BAB=7</text>
+<line x1='232.0' y1='114.0' x2='232.0' y2='140.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='266' y='78' width='34' height='36' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<text x='283.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>B</text>
+<rect x='268.0' y='30.0' width='30' height='24' rx='3' fill='#7c2233'/>
+<text x='283.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#f5efe4'>2</text>
+<line x1='283.0' y1='54.0' x2='283.0' y2='78.0' stroke='#a14958' stroke-width='1'/>
+<text x='283.0' y='154.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='11' fill='#4a6e3a'>BC=8</text>
+<line x1='283.0' y1='114.0' x2='283.0' y2='140.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='300' y='78' width='34' height='36' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='317.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>C</text>
+<rect x='302.0' y='30.0' width='30' height='24' rx='3' fill='#7c2233'/>
+<text x='317.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#f5efe4'>3</text>
+<line x1='317.0' y1='54.0' x2='317.0' y2='78.0' stroke='#a14958' stroke-width='1'/>
+<text x='317.0' y='154.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='11' fill='#4a6e3a'>CA=9</text>
+<line x1='317.0' y1='114.0' x2='317.0' y2='140.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='334' y='78' width='68' height='36' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<text x='351.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>A</text>
+<line x1='368' y1='78' x2='368' y2='114' stroke='#c9bda5' stroke-width='0.8' stroke-dasharray='2 2'/>
+<text x='385.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>B</text>
+<rect x='353.0' y='30.0' width='30' height='24' rx='3' fill='#7c2233'/>
+<text x='368.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#f5efe4'>4</text>
+<line x1='368.0' y1='54.0' x2='368.0' y2='78.0' stroke='#a14958' stroke-width='1'/>
+<text x='368.0' y='154.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='11' fill='#4a6e3a'>ABA=10</text>
+<line x1='368.0' y1='114.0' x2='368.0' y2='140.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='402' y='78' width='102' height='36' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='419.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>A</text>
+<line x1='436' y1='78' x2='436' y2='114' stroke='#c9bda5' stroke-width='0.8' stroke-dasharray='2 2'/>
+<text x='453.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>B</text>
+<line x1='470' y1='78' x2='470' y2='114' stroke='#c9bda5' stroke-width='0.8' stroke-dasharray='2 2'/>
+<text x='487.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>B</text>
+<rect x='438.0' y='30.0' width='30' height='24' rx='3' fill='#7c2233'/>
+<text x='453.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#f5efe4'>6</text>
+<line x1='453.0' y1='54.0' x2='453.0' y2='78.0' stroke='#a14958' stroke-width='1'/>
+<text x='453.0' y='154.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='11' fill='#4a6e3a'>ABBA=11</text>
+<line x1='453.0' y1='114.0' x2='453.0' y2='140.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='504' y='78' width='34' height='36' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<text x='521.0' y='102.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='17' fill='#1a1816'>A</text>
+<rect x='506.0' y='30.0' width='30' height='24' rx='3' fill='#7c2233'/>
+<text x='521.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#f5efe4'>1</text>
+<line x1='521.0' y1='54.0' x2='521.0' y2='78.0' stroke='#a14958' stroke-width='1'/>
+<text x='521.0' y='154.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='11' fill='#7a7268'>— (EOF)</text>
+<line x1='521.0' y1='114.0' x2='521.0' y2='140.0' stroke='#c9bda5' stroke-width='0.8'/>
+<text x='300.0' y='179' text-anchor='middle' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='11' fill='#4a4540'>码字流: <tspan font-family='SF Mono,Menlo,Consolas,monospace' fill='#7c2233' font-weight='700'>1 2 4 5 2 3 4 6 1</tspan>  (14 字符 &#8594; 9 码)</text>
+</svg>
+</div><div class="figure-cap"><b>贪心切分。</b>算法把输入串从左到右切成一段段"已在字典里的最长短语"(底部虚线为短语内的单字符),每切出一段就<b>吐一个码字</b>(顶部红块),同时把"该短语 + 下一个字符"登记为新字典项(下方绿字,码号 4→11 连续递增)。EOF 处最后一段 <code>A</code> 无后继字符,故不再新增字典项。</div></div>
+
+<div class="figure"><div class="figure-body">
+<div class="fig-title">压缩效果:符号个数对比</div>
+<svg viewBox='0 0 560 170' xmlns='http://www.w3.org/2000/svg' style='width:100%;max-width:520px;height:auto;display:block;margin:0 auto'>
+<rect x='150' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='177' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='204' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='231' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='258' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='285' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='312' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='339' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='366' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='393' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='420' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='447' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='474' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<rect x='501' y='40' width='25' height='34' fill='#ddd2bb' stroke='#c9bda5' stroke-width='1'/>
+<text x='138' y='55.0' text-anchor='end' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='12' font-weight='700' fill='#1a1816'>原始串</text>
+<text x='138' y='70.0' text-anchor='end' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='10' fill='#7a7268'>14 字符</text>
+<text x='536' y='62.0' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='12' fill='#4a4540'>14</text>
+<rect x='150' y='95' width='25' height='34' fill='#7c2233' stroke='#7c2233' stroke-width='1'/>
+<rect x='177' y='95' width='25' height='34' fill='#7c2233' stroke='#7c2233' stroke-width='1'/>
+<rect x='204' y='95' width='25' height='34' fill='#7c2233' stroke='#7c2233' stroke-width='1'/>
+<rect x='231' y='95' width='25' height='34' fill='#7c2233' stroke='#7c2233' stroke-width='1'/>
+<rect x='258' y='95' width='25' height='34' fill='#7c2233' stroke='#7c2233' stroke-width='1'/>
+<rect x='285' y='95' width='25' height='34' fill='#7c2233' stroke='#7c2233' stroke-width='1'/>
+<rect x='312' y='95' width='25' height='34' fill='#7c2233' stroke='#7c2233' stroke-width='1'/>
+<rect x='339' y='95' width='25' height='34' fill='#7c2233' stroke='#7c2233' stroke-width='1'/>
+<rect x='366' y='95' width='25' height='34' fill='#7c2233' stroke='#7c2233' stroke-width='1'/>
+<text x='138' y='110.0' text-anchor='end' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='12' font-weight='700' fill='#7c2233'>LZW 码</text>
+<text x='138' y='125.0' text-anchor='end' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='10' fill='#7a7268'>9 码字</text>
+<text x='401' y='117.0' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='12' fill='#7c2233'>9</text>
+<text x='280.0' y='154' text-anchor='middle' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='13' fill='#1a1816'>压缩比 = 14 / 9 &#8776; <tspan font-weight='700' fill='#4a6e3a'>1.56</tspan></text>
+<text x='280.0' y='168' text-anchor='middle' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='10' fill='#7a7268'>(条数即符号个数;串越长、重复越多,LZW 越省)</text>
+</svg>
+</div><div class="figure-cap"><b>怎么读。</b>每个方块是一个待存储的符号:原始串 14 个字符,LZW 后 9 个码字。<b>条数越短越省</b>。注意压缩比按"符号个数"算得 1.56;真实比特数还取决于码字位宽(码字定长、通常比一个字节的 8 位更宽),故短串未必真省——LZW 的收益随<b>串越长、重复片段越多</b>而放大。</div></div>
+
 <div class="worked">
   <div class="worked-head">Part B · 解压(还原,验证无损)</div>
   <div class="worked-body">
@@ -215,6 +346,80 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     </div>
   </div>
 </div>
+
+<div class="figure"><div class="figure-body">
+<div class="fig-title">解压:码字流如何重建原串与字典</div>
+<svg viewBox='0 0 600 185' xmlns='http://www.w3.org/2000/svg' style='width:100%;max-width:600px;height:auto;display:block;margin:0 auto'>
+<text x='8' y='48' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='10' fill='#7a7268'>读码</text>
+<text x='8' y='123' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='10' fill='#7a7268'>输出</text>
+<text x='8' y='164' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='10' fill='#7a7268'>重建</text>
+<rect x='34.0' y='31.0' width='52' height='26' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='1.4'/>
+<text x='60.0' y='49.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#7c2233'>1</text>
+<line x1='60.0' y1='57.0' x2='60.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar2)'/>
+<rect x='34.0' y='89.0' width='52' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='60.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='13' fill='#1a1816'>A</text>
+<text x='60.0' y='164.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='10' fill='#7a7268'>—</text>
+<line x1='60.0' y1='119.0' x2='60.0' y2='151.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='94.0' y='31.0' width='52' height='26' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='1.4'/>
+<text x='120.0' y='49.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#7c2233'>2</text>
+<line x1='120.0' y1='57.0' x2='120.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar2)'/>
+<rect x='94.0' y='89.0' width='52' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='120.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='13' fill='#1a1816'>B</text>
+<text x='120.0' y='164.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='10' fill='#4a6e3a'>AB=4</text>
+<line x1='120.0' y1='119.0' x2='120.0' y2='151.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='154.0' y='31.0' width='52' height='26' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='1.4'/>
+<text x='180.0' y='49.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#7c2233'>4</text>
+<line x1='180.0' y1='57.0' x2='180.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar2)'/>
+<rect x='154.0' y='89.0' width='52' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='180.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='13' fill='#1a1816'>AB</text>
+<text x='180.0' y='164.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='10' fill='#4a6e3a'>BA=5</text>
+<line x1='180.0' y1='119.0' x2='180.0' y2='151.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='214.0' y='31.0' width='52' height='26' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='1.4'/>
+<text x='240.0' y='49.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#7c2233'>5</text>
+<line x1='240.0' y1='57.0' x2='240.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar2)'/>
+<rect x='214.0' y='89.0' width='52' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='240.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='13' fill='#1a1816'>BA</text>
+<text x='240.0' y='164.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='10' fill='#4a6e3a'>ABB=6</text>
+<line x1='240.0' y1='119.0' x2='240.0' y2='151.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='274.0' y='31.0' width='52' height='26' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='1.4'/>
+<text x='300.0' y='49.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#7c2233'>2</text>
+<line x1='300.0' y1='57.0' x2='300.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar2)'/>
+<rect x='274.0' y='89.0' width='52' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='300.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='13' fill='#1a1816'>B</text>
+<text x='300.0' y='164.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='10' fill='#4a6e3a'>BAB=7</text>
+<line x1='300.0' y1='119.0' x2='300.0' y2='151.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='334.0' y='31.0' width='52' height='26' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='1.4'/>
+<text x='360.0' y='49.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#7c2233'>3</text>
+<line x1='360.0' y1='57.0' x2='360.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar2)'/>
+<rect x='334.0' y='89.0' width='52' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='360.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='13' fill='#1a1816'>C</text>
+<text x='360.0' y='164.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='10' fill='#4a6e3a'>BC=8</text>
+<line x1='360.0' y1='119.0' x2='360.0' y2='151.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='394.0' y='31.0' width='52' height='26' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='1.4'/>
+<text x='420.0' y='49.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#7c2233'>4</text>
+<line x1='420.0' y1='57.0' x2='420.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar2)'/>
+<rect x='394.0' y='89.0' width='52' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='420.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='13' fill='#1a1816'>AB</text>
+<text x='420.0' y='164.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='10' fill='#4a6e3a'>CA=9</text>
+<line x1='420.0' y1='119.0' x2='420.0' y2='151.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='454.0' y='31.0' width='52' height='26' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='1.4'/>
+<text x='480.0' y='49.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#7c2233'>6</text>
+<line x1='480.0' y1='57.0' x2='480.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar2)'/>
+<rect x='454.0' y='89.0' width='52' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='480.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='13' fill='#1a1816'>ABB</text>
+<text x='480.0' y='164.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='10' fill='#4a6e3a'>ABA=10</text>
+<line x1='480.0' y1='119.0' x2='480.0' y2='151.0' stroke='#c9bda5' stroke-width='0.8'/>
+<rect x='514.0' y='31.0' width='52' height='26' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='1.4'/>
+<text x='540.0' y='49.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' font-weight='700' fill='#7c2233'>1</text>
+<line x1='540.0' y1='57.0' x2='540.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar2)'/>
+<rect x='514.0' y='89.0' width='52' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='540.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='13' fill='#1a1816'>A</text>
+<text x='540.0' y='164.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='10' fill='#4a6e3a'>ABBA=11</text>
+<line x1='540.0' y1='119.0' x2='540.0' y2='151.0' stroke='#c9bda5' stroke-width='0.8'/>
+<defs><marker id='ar2' markerWidth='7' markerHeight='7' refX='5' refY='3' orient='auto'><path d='M0,0 L6,3 L0,6 z' fill='#7a7268'/></marker></defs>
+<text x='300.0' y='179' text-anchor='middle' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='11' fill='#4a4540'>拼接输出 = <tspan font-family='SF Mono,Menlo,Consolas,monospace' fill='#4a6e3a' font-weight='700'>ABABBABCABABBA</tspan>  &#10003; 无损还原</text>
+</svg>
+</div><div class="figure-cap"><b>对称还原。</b>解压端依次读码(红框),每个码查表输出对应短语(灰框),并把"上次输出的串 + 本次短语的<b>首字符</b>"登记为新字典项(下方绿字)。重建出的字典 (AB=4…ABBA=11) 与压缩端<b>逐项一致</b>——这正是字典无需随数据传输的原因。</div></div>
 
 <p><strong>压缩与解压的对称性:</strong>两边都在"输出一个已知串之后,才把'该串 + 下一个字符'加入字典"。压缩端的"下一个字符"是它当前正读到的 c;解压端的"下一个字符"是下一个 entry 的首字符。规则同源,字典自然同步。</p>
 </section>
@@ -256,6 +461,37 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     </div>
   </details>
 </div>
+
+<div class="figure"><div class="figure-body">
+<div class="fig-title">经典陷阱:解压端的异常情形 (以本页自测题 ABABABA 为例)</div>
+<svg viewBox='0 0 560 210' xmlns='http://www.w3.org/2000/svg' style='width:100%;max-width:520px;height:auto;display:block;margin:0 auto'>
+<defs><marker id='ar4' markerWidth='7' markerHeight='7' refX='5' refY='3' orient='auto'><path d='M0,0 L6,3 L0,6 z' fill='#7a7268'/></marker></defs>
+<rect x='113.0' y='28.0' width='64' height='28' rx='3' fill='#f5efe4' stroke='#a14958' stroke-width='1.3'/>
+<text x='145.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='15' font-weight='700' fill='#7c2233'>1</text>
+<line x1='145.0' y1='56.0' x2='145.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar4)'/>
+<rect x='113.0' y='89.0' width='64' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='145.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' fill='#1a1816'>A</text>
+<rect x='203.0' y='28.0' width='64' height='28' rx='3' fill='#f5efe4' stroke='#a14958' stroke-width='1.3'/>
+<text x='235.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='15' font-weight='700' fill='#7c2233'>2</text>
+<line x1='235.0' y1='56.0' x2='235.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar4)'/>
+<rect x='203.0' y='89.0' width='64' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='235.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' fill='#1a1816'>B</text>
+<rect x='293.0' y='28.0' width='64' height='28' rx='3' fill='#f5efe4' stroke='#a14958' stroke-width='1.3'/>
+<text x='325.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='15' font-weight='700' fill='#7c2233'>3</text>
+<line x1='325.0' y1='56.0' x2='325.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar4)'/>
+<rect x='293.0' y='89.0' width='64' height='30' rx='2' fill='#ebe3d3' stroke='#c9bda5' stroke-width='1'/>
+<text x='325.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' fill='#1a1816'>AB</text>
+<rect x='383.0' y='28.0' width='64' height='28' rx='3' fill='#f5efe4' stroke='#7c2233' stroke-width='2.2'/>
+<text x='415.0' y='47.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='15' font-weight='700' fill='#7c2233'>5</text>
+<line x1='415.0' y1='56.0' x2='415.0' y2='86.0' stroke='#7a7268' stroke-width='1' marker-end='url(#ar4)'/>
+<rect x='383.0' y='89.0' width='64' height='30' rx='2' fill='#f2e3c8' stroke='#c19a3e' stroke-width='2'/>
+<text x='415.0' y='109.0' text-anchor='middle' font-family='SF Mono,Menlo,Consolas,monospace' font-size='14' fill='#1a1816'>ABA</text>
+<text x='415.0' y='20.0' text-anchor='middle' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='11' font-weight='700' fill='#7c2233'>码 5 还没入典!</text>
+<rect x='40' y='138' width='480' height='58' rx='4' fill='#ebe3d3' stroke='#c19a3e' stroke-width='1.4'/>
+<text x='54' y='160' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='12' font-weight='700' fill='#7c2233'>异常情形 (cScSc):当前码 = 即将新建的字典号</text>
+<text x='54' y='179' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif' font-size='12' fill='#4a4540'>规则:entry = 上次串 s + s 的首字符。此处 s=AB &#8594; entry = AB + A = <tspan font-family='SF Mono,Menlo,Consolas,monospace' fill='#7c2233' font-weight='700'>ABA</tspan></text>
+</svg>
+</div><div class="figure-cap"><b>cScSc 情形。</b>把 <code>ABABABA</code> 压成码流 <code>1 2 3 5</code> 后解压,读到第 4 个码 <b>5</b> 时字典里还没有 5 号项——这是唯一的异常:<b>当前码正好等于即将新建的字典号</b>。此时不能查表,改用公式 <code>entry = 上次串 s + s 的首字符</code>,即 <code>AB + A = ABA</code>,再把它登记为 5 号。凡是"某字符串紧接着以自己开头重复出现"就会触发,考试务必单独检查这一步。</div></div>
 
 <div class="nextstep">
   <strong>下一步 →</strong> 进入 <a href="0012-arithmetic-coding.html">0012 · 算术编码(区间细分)</a>,换一种把"整条消息压成一个小数区间"的熵编码,真题里和 LZW 一样是高频计算题。

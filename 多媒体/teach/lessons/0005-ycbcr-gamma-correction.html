@@ -86,6 +86,18 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 190px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-img { width: 100%; max-width: 190px; border: 1px solid var(--rule); border-radius: 2px; display:block; margin:0 auto; image-rendering:auto; }
+.pipe { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px; font-family:var(--sans); font-size:12px; }
+.pipe .box { border:1px solid var(--ink); background:var(--paper); padding:8px 10px; border-radius:3px; max-width:150px; }
+.pipe .op { color:var(--accent); font-weight:700; font-family:var(--mono); }
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -121,6 +133,18 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <div class="intuition">
   <span class="tag-label">直觉类比</span>
   <p>把一张彩色照片想成一幅<strong>素描 + 一层上色</strong>:素描(明暗轮廓)决定你能不能看清人脸、文字、边缘;上色(色彩)只是往里填颜料。人眼对素描极其敏锐,对上色却相当迟钝——把上色画糊一点你几乎看不出。<strong>YCbCr 就是把照片拆成"素描(Y)"和"两层上色(Cb、Cr)"</strong>,于是我们可以放心地把上色那两层压得很狠,画质却几乎不掉。</p>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col"><div class="fig-title">原图 (RGB)</div><img class="fig-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACWCAIAAAAUvlBOAAAFY0lEQVR4nO3cy29VVRTH8b1vT2laHiPGjvwL/AOMiUITtTh35KSoMWFEwNoCpe0FHUq00DZGov4DGDHxGWN8TAjge+LIqWi0rRjo45rmJKUqPatd96yzH/f7yRkB9/Sw+7trr73Pude/+OmvDqhbq/YzAs65wjMMMFB4kgUDTIUwQcWCCXosmCi8o8lC/QpyBQtMhTBB8w4TVCyYoMeCCVaFMMFUCBM0771i4sBT///DmcUrRj/OT3/xm9GpEW2eGkiYn/mSYOVpfP+OIrVVe6m2eLW829h758hsBMZ3n6oyi7Vdw7mvfq8rpIjB2L4j3Z/k/PK7XZ6B57GyMlZHqmo5D9sNuL8uH3rxL3/NVJiJk3vrKVebXvlLPyEyFWbiZN2p6vKcbJCiivqzNmw35HCcGKq/XJVODB3RXRI3oSHQPbzOYzOQqGZDpsLkj+ODI87S8cER1VTIh3QgUYSEDVLIFMWHHgs7oKpYuc2FA+3hO+MfhL6KrChCklvzPtAeLrMV/Ep8U0cDer1575/ZSFVpT3t4ZYK6VQ9FSPyr1/5weUXqP3ohXsf2PGl38gt331O8KoeKVUwPV2du9VT+2bKjS0jyPVZ1qkrFdOYtlynlVb12/U+XrNbU4Z3/4/XTH7p8vVA8YXHa11ev6l5YuB6I1NaX5B2veCQ5FSpSde8/PHU4+PV7g2NWW1oqzK5e1V/S7I3UpsKz+lTdcybPuvV8X20T4sW1rpLa6sVU1XgebMNfvJlGxepMmkTBT+ZWup5r1VC0Lq13O7H6SykEa90mVaVWdtlyzj2rjddc15Eq+bmbiy5ua5OHrH9E3+RHLjtHW4/v9iXz6+/X9dP93DdRB2vtjHmqSn1nM8yWc+6o31G85ju1Rark52MN1mpTkdqqyDRezrnR+yVsoe48bfIL38YYrJXTAVJV6p/KNlu9vkEaMFVlpoOPgE//aIW/hH8fd4OmqrRxDaHHwSV++De+W3JxuHPqMReZgemPQ19CqmKZCiNMVZn14CPjEz3e/D58xfp7IsZUbRqcoW4leK8w8lQlcYUR8pd/CFaxbo8n9gsbalO6ou+xkktV+U4I37u4RI63flxu/je0/NKjLln7zn0S+hISEKDHSjpVGVx/M/zbDVaspbx+JfspXdvz7/zUULAWx6pS9dCtFRel6wf7K/72wHmmxdDBqvbg6MMuSj8vfB76EpKUwyehTTE+OnzxmoD3nU6G349VL8ZHh2/0k/C+y2kqfOCy8LGcX55p6KM1cY5P/GjeBTTvWVWseDA+OvRYEpKlwqpQwKpQh6lQQMHSoXkX0Lyn+mgyskTFElCxdOixBPRYOoXnLVmJ8cnqW5Mbu2MDI0yFAqZCHZp3AZ2CDtsNMEHFElCxeq7HunD71m5fcmzo4G5fku74hMVNaAE3oXV4bEZCyeq1qbAZjI8OzbuA5l2HiiWgYunQY0lIlgqrQgGrQh2mQgEFS4fmXUDzrsO9QpigYgmoWDr0WAJ6LJ3iymcjLgJPu0hFMj7JKTqdTuhriBrjo1OQq2qMj07ByAlIlkrBRFiN8dEpGDkByVKheRfQvOtQsSRULBV6LAG50mFVKGFVqMI+loBc6fB0A0ywKhSwKtRhKhQwFSqDxciRLAtsNwjYbtDxo3OPKF8KbI/mHSa4pQMT9FgwwaoQJtjHgglu6cAEq0KYYCqECZp3mGC7ASbYIIUJmneYoGLBBD0WTLAqhAn2sWCCWzowwaoQJpgKYYLmHSbYboAJNkhhguYdJqhYMEGPBROsCmGCfSyY4JYOTLAqhAmmQpigeYcJthtggg1SmKB5hwkqFkzQY8EEq0KYYB8LzsI/+yFIe3RNhd4AAAAASUVORK5CYII=" alt="原始彩色图"></div>
+      <div class="fig-col"><div class="fig-title">Y · 亮度(素描)</div><img class="fig-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACWCAAAAAC+t5jFAAAC3ElEQVR4nO2cyW4TQRRFbz3dVYAICYgd8QV8EzOEacW3ZAVJzJh4yycg5iF8AJ8QQEJCgbAElAQF7Njuru5q+/VVnU3a773qytUpD5IlhyfQwCCCQQQGaGAQgdmIMwwiMB8tZ1DFCFWCGERgNuIMtsDI4v6frYlDRDtSYO9qq7VGuoMPF/Gpna9a3RKVFhjpjCp28bltRjpRdcdB4vB7tBbGdjpf2mRkIbLn18gkQnuMnIrtttMIQmuMROPUyImC/smvw5VsZMaE4UI2Mkj/LCSM9NGHwqvWxm6Wc5gm4VDhaZIYe6SMcnxy+1sDRtYPrjbOo8Xv7OtjrqdNeFZv/ePBhxeQivlJze3UQYZipIwyHxnEEucYWavCdmQvPK++16PR5YtIw7Fxje+jipY8x9h6s4QXFRc+nNS8hBQcHV3+MbIaXlbb5MHk9mUk4cjh0s6YUWskR2G/JDslKn8Jr6pscL945ArSMPf/g5/j56oEKREjZRTMFabYDfI6+r73yg5exRSx5nJETCYgvIlc0IsZXoLXIL3Y+y/5PFq96PvHr6hIeBsxvFZlh2twZ2St0g7VVkUT3pWdXEVlrsORkdUam9RZW5bwvtzcCmpxA06MrNTcpu76YsJmiaG7SMBNNEr4UDxzp86H/l8HV7cw6yC1Tkjzz4598tcKZZnWV3sGEahihPFLbv+7XIYbqGLEIAKzEWcwG3GGQQSqHC3mIO3/iLIMjxhEoMpzxCACVYyw3vKPw4UzmBEGEahytAwiMBtxBrMRZ1DFCFWCGERgNuIMNv2zVNP62Sv+bniDpu8vF8QgArMRZ1DFCFWCGESgihGqBDGIQBUjVAliEIEqRhg1fbqwoGtkWlAliEEEqhihShCDCFQxQpUgBhGYjTiDKkaoEsQgAlWMUCWIQQRmI85gNuIMqhhhDuIMgwjMR8sZBhGocrQMIjAbcQZVjDAHcYZBBKocLZv1P5CKP88GdUDxuPMnAAAAAElFTkSuQmCC" alt="Y 亮度通道"></div>
+      <div class="fig-col"><div class="fig-title">Cb · 蓝色差</div><img class="fig-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACWCAAAAAC+t5jFAAACq0lEQVR4nO2czY4SQRSFT5/clXE/r4GOjyUkMw9iG2WjJpr4NmYa6NdwP5tJTDBqjAYa6PrrrjrUtwHura6qw/1pmg40X6EBIQIhgu2hASECIQIhAiECIYLVrpUZhAimklrWQANCBCsgtd78ebg/O6j5giJUXNTSfEbOtIeGuzJrpB1hKSAi7bD5rrSItE72jIW4ka+Q1s3D8nRg0FfCCfGYfTkReevqzVWIM1XInJmFAX+ZxY7jcq+plRuMM80DNIQ8zK/EYhR790vLK0zJ/tDQfIoi4zcxpbw7714lSK1u4NkMMHSC/3ffFSykO/MqhJWr14KWO9p4F7VQJovIUAC6CUKyGrA1H/3X2gybbxGH96ccy8gR2Tja00LfAzcbH5cLSyd788Fvle1590tEYX1sen1iqGeNXHzPbxPVyfLUSL+IXIhHxJhgPSYcnkJGyIgpBeuLKvyEjNQRUUmarrVNMHKO65Gdw9jtC+R6V3frNvtuuvSyfapwTBwUptXhd0xqIX572uWWWr3vEjsskFFE+oBFQo6NLSRsL302QvrAZdIrsYm20acuFBu1ib/8CFigX8wuZBHyzcIUHWuSGz1T3UgiRCBEIEQw90O+/3t6g2ywWuyZQYhAiECIYLXYM4MQgRCBuN6PKDfIEUIEq+03MwgRLCy1nh8aHue6ZrfUv3qb6ld1Vos9MwgRCBFMpUasdq2R1O9+HanFPpaaWo7YN5fRz1ynB5zmD0CnRhqRT7+ECIQIhAiECIQIptK1rF6PjKSeR6612AkRCBGIqzyPPF00HFG71rWmFiECIYLVvzfMDEIEQgRCBEIEQgRCBKvnkcwgRCBEIEQgRLDatTKDEIEQgRCBEMFUupYV+l+muhEhRCBEIEQgRCBEsNq1MoMQgRCBEMFUiv0n/MRx7l/GV2oAAAAASUVORK5CYII=" alt="Cb 通道"></div>
+      <div class="fig-col"><div class="fig-title">Cr · 红色差</div><img class="fig-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACWCAAAAAC+t5jFAAACrElEQVR4nO2cQZKbMBREW13/IjlCllkiBu6QVZID5IKeib3MMkfIUUilUuVxbGwQkkBq8zaDJYzU07T8ZarsPkMDQgRCBEIEQgRz0IAQgRCBEMH2jBQGIQIhAiGCqYTdUD79vz+HuoX0l0eHaoX01y8PdYa9n9FSgSP9eOOhNkf6oPYal19XlyNdWA/r04HRvmKFhMIKDcFYb41hx1jebUCNDLU48jLR373VkpFgCnVkEieSEQyZHOkf73rS4/JkpL9fXq8FU1zkr4qtlbgv0Zc4S0h5e7WPu39kcOS/TfV2WGzYL8ue/hUr4ZI70gWUeiEcQ3vj9uw3E++wmikpHRkzoFvBkmNiIeNzzq/kiLRC7s04XVBCcF+xjIfTTRMUH2KV+5Zlw3CzXVhGc9t0unMq82x8pvpncprREuXIjHkm8gTNLBnLhMz8d6eSgmZSxTIhs2+bZEry1FoTdekFL7c1aj6YT0fYubFY2OmBU2tHNg5FONIGX78tMiN+wQDt44J8E0f8ohGWvStjRhZPyE/sklZ2xEcM4gsS4qNG8cUI8ZHD+DJWrSZ+HD9RKq0S9uZ89CF8gN/nq5w2F3KKEZLZCL0HPYQIlvuJ1VpPxCz3E6uhXEd+vh9+KscRQgRCBEIEQgRTWX4JEQgRCBFsz0hhWPhbZtQlG0CIQIhAiECIYHHL76/rho/XDXuJ8qy3FiECIYKp1Fr2xF8HhbEvv88adkIEQgRTCbtRxHJCBEIEQgRCBEIEQgST+RwZMg+wl/HP6gghAiECIYLty29hYXffoQEhAiECIQIhAiECIQIhAiGCVfpLNVD5pRrdW4sQwfaMFIapOEKIQIhAiECIQIhAiECIQIhgKh+IplLG2+5IYRAiECIQItge9sIwFUcIEQgRCBEIEbj1BFLxB9JwSNixt4O7AAAAAElFTkSuQmCC" alt="Cr 通道"></div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>图 1 · 把照片拆成"素描 + 两层上色"。</b>同一张图经 RGB→YCbCr 分解:<b>Y</b> 是灰度素描,轮廓、房子、太阳、窗户全在这里——遮住颜色你照样认得出画面。<b>Cb/Cr</b> 只记"偏蓝/偏红"的程度,画面结构几乎消失、大片平坦。人眼盯着 Y 看,对 Cb/Cr 极不敏感——这就是压缩的突破口。</div>
 </div>
 
 <section>
@@ -162,6 +186,16 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
   <li><strong>结果:大幅省比特,主观画质几乎不降。</strong>这正是 JPEG、H.264 等一切压缩标准第一步都要 RGB→YCbCr 的根本原因。</li>
 </ol>
 <p>一句话收束:<strong>YCbCr 的价值不在"换个坐标系",而在把人眼的"偏心"变成可以直接兑现的压缩空间。</strong></p>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col" style="flex:0 1 240px"><div class="fig-title">原图:Y/Cb/Cr 全分辨率</div><img class="fig-img" style="max-width:240px" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACWCAIAAAAUvlBOAAAFY0lEQVR4nO3cy29VVRTH8b1vT2laHiPGjvwL/AOMiUITtTh35KSoMWFEwNoCpe0FHUq00DZGov4DGDHxGWN8TAjge+LIqWi0rRjo45rmJKUqPatd96yzH/f7yRkB9/Sw+7trr73Pude/+OmvDqhbq/YzAs65wjMMMFB4kgUDTIUwQcWCCXosmCi8o8lC/QpyBQtMhTBB8w4TVCyYoMeCCVaFMMFUCBM0771i4sBT///DmcUrRj/OT3/xm9GpEW2eGkiYn/mSYOVpfP+OIrVVe6m2eLW829h758hsBMZ3n6oyi7Vdw7mvfq8rpIjB2L4j3Z/k/PK7XZ6B57GyMlZHqmo5D9sNuL8uH3rxL3/NVJiJk3vrKVebXvlLPyEyFWbiZN2p6vKcbJCiivqzNmw35HCcGKq/XJVODB3RXRI3oSHQPbzOYzOQqGZDpsLkj+ODI87S8cER1VTIh3QgUYSEDVLIFMWHHgs7oKpYuc2FA+3hO+MfhL6KrChCklvzPtAeLrMV/Ep8U0cDer1575/ZSFVpT3t4ZYK6VQ9FSPyr1/5weUXqP3ohXsf2PGl38gt331O8KoeKVUwPV2du9VT+2bKjS0jyPVZ1qkrFdOYtlynlVb12/U+XrNbU4Z3/4/XTH7p8vVA8YXHa11ev6l5YuB6I1NaX5B2veCQ5FSpSde8/PHU4+PV7g2NWW1oqzK5e1V/S7I3UpsKz+lTdcybPuvV8X20T4sW1rpLa6sVU1XgebMNfvJlGxepMmkTBT+ZWup5r1VC0Lq13O7H6SykEa90mVaVWdtlyzj2rjddc15Eq+bmbiy5ua5OHrH9E3+RHLjtHW4/v9iXz6+/X9dP93DdRB2vtjHmqSn1nM8yWc+6o31G85ju1Rark52MN1mpTkdqqyDRezrnR+yVsoe48bfIL38YYrJXTAVJV6p/KNlu9vkEaMFVlpoOPgE//aIW/hH8fd4OmqrRxDaHHwSV++De+W3JxuHPqMReZgemPQ19CqmKZCiNMVZn14CPjEz3e/D58xfp7IsZUbRqcoW4leK8w8lQlcYUR8pd/CFaxbo8n9gsbalO6ou+xkktV+U4I37u4RI63flxu/je0/NKjLln7zn0S+hISEKDHSjpVGVx/M/zbDVaspbx+JfspXdvz7/zUULAWx6pS9dCtFRel6wf7K/72wHmmxdDBqvbg6MMuSj8vfB76EpKUwyehTTE+OnzxmoD3nU6G349VL8ZHh2/0k/C+y2kqfOCy8LGcX55p6KM1cY5P/GjeBTTvWVWseDA+OvRYEpKlwqpQwKpQh6lQQMHSoXkX0Lyn+mgyskTFElCxdOixBPRYOoXnLVmJ8cnqW5Mbu2MDI0yFAqZCHZp3AZ2CDtsNMEHFElCxeq7HunD71m5fcmzo4G5fku74hMVNaAE3oXV4bEZCyeq1qbAZjI8OzbuA5l2HiiWgYunQY0lIlgqrQgGrQh2mQgEFS4fmXUDzrsO9QpigYgmoWDr0WAJ6LJ3iymcjLgJPu0hFMj7JKTqdTuhriBrjo1OQq2qMj07ByAlIlkrBRFiN8dEpGDkByVKheRfQvOtQsSRULBV6LAG50mFVKGFVqMI+loBc6fB0A0ywKhSwKtRhKhQwFSqDxciRLAtsNwjYbtDxo3OPKF8KbI/mHSa4pQMT9FgwwaoQJtjHgglu6cAEq0KYYCqECZp3mGC7ASbYIIUJmneYoGLBBD0WTLAqhAn2sWCCWzowwaoQJpgKYYLmHSbYboAJNkhhguYdJqhYMEGPBROsCmGCfSyY4JYOTLAqhAmmQpigeYcJthtggg1SmKB5hwkqFkzQY8EEq0KYYB8LzsI/+yFIe3RNhd4AAAAASUVORK5CYII=" alt="原图"></div>
+      <div class="fig-col" style="flex:0 1 240px"><div class="fig-title">色度砍到 1/16 后重建</div><img class="fig-img" style="max-width:240px" src="data:image/png;base64,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" alt="色度子采样重建"></div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>图 2 · 兑现红利:把色度狠压,画质几乎不掉。</b>右图保留了<b>全分辨率的 Y</b>,但把 Cb、Cr 各自在长宽上降采样 4 倍(数据量降到原色度的 1/16)再拉回合成。两图并排看几乎无差——因为人眼盯的是没动过的 Y。这就是下一讲 4:2:0 色度子采样的底层原理:<b>只对人眼迟钝的色度开刀。</b></div>
+</div>
 </section>
 
 <section>
@@ -169,6 +203,41 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <p>为什么单独讲 Gamma?因为它揭示一个反直觉的事实:<strong>你送给屏幕的数字 0.5,屏幕并不会发出 50% 的亮度。</strong></p>
 <p>显示器的光电响应是幂律关系 <code>L = V<sup>γ</sup></code>(γ≈2.2)。代入 V=0.5:<code>L = 0.5<sup>2.2</sup> ≈ 0.22</code>——本该"半亮"的信号,显示出来只有约 22% 亮度,画面整体偏暗、暗部被压死。</p>
 <p>解决办法不是去改屏幕,而是在<strong>编码/存储时先反向预校正</strong>:对每个信号取 <code>V' = V<sup>1/γ</sup></code>。这样信号经过屏幕的 γ 次方后,<code>(V<sup>1/γ</sup>)<sup>γ</sup> = V</code>,一升一降相互抵消,最终发出的光才与原始线性亮度成正比。这就是"逆 Gamma 校正"要在编码端先做的原因:<strong>用一个预失真去抵消设备的固有失真。</strong></p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg viewBox="0 0 250 200" width="100%" style="max-width:340px">
+      <line x1="34" y1="176" x2="224" y2="176" stroke="#1a1816" stroke-width="1"/>
+      <line x1="34" y1="176" x2="34" y2="16" stroke="#1a1816" stroke-width="1"/>
+      <line x1="34" y1="176" x2="224" y2="16" stroke="#7a7268" stroke-width="1" stroke-dasharray="4 3"/>
+      <path d="M34.0,176.0 L37.8,149.0 L41.6,139.0 L45.4,131.5 L49.2,125.2 L53.0,119.8 L56.8,115.0 L60.6,110.5 L64.4,106.4 L68.2,102.6 L72.0,99.0 L75.8,95.6 L79.6,92.4 L83.4,89.3 L87.2,86.3 L91.0,83.4 L94.8,80.7 L98.6,78.0 L102.4,75.4 L106.2,72.9 L110.0,70.5 L113.8,68.1 L117.6,65.8 L121.4,63.6 L125.2,61.4 L129.0,59.2 L132.8,57.1 L136.6,55.1 L140.4,53.1 L144.2,51.1 L148.0,49.2 L151.8,47.2 L155.6,45.4 L159.4,43.5 L163.2,41.7 L167.0,39.9 L170.8,38.2 L174.6,36.5 L178.4,34.8 L182.2,33.1 L186.0,31.4 L189.8,29.8 L193.6,28.2 L197.4,26.6 L201.2,25.0 L205.0,23.5 L208.8,22.0 L212.6,20.4 L216.4,18.9 L220.2,17.5 L224.0,16.0" fill="none" stroke="#4a6e3a" stroke-width="2.5"/>
+      <path d="M34.0,176.0 L37.8,176.0 L41.6,175.9 L45.4,175.7 L49.2,175.4 L53.0,175.0 L56.8,174.5 L60.6,173.9 L64.4,173.2 L68.2,172.3 L72.0,171.4 L75.8,170.3 L79.6,169.1 L83.4,167.7 L87.2,166.3 L91.0,164.7 L94.8,163.0 L98.6,161.1 L102.4,159.1 L106.2,157.0 L110.0,154.7 L113.8,152.3 L117.6,149.7 L121.4,147.0 L125.2,144.2 L129.0,141.2 L132.8,138.0 L136.6,134.8 L140.4,131.3 L144.2,127.7 L148.0,124.0 L151.8,120.1 L155.6,116.1 L159.4,111.9 L163.2,107.5 L167.0,103.0 L170.8,98.3 L174.6,93.5 L178.4,88.5 L182.2,83.4 L186.0,78.1 L189.8,72.6 L193.6,67.0 L197.4,61.2 L201.2,55.2 L205.0,49.1 L208.8,42.8 L212.6,36.4 L216.4,29.7 L220.2,23.0 L224.0,16.0" fill="none" stroke="#7c2233" stroke-width="2.5"/>
+      <circle cx="129" cy="59.2" r="3.5" fill="#4a6e3a"/>
+      <circle cx="129" cy="141.2" r="3.5" fill="#7c2233"/>
+      <line x1="129" y1="176" x2="129" y2="141.2" stroke="#7a7268" stroke-width="0.7" stroke-dasharray="2 2"/>
+      <text x="150" y="52" font-family="sans-serif" font-size="10" fill="#4a6e3a">编码 V^(1/γ)</text>
+      <text x="150" y="150" font-family="sans-serif" font-size="10" fill="#7c2233">显示 L=V^γ</text>
+      <text x="196" y="34" font-family="sans-serif" font-size="9" fill="#7a7268">理想线性</text>
+      <text x="120" y="190" font-family="sans-serif" font-size="10" fill="#1a1816">输入 0.5</text>
+      <text x="6" y="100" font-family="sans-serif" font-size="10" fill="#1a1816" transform="rotate(-90 6,100)">输出亮度</text>
+      <text x="228" y="180" font-family="sans-serif" font-size="10" fill="#1a1816">V</text>
+    </svg>
+  </div>
+  <div class="figure-cap"><b>图 3 · Gamma:两条弯把彼此掰直。</b>灰色虚线是"理想线性"。<b>红线</b>是屏幕的真实响应 L=V^γ(向下弯,送 0.5 只发约 0.22 的光,暗部被压死)。<b>绿线</b>是编码端的逆校正 V^(1/γ)(向上弯)。信号先被绿线抬高、再被红线压下,两次幂律 (V^(1/γ))^γ=V 恰好抵消,最终落回灰色虚线——亮度就正确了。</div>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="pipe">
+      <span class="box">原始线性亮度<br>V</span>
+      <span class="op">──编码 V<sup>1/γ</sup>──▶</span>
+      <span class="box">存储/传输<br>V′(暗部被抬亮)</span>
+      <span class="op">──屏幕 (·)<sup>γ</sup>──▶</span>
+      <span class="box">还原亮度<br>V ✓</span>
+    </div>
+  </div>
+  <div class="figure-cap"><b>图 4 · Gamma 校正流水线。</b>关键:预校正发生在<b>编码/存储端</b>(第一步),不是屏幕里。编码时抬亮 → 屏幕的幂律再压暗 → 一升一降抵消。这也解释了为什么存储的像素值不是"线性光",而是已经 Gamma 编码过的值。</div>
+</div>
 </section>
 
 <div class="worked">

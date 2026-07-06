@@ -86,6 +86,21 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 205px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 240px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+.pipe { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px; font-family:var(--sans); font-size:12px; }
+.pipe .box { border:1px solid var(--ink); background:var(--paper); padding:8px 10px; border-radius:3px; max-width:160px; line-height:1.4; }
+.pipe .box.send { border-left:4px solid var(--highlight); }
+.pipe .box.recv { border-left:4px solid var(--success); }
+.pipe .op { color:var(--accent); font-weight:700; font-family:var(--mono); font-size:15px; }
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -136,6 +151,55 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     <dd><strong>NTSC</strong>(北美/日本):<code>30 fps</code>、60 场/秒、约 33.3 ms/帧。<strong>PAL</strong>(中国/欧洲):<code>25 fps</code>、50 场/秒、40 ms/帧。<span class="alias">记忆钩:PAL 慢一点(25),对应欧洲 50 Hz 市电;NTSC 快一点(30),对应北美 60 Hz。</span></dd>
   </dl>
 </div>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">逐行扫描 Progressive</div>
+        <svg class="fig-svg" viewBox="0 0 170 150" role="img" aria-label="逐行扫描示意">
+          <defs><marker id="ahp" markerWidth="7" markerHeight="7" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7c2233"/></marker></defs>
+          <rect x="30" y="8" width="110" height="128" fill="none" stroke="#1a1816" stroke-width="1.5"/>
+          <rect x="33" y="12"   width="104" height="13" fill="#ddd2bb" stroke="#c9bda5" stroke-width="0.5"/>
+          <rect x="33" y="27.5" width="104" height="13" fill="#ddd2bb" stroke="#c9bda5" stroke-width="0.5"/>
+          <rect x="33" y="43"   width="104" height="13" fill="#ddd2bb" stroke="#c9bda5" stroke-width="0.5"/>
+          <rect x="33" y="58.5" width="104" height="13" fill="#ddd2bb" stroke="#c9bda5" stroke-width="0.5"/>
+          <rect x="33" y="74"   width="104" height="13" fill="#ddd2bb" stroke="#c9bda5" stroke-width="0.5"/>
+          <rect x="33" y="89.5" width="104" height="13" fill="#ddd2bb" stroke="#c9bda5" stroke-width="0.5"/>
+          <rect x="33" y="105"  width="104" height="13" fill="#ddd2bb" stroke="#c9bda5" stroke-width="0.5"/>
+          <rect x="33" y="120.5" width="104" height="13" fill="#ddd2bb" stroke="#c9bda5" stroke-width="0.5"/>
+          <g font-size="9" fill="#7a7268" font-family="sans-serif" text-anchor="middle">
+            <text x="22" y="22">1</text><text x="22" y="37.5">2</text><text x="22" y="53">3</text><text x="22" y="68.5">4</text>
+            <text x="22" y="84">5</text><text x="22" y="99.5">6</text><text x="22" y="115">7</text><text x="22" y="130.5">8</text>
+          </g>
+          <line x1="152" y1="16" x2="152" y2="126" stroke="#7c2233" stroke-width="1.5" marker-end="url(#ahp)"/>
+          <text x="163" y="75" font-size="9" fill="#7c2233" font-family="sans-serif" transform="rotate(90 163 75)" text-anchor="middle">1→8 一次扫完</text>
+        </svg>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">隔行扫描 Interlaced</div>
+        <svg class="fig-svg" viewBox="0 0 170 150" role="img" aria-label="隔行扫描示意">
+          <rect x="30" y="8" width="110" height="128" fill="none" stroke="#1a1816" stroke-width="1.5"/>
+          <rect x="33" y="12"   width="104" height="13" fill="#b98793" stroke="#7c2233" stroke-width="0.5"/>
+          <rect x="33" y="27.5" width="104" height="13" fill="#dcc78a" stroke="#c19a3e" stroke-width="0.5"/>
+          <rect x="33" y="43"   width="104" height="13" fill="#b98793" stroke="#7c2233" stroke-width="0.5"/>
+          <rect x="33" y="58.5" width="104" height="13" fill="#dcc78a" stroke="#c19a3e" stroke-width="0.5"/>
+          <rect x="33" y="74"   width="104" height="13" fill="#b98793" stroke="#7c2233" stroke-width="0.5"/>
+          <rect x="33" y="89.5" width="104" height="13" fill="#dcc78a" stroke="#c19a3e" stroke-width="0.5"/>
+          <rect x="33" y="105"  width="104" height="13" fill="#b98793" stroke="#7c2233" stroke-width="0.5"/>
+          <rect x="33" y="120.5" width="104" height="13" fill="#dcc78a" stroke="#c19a3e" stroke-width="0.5"/>
+          <g font-size="9" fill="#7a7268" font-family="sans-serif" text-anchor="middle">
+            <text x="22" y="22">1</text><text x="22" y="37.5">2</text><text x="22" y="53">3</text><text x="22" y="68.5">4</text>
+            <text x="22" y="84">5</text><text x="22" y="99.5">6</text><text x="22" y="115">7</text><text x="22" y="130.5">8</text>
+          </g>
+          <text x="152" y="52" font-size="8" fill="#7c2233" font-family="sans-serif" transform="rotate(90 152 52)" text-anchor="middle">奇场先</text>
+          <text x="164" y="98" font-size="8" fill="#c19a3e" font-family="sans-serif" transform="rotate(90 164 98)" text-anchor="middle">偶场后</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>逐行 vs 隔行。</b>左:逐行扫描按 1→2→3…→8 顺序一次扫完整帧,运动无锯齿(HDTV/显示器用)。右:隔行扫描先扫<span style="color:#7c2233">奇场(1,3,5,7)</span>、再扫<span style="color:#c19a3e">偶场(2,4,6,8)</span>,靠视觉暂留合成一帧——省一半带宽,但快速运动时相邻两场错位会产生锯齿/梳状伪影(老式模拟电视用)。</div>
+</div>
 </section>
 
 <section>
@@ -156,6 +220,72 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 </tbody>
 </table>
 <p>顺着数字读:4:4:4 每像素扛着 <code>Y+Cb+Cr = 3</code> 个字节;4:2:2 把色度水平方向减半(每 4 个像素只采 2 个 Cb、2 个 Cr),降到 2 B/px;4:2:0 更狠——第二行完全不采色度(b=0),水平和垂直方向色度<strong>都减半</strong>,降到 1.5 B/px。相对 4:4:4,4:2:0 直接省下 <code>(3-1.5)/3 = 50%</code> 的数据。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">4:4:4 · 3 B/px</div>
+        <svg class="fig-svg" viewBox="0 0 165 125" role="img" aria-label="4:4:4 采样格点">
+          <g stroke="#c9bda5" stroke-width="0.6">
+            <rect x="12.5" y="20" width="140" height="80" fill="none"/>
+            <line x1="47.5" y1="20" x2="47.5" y2="100"/><line x1="82.5" y1="20" x2="82.5" y2="100"/><line x1="117.5" y1="20" x2="117.5" y2="100"/>
+            <line x1="12.5" y1="60" x2="152.5" y2="60"/>
+          </g>
+          <g stroke="#1a1816" stroke-width="1.4">
+            <path d="M27,37 L33,43 M27,43 L33,37"/><path d="M62,37 L68,43 M62,43 L68,37"/><path d="M97,37 L103,43 M97,43 L103,37"/><path d="M132,37 L138,43 M132,43 L138,37"/>
+            <path d="M27,77 L33,83 M27,83 L33,77"/><path d="M62,77 L68,83 M62,83 L68,77"/><path d="M97,77 L103,83 M97,83 L103,77"/><path d="M132,77 L138,83 M132,83 L138,77"/>
+          </g>
+          <g fill="none" stroke="#7c2233" stroke-width="1.6">
+            <circle cx="30" cy="40" r="8"/><circle cx="65" cy="40" r="8"/><circle cx="100" cy="40" r="8"/><circle cx="135" cy="40" r="8"/>
+            <circle cx="30" cy="80" r="8"/><circle cx="65" cy="80" r="8"/><circle cx="100" cy="80" r="8"/><circle cx="135" cy="80" r="8"/>
+          </g>
+          <text x="82.5" y="116" font-size="10" fill="#7c2233" font-family="sans-serif" text-anchor="middle">8 亮度 + 8 色度</text>
+        </svg>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">4:2:2 · 2 B/px</div>
+        <svg class="fig-svg" viewBox="0 0 165 125" role="img" aria-label="4:2:2 采样格点">
+          <g stroke="#c9bda5" stroke-width="0.6">
+            <rect x="12.5" y="20" width="140" height="80" fill="none"/>
+            <line x1="47.5" y1="20" x2="47.5" y2="100"/><line x1="82.5" y1="20" x2="82.5" y2="100"/><line x1="117.5" y1="20" x2="117.5" y2="100"/>
+            <line x1="12.5" y1="60" x2="152.5" y2="60"/>
+          </g>
+          <g stroke="#1a1816" stroke-width="1.4">
+            <path d="M27,37 L33,43 M27,43 L33,37"/><path d="M62,37 L68,43 M62,43 L68,37"/><path d="M97,37 L103,43 M97,43 L103,37"/><path d="M132,37 L138,43 M132,43 L138,37"/>
+            <path d="M27,77 L33,83 M27,83 L33,77"/><path d="M62,77 L68,83 M62,83 L68,77"/><path d="M97,77 L103,83 M97,83 L103,77"/><path d="M132,77 L138,83 M132,83 L138,77"/>
+          </g>
+          <g fill="none" stroke="#7c2233" stroke-width="1.6">
+            <circle cx="30" cy="40" r="8"/><circle cx="100" cy="40" r="8"/>
+            <circle cx="30" cy="80" r="8"/><circle cx="100" cy="80" r="8"/>
+          </g>
+          <text x="82.5" y="116" font-size="10" fill="#7c2233" font-family="sans-serif" text-anchor="middle">8 亮度 + 4 色度</text>
+        </svg>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">4:2:0 · 1.5 B/px</div>
+        <svg class="fig-svg" viewBox="0 0 165 125" role="img" aria-label="4:2:0 采样格点">
+          <g stroke="#c9bda5" stroke-width="0.6">
+            <rect x="12.5" y="20" width="140" height="80" fill="none"/>
+            <line x1="47.5" y1="20" x2="47.5" y2="100"/><line x1="82.5" y1="20" x2="82.5" y2="100"/><line x1="117.5" y1="20" x2="117.5" y2="100"/>
+            <line x1="12.5" y1="60" x2="152.5" y2="60"/>
+          </g>
+          <g stroke="#1a1816" stroke-width="1.4">
+            <path d="M27,37 L33,43 M27,43 L33,37"/><path d="M62,37 L68,43 M62,43 L68,37"/><path d="M97,37 L103,43 M97,43 L103,37"/><path d="M132,37 L138,43 M132,43 L138,37"/>
+            <path d="M27,77 L33,83 M27,83 L33,77"/><path d="M62,77 L68,83 M62,83 L68,77"/><path d="M97,77 L103,83 M97,83 L103,77"/><path d="M132,77 L138,83 M132,83 L138,77"/>
+          </g>
+          <g fill="none" stroke="#7c2233" stroke-width="1.6">
+            <circle cx="30" cy="60" r="8"/><circle cx="100" cy="60" r="8"/>
+          </g>
+          <text x="82.5" y="116" font-size="10" fill="#7c2233" font-family="sans-serif" text-anchor="middle">8 亮度 + 2 色度</text>
+        </svg>
+      </div>
+    </div>
+    <div class="fig-legend"><span style="font-family:monospace">×</span> = 亮度 Y(每个像素都采,永不减) &nbsp;·&nbsp; <span style="color:#7c2233;font-weight:700">○</span> = 一组色度 Cb/Cr 的采样位置</div>
+  </div>
+  <div class="figure-cap"><b>色度只砍圈圈,叉叉一个不动。</b>三张图的 <span style="font-family:monospace">×</span>(亮度)完全一样——8 个像素全采;区别全在 <span style="color:#7c2233">○</span>(色度):4:4:4 每像素一组(8 组)→ 4:2:2 水平隔一列采(4 组)→ 4:2:0 水平垂直都隔一个、每 2×2 块共享一组(2 组)。圈越少、每像素字节越少。这张"叉不变、圈递减"的图就是真题让你手画的那张。</div>
+</div>
+
 <div class="intuition">
   <span class="tag-label">易错点</span>
   <p>4:2:0 里那个 <code>0</code> <strong>不是</strong>"某个分量为零",而是指"第二行不单独采色度"。它和 4:1:1 都得到 1.5 B/px,但方式不同:4:1:1 是<strong>水平</strong>方向压到 1/4、垂直不动;4:2:0 是<strong>水平、垂直各减半</strong>。4:2:0 的色度分布更均匀,所以 JPEG、MPEG、H.264、HDTV 全都选它。</p>
@@ -170,6 +300,38 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
   <li>整个 2×2 块<strong>只存一个</strong> Cb 和一个 Cr(取平均或左上角值),共 <strong>2 个字节</strong>。</li>
 </ul>
 <p>于是每个 2×2 块 = <code>Y×4 + Cb×1 + Cr×1 = 6 字节</code>,平摊到 4 个像素:<code>6 / 4 = 1.5</code> B/px。和上一节的 12/8 完全一致,只是分块方式更直观——这也是真题要求"画示意图"时最好画的那张图。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:340px" viewBox="0 0 300 160" role="img" aria-label="2x2 块共享一组色度">
+      <defs><marker id="ah3" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 Z" fill="#4a4540"/></marker></defs>
+      <!-- 2x2 block -->
+      <g stroke="#1a1816" stroke-width="1.3">
+        <rect x="25" y="25" width="55" height="55" fill="#ddd2bb"/>
+        <rect x="80" y="25" width="55" height="55" fill="#ddd2bb"/>
+        <rect x="25" y="80" width="55" height="55" fill="#ddd2bb"/>
+        <rect x="80" y="80" width="55" height="55" fill="#ddd2bb"/>
+      </g>
+      <g font-family="serif" text-anchor="middle" fill="#1a1816">
+        <text x="52.5" y="52" font-size="16">Y₀</text><text x="107.5" y="52" font-size="16">Y₁</text>
+        <text x="52.5" y="107" font-size="16">Y₂</text><text x="107.5" y="107" font-size="16">Y₃</text>
+      </g>
+      <g font-family="sans-serif" text-anchor="middle" fill="#7a7268" font-size="9">
+        <text x="52.5" y="66">1B</text><text x="107.5" y="66">1B</text><text x="52.5" y="121">1B</text><text x="107.5" y="121">1B</text>
+      </g>
+      <text x="80" y="152" font-size="10" fill="#7a7268" font-family="sans-serif" text-anchor="middle">4 个亮度 = 4 B</text>
+      <!-- arrow to shared chroma -->
+      <line x1="140" y1="80" x2="185" y2="80" stroke="#4a4540" stroke-width="1.3" marker-end="url(#ah3)"/>
+      <text x="162" y="72" font-size="9" fill="#4a4540" font-family="sans-serif" text-anchor="middle">整块共享</text>
+      <!-- shared chroma -->
+      <circle cx="235" cy="80" r="30" fill="none" stroke="#7c2233" stroke-width="2"/>
+      <text x="235" y="76" font-size="14" fill="#7c2233" font-family="serif" text-anchor="middle">Cb·Cr</text>
+      <text x="235" y="92" font-size="9" fill="#7c2233" font-family="sans-serif" text-anchor="middle">各 1B</text>
+      <text x="235" y="128" font-size="10" fill="#7c2233" font-family="sans-serif" text-anchor="middle">1 组色度 = 2 B</text>
+    </svg>
+  </div>
+  <div class="figure-cap"><b>2×2 块 = 4 亮度 + 1 组色度。</b>4 个像素各留自己的 <span style="font-family:serif">Y₀…Y₃</span>(共 4B),整块只存<strong>一组</strong> Cb·Cr(2B,取平均或左上值)。合计 <code>4+1+1=6</code> B ÷ 4 像素 = <code>1.5 B/px</code>——与 §2 的 <code>12/8</code> 分毫不差,只是从"两行 8 像素"换成了"一个 2×2 方块",画起来更省事。</div>
+</div>
 </section>
 
 <div class="worked">
@@ -188,6 +350,25 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
       <strong>答案要点:</strong>效率排序 <code>4:2:0(1.5) &gt; 4:2:2(2) &gt; 4:4:4(3)</code> 字节/像素,4:2:0 最高。发送 = 全采 Y + 色度水平垂直各减半;还原 = 色度上采样补回全分辨率 → 逐像素 YCbCr 逆变换回 RGB。答题时务必点出"人眼对色度不敏感"这一心理视觉冗余作为设计动机。
     </div>
   </div>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="pipe">
+      <span class="box send">① 发送端<br>RGB → YCbCr</span>
+      <span class="op">→</span>
+      <span class="box send">② Y 全分辨率发送<br>Cb·Cr 各降到 1/4</span>
+      <span class="op">))</span>
+      <span class="box recv">③ 色度上采样<br>Cb·Cr 插值回全尺寸</span>
+      <span class="op">→</span>
+      <span class="box recv">④ 每像素凑齐<br>Y · Cb · Cr</span>
+      <span class="op">→</span>
+      <span class="box recv">⑤ 逆变换<br>R=Y+1.402(Cr−128)…</span>
+      <span class="op">→</span>
+      <span class="box recv">⑥ RGB 显示</span>
+    </div>
+  </div>
+  <div class="figure-cap"><b>发送 → 传输 → 还原全流程。</b>金色框(①②)是<b>发送端</b>做的:转到 YCbCr 后,亮度全发、色度砍到 1/4。绿色框(③④⑤⑥)是<b>接收端</b>做的:先把小尺寸色度<b>上采样(chroma upsampling)</b>插值放大回全分辨率,让每个像素重新配齐 Y·Cb·Cr,再逐像素做 YCbCr→RGB 逆变换,得到能显示的彩色图。<code>))</code> 那一步是信道传输——真正在网上流动的,只有"1 张全尺寸 Y + 2 张 1/4 尺寸 Cb/Cr"。</div>
 </div>
 
 <section>

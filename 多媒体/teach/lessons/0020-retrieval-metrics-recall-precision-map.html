@@ -86,6 +86,17 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -137,6 +148,35 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     <dt>mAP 平均精度均值 (mean Average Precision)</dt>
     <dd><strong>整个系统</strong>的评分。把所有查询各自的 AP 再求平均。<code>mAP = (Σ 各查询的 AP) / 查询个数</code>。是图像检索最常用的综合指标。</dd>
   </dl>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" viewBox="0 0 340 268" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="检索到的与相关的两个集合交叠,交叠区为 TP">
+      <!-- 全体文档 = TN 底 -->
+      <rect x="12" y="24" width="316" height="196" fill="#ddd2bb" stroke="#1a1816" stroke-width="1"/>
+      <text x="24" y="212" font-family="sans-serif" font-size="12" fill="#4a4540">全部文档</text>
+      <text x="316" y="212" text-anchor="end" font-family="sans-serif" font-size="12" fill="#4a4540">TN(不相关且未检出)</text>
+      <!-- 检索到的(左圈) -->
+      <circle cx="135" cy="118" r="80" fill="#a14958" fill-opacity="0.45" stroke="#7c2233" stroke-width="1.5"/>
+      <!-- 相关的(右圈) -->
+      <circle cx="205" cy="118" r="80" fill="#4a6e3a" fill-opacity="0.42" stroke="#4a6e3a" stroke-width="1.5"/>
+      <!-- 区域标注 -->
+      <text x="92" y="118" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="700" fill="#7c2233">FP</text>
+      <text x="92" y="136" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#4a4540">检出但不相关</text>
+      <text x="170" y="114" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="700" fill="#1a1816">TP</text>
+      <text x="170" y="132" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#1a1816">检出且相关</text>
+      <text x="248" y="118" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="700" fill="#4a6e3a">FN</text>
+      <text x="248" y="136" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#4a4540">相关但漏检</text>
+      <!-- 圈名 -->
+      <text x="95" y="52" text-anchor="middle" font-family="sans-serif" font-size="12.5" font-weight="700" fill="#7c2233">检索到的</text>
+      <text x="245" y="52" text-anchor="middle" font-family="sans-serif" font-size="12.5" font-weight="700" fill="#4a6e3a">相关的</text>
+      <!-- 公式 -->
+      <text x="170" y="242" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#1a1816">Precision = TP/(TP+FP) = 交叠 / <tspan fill="#7c2233" font-weight="700">左圈</tspan></text>
+      <text x="170" y="260" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#1a1816">Recall = TP/(TP+FN) = 交叠 / <tspan fill="#4a6e3a" font-weight="700">右圈</tspan></text>
+    </svg>
+  </div>
+  <div class="figure-cap"><b>相关/检索四象限。</b>左圈是系统"检索到的",右圈是数据库里"真正相关的",交叠部分才是命中(<b>TP</b>)。<b>Precision</b> 拿交叠去除以整个左圈——你捞上来的里有几成是真鱼;<b>Recall</b> 拿交叠去除以整个右圈——池子里的真鱼你捞上来几成。左圈里非交叠的是误检(FP),右圈里非交叠的是漏检(FN),两圈之外全是 TN。<b>边界:</b>把左圈撑大(多返回结果)Recall 涨但 Precision 常跌,这正是二者的张力。</div>
 </div>
 </section>
 
@@ -214,6 +254,83 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
       </li>
     </ol>
   </div>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+  <div class="fig-row">
+    <div class="fig-col">
+    <div class="fig-title">查询 1 的 P-R 曲线</div>
+    <svg class="fig-svg" viewBox="0 0 340 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="查询1的Precision-Recall锯齿曲线">
+      <!-- 网格 -->
+      <line x1="55" y1="30" x2="55" y2="200" stroke="#1a1816" stroke-width="1"/>
+      <line x1="55" y1="200" x2="305" y2="200" stroke="#1a1816" stroke-width="1"/>
+      <line x1="55" y1="115" x2="305" y2="115" stroke="#c9bda5" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="180" y1="30" x2="180" y2="200" stroke="#c9bda5" stroke-width="1" stroke-dasharray="3 3"/>
+      <!-- 轴标签 -->
+      <text x="180" y="228" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4a4540">Recall →</text>
+      <text x="20" y="118" font-family="sans-serif" font-size="12" fill="#4a4540" transform="rotate(-90 20 118)">Precision →</text>
+      <text x="50" y="204" text-anchor="end" font-family="sans-serif" font-size="9.5" fill="#7a7268">0</text>
+      <text x="50" y="118" text-anchor="end" font-family="sans-serif" font-size="9.5" fill="#7a7268">.5</text>
+      <text x="50" y="33" text-anchor="end" font-family="sans-serif" font-size="9.5" fill="#7a7268">1</text>
+      <text x="180" y="213" text-anchor="middle" font-family="sans-serif" font-size="9.5" fill="#7a7268">.5</text>
+      <text x="305" y="213" text-anchor="middle" font-family="sans-serif" font-size="9.5" fill="#7a7268">1</text>
+      <!-- 曲线(按 rank 顺序连线,锯齿) -->
+      <polyline points="105,30 105,115 155,86.6 205,72.5 205,98 205,115 255,102.9 255,115 255,124.5 305,115"
+        fill="none" stroke="#a14958" stroke-width="1.8"/>
+      <!-- 命中点(相关位置,红实心,进 AP 求和) -->
+      <circle cx="105" cy="30"  r="4.5" fill="#7c2233"/>
+      <circle cx="155" cy="86.6" r="4.5" fill="#7c2233"/>
+      <circle cx="205" cy="72.5" r="4.5" fill="#7c2233"/>
+      <circle cx="255" cy="102.9" r="4.5" fill="#7c2233"/>
+      <circle cx="305" cy="115" r="4.5" fill="#7c2233"/>
+      <!-- 命中点 P 值 -->
+      <text x="105" y="22" text-anchor="middle" font-family="sans-serif" font-size="9.5" font-weight="700" fill="#7c2233">1.00</text>
+      <text x="150" y="80" text-anchor="end" font-family="sans-serif" font-size="9.5" font-weight="700" fill="#7c2233">.667</text>
+      <text x="205" y="65" text-anchor="middle" font-family="sans-serif" font-size="9.5" font-weight="700" fill="#7c2233">.750</text>
+      <text x="261" y="99" text-anchor="start" font-family="sans-serif" font-size="9.5" font-weight="700" fill="#7c2233">.571</text>
+      <text x="305" y="108" text-anchor="middle" font-family="sans-serif" font-size="9.5" font-weight="700" fill="#7c2233">.500</text>
+      <!-- 未命中点(空心) -->
+      <circle cx="105" cy="115" r="3" fill="#f5efe4" stroke="#7a7268"/>
+      <circle cx="205" cy="98" r="3" fill="#f5efe4" stroke="#7a7268"/>
+      <circle cx="205" cy="115" r="3" fill="#f5efe4" stroke="#7a7268"/>
+      <circle cx="255" cy="115" r="3" fill="#f5efe4" stroke="#7a7268"/>
+      <circle cx="255" cy="124.5" r="3" fill="#f5efe4" stroke="#7a7268"/>
+    </svg>
+    <div class="fig-legend"><span style="color:#7c2233">●</span> 命中(计入 AP)　<span style="color:#7a7268">○</span> 未命中</div>
+    </div>
+    <div class="fig-col">
+    <div class="fig-title">AP → mAP</div>
+    <svg class="fig-svg" viewBox="0 0 340 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="两个查询AP及其平均mAP的条形图">
+      <!-- 轴 -->
+      <line x1="55" y1="30" x2="55" y2="185" stroke="#1a1816" stroke-width="1"/>
+      <line x1="55" y1="185" x2="315" y2="185" stroke="#1a1816" stroke-width="1"/>
+      <text x="50" y="189" text-anchor="end" font-family="sans-serif" font-size="9.5" fill="#7a7268">0</text>
+      <text x="50" y="112" text-anchor="end" font-family="sans-serif" font-size="9.5" fill="#7a7268">.5</text>
+      <text x="50" y="37" text-anchor="end" font-family="sans-serif" font-size="9.5" fill="#7a7268">1</text>
+      <line x1="55" y1="107.5" x2="315" y2="107.5" stroke="#c9bda5" stroke-width="1" stroke-dasharray="3 3"/>
+      <!-- mAP 平均线 (0.807 -> y=185-155*0.807=59.9) -->
+      <line x1="55" y1="59.9" x2="315" y2="59.9" stroke="#c19a3e" stroke-width="1.3" stroke-dasharray="5 3"/>
+      <text x="58" y="55" text-anchor="start" font-family="sans-serif" font-size="9.5" font-weight="700" fill="#c19a3e">mAP 均线</text>
+      <!-- AP1 bar 0.698 -> h=108.2 y=76.8 -->
+      <rect x="80"  y="76.8" width="58" height="108.2" fill="#a14958"/>
+      <text x="109" y="70" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#7c2233">0.698</text>
+      <text x="109" y="200" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#4a4540">AP₁</text>
+      <!-- AP2 bar 0.917 -> h=142.1 y=42.9 -->
+      <rect x="155" y="42.9" width="58" height="142.1" fill="#a14958"/>
+      <text x="184" y="36" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#7c2233">0.917</text>
+      <text x="184" y="200" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#4a4540">AP₂</text>
+      <!-- mAP bar 0.807 -> h=125.1 y=59.9 -->
+      <rect x="230" y="59.9" width="58" height="125.1" fill="#7c2233"/>
+      <text x="259" y="53" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#7c2233">0.807</text>
+      <text x="259" y="200" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#7c2233">mAP</text>
+      <text x="185" y="226" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#4a4540">mAP = (AP₁ + AP₂) / 2</text>
+    </svg>
+    <div class="fig-legend">mAP 是两条 AP 的平均</div>
+    </div>
+  </div>
+  </div>
+  <div class="figure-cap"><b>P-R 曲线与 mAP。</b>左图把例题查询 1 的十个截断点画成曲线:横轴 Recall、纵轴 Precision。每遇一个<b>命中</b>(红点),Precision 跳升;每遇一个未命中(空心),Recall 不动而 Precision 下滑——于是形成<b>锯齿下降</b>。AP 就是把五个红点的 Precision(1.00、.667、.750、.571、.500)求和再除以相关总数 5 ≈ <b>0.698</b>,几何上近似曲线下面积。右图把两个查询的 AP 各画一条,取平均得 <b>mAP ≈ 0.807</b>;查询 2 命中全靠前,AP 高,把均线抬了上去。<b>边界:</b>红点值只在"相关位置"取,空心点从不进 AP 求和。</div>
 </div>
 
 <section>

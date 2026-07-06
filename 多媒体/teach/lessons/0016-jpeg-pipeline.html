@@ -86,6 +86,17 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -147,6 +158,62 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 </tbody>
 </table>
 <p>记忆口诀:<strong>换色 → 变频 → 量化 → 扫描游程 → 熵编码</strong>。前三步"有损",第 4、5 步"无损"。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:520px" viewBox="0 0 520 282" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', sans-serif">
+      <defs>
+        <marker id="ar16" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#4a4540"/></marker>
+      </defs>
+      <text x="14" y="18" font-size="12" font-weight="700" fill="#7c2233" letter-spacing="0.5">发送端（编码）</text>
+      <!-- Row 1 -->
+      <rect x="14"  y="30" width="108" height="42" rx="3" fill="#ebe3d3" stroke="#1a1816"/>
+      <text x="68"  y="56" text-anchor="middle" font-size="12" fill="#1a1816">RGB → YCbCr</text>
+      <rect x="142" y="30" width="108" height="42" rx="3" fill="#ebe3d3" stroke="#1a1816"/>
+      <text x="196" y="56" text-anchor="middle" font-size="12" fill="#1a1816">8×8 分块</text>
+      <rect x="270" y="30" width="108" height="42" rx="3" fill="#ebe3d3" stroke="#1a1816"/>
+      <text x="324" y="56" text-anchor="middle" font-size="12" fill="#1a1816">2D DCT</text>
+      <rect x="398" y="30" width="108" height="42" rx="3" fill="#ddd2bb" stroke="#7c2233" stroke-width="2"/>
+      <text x="452" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#7c2233">量化 ÷ Q</text>
+      <text x="452" y="66" text-anchor="middle" font-size="9.5" fill="#a13e2a">有损·压掉高频</text>
+      <line x1="122" y1="51" x2="140" y2="51" stroke="#4a4540" marker-end="url(#ar16)"/>
+      <line x1="250" y1="51" x2="268" y2="51" stroke="#4a4540" marker-end="url(#ar16)"/>
+      <line x1="378" y1="51" x2="396" y2="51" stroke="#4a4540" marker-end="url(#ar16)"/>
+      <!-- Wrap connector row1 -> row2 -->
+      <path d="M452,72 L452,92 L68,92 L68,116" fill="none" stroke="#4a4540" marker-end="url(#ar16)"/>
+      <!-- Row 2 -->
+      <rect x="14"  y="118" width="108" height="42" rx="3" fill="#ebe3d3" stroke="#1a1816"/>
+      <text x="68"  y="144" text-anchor="middle" font-size="12" fill="#1a1816">Zigzag 扫描</text>
+      <rect x="142" y="118" width="108" height="42" rx="3" fill="#ebe3d3" stroke="#1a1816"/>
+      <text x="196" y="138" text-anchor="middle" font-size="12" fill="#1a1816">DC · DPCM 差分</text>
+      <text x="196" y="152" text-anchor="middle" font-size="12" fill="#1a1816">AC · RLC 游程</text>
+      <rect x="270" y="118" width="108" height="42" rx="3" fill="#ebe3d3" stroke="#1a1816"/>
+      <text x="324" y="138" text-anchor="middle" font-size="12" fill="#1a1816">Huffman</text>
+      <text x="324" y="152" text-anchor="middle" font-size="12" fill="#1a1816">熵编码</text>
+      <rect x="398" y="118" width="108" height="42" rx="3" fill="#7c2233" stroke="#7c2233"/>
+      <text x="452" y="144" text-anchor="middle" font-size="12" font-weight="700" fill="#f5efe4">JPEG 码流</text>
+      <line x1="122" y1="139" x2="140" y2="139" stroke="#4a4540" marker-end="url(#ar16)"/>
+      <line x1="250" y1="139" x2="268" y2="139" stroke="#4a4540" marker-end="url(#ar16)"/>
+      <line x1="378" y1="139" x2="396" y2="139" stroke="#4a4540" marker-end="url(#ar16)"/>
+      <!-- divider -->
+      <line x1="14" y1="188" x2="506" y2="188" stroke="#c9bda5" stroke-dasharray="4 3"/>
+      <text x="14" y="210" font-size="12" font-weight="700" fill="#4a6e3a" letter-spacing="0.5">解码端（解码）· 完全反向</text>
+      <!-- Decoder row: data flows right -> left -->
+      <rect x="14"  y="222" width="108" height="42" rx="3" fill="#f5efe4" stroke="#4a6e3a"/>
+      <text x="68"  y="248" text-anchor="middle" font-size="11.5" fill="#1a1816">颜色反变换</text>
+      <rect x="142" y="222" width="108" height="42" rx="3" fill="#f5efe4" stroke="#4a6e3a"/>
+      <text x="196" y="248" text-anchor="middle" font-size="12" fill="#1a1816">IDCT</text>
+      <rect x="270" y="222" width="108" height="42" rx="3" fill="#f5efe4" stroke="#4a6e3a"/>
+      <text x="324" y="248" text-anchor="middle" font-size="12" fill="#1a1816">反量化 ×Q</text>
+      <rect x="398" y="222" width="108" height="42" rx="3" fill="#f5efe4" stroke="#4a6e3a"/>
+      <text x="452" y="248" text-anchor="middle" font-size="12" fill="#1a1816">熵解码</text>
+      <line x1="140" y1="243" x2="122" y2="243" stroke="#4a6e3a" marker-end="url(#ar16)"/>
+      <line x1="268" y1="243" x2="250" y2="243" stroke="#4a6e3a" marker-end="url(#ar16)"/>
+      <line x1="396" y1="243" x2="378" y2="243" stroke="#4a6e3a" marker-end="url(#ar16)"/>
+    </svg>
+  </div>
+  <div class="figure-cap"><b>JPEG 编码流水线框图。</b>上排读法:沿箭头 <b>RGB→YCbCr → 8×8 分块 → DCT → 量化 → Zigzag → DC 差分 / AC 游程 → Huffman</b>,末端得到 JPEG 码流;<b>量化</b>那格描红,是全链<b>唯一有损</b>的一步,压掉的高频再也回不来。下排绿色是解码端,把每一步<b>严格反着做一遍</b>(熵解码→反量化→IDCT→颜色反变换),但"反量化"只能乘回量化表、补不回被抹成 0 的高频——所以解出的图与原图不完全相同。</div>
+</div>
 </section>
 
 <section>
@@ -168,8 +235,200 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <section>
 <h2><span class="num">3.</span>为什么先做之字扫描</h2>
 <p>量化后的块长这样(下面例题会用到它):能量堆在左上,右下大片 0。假如<strong>逐行</strong>读,第一行读完非零值后马上撞上 0,下一行又冒出非零值,0 被切成好几段短游程——游程编码几乎占不到便宜。</p>
+
+<div class="figure">
+  <div class="figure-body">
+<svg class="fig-svg" style="max-width:512px" viewBox="0 0 512 178" xmlns="http://www.w3.org/2000/svg" font-family="'SF Mono', Menlo, monospace">
+<text x="68" y="20" text-anchor="middle" font-size="11.5" font-weight="700" fill="#4a4540" font-family="-apple-system, sans-serif">DCT 系数 F</text>
+<text x="256" y="20" text-anchor="middle" font-size="11.5" font-weight="700" fill="#4a4540" font-family="-apple-system, sans-serif">量化表 Q</text>
+<text x="444" y="20" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7c2233" font-family="-apple-system, sans-serif">量化结果 F̂</text>
+<rect x="8" y="30" width="30" height="30" fill="#ddd2bb" stroke="#c9bda5"/>
+<text x="23" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">240</text>
+<rect x="38" y="30" width="30" height="30" fill="#e4dac6" stroke="#c9bda5"/>
+<text x="53" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">-18</text>
+<rect x="68" y="30" width="30" height="30" fill="#ebe3d3" stroke="#c9bda5"/>
+<text x="83" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">5</text>
+<rect x="98" y="30" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="113" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">1</text>
+<rect x="8" y="60" width="30" height="30" fill="#e4dac6" stroke="#c9bda5"/>
+<text x="23" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">-12</text>
+<rect x="38" y="60" width="30" height="30" fill="#ebe3d3" stroke="#c9bda5"/>
+<text x="53" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">9</text>
+<rect x="68" y="60" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="83" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">-2</text>
+<rect x="98" y="60" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="113" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">0</text>
+<rect x="8" y="90" width="30" height="30" fill="#ebe3d3" stroke="#c9bda5"/>
+<text x="23" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">4</text>
+<rect x="38" y="90" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="53" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">-3</text>
+<rect x="68" y="90" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="83" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">1</text>
+<rect x="98" y="90" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="113" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">0</text>
+<rect x="8" y="120" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="23" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">1</text>
+<rect x="38" y="120" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="53" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">0</text>
+<rect x="68" y="120" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="83" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">0</text>
+<rect x="98" y="120" width="30" height="30" fill="#f2ecdf" stroke="#c9bda5"/>
+<text x="113" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">0</text>
+<rect x="8" y="30" width="120" height="120" fill="none" stroke="#1a1816"/>
+<rect x="196" y="30" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="211" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">16</text>
+<rect x="226" y="30" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="241" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">11</text>
+<rect x="256" y="30" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="271" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">16</text>
+<rect x="286" y="30" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="301" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">24</text>
+<rect x="196" y="60" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="211" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">12</text>
+<rect x="226" y="60" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="241" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">14</text>
+<rect x="256" y="60" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="271" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">22</text>
+<rect x="286" y="60" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="301" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">40</text>
+<rect x="196" y="90" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="211" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">14</text>
+<rect x="226" y="90" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="241" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">22</text>
+<rect x="256" y="90" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="271" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">40</text>
+<rect x="286" y="90" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="301" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">57</text>
+<rect x="196" y="120" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="211" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">24</text>
+<rect x="226" y="120" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="241" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">40</text>
+<rect x="256" y="120" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="271" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">57</text>
+<rect x="286" y="120" width="30" height="30" fill="#efe7d7" stroke="#c9bda5"/>
+<text x="301" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#1a1816">80</text>
+<rect x="196" y="30" width="120" height="120" fill="none" stroke="#1a1816"/>
+<rect x="384" y="30" width="30" height="30" fill="#7c2233" stroke="#c9bda5"/>
+<text x="399" y="49" text-anchor="middle" font-size="11" font-weight="700" fill="#f5efe4">15</text>
+<rect x="414" y="30" width="30" height="30" fill="#ddd2bb" stroke="#c9bda5"/>
+<text x="429" y="49" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1816">-2</text>
+<rect x="444" y="30" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="459" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="474" y="30" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="489" y="49" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="384" y="60" width="30" height="30" fill="#ddd2bb" stroke="#c9bda5"/>
+<text x="399" y="79" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1816">-1</text>
+<rect x="414" y="60" width="30" height="30" fill="#ddd2bb" stroke="#c9bda5"/>
+<text x="429" y="79" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1816">1</text>
+<rect x="444" y="60" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="459" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="474" y="60" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="489" y="79" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="384" y="90" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="399" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="414" y="90" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="429" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="444" y="90" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="459" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="474" y="90" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="489" y="109" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="384" y="120" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="399" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="414" y="120" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="429" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="444" y="120" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="459" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="474" y="120" width="30" height="30" fill="#f5efe4" stroke="#c9bda5"/>
+<text x="489" y="139" text-anchor="middle" font-size="11" font-weight="400" fill="#a89d88">0</text>
+<rect x="384" y="30" width="120" height="120" fill="none" stroke="#1a1816"/>
+<text x="162" y="96" text-anchor="middle" font-size="26" fill="#7c2233" font-family="-apple-system, sans-serif">÷</text>
+<text x="350" y="96" text-anchor="middle" font-size="24" fill="#7c2233" font-family="-apple-system, sans-serif">=</text>
+<text x="444" y="168" text-anchor="middle" font-size="10.5" fill="#a13e2a" font-family="-apple-system, sans-serif">高频区大量变 0</text>
+</svg>
+  </div>
+  <div class="figure-cap"><b>量化:高频被抹平成 0(有损的根源)。</b>逐格计算 <b>F̂(u,v)=round(F(u,v)/Q(u,v))</b>:量化表 Q 的值<b>越往右下越大</b>(高频),而那里的 DCT 系数本就小,一除就四舍五入成 0。于是左块"满是数字"被压成右块"只剩左上角几个非零值 + 一大片 0"。这些 0 无法在解码时恢复——这是 JPEG 唯一不可逆的一步,量化表调得越狠,零越多、压缩率越高、画质越糊。(图示用 4×4 示意,考试实际是 8×8。)</div>
+</div>
 <p>之字扫描换了个走法:它按"离左上角的对角线距离"由近及远地遍历,而对角线距离恰好对应 DCT 的<strong>频率高低</strong>。于是低频非零值全排在前面,一旦进入高频区就是连续的 0,直到块尾。<strong>一条长零尾巴</strong>用一个 EOB 就能表达完毕——这就是 Zig-zag 存在的唯一目的:<em>把二维的"零分布"重排成一维的"零聚集",最大化零游程长度。</em></p>
 <p>记住扫描的头几步走向:<code>(0,0)→(0,1)→(1,0)→(2,0)→(1,1)→(0,2)→(0,3)→…</code>,像沿反斜线来回折返。这个顺序背下来,考场上照着块填一维序列即可。</p>
+
+<div class="figure">
+  <div class="figure-body">
+<svg class="fig-svg" style="max-width:360px" viewBox="0 0 348 366" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', sans-serif">
+<defs><marker id="zzar" markerWidth="10" markerHeight="10" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="#7c2233"/></marker></defs>
+<rect x="22" y="30" width="38" height="38" fill="#7c2233" stroke="#c9bda5"/>
+<rect x="60" y="30" width="38" height="38" fill="#dfd4be" stroke="#c9bda5"/>
+<rect x="98" y="30" width="38" height="38" fill="#e1d7c1" stroke="#c9bda5"/>
+<rect x="136" y="30" width="38" height="38" fill="#e3d9c5" stroke="#c9bda5"/>
+<rect x="174" y="30" width="38" height="38" fill="#e4dbc8" stroke="#c9bda5"/>
+<rect x="212" y="30" width="38" height="38" fill="#e6ddcb" stroke="#c9bda5"/>
+<rect x="250" y="30" width="38" height="38" fill="#e8e0ce" stroke="#c9bda5"/>
+<rect x="288" y="30" width="38" height="38" fill="#eae2d2" stroke="#c9bda5"/>
+<rect x="22" y="68" width="38" height="38" fill="#dfd4be" stroke="#c9bda5"/>
+<rect x="60" y="68" width="38" height="38" fill="#e1d7c1" stroke="#c9bda5"/>
+<rect x="98" y="68" width="38" height="38" fill="#e3d9c5" stroke="#c9bda5"/>
+<rect x="136" y="68" width="38" height="38" fill="#e4dbc8" stroke="#c9bda5"/>
+<rect x="174" y="68" width="38" height="38" fill="#e6ddcb" stroke="#c9bda5"/>
+<rect x="212" y="68" width="38" height="38" fill="#e8e0ce" stroke="#c9bda5"/>
+<rect x="250" y="68" width="38" height="38" fill="#eae2d2" stroke="#c9bda5"/>
+<rect x="288" y="68" width="38" height="38" fill="#ece4d5" stroke="#c9bda5"/>
+<rect x="22" y="106" width="38" height="38" fill="#e1d7c1" stroke="#c9bda5"/>
+<rect x="60" y="106" width="38" height="38" fill="#e3d9c5" stroke="#c9bda5"/>
+<rect x="98" y="106" width="38" height="38" fill="#e4dbc8" stroke="#c9bda5"/>
+<rect x="136" y="106" width="38" height="38" fill="#e6ddcb" stroke="#c9bda5"/>
+<rect x="174" y="106" width="38" height="38" fill="#e8e0ce" stroke="#c9bda5"/>
+<rect x="212" y="106" width="38" height="38" fill="#eae2d2" stroke="#c9bda5"/>
+<rect x="250" y="106" width="38" height="38" fill="#ece4d5" stroke="#c9bda5"/>
+<rect x="288" y="106" width="38" height="38" fill="#eee7d8" stroke="#c9bda5"/>
+<rect x="22" y="144" width="38" height="38" fill="#e3d9c5" stroke="#c9bda5"/>
+<rect x="60" y="144" width="38" height="38" fill="#e4dbc8" stroke="#c9bda5"/>
+<rect x="98" y="144" width="38" height="38" fill="#e6ddcb" stroke="#c9bda5"/>
+<rect x="136" y="144" width="38" height="38" fill="#e8e0ce" stroke="#c9bda5"/>
+<rect x="174" y="144" width="38" height="38" fill="#eae2d2" stroke="#c9bda5"/>
+<rect x="212" y="144" width="38" height="38" fill="#ece4d5" stroke="#c9bda5"/>
+<rect x="250" y="144" width="38" height="38" fill="#eee7d8" stroke="#c9bda5"/>
+<rect x="288" y="144" width="38" height="38" fill="#f0e9db" stroke="#c9bda5"/>
+<rect x="22" y="182" width="38" height="38" fill="#e4dbc8" stroke="#c9bda5"/>
+<rect x="60" y="182" width="38" height="38" fill="#e6ddcb" stroke="#c9bda5"/>
+<rect x="98" y="182" width="38" height="38" fill="#e8e0ce" stroke="#c9bda5"/>
+<rect x="136" y="182" width="38" height="38" fill="#eae2d2" stroke="#c9bda5"/>
+<rect x="174" y="182" width="38" height="38" fill="#ece4d5" stroke="#c9bda5"/>
+<rect x="212" y="182" width="38" height="38" fill="#eee7d8" stroke="#c9bda5"/>
+<rect x="250" y="182" width="38" height="38" fill="#f0e9db" stroke="#c9bda5"/>
+<rect x="288" y="182" width="38" height="38" fill="#f1ebde" stroke="#c9bda5"/>
+<rect x="22" y="220" width="38" height="38" fill="#e6ddcb" stroke="#c9bda5"/>
+<rect x="60" y="220" width="38" height="38" fill="#e8e0ce" stroke="#c9bda5"/>
+<rect x="98" y="220" width="38" height="38" fill="#eae2d2" stroke="#c9bda5"/>
+<rect x="136" y="220" width="38" height="38" fill="#ece4d5" stroke="#c9bda5"/>
+<rect x="174" y="220" width="38" height="38" fill="#eee7d8" stroke="#c9bda5"/>
+<rect x="212" y="220" width="38" height="38" fill="#f0e9db" stroke="#c9bda5"/>
+<rect x="250" y="220" width="38" height="38" fill="#f1ebde" stroke="#c9bda5"/>
+<rect x="288" y="220" width="38" height="38" fill="#f3ede2" stroke="#c9bda5"/>
+<rect x="22" y="258" width="38" height="38" fill="#e8e0ce" stroke="#c9bda5"/>
+<rect x="60" y="258" width="38" height="38" fill="#eae2d2" stroke="#c9bda5"/>
+<rect x="98" y="258" width="38" height="38" fill="#ece4d5" stroke="#c9bda5"/>
+<rect x="136" y="258" width="38" height="38" fill="#eee7d8" stroke="#c9bda5"/>
+<rect x="174" y="258" width="38" height="38" fill="#f0e9db" stroke="#c9bda5"/>
+<rect x="212" y="258" width="38" height="38" fill="#f1ebde" stroke="#c9bda5"/>
+<rect x="250" y="258" width="38" height="38" fill="#f3ede2" stroke="#c9bda5"/>
+<rect x="288" y="258" width="38" height="38" fill="#f5f0e5" stroke="#c9bda5"/>
+<rect x="22" y="296" width="38" height="38" fill="#eae2d2" stroke="#c9bda5"/>
+<rect x="60" y="296" width="38" height="38" fill="#ece4d5" stroke="#c9bda5"/>
+<rect x="98" y="296" width="38" height="38" fill="#eee7d8" stroke="#c9bda5"/>
+<rect x="136" y="296" width="38" height="38" fill="#f0e9db" stroke="#c9bda5"/>
+<rect x="174" y="296" width="38" height="38" fill="#f1ebde" stroke="#c9bda5"/>
+<rect x="212" y="296" width="38" height="38" fill="#f3ede2" stroke="#c9bda5"/>
+<rect x="250" y="296" width="38" height="38" fill="#f5f0e5" stroke="#c9bda5"/>
+<rect x="288" y="296" width="38" height="38" fill="#f7f2e8" stroke="#c9bda5"/>
+<rect x="22" y="30" width="304" height="304" fill="none" stroke="#1a1816" stroke-width="1.5"/>
+<text x="41" y="53" text-anchor="middle" font-size="10" font-weight="700" fill="#f5efe4">DC</text>
+<polyline points="41,49 79,49 41,87 41,125 79,87 117,49 155,49 117,87 79,125 41,163 41,201 79,163 117,125 155,87 193,49 231,49 193,87 155,125 117,163 79,201 41,239 41,277 79,239 117,201 155,163 193,125 231,87 269,49 307,49 269,87 231,125 193,163 155,201 117,239 79,277 41,315 79,315 117,277 155,239 193,201 231,163 269,125 307,87 307,125 269,163 231,201 193,239 155,277 117,315 155,315 193,277 231,239 269,201 307,163 307,201 269,239 231,277 193,315 231,315 269,277 307,239 307,277 269,315 307,315" fill="none" stroke="#7c2233" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" opacity="0.9" marker-end="url(#zzar)"/>
+<circle cx="41" cy="49" r="4" fill="#c19a3e" stroke="#1a1816" stroke-width="1"/>
+<text x="22" y="20" font-size="11" fill="#4a6e3a" font-weight="700">低频起点 (0,0)</text>
+<text x="326" y="352" text-anchor="end" font-size="11" fill="#a13e2a" font-weight="700">高频终点 (7,7)</text>
+</svg>
+  </div>
+  <div class="figure-cap"><b>Zig-zag 之字扫描路径。</b>从左上金点 <b>DC(0,0)</b> 出发,沿对角线来回折返,一路走到右下角 (7,7),把 8×8 的二维系数<b>拉成 64 个数的一维序列</b>。格子底色由深到浅代表频率由低到高——折线恰好<b>按频率从低到高</b>穿过所有格子。怎么读:线经过的先后顺序就是写进一维序列的顺序。为什么这样走:低频非零值集中在左上、被先取走,高频区的 0 自然排到队尾连成一长串,给游程编码留出一个 EOB 就能收尾的"零尾巴"。</div>
+</div>
 </section>
 
 <div class="worked">

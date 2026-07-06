@@ -86,6 +86,16 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -152,6 +162,38 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <tr><td>→ 0</td><td>→ ∞</td><td>几乎不可能,一旦发生信息量爆炸</td></tr>
 </tbody>
 </table>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:430px" viewBox="0 0 300 190" xmlns="http://www.w3.org/2000/svg">
+      <line x1="45" y1="165" x2="45" y2="12" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+      <line x1="45" y1="135.6" x2="285" y2="135.6" stroke="#c9bda5" stroke-width="0.5" stroke-dasharray="2 3"/>
+      <line x1="45" y1="106.2" x2="285" y2="106.2" stroke="#c9bda5" stroke-width="0.5" stroke-dasharray="2 3"/>
+      <line x1="45" y1="76.8" x2="285" y2="76.8" stroke="#c9bda5" stroke-width="0.5" stroke-dasharray="2 3"/>
+      <line x1="45" y1="47.4" x2="285" y2="47.4" stroke="#c9bda5" stroke-width="0.5" stroke-dasharray="2 3"/>
+      <line x1="45" y1="165" x2="290" y2="165" stroke="#1a1816" stroke-width="1"/>
+      <line x1="45" y1="165" x2="45" y2="12" stroke="#1a1816" stroke-width="1"/>
+      <text x="40" y="168" text-anchor="end" font-size="9" fill="#7a7268">0</text>
+      <text x="40" y="139" text-anchor="end" font-size="9" fill="#7a7268">1</text>
+      <text x="40" y="109.5" text-anchor="end" font-size="9" fill="#7a7268">2</text>
+      <text x="40" y="80" text-anchor="end" font-size="9" fill="#7a7268">3</text>
+      <text x="40" y="50.5" text-anchor="end" font-size="9" fill="#7a7268">4</text>
+      <text x="75" y="177" text-anchor="middle" font-size="9" fill="#7a7268">1/8</text>
+      <text x="105" y="177" text-anchor="middle" font-size="9" fill="#7a7268">1/4</text>
+      <text x="165" y="177" text-anchor="middle" font-size="9" fill="#7a7268">1/2</text>
+      <text x="285" y="177" text-anchor="middle" font-size="9" fill="#7a7268">1</text>
+      <text x="152" y="189" text-anchor="middle" font-size="10" fill="#4a4540">概率 p →</text>
+      <text x="16" y="24" text-anchor="middle" font-size="10" fill="#4a4540" transform="rotate(-90 16 90)">自信息 I = −log₂p (bit)</text>
+      <path d="M 49.8,18.0 L 51.0,18.0 L 52.2,18.0 L 53.3,22.4 L 54.5,28.0 L 55.7,33.0 L 56.9,37.4 L 58.0,41.4 L 59.2,45.1 L 60.4,48.5 L 61.6,51.6 L 62.7,54.5 L 63.9,57.2 L 65.1,59.8 L 66.3,62.2 L 67.4,64.5 L 68.6,66.7 L 69.8,68.7 L 71.0,70.7 L 72.1,72.6 L 73.3,74.4 L 74.5,76.1 L 75.7,77.7 L 76.8,79.3 L 78.0,80.9 L 79.2,82.4 L 80.4,83.8 L 81.6,85.2 L 82.7,86.5 L 83.9,87.8 L 85.1,89.1 L 86.3,90.3 L 87.4,91.5 L 88.6,92.7 L 89.8,93.8 L 91.0,94.9 L 92.1,96.0 L 93.3,97.0 L 94.5,98.0 L 95.7,99.0 L 96.8,100.0 L 98.0,101.0 L 99.2,101.9 L 100.4,102.8 L 101.5,103.7 L 102.7,104.6 L 103.9,105.4 L 105.1,106.3 L 106.2,107.1 L 107.4,107.9 L 108.6,108.7 L 109.8,109.4 L 111.0,110.2 L 112.1,111.0 L 113.3,111.7 L 114.5,112.4 L 115.7,113.1 L 116.8,113.8 L 118.0,114.5 L 119.2,115.2 L 120.4,115.9 L 121.5,116.5 L 122.7,117.2 L 123.9,117.8 L 125.1,118.4 L 126.2,119.1 L 127.4,119.7 L 128.6,120.3 L 129.8,120.9 L 130.9,121.4 L 132.1,122.0 L 133.3,122.6 L 134.5,123.1 L 135.6,123.7 L 136.8,124.2 L 138.0,124.8 L 139.2,125.3 L 140.4,125.8 L 141.5,126.4 L 142.7,126.9 L 143.9,127.4 L 145.1,127.9 L 146.2,128.4 L 147.4,128.9 L 148.6,129.4 L 149.8,129.8 L 150.9,130.3 L 152.1,130.8 L 153.3,131.2 L 154.5,131.7 L 155.6,132.2 L 156.8,132.6 L 158.0,133.0 L 159.2,133.5 L 160.3,133.9 L 161.5,134.4 L 162.7,134.8 L 163.9,135.2 L 165.0,135.6 L 166.2,136.0 L 167.4,136.4 L 168.6,136.8 L 169.8,137.2 L 170.9,137.6 L 172.1,138.0 L 173.3,138.4 L 174.5,138.8 L 175.6,139.2 L 176.8,139.6 L 178.0,140.0 L 179.2,140.3 L 180.3,140.7 L 181.5,141.1 L 182.7,141.4 L 183.9,141.8 L 185.0,142.2 L 186.2,142.5 L 187.4,142.9 L 188.6,143.2 L 189.7,143.6 L 190.9,143.9 L 192.1,144.2 L 193.3,144.6 L 194.4,144.9 L 195.6,145.2 L 196.8,145.6 L 198.0,145.9 L 199.2,146.2 L 200.3,146.5 L 201.5,146.9 L 202.7,147.2 L 203.9,147.5 L 205.0,147.8 L 206.2,148.1 L 207.4,148.4 L 208.6,148.7 L 209.7,149.0 L 210.9,149.3 L 212.1,149.6 L 213.3,149.9 L 214.4,150.2 L 215.6,150.5 L 216.8,150.8 L 218.0,151.1 L 219.1,151.4 L 220.3,151.7 L 221.5,152.0 L 222.7,152.2 L 223.8,152.5 L 225.0,152.8 L 226.2,153.1 L 227.4,153.4 L 228.6,153.6 L 229.7,153.9 L 230.9,154.2 L 232.1,154.4 L 233.3,154.7 L 234.4,155.0 L 235.6,155.2 L 236.8,155.5 L 238.0,155.7 L 239.1,156.0 L 240.3,156.3 L 241.5,156.5 L 242.7,156.8 L 243.8,157.0 L 245.0,157.3 L 246.2,157.5 L 247.4,157.8 L 248.5,158.0 L 249.7,158.3 L 250.9,158.5 L 252.1,158.7 L 253.2,159.0 L 254.4,159.2 L 255.6,159.5 L 256.8,159.7 L 258.0,159.9 L 259.1,160.2 L 260.3,160.4 L 261.5,160.6 L 262.7,160.9 L 263.8,161.1 L 265.0,161.3 L 266.2,161.5 L 267.4,161.8 L 268.5,162.0 L 269.7,162.2 L 270.9,162.4 L 272.1,162.6 L 273.2,162.9 L 274.4,163.1 L 275.6,163.3 L 276.8,163.5 L 277.9,163.7 L 279.1,163.9 L 280.3,164.2 L 281.5,164.4 L 282.6,164.6 L 283.8,164.8 L 285.0,165.0" fill="none" stroke="#7c2233" stroke-width="2"/>
+      <circle cx="75" cy="76.8" r="3.5" fill="#7c2233"/>
+      <circle cx="105" cy="106.2" r="3.5" fill="#7c2233"/>
+      <circle cx="165" cy="135.6" r="3.5" fill="#7c2233"/>
+      <circle cx="285" cy="165" r="3.5" fill="#7c2233"/>
+    </svg>
+    <div class="fig-legend">红点即上表四行:p 每减半,曲线就往上跳 1 bit</div>
+  </div>
+  <div class="figure-cap"><b>越稀有越"值钱"。</b>自信息 <code>I=−log₂p</code> 是一条随概率下降而陡升的曲线:p=1(必然)时信息为 0,p→0(几乎不可能)时信息爆炸到无穷。曲线的凹形正是"稀有事件信息量不成比例地大"的几何写照。</div>
+</div>
 </section>
 
 <section>
@@ -159,6 +201,31 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <p>熵不是随便定义的数字,它是一道<strong>物理下限</strong>:任何无损编码,平均每个符号的码长 <code>l̄</code> 都不可能低于熵 <code>η</code>,即 <code>η ≤ l̄</code>。</p>
 <p>道理在于:要想缩短平均码长,就得给<strong>高概率符号短码、低概率符号长码</strong>。但码字不能随便短——任意无损前缀码受 Kraft 不等式约束 <code>Σ 2^(−lᵢ) ≤ 1</code>。在这个约束下让加权平均码长 <code>Σ pᵢ·lᵢ</code> 最小,最优解恰好是 <code>lᵢ = −log₂ pᵢ</code>,此时平均码长正好等于熵。</p>
 <p>可现实里码长必须是<strong>整数</strong>(Huffman 就是逐符号给整数位码),没法精确取到 <code>−log₂ pᵢ</code> 这种小数,所以只能 <code>l̄ ≥ η</code>,并且最优时满足 <code>η ≤ l̄ < η + 1</code>。这也解释了后面为什么算术编码(对整条消息编码、能逼近熵)常常胜过 Huffman。<strong>一句话:熵 = 消除每个符号平均不确定性所需的最少比特数。</strong></p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:430px" viewBox="0 0 300 178" xmlns="http://www.w3.org/2000/svg">
+      <line x1="162.5" y1="150" x2="162.5" y2="25" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+      <line x1="40" y1="25" x2="285" y2="25" stroke="#c9bda5" stroke-width="0.5" stroke-dasharray="2 3"/>
+      <line x1="40" y1="150" x2="290" y2="150" stroke="#1a1816" stroke-width="1"/>
+      <line x1="40" y1="150" x2="40" y2="18" stroke="#1a1816" stroke-width="1"/>
+      <text x="35" y="153" text-anchor="end" font-size="9" fill="#7a7268">0</text>
+      <text x="35" y="28" text-anchor="end" font-size="9" fill="#7a7268">1</text>
+      <text x="40" y="163" text-anchor="middle" font-size="9" fill="#7a7268">0</text>
+      <text x="162.5" y="163" text-anchor="middle" font-size="9" fill="#7a7268">0.5</text>
+      <text x="285" y="163" text-anchor="middle" font-size="9" fill="#7a7268">1</text>
+      <text x="160" y="176" text-anchor="middle" font-size="10" fill="#4a4540">符号 A 的概率 p →</text>
+      <text x="14" y="24" text-anchor="middle" font-size="10" fill="#4a4540" transform="rotate(-90 14 88)">熵 η (bit/symbol)</text>
+      <path d="M 40.0,150.0 L 41.2,144.3 L 42.5,139.9 L 43.7,136.0 L 44.9,132.3 L 46.1,128.9 L 47.4,125.7 L 48.6,122.6 L 49.8,119.7 L 51.0,116.9 L 52.2,114.2 L 53.5,111.6 L 54.7,109.1 L 55.9,106.6 L 57.2,104.3 L 58.4,102.0 L 59.6,99.7 L 60.8,97.6 L 62.0,95.4 L 63.3,93.4 L 64.5,91.4 L 65.7,89.4 L 67.0,87.5 L 68.2,85.6 L 69.4,83.8 L 70.6,82.1 L 71.8,80.3 L 73.1,78.6 L 74.3,77.0 L 75.5,75.4 L 76.8,73.8 L 78.0,72.2 L 79.2,70.7 L 80.4,69.2 L 81.7,67.8 L 82.9,66.4 L 84.1,65.0 L 85.3,63.6 L 86.5,62.3 L 87.8,61.0 L 89.0,59.8 L 90.2,58.5 L 91.4,57.3 L 92.7,56.1 L 93.9,55.0 L 95.1,53.9 L 96.3,52.7 L 97.6,51.7 L 98.8,50.6 L 100.0,49.6 L 101.2,48.6 L 102.5,47.6 L 103.7,46.7 L 104.9,45.7 L 106.2,44.8 L 107.4,43.9 L 108.6,43.1 L 109.8,42.2 L 111.0,41.4 L 112.3,40.6 L 113.5,39.8 L 114.7,39.1 L 116.0,38.4 L 117.2,37.6 L 118.4,37.0 L 119.6,36.3 L 120.9,35.6 L 122.1,35.0 L 123.3,34.4 L 124.5,33.8 L 125.8,33.2 L 127.0,32.7 L 128.2,32.2 L 129.4,31.7 L 130.7,31.2 L 131.9,30.7 L 133.1,30.2 L 134.3,29.8 L 135.6,29.4 L 136.8,29.0 L 138.0,28.6 L 139.2,28.3 L 140.4,27.9 L 141.7,27.6 L 142.9,27.3 L 144.1,27.0 L 145.3,26.8 L 146.6,26.5 L 147.8,26.3 L 149.0,26.1 L 150.2,25.9 L 151.5,25.7 L 152.7,25.6 L 153.9,25.4 L 155.1,25.3 L 156.4,25.2 L 157.6,25.1 L 158.8,25.1 L 160.1,25.0 L 161.3,25.0 L 162.5,25.0 L 163.7,25.0 L 164.9,25.0 L 166.2,25.1 L 167.4,25.1 L 168.6,25.2 L 169.8,25.3 L 171.1,25.4 L 172.3,25.6 L 173.5,25.7 L 174.8,25.9 L 176.0,26.1 L 177.2,26.3 L 178.4,26.5 L 179.6,26.8 L 180.9,27.0 L 182.1,27.3 L 183.3,27.6 L 184.5,27.9 L 185.8,28.3 L 187.0,28.6 L 188.2,29.0 L 189.4,29.4 L 190.7,29.8 L 191.9,30.2 L 193.1,30.7 L 194.3,31.2 L 195.6,31.7 L 196.8,32.2 L 198.0,32.7 L 199.2,33.2 L 200.5,33.8 L 201.7,34.4 L 202.9,35.0 L 204.2,35.6 L 205.4,36.3 L 206.6,37.0 L 207.8,37.6 L 209.0,38.4 L 210.3,39.1 L 211.5,39.8 L 212.7,40.6 L 213.9,41.4 L 215.2,42.2 L 216.4,43.1 L 217.6,43.9 L 218.8,44.8 L 220.1,45.7 L 221.3,46.7 L 222.5,47.6 L 223.8,48.6 L 225.0,49.6 L 226.2,50.6 L 227.4,51.7 L 228.7,52.7 L 229.9,53.9 L 231.1,55.0 L 232.3,56.1 L 233.6,57.3 L 234.8,58.5 L 236.0,59.8 L 237.2,61.0 L 238.5,62.3 L 239.7,63.6 L 240.9,65.0 L 242.1,66.4 L 243.3,67.8 L 244.6,69.2 L 245.8,70.7 L 247.0,72.2 L 248.2,73.8 L 249.5,75.4 L 250.7,77.0 L 251.9,78.6 L 253.2,80.3 L 254.4,82.1 L 255.6,83.8 L 256.8,85.6 L 258.1,87.5 L 259.3,89.4 L 260.5,91.4 L 261.7,93.4 L 263.0,95.4 L 264.2,97.6 L 265.4,99.7 L 266.6,102.0 L 267.9,104.3 L 269.1,106.6 L 270.3,109.1 L 271.5,111.6 L 272.8,114.2 L 274.0,116.9 L 275.2,119.7 L 276.4,122.6 L 277.6,125.7 L 278.9,128.9 L 280.1,132.3 L 281.3,136.0 L 282.6,139.9 L 283.8,144.3 L 285.0,150.0" fill="none" stroke="#7c2233" stroke-width="2"/>
+      <circle cx="162.5" cy="25" r="3.5" fill="#7c2233"/>
+      <circle cx="40" cy="150" r="3.5" fill="#4a6e3a"/>
+      <circle cx="285" cy="150" r="3.5" fill="#4a6e3a"/>
+      <text x="162.5" y="20" text-anchor="middle" font-size="9" fill="#7c2233">最大 η=1</text>
+    </svg>
+    <div class="fig-legend">两端 η=0(某符号必然出现,毫无悬念),中点 η=1(五五开,最不可预测)</div>
+  </div>
+  <div class="figure-cap"><b>为什么"等概率时熵最大"。</b>以只有两个符号的信源为例,横轴是符号 A 出现的概率。当 p=0 或 1 时结果完全确定,熵为 0,压无可压;当 p=0.5 时最难猜,熵达到峰值 1 bit——这正是熵作为压缩下界的含义:<b>越可预测的数据,理论上能压得越狠</b>。RLC 正是靠"大片重复=极可预测"这一端吃到红利。</div>
+</div>
 </section>
 
 <div class="worked">
@@ -175,6 +242,32 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
   </div>
 </div>
 
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:360px" viewBox="0 0 300 155" xmlns="http://www.w3.org/2000/svg">
+      <line x1="30" y1="120" x2="290" y2="120" stroke="#1a1816" stroke-width="1"/>
+      <line x1="30" y1="120" x2="30" y2="15" stroke="#1a1816" stroke-width="1"/>
+      <line x1="30" y1="30" x2="290" y2="30" stroke="#c9bda5" stroke-width="0.5" stroke-dasharray="2 3"/>
+      <line x1="30" y1="52.5" x2="290" y2="52.5" stroke="#c9bda5" stroke-width="0.5" stroke-dasharray="2 3"/>
+      <text x="25" y="123" text-anchor="end" font-size="9" fill="#7a7268">0</text>
+      <text x="25" y="55.5" text-anchor="end" font-size="9" fill="#7a7268">1.5</text>
+      <text x="25" y="33" text-anchor="end" font-size="9" fill="#7a7268">2.0</text>
+      <rect x="70" y="30" width="60" height="90" fill="#a14958"/>
+      <text x="100" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="#7c2233">2.0 bit</text>
+      <text x="100" y="135" text-anchor="middle" font-size="10" fill="#4a4540">定长码</text>
+      <rect x="180" y="52.5" width="60" height="67.5" fill="#7c2233"/>
+      <text x="210" y="47" text-anchor="middle" font-size="11" font-weight="700" fill="#7c2233">1.5 bit</text>
+      <text x="210" y="135" text-anchor="middle" font-size="10" fill="#4a4540">熵下界 η</text>
+      <line x1="255" y1="30" x2="255" y2="52.5" stroke="#4a6e3a" stroke-width="1.2"/>
+      <line x1="251" y1="30" x2="259" y2="30" stroke="#4a6e3a" stroke-width="1.2"/>
+      <line x1="251" y1="52.5" x2="259" y2="52.5" stroke="#4a6e3a" stroke-width="1.2"/>
+      <text x="263" y="44" font-size="9" fill="#4a6e3a">可压 0.5</text>
+    </svg>
+    <div class="fig-legend">同一信源:定长码要 2.0 bit,熵只要 1.5 bit</div>
+  </div>
+  <div class="figure-cap"><b>熵 = 可压缩的地板。</b>例题 A 的信源用最笨的定长码要 2 bit/符号,而熵告诉我们理论下界是 1.5 bit/符号——中间这 <code>0.5 bit</code> 就是变长编码(下一课的 Huffman)能榨出的压缩空间。注意:谁也压不到 1.5 以下,那是物理地板。</div>
+</div>
+
 <div class="worked">
   <div class="worked-head">例题 B · 游程编码 RLC</div>
   <div class="worked-body">
@@ -186,6 +279,43 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     </ol>
     <div class="result"><strong>结果:</strong> <code>aaabbc → (3,a)(2,b)(1,c)</code>。<br>提醒:RLC 只在<strong>重复多</strong>时才划算。若是 <code>abcabc</code> 这种毫无连续重复的串,RLC 反而会把 6 个符号变成 6 个二元组,越"压"越大——这正是它的边界情况。</div>
   </div>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:340px" viewBox="0 0 300 175" xmlns="http://www.w3.org/2000/svg">
+      <text x="150" y="14" text-anchor="middle" font-size="10" fill="#7a7268">原始:6 个符号</text>
+      <rect x="66" y="22" width="28" height="30" fill="#e3c3c9" stroke="#7c2233" stroke-width="1"/>
+      <rect x="94" y="22" width="28" height="30" fill="#e3c3c9" stroke="#7c2233" stroke-width="1"/>
+      <rect x="122" y="22" width="28" height="30" fill="#e3c3c9" stroke="#7c2233" stroke-width="1"/>
+      <rect x="150" y="22" width="28" height="30" fill="#efe0b8" stroke="#c19a3e" stroke-width="1"/>
+      <rect x="178" y="22" width="28" height="30" fill="#efe0b8" stroke="#c19a3e" stroke-width="1"/>
+      <rect x="206" y="22" width="28" height="30" fill="#d7e2cd" stroke="#4a6e3a" stroke-width="1"/>
+      <text x="80" y="43" text-anchor="middle" font-size="15" fill="#7c2233">a</text>
+      <text x="108" y="43" text-anchor="middle" font-size="15" fill="#7c2233">a</text>
+      <text x="136" y="43" text-anchor="middle" font-size="15" fill="#7c2233">a</text>
+      <text x="164" y="43" text-anchor="middle" font-size="15" fill="#9a7b1e">b</text>
+      <text x="192" y="43" text-anchor="middle" font-size="15" fill="#9a7b1e">b</text>
+      <text x="220" y="43" text-anchor="middle" font-size="15" fill="#4a6e3a">c</text>
+      <path d="M 66,60 L 66,66 L 150,66 L 150,60" fill="none" stroke="#7c2233" stroke-width="1"/>
+      <text x="108" y="78" text-anchor="middle" font-size="9" fill="#7c2233">连续 3 个 a</text>
+      <path d="M 150,60 L 150,66 L 206,66 L 206,60" fill="none" stroke="#c19a3e" stroke-width="1"/>
+      <text x="178" y="78" text-anchor="middle" font-size="9" fill="#9a7b1e">2 个 b</text>
+      <path d="M 206,60 L 206,66 L 234,66 L 234,60" fill="none" stroke="#4a6e3a" stroke-width="1"/>
+      <text x="220" y="78" text-anchor="middle" font-size="9" fill="#4a6e3a">1 个 c</text>
+      <path d="M 150,88 L 150,104" stroke="#1a1816" stroke-width="1.5" marker-end="url(#arr8)"/>
+      <defs><marker id="arr8" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#1a1816"/></marker></defs>
+      <text x="150" y="122" text-anchor="middle" font-size="10" fill="#7a7268">编码:3 个二元组</text>
+      <rect x="72" y="130" width="52" height="30" fill="#e3c3c9" stroke="#7c2233" stroke-width="1"/>
+      <text x="98" y="150" text-anchor="middle" font-size="13" fill="#7c2233">(3,a)</text>
+      <rect x="124" y="130" width="52" height="30" fill="#efe0b8" stroke="#c19a3e" stroke-width="1"/>
+      <text x="150" y="150" text-anchor="middle" font-size="13" fill="#9a7b1e">(2,b)</text>
+      <rect x="176" y="130" width="52" height="30" fill="#d7e2cd" stroke="#4a6e3a" stroke-width="1"/>
+      <text x="202" y="150" text-anchor="middle" font-size="13" fill="#4a6e3a">(1,c)</text>
+    </svg>
+    <div class="fig-legend">同色=一段连续相同符号,各折叠成"(次数, 符号)"</div>
+  </div>
+  <div class="figure-cap"><b>RLC 就是"数个数再折叠"。</b>从左到右扫描,把每一段连续相同的符号压成一个二元组。<code>aaabbc</code> 的三段分别折成 <code>(3,a)(2,b)(1,c)</code>。重复越长,折叠收益越大;但若像 <code>abcabc</code> 毫无连续重复,每段长度都是 1,反而越折越长——这就是 RLC 的适用边界。</div>
 </div>
 
 <div class="selftest">

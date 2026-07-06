@@ -86,6 +86,17 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -123,6 +134,62 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
   <p>把一张图像想成方格纸:每个小格子就是一个<strong>像素 (pixel)</strong>,格子里填的数字就是这个点的颜色。方格纸有多少行多少列,就是<strong>图像分辨率</strong>(如 512×512)。整张填满数字的方格纸,就是<strong>位图 (bitmap)</strong>——一个二维数组。而"这张图占多少空间",本质就是:<em>格子数 × 每个格子记几个字节</em>。全部计算题都从这一句展开。</p>
 </div>
 
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-title">图像 = 像素网格</div>
+    <svg class="fig-svg" viewBox="0 0 440 254" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', sans-serif">
+      <!-- thumbnail scene -->
+      <rect x="30" y="76" width="15" height="15" fill="rgb(122,170,214)"/>
+      <rect x="45" y="76" width="15" height="15" fill="rgb(122,170,214)"/>
+      <rect x="60" y="76" width="15" height="15" fill="rgb(140,185,222)"/>
+      <rect x="75" y="76" width="15" height="15" fill="rgb(150,192,228)"/>
+      <rect x="30" y="91" width="15" height="15" fill="rgb(122,170,214)"/>
+      <rect x="45" y="91" width="15" height="15" fill="rgb(140,185,222)"/>
+      <rect x="60" y="91" width="15" height="15" fill="rgb(150,192,228)"/>
+      <rect x="75" y="91" width="15" height="15" fill="rgb(196,214,150)"/>
+      <rect x="30" y="106" width="15" height="15" fill="rgb(140,185,222)"/>
+      <rect x="45" y="106" width="15" height="15" fill="rgb(150,192,228)"/>
+      <rect x="60" y="106" width="15" height="15" fill="rgb(120,150,80)"/>
+      <rect x="75" y="106" width="15" height="15" fill="rgb(140,168,92)"/>
+      <rect x="30" y="121" width="15" height="15" fill="rgb(96,124,64)"/>
+      <rect x="45" y="121" width="15" height="15" fill="rgb(110,140,74)"/>
+      <rect x="60" y="121" width="15" height="15" fill="rgb(140,168,92)"/>
+      <rect x="75" y="121" width="15" height="15" fill="rgb(150,178,100)"/>
+      <rect x="30" y="76" width="60" height="60" fill="none" stroke="#1a1816" stroke-width="1.5"/>
+      <text x="60" y="154" text-anchor="middle" font-size="12" fill="#4a4540">一张图像(远看)</text>
+      <!-- arrow -->
+      <line x1="104" y1="106" x2="210" y2="106" stroke="#7c2233" stroke-width="2"/>
+      <polygon points="210,106 200,101 200,111" fill="#7c2233"/>
+      <text x="157" y="98" text-anchor="middle" font-size="12" font-weight="700" fill="#7c2233">放大</text>
+      <text x="157" y="122" text-anchor="middle" font-size="10.5" fill="#7a7268">zoom in</text>
+      <!-- zoomed grid 4x4 -->
+      <rect x="232" y="26" width="46" height="46" fill="rgb(122,170,214)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="278" y="26" width="46" height="46" fill="rgb(122,170,214)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="324" y="26" width="46" height="46" fill="rgb(140,185,222)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="370" y="26" width="46" height="46" fill="rgb(150,192,228)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="232" y="72" width="46" height="46" fill="rgb(122,170,214)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="278" y="72" width="46" height="46" fill="rgb(140,185,222)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="324" y="72" width="46" height="46" fill="rgb(150,192,228)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="370" y="72" width="46" height="46" fill="rgb(196,214,150)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="232" y="118" width="46" height="46" fill="rgb(140,185,222)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="278" y="118" width="46" height="46" fill="rgb(150,192,228)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="324" y="118" width="46" height="46" fill="rgb(120,150,80)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="370" y="118" width="46" height="46" fill="rgb(140,168,92)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="232" y="164" width="46" height="46" fill="rgb(96,124,64)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="278" y="164" width="46" height="46" fill="rgb(110,140,74)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="324" y="164" width="46" height="46" fill="rgb(140,168,92)" stroke="#f5efe4" stroke-width="1.5"/>
+      <rect x="370" y="164" width="46" height="46" fill="rgb(150,178,100)" stroke="#f5efe4" stroke-width="1.5"/>
+      <!-- highlight one pixel -->
+      <rect x="324" y="118" width="46" height="46" fill="none" stroke="#c19a3e" stroke-width="3.5"/>
+      <!-- RGB callout below grid -->
+      <rect x="232" y="222" width="18" height="18" fill="rgb(120,150,80)" stroke="#1a1816" stroke-width="1"/>
+      <text x="258" y="235" font-size="13" fill="#1a1816" font-family="Menlo, monospace">= 1 像素 → R120 G150 B80</text>
+    </svg>
+    <div class="fig-legend">左边远看是连续画面,放大后露出方格 —— 每格是一个像素,存 (R, G, B) 三个数。</div>
+  </div>
+  <div class="figure-cap"><b>图像的底层就是像素网格。</b>屏幕上看似连续的图,放大到极致就是一张填满数字的方格纸(位图=二维数组)。<b>怎么读:</b>右侧 4×4 是放大后的像素;金框那格的颜色 = <code>rgb(120,150,80)</code>。<b>边界:</b>格子越多(分辨率越高)图越细,但数据量也越大 —— 这正是下面计算题的起点。</div>
+</div>
+
 <section>
 <h2><span class="num">1.</span>核心定义:从像素到位图</h2>
 <div class="def">
@@ -138,6 +205,92 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     <dt>24-bit 彩色图 (24-bit Color Image)</dt>
     <dd>RGB 模型下 R(8-bit) + G(8-bit) + B(8-bit),<strong>每个像素占 3 个字节</strong>。可表示 256×256×256 ≈ <strong>1680 万</strong>种颜色,又称真彩色。<span class="alias">有些系统存成 32-bit(多 1 字节存特效/透明信息)。</span></dd>
   </dl>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">一个像素的 24 bit = R8 + G8 + B8</div>
+        <svg class="fig-svg" viewBox="0 0 340 200" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', sans-serif">
+          <rect x="14" y="64" width="48" height="48" fill="rgb(120,150,80)" stroke="#1a1816" stroke-width="1.5"/>
+          <text x="38" y="128" text-anchor="middle" font-size="11" fill="#4a4540">1 像素</text>
+          <line x1="64" y1="88" x2="88" y2="88" stroke="#1a1816" stroke-width="1.5"/>
+          <polygon points="90,88 81,84 81,92" fill="#1a1816"/>
+          <!-- R=120 -->
+          <rect x="92" y="24" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="105" y="44" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="118" y="24" width="26" height="30" fill="#a14958" stroke="#c9bda5" stroke-width="1"/><text x="131" y="44" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="144" y="24" width="26" height="30" fill="#a14958" stroke="#c9bda5" stroke-width="1"/><text x="157" y="44" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="170" y="24" width="26" height="30" fill="#a14958" stroke="#c9bda5" stroke-width="1"/><text x="183" y="44" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="196" y="24" width="26" height="30" fill="#a14958" stroke="#c9bda5" stroke-width="1"/><text x="209" y="44" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="222" y="24" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="235" y="44" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="248" y="24" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="261" y="44" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="274" y="24" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="287" y="44" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <text x="304" y="44" font-size="12" font-weight="700" fill="#a14958">R 120</text>
+          <!-- G=150 -->
+          <rect x="92" y="74" width="26" height="30" fill="#4a6e3a" stroke="#c9bda5" stroke-width="1"/><text x="105" y="94" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="118" y="74" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="131" y="94" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="144" y="74" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="157" y="94" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="170" y="74" width="26" height="30" fill="#4a6e3a" stroke="#c9bda5" stroke-width="1"/><text x="183" y="94" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="196" y="74" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="209" y="94" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="222" y="74" width="26" height="30" fill="#4a6e3a" stroke="#c9bda5" stroke-width="1"/><text x="235" y="94" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="248" y="74" width="26" height="30" fill="#4a6e3a" stroke="#c9bda5" stroke-width="1"/><text x="261" y="94" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="274" y="74" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="287" y="94" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <text x="304" y="94" font-size="12" font-weight="700" fill="#4a6e3a">G 150</text>
+          <!-- B=80 -->
+          <rect x="92" y="124" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="105" y="144" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="118" y="124" width="26" height="30" fill="#4a6e83" stroke="#c9bda5" stroke-width="1"/><text x="131" y="144" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="144" y="124" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="157" y="144" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="170" y="124" width="26" height="30" fill="#4a6e83" stroke="#c9bda5" stroke-width="1"/><text x="183" y="144" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#f5efe4">1</text>
+          <rect x="196" y="124" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="209" y="144" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="222" y="124" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="235" y="144" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="248" y="124" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="261" y="144" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <rect x="274" y="124" width="26" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/><text x="287" y="144" text-anchor="middle" font-size="13" font-family="Menlo,monospace" fill="#7a7268">0</text>
+          <text x="304" y="144" font-size="12" font-weight="700" fill="#4a6e83">B 80</text>
+          <text x="170" y="185" text-anchor="middle" font-size="12.5" fill="#1a1816">8 + 8 + 8 = <tspan font-weight="700" fill="#7c2233">24 bit = 3 字节 / 像素</tspan></text>
+        </svg>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">位深 → 能表示多少灰阶</div>
+        <svg class="fig-svg" viewBox="0 0 224 214" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', sans-serif">
+          <defs><linearGradient id="g8" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></linearGradient></defs>
+          <text x="18" y="22" font-size="12" font-weight="700" fill="#1a1816">1-bit</text><text x="214" y="22" text-anchor="end" font-size="11" fill="#7a7268">2 级</text>
+          <rect x="18" y="28" width="98" height="22" fill="rgb(0,0,0)"/>
+          <rect x="116" y="28" width="98" height="22" fill="rgb(255,255,255)"/>
+          <rect x="18" y="28" width="196" height="22" fill="none" stroke="#1a1816" stroke-width="1"/>
+          <text x="18" y="74" font-size="12" font-weight="700" fill="#1a1816">2-bit</text><text x="214" y="74" text-anchor="end" font-size="11" fill="#7a7268">4 级</text>
+          <rect x="18" y="80" width="49" height="22" fill="rgb(0,0,0)"/>
+          <rect x="67" y="80" width="49" height="22" fill="rgb(85,85,85)"/>
+          <rect x="116" y="80" width="49" height="22" fill="rgb(170,170,170)"/>
+          <rect x="165" y="80" width="49" height="22" fill="rgb(255,255,255)"/>
+          <rect x="18" y="80" width="196" height="22" fill="none" stroke="#1a1816" stroke-width="1"/>
+          <text x="18" y="126" font-size="12" font-weight="700" fill="#1a1816">4-bit</text><text x="214" y="126" text-anchor="end" font-size="11" fill="#7a7268">16 级</text>
+          <rect x="18.00" y="132" width="12.25" height="22" fill="rgb(0,0,0)"/>
+          <rect x="30.25" y="132" width="12.25" height="22" fill="rgb(17,17,17)"/>
+          <rect x="42.50" y="132" width="12.25" height="22" fill="rgb(34,34,34)"/>
+          <rect x="54.75" y="132" width="12.25" height="22" fill="rgb(51,51,51)"/>
+          <rect x="67.00" y="132" width="12.25" height="22" fill="rgb(68,68,68)"/>
+          <rect x="79.25" y="132" width="12.25" height="22" fill="rgb(85,85,85)"/>
+          <rect x="91.50" y="132" width="12.25" height="22" fill="rgb(102,102,102)"/>
+          <rect x="103.75" y="132" width="12.25" height="22" fill="rgb(119,119,119)"/>
+          <rect x="116.00" y="132" width="12.25" height="22" fill="rgb(136,136,136)"/>
+          <rect x="128.25" y="132" width="12.25" height="22" fill="rgb(153,153,153)"/>
+          <rect x="140.50" y="132" width="12.25" height="22" fill="rgb(170,170,170)"/>
+          <rect x="152.75" y="132" width="12.25" height="22" fill="rgb(187,187,187)"/>
+          <rect x="165.00" y="132" width="12.25" height="22" fill="rgb(204,204,204)"/>
+          <rect x="177.25" y="132" width="12.25" height="22" fill="rgb(221,221,221)"/>
+          <rect x="189.50" y="132" width="12.25" height="22" fill="rgb(238,238,238)"/>
+          <rect x="201.75" y="132" width="12.25" height="22" fill="rgb(255,255,255)"/>
+          <rect x="18" y="132" width="196" height="22" fill="none" stroke="#1a1816" stroke-width="1"/>
+          <text x="18" y="178" font-size="12" font-weight="700" fill="#1a1816">8-bit</text><text x="214" y="178" text-anchor="end" font-size="11" fill="#7a7268">256 级</text>
+          <rect x="18" y="184" width="196" height="22" fill="url(#g8)"/>
+          <rect x="18" y="184" width="196" height="22" fill="none" stroke="#1a1816" stroke-width="1"/>
+        </svg>
+      </div>
+    </div>
+    <div class="fig-legend">左:一个彩色像素被拆成红/绿/蓝三条 8 位二进制。右:位深越大,黑到白之间能分的台阶越多。</div>
+  </div>
+  <div class="figure-cap"><b>位深决定"一格记几个 bit",从而决定颜色/灰阶的丰富度。</b><b>怎么读:</b>左图一个像素 = R、G、B 三个 8 位数(彩条=1、浅格=0),合起来 24 bit,除以 8 正好是 <b>3 字节</b>;右图 1-bit 只有黑白 2 级,8-bit 有 256 级近乎连续。<b>边界:</b>位深每翻倍,可表示的层级数是 2 的幂(2ⁿ),数据量也随位深线性增长。</div>
 </div>
 </section>
 
@@ -186,6 +339,49 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
       若题目问的是 <strong>bit</strong>:<code>512 × 512 × 24 = 6,291,456 b</code>,正好是字节数的 8 倍——别把单位搞反。
     </div>
   </div>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-title">数据量公式 = 宽 × 高 × (位深 ÷ 8)</div>
+    <svg class="fig-svg" viewBox="0 0 440 226" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', sans-serif">
+      <!-- factor: width -->
+      <rect x="14" y="30" width="96" height="52" fill="#ebe3d3" stroke="#1a1816" stroke-width="1"/>
+      <text x="62" y="50" text-anchor="middle" font-size="11" fill="#7a7268">宽 width</text>
+      <text x="62" y="73" text-anchor="middle" font-size="20" font-weight="700" fill="#1a1816">512</text>
+      <text x="120" y="63" text-anchor="middle" font-size="20" font-weight="700" fill="#7c2233">×</text>
+      <!-- factor: height -->
+      <rect x="130" y="30" width="96" height="52" fill="#ebe3d3" stroke="#1a1816" stroke-width="1"/>
+      <text x="178" y="50" text-anchor="middle" font-size="11" fill="#7a7268">高 height</text>
+      <text x="178" y="73" text-anchor="middle" font-size="20" font-weight="700" fill="#1a1816">512</text>
+      <text x="236" y="63" text-anchor="middle" font-size="20" font-weight="700" fill="#7c2233">×</text>
+      <!-- factor: bytes per pixel -->
+      <rect x="246" y="30" width="180" height="52" fill="#ebe3d3" stroke="#1a1816" stroke-width="1"/>
+      <text x="336" y="50" text-anchor="middle" font-size="11" fill="#7a7268">位深 ÷ 8 = 每像素字节</text>
+      <text x="336" y="73" text-anchor="middle" font-size="17" font-weight="700" fill="#7c2233">24 ÷ 8 = 3 B</text>
+      <!-- down arrow -->
+      <line x1="220" y1="86" x2="220" y2="106" stroke="#1a1816" stroke-width="1.5"/>
+      <polygon points="220,110 215,101 225,101" fill="#1a1816"/>
+      <!-- result -->
+      <rect x="70" y="112" width="300" height="42" fill="#f5efe4" stroke="#4a6e3a" stroke-width="2"/>
+      <text x="220" y="139" text-anchor="middle" font-size="17" font-weight="700" fill="#1a1816">512 × 512 × 3 = 786,432 B</text>
+      <!-- unit chain -->
+      <rect x="18" y="180" width="104" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/>
+      <text x="70" y="200" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1816">786,432 B</text>
+      <line x1="124" y1="195" x2="158" y2="195" stroke="#7c2233" stroke-width="1.5"/>
+      <polygon points="160,195 151,191 151,199" fill="#7c2233"/>
+      <text x="141" y="188" text-anchor="middle" font-size="10" fill="#7c2233">÷1024</text>
+      <rect x="162" y="180" width="86" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/>
+      <text x="205" y="200" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1816">768 KB</text>
+      <line x1="250" y1="195" x2="284" y2="195" stroke="#7c2233" stroke-width="1.5"/>
+      <polygon points="286,195 277,191 277,199" fill="#7c2233"/>
+      <text x="267" y="188" text-anchor="middle" font-size="10" fill="#7c2233">÷1024</text>
+      <rect x="288" y="180" width="90" height="30" fill="#ebe3d3" stroke="#c9bda5" stroke-width="1"/>
+      <text x="333" y="200" text-anchor="middle" font-size="13" font-weight="700" fill="#4a6e3a">0.75 MB</text>
+    </svg>
+    <div class="fig-legend">每个方框对应公式里的一项:宽、高各是像素数,第三项是"位深÷8 = 每像素字节数"。</div>
+  </div>
+  <div class="figure-cap"><b>三项相乘,得字节数;再逐级 ÷1024 换成 KB、MB。</b>这正是例题里 <code>512×512</code> 的 24-bit 图。<b>怎么读:</b>第三个框最关键——<code>位深÷8</code> 把 bit 换成 Byte(24÷8=3),想要答案是 <b>bit</b> 就跳过这一步、直接乘位深 24。<b>边界:</b>KB/MB 换算用 1024 而非 1000;单位问的是 b 还是 B,决定要不要那个 ÷8。</div>
 </div>
 
 <div class="selftest">

@@ -86,6 +86,17 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -138,6 +149,136 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     <dd>某个输出神经元"能看到"的原始输入区域大小。越往深层,单个神经元的感受野越大,看到的东西越"全局"。<span class="alias">这就是为什么小卷积核多层堆叠能覆盖大范围——深度换视野。</span></dd>
   </dl>
 </div>
+
+<div class="figure"><div class="figure-body">
+<svg class="fig-svg" viewBox="0 0 340 230" xmlns="http://www.w3.org/2000/svg" style="max-width:340px" role="img" aria-label="卷积操作示意">
+<text x="12" y="30" font-family="sans-serif" font-size="12" font-weight="700" fill="#7a7268">输入 5×5</text>
+<rect x="12" y="42" width="26" height="26" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="25.0" y="55.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">3</text>
+<rect x="38" y="42" width="26" height="26" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="51.0" y="55.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="64" y="42" width="26" height="26" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="77.0" y="55.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">2</text>
+<rect x="90" y="42" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="103.0" y="55.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">0</text>
+<rect x="116" y="42" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="129.0" y="55.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="12" y="68" width="26" height="26" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="25.0" y="81.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">0</text>
+<rect x="38" y="68" width="26" height="26" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="51.0" y="81.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">2</text>
+<rect x="64" y="68" width="26" height="26" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="77.0" y="81.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="90" y="68" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="103.0" y="81.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">3</text>
+<rect x="116" y="68" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="129.0" y="81.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="12" y="94" width="26" height="26" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="25.0" y="107.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="38" y="94" width="26" height="26" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="51.0" y="107.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">0</text>
+<rect x="64" y="94" width="26" height="26" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="77.0" y="107.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">2</text>
+<rect x="90" y="94" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="103.0" y="107.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">2</text>
+<rect x="116" y="94" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="129.0" y="107.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">0</text>
+<rect x="12" y="120" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="25.0" y="133.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">2</text>
+<rect x="38" y="120" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="51.0" y="133.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="64" y="120" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="77.0" y="133.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">0</text>
+<rect x="90" y="120" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="103.0" y="133.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="116" y="120" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="129.0" y="133.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">3</text>
+<rect x="12" y="146" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="25.0" y="159.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">0</text>
+<rect x="38" y="146" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="51.0" y="159.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">3</text>
+<rect x="64" y="146" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="77.0" y="159.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="90" y="146" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="103.0" y="159.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">2</text>
+<rect x="116" y="146" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="129.0" y="159.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="12" y="42" width="78" height="78" fill="none" stroke="#7c2233" stroke-width="2.5"/>
+<text x="51.0" y="188" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#7c2233" font-weight="700">3×3 核窗口 = 感受野</text>
+<line x1="150" y1="107.0" x2="238" y2="107.0" stroke="#4a4540" stroke-width="2"/>
+<polygon points="238,102.0 247,107.0 238,112.0" fill="#4a4540"/>
+<text x="196.0" y="98.0" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#4a4540">Σ 核·感受野</text>
+<text x="196.0" y="123.0" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#4a4540">逐元素乘加</text>
+<text x="250" y="54" font-family="sans-serif" font-size="12" font-weight="700" fill="#7a7268">输出 3×3</text>
+<rect x="250" y="68" width="26" height="26" fill="#d9a441" stroke="#1a1816" stroke-width="1"/>
+<text x="263.0" y="81.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#f5efe4">?</text>
+<rect x="276" y="68" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<rect x="302" y="68" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<rect x="250" y="94" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<rect x="276" y="94" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<rect x="302" y="94" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<rect x="250" y="120" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<rect x="276" y="120" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<rect x="302" y="120" width="26" height="26" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="289.0" y="162" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#4a4540">stride=1 · pad=0</text>
+</svg>
+</div><div class="figure-cap"><b>卷积:核在输入上滑动,一次算出输出一个像素。</b>把 <code>3×3</code> 卷积核对准输入左上角的红框区域(它"看到"的这一小片就是<b>感受野</b>),核里 9 个权重与框内 9 个数<b>逐元素相乘再求和</b>,得到输出图左上角那一个像素(图中的 <code>?</code>)。核向右滑一格(<code>stride=1</code>)算下一个,滑遍全图就得到整张 <code>3×3</code> 输出。无填充(<code>pad=0</code>)时输出比输入小:<code>(5−3)/1+1=3</code>。整张图只用这一个核的同一套权重——这就是<b>参数共享</b>。</div></div>
+
+<div class="figure"><div class="figure-body">
+<svg class="fig-svg" viewBox="0 0 340 210" xmlns="http://www.w3.org/2000/svg" style="max-width:340px" role="img" aria-label="最大池化示意">
+<text x="12" y="28" font-family="sans-serif" font-size="12" font-weight="700" fill="#7a7268">输入 4×4</text>
+<rect x="12" y="42" width="30" height="30" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="27.0" y="57.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">1</text>
+<rect x="42" y="42" width="30" height="30" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="57.0" y="57.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">3</text>
+<rect x="72" y="42" width="30" height="30" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="87.0" y="57.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">2</text>
+<rect x="102" y="42" width="30" height="30" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="117.0" y="57.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">4</text>
+<rect x="12" y="72" width="30" height="30" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="27.0" y="87.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">5</text>
+<rect x="42" y="72" width="30" height="30" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="57.0" y="87.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">6</text>
+<rect x="72" y="72" width="30" height="30" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="87.0" y="87.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">7</text>
+<rect x="102" y="72" width="30" height="30" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="117.0" y="87.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">8</text>
+<rect x="12" y="102" width="30" height="30" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="27.0" y="117.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">3</text>
+<rect x="42" y="102" width="30" height="30" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="57.0" y="117.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">2</text>
+<rect x="72" y="102" width="30" height="30" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="87.0" y="117.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">1</text>
+<rect x="102" y="102" width="30" height="30" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="117.0" y="117.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">0</text>
+<rect x="12" y="132" width="30" height="30" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="27.0" y="147.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">1</text>
+<rect x="42" y="132" width="30" height="30" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="57.0" y="147.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">2</text>
+<rect x="72" y="132" width="30" height="30" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="87.0" y="147.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">4</text>
+<rect x="102" y="132" width="30" height="30" fill="#efd9b0" stroke="#1a1816" stroke-width="1"/>
+<text x="117.0" y="147.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="13" fill="#1a1816">3</text>
+<rect x="12" y="42" width="60" height="60" fill="none" stroke="#7c2233" stroke-width="2.5"/>
+<rect x="72" y="42" width="60" height="60" fill="none" stroke="#a14958" stroke-width="2"/>
+<rect x="12" y="102" width="60" height="60" fill="none" stroke="#a14958" stroke-width="2"/>
+<rect x="72" y="102" width="60" height="60" fill="none" stroke="#a14958" stroke-width="2"/>
+<text x="72" y="178" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#7c2233" font-weight="700">2×2 窗口取最大</text>
+<line x1="140" y1="102" x2="240" y2="102" stroke="#4a4540" stroke-width="2"/>
+<polygon points="240,97 248,102 240,107" fill="#4a4540"/>
+<text x="191.0" y="94" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#4a4540">max</text>
+<text x="250" y="58" font-family="sans-serif" font-size="12" font-weight="700" fill="#7a7268">输出 2×2</text>
+<rect x="250" y="72" width="30" height="30" fill="#d9a441" stroke="#1a1816" stroke-width="1"/>
+<text x="265.0" y="87.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="14" fill="#1a1816">6</text>
+<rect x="280" y="72" width="30" height="30" fill="#c9bda5" stroke="#1a1816" stroke-width="1"/>
+<text x="295.0" y="87.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="14" fill="#1a1816">8</text>
+<rect x="250" y="102" width="30" height="30" fill="#c9bda5" stroke="#1a1816" stroke-width="1"/>
+<text x="265.0" y="117.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="14" fill="#1a1816">3</text>
+<rect x="280" y="102" width="30" height="30" fill="#d9a441" stroke="#1a1816" stroke-width="1"/>
+<text x="295.0" y="117.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="14" fill="#1a1816">4</text>
+<text x="280" y="148" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#4a4540">尺寸减半 · 无参数</text>
+</svg>
+</div><div class="figure-cap"><b>池化:把每个 <code>2×2</code> 窗口压成一个值,只留主特征。</b>输入按 <code>2×2</code> 划成四块,<b>Max pooling</b> 每块取最大值:左上块 <code>{1,3,5,6}→6</code>,右上 <code>{2,4,7,8}→8</code>,左下 <code>{3,2,1,0}→3</code>,右下 <code>{1,2,4,3}→4</code>。<code>4×4</code> 一步降为 <code>2×2</code>,尺寸减半。若换成 <b>Average pooling</b> 就把"取最大"改成"取平均"。池化<b>没有可学参数</b>,纯粹是缩图——目的是减计算、防过拟合、增强对微小平移的鲁棒性。</div></div>
 </section>
 
 <section>
@@ -176,6 +317,41 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     <span class="alias">那个 <code>+1</code> 是每个卷积核自带的一个<strong>偏置 bias</strong>。输出通道数 = 卷积核个数 <code>K</code>。</span></dd>
   </dl>
 </div>
+
+<div class="figure"><div class="figure-body">
+<svg class="fig-svg" viewBox="0 0 340 200" xmlns="http://www.w3.org/2000/svg" style="max-width:340px" role="img" aria-label="输出尺寸公式示意">
+<rect x="30" y="60" width="28" height="28" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="44.0" y="74.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#7a7268">0</text>
+<rect x="58" y="60" width="28" height="28" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="72.0" y="74.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">2</text>
+<rect x="86" y="60" width="28" height="28" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="100.0" y="74.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">4</text>
+<rect x="114" y="60" width="28" height="28" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="128.0" y="74.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">1</text>
+<rect x="142" y="60" width="28" height="28" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="156.0" y="74.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">3</text>
+<rect x="170" y="60" width="28" height="28" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="184.0" y="74.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#1a1816">5</text>
+<rect x="198" y="60" width="28" height="28" fill="#e3d3ba" stroke="#1a1816" stroke-width="1"/>
+<text x="212.0" y="74.0" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#7a7268">0</text>
+<line x1="58" y1="98" x2="198" y2="98" stroke="#4a6e3a" stroke-width="1.5"/>
+<line x1="58" y1="94" x2="58" y2="102" stroke="#4a6e3a" stroke-width="1.5"/>
+<line x1="198" y1="94" x2="198" y2="102" stroke="#4a6e3a" stroke-width="1.5"/>
+<text x="128.0" y="114" text-anchor="middle" font-family="monospace" font-size="12" fill="#4a6e3a" font-weight="700">W = 5</text>
+<text x="44.0" y="52" text-anchor="middle" font-family="monospace" font-size="11" fill="#7a7268">P</text>
+<text x="212.0" y="52" text-anchor="middle" font-family="monospace" font-size="11" fill="#7a7268">P</text>
+<text x="128.0" y="52" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#7a7268">padding P=1 (两侧各补1)</text>
+<rect x="30" y="60" width="84" height="28" fill="none" stroke="#7c2233" stroke-width="2.5"/>
+<text x="72.0" y="138" text-anchor="middle" font-family="monospace" font-size="12" fill="#7c2233" font-weight="700">K = 3</text>
+<line x1="30" y1="128" x2="114" y2="128" stroke="#7c2233" stroke-width="1.5"/>
+<line x1="30" y1="124" x2="30" y2="132" stroke="#7c2233" stroke-width="1.5"/>
+<line x1="114" y1="124" x2="114" y2="132" stroke="#7c2233" stroke-width="1.5"/>
+<line x1="44.0" y1="36" x2="100.0" y2="36" stroke="#c19a3e" stroke-width="2"/>
+<polygon points="100.0,32 108.0,36 100.0,40" fill="#c19a3e"/>
+<text x="72.0" y="30" text-anchor="middle" font-family="monospace" font-size="11" fill="#c19a3e" font-weight="700">S = 2</text>
+<text x="170" y="176" text-anchor="middle" font-family="monospace" font-size="14" fill="#1a1816">O = ⌊(W−K+2P)/S⌋+1 = ⌊(5−3+2)/2⌋+1 = 3</text>
+</svg>
+</div><div class="figure-cap"><b>把公式每一项对上图:输出边长 <code>O = ⌊(W−K+2P)/S⌋+1</code>。</b>灰格是两侧各补的 <b>padding P</b>,中间 5 个是原始输入宽 <b>W</b>;红框是核宽 <b>K=3</b> 首次覆盖的位置,金色箭头是它每次向右跳的步长 <b>S=2</b>。核在"加了 padding 的 <code>W+2P=7</code> 格"上滑动,每步跳 S,能落几次就出几个像素:<code>(7−3)/2+1=3</code>。<b>怎么读:</b>先算分子 <code>W−K+2P</code>,再除步长 <code>S</code>,<b>最后才 +1</b>(算头一次落点)。<b>边界:</b>结果要向下取整 <code>⌊·⌋</code>,除不尽说明核在边缘"够不着",最后一步被舍掉。</div></div>
 </section>
 
 <div class="worked">

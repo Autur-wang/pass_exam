@@ -86,6 +86,16 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 320px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -141,6 +151,132 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     <dd>Signal to Quantization Noise Ratio。衡量量化档位够不够细的指标。用位深 <code>N</code> 表示为 <code>SQNR ≈ 6.02·N dB</code>——每多 1 bit,信噪比约提升 6 dB。</dd>
   </dl>
 </div>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">① 采样 · 定时取点</div>
+        <svg class="fig-svg" viewBox="0 0 320 155" xmlns="http://www.w3.org/2000/svg">
+          <line x1="20" y1="85" x2="308" y2="85" stroke="#c9bda5" stroke-width="0.8"/>
+          <path d="M 20.0,85.0 L 22.3,79.6 L 24.7,74.2 L 27.0,68.9 L 29.3,63.8 L 31.7,59.0 L 34.0,54.4 L 36.3,50.2 L 38.7,46.4 L 41.0,42.9 L 43.3,40.0 L 45.7,37.5 L 48.0,35.5 L 50.3,34.1 L 52.7,33.3 L 55.0,33.0 L 57.3,33.3 L 59.7,34.1 L 62.0,35.5 L 64.3,37.5 L 66.7,40.0 L 69.0,42.9 L 71.3,46.4 L 73.7,50.2 L 76.0,54.4 L 78.3,59.0 L 80.7,63.8 L 83.0,68.9 L 85.3,74.2 L 87.7,79.6 L 90.0,85.0 L 92.3,90.4 L 94.7,95.8 L 97.0,101.1 L 99.3,106.2 L 101.7,111.0 L 104.0,115.6 L 106.3,119.8 L 108.7,123.6 L 111.0,127.1 L 113.3,130.0 L 115.7,132.5 L 118.0,134.5 L 120.3,135.9 L 122.7,136.7 L 125.0,137.0 L 127.3,136.7 L 129.7,135.9 L 132.0,134.5 L 134.3,132.5 L 136.7,130.0 L 139.0,127.1 L 141.3,123.6 L 143.7,119.8 L 146.0,115.6 L 148.3,111.0 L 150.7,106.2 L 153.0,101.1 L 155.3,95.8 L 157.7,90.4 L 160.0,85.0 L 162.3,79.6 L 164.7,74.2 L 167.0,68.9 L 169.3,63.8 L 171.7,59.0 L 174.0,54.4 L 176.3,50.2 L 178.7,46.4 L 181.0,42.9 L 183.3,40.0 L 185.7,37.5 L 188.0,35.5 L 190.3,34.1 L 192.7,33.3 L 195.0,33.0 L 197.3,33.3 L 199.7,34.1 L 202.0,35.5 L 204.3,37.5 L 206.7,40.0 L 209.0,42.9 L 211.3,46.4 L 213.7,50.2 L 216.0,54.4 L 218.3,59.0 L 220.7,63.8 L 223.0,68.9 L 225.3,74.2 L 227.7,79.6 L 230.0,85.0 L 232.3,90.4 L 234.7,95.8 L 237.0,101.1 L 239.3,106.2 L 241.7,111.0 L 244.0,115.6 L 246.3,119.8 L 248.7,123.6 L 251.0,127.1 L 253.3,130.0 L 255.7,132.5 L 258.0,134.5 L 260.3,135.9 L 262.7,136.7 L 265.0,137.0 L 267.3,136.7 L 269.7,135.9 L 272.0,134.5 L 274.3,132.5 L 276.7,130.0 L 279.0,127.1 L 281.3,123.6 L 283.7,119.8 L 286.0,115.6 L 288.3,111.0 L 290.7,106.2 L 293.0,101.1 L 295.3,95.8 L 297.7,90.4 L 300.0,85.0" fill="none" stroke="#a14958" stroke-width="1.6"/>
+          <line x1="20.0" y1="85" x2="20.0" y2="85.0" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="37.5" y1="85" x2="37.5" y2="48.2" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="55.0" y1="85" x2="55.0" y2="33.0" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="72.5" y1="85" x2="72.5" y2="48.2" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="90.0" y1="85" x2="90.0" y2="85.0" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="107.5" y1="85" x2="107.5" y2="121.8" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="125.0" y1="85" x2="125.0" y2="137.0" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="142.5" y1="85" x2="142.5" y2="121.8" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="160.0" y1="85" x2="160.0" y2="85.0" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="177.5" y1="85" x2="177.5" y2="48.2" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="195.0" y1="85" x2="195.0" y2="33.0" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="212.5" y1="85" x2="212.5" y2="48.2" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="230.0" y1="85" x2="230.0" y2="85.0" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="247.5" y1="85" x2="247.5" y2="121.8" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="265.0" y1="85" x2="265.0" y2="137.0" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="282.5" y1="85" x2="282.5" y2="121.8" stroke="#7c2233" stroke-width="1.3"/>
+          <line x1="300.0" y1="85" x2="300.0" y2="85.0" stroke="#7c2233" stroke-width="1.3"/>
+          <circle cx="37.5" cy="48.2" r="3.2" fill="#7c2233"/>
+          <circle cx="55.0" cy="33.0" r="3.2" fill="#7c2233"/>
+          <circle cx="72.5" cy="48.2" r="3.2" fill="#7c2233"/>
+          <circle cx="90.0" cy="85.0" r="3.2" fill="#7c2233"/>
+          <circle cx="107.5" cy="121.8" r="3.2" fill="#7c2233"/>
+          <circle cx="125.0" cy="137.0" r="3.2" fill="#7c2233"/>
+          <circle cx="142.5" cy="121.8" r="3.2" fill="#7c2233"/>
+          <circle cx="177.5" cy="48.2" r="3.2" fill="#7c2233"/>
+          <circle cx="195.0" cy="33.0" r="3.2" fill="#7c2233"/>
+          <circle cx="212.5" cy="48.2" r="3.2" fill="#7c2233"/>
+          <circle cx="247.5" cy="121.8" r="3.2" fill="#7c2233"/>
+          <circle cx="265.0" cy="137.0" r="3.2" fill="#7c2233"/>
+          <circle cx="282.5" cy="121.8" r="3.2" fill="#7c2233"/>
+        </svg>
+        <div class="fig-legend">连续声波(浅红)每隔固定时间被竖线取一个点</div>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">② 量化 · 归到档位</div>
+        <svg class="fig-svg" viewBox="0 0 320 155" xmlns="http://www.w3.org/2000/svg">
+          <line x1="20" y1="137.0" x2="300" y2="137.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="20" y1="124.0" x2="300" y2="124.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="20" y1="111.0" x2="300" y2="111.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="20" y1="98.0" x2="300" y2="98.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="20" y1="85.0" x2="300" y2="85.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="20" y1="72.0" x2="300" y2="72.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="20" y1="59.0" x2="300" y2="59.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="20" y1="46.0" x2="300" y2="46.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="20" y1="33.0" x2="300" y2="33.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <path d="M 20.0,85.0 L 55.0,33.0 L 90.0,85.0 L 125.0,137.0 L 160.0,85.0 L 195.0,33.0 L 230.0,85.0 L 265.0,137.0 L 300.0,85.0" fill="none" stroke="#a14958" stroke-width="1.2" stroke-dasharray="3 2"/>
+          <path d="M 20.0,78.5 L 28.8,78.5 L 28.8,65.5 L 37.5,65.5 L 37.5,52.5 L 46.2,52.5 L 46.2,39.5 L 55.0,39.5 L 55.0,39.5 L 63.8,39.5 L 63.8,39.5 L 72.5,39.5 L 72.5,52.5 L 81.2,52.5 L 81.2,65.5 L 90.0,65.5 L 90.0,78.5 L 98.8,78.5 L 98.8,104.5 L 107.5,104.5 L 107.5,117.5 L 116.2,117.5 L 116.2,130.5 L 125.0,130.5 L 125.0,130.5 L 133.8,130.5 L 133.8,130.5 L 142.5,130.5 L 142.5,117.5 L 151.2,117.5 L 151.2,104.5 L 160.0,104.5 L 160.0,91.5 L 168.8,91.5 L 168.8,65.5 L 177.5,65.5 L 177.5,52.5 L 186.2,52.5 L 186.2,39.5 L 195.0,39.5 L 195.0,39.5 L 203.8,39.5 L 203.8,39.5 L 212.5,39.5 L 212.5,52.5 L 221.2,52.5 L 221.2,65.5 L 230.0,65.5 L 230.0,78.5 L 238.8,78.5 L 238.8,104.5 L 247.5,104.5 L 247.5,117.5 L 256.2,117.5 L 256.2,130.5 L 265.0,130.5 L 265.0,130.5 L 273.8,130.5 L 273.8,130.5 L 282.5,130.5 L 282.5,117.5 L 291.2,117.5 L 291.2,104.5 L 300.0,104.5" fill="none" stroke="#7c2233" stroke-width="1.8"/>
+        </svg>
+        <div class="fig-legend">虚线=原波,实线阶梯=归到最近档位(此处 8 档=3bit)</div>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>连续 → 离散的两个动作。</b>采样解决"何时取"(横轴离散化),量化解决"取多准"(纵轴离散化)。两步都会丢信息:采样太疏 → 假频;量化太粗 → 噪声。奈奎斯特管前者,SQNR 管后者。</div>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">PCM · 存采样值本身</div>
+        <svg class="fig-svg" viewBox="0 0 310 172" xmlns="http://www.w3.org/2000/svg">
+          <line x1="8" y1="150" x2="305" y2="150" stroke="#1a1816" stroke-width="1"/>
+          <rect x="12" y="108.0" width="16" height="42.0" fill="#7c2233"/>
+          <text x="20" y="162" text-anchor="middle" font-size="9" fill="#7a7268">30</text>
+          <rect x="42" y="88.4" width="16" height="61.6" fill="#7c2233"/>
+          <text x="50" y="162" text-anchor="middle" font-size="9" fill="#7a7268">44</text>
+          <rect x="72" y="77.2" width="16" height="72.8" fill="#7c2233"/>
+          <text x="80" y="162" text-anchor="middle" font-size="9" fill="#7a7268">52</text>
+          <rect x="102" y="73.0" width="16" height="77.0" fill="#7c2233"/>
+          <text x="110" y="162" text-anchor="middle" font-size="9" fill="#7a7268">55</text>
+          <rect x="132" y="80.0" width="16" height="70.0" fill="#7c2233"/>
+          <text x="140" y="162" text-anchor="middle" font-size="9" fill="#7a7268">50</text>
+          <rect x="162" y="68.8" width="16" height="81.2" fill="#7c2233"/>
+          <text x="170" y="162" text-anchor="middle" font-size="9" fill="#7a7268">58</text>
+          <rect x="192" y="57.6" width="16" height="92.4" fill="#7c2233"/>
+          <text x="200" y="162" text-anchor="middle" font-size="9" fill="#7a7268">66</text>
+          <rect x="222" y="66.0" width="16" height="84.0" fill="#7c2233"/>
+          <text x="230" y="162" text-anchor="middle" font-size="9" fill="#7a7268">60</text>
+          <rect x="252" y="74.4" width="16" height="75.6" fill="#7c2233"/>
+          <text x="260" y="162" text-anchor="middle" font-size="9" fill="#7a7268">54</text>
+          <rect x="282" y="82.8" width="16" height="67.2" fill="#7c2233"/>
+          <text x="290" y="162" text-anchor="middle" font-size="9" fill="#7a7268">48</text>
+        </svg>
+        <div class="fig-legend">每个值都大,要用完整位宽记录</div>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">DPCM · 存相邻差值</div>
+        <svg class="fig-svg" viewBox="0 0 310 172" xmlns="http://www.w3.org/2000/svg">
+          <line x1="8" y1="95" x2="305" y2="95" stroke="#1a1816" stroke-width="1"/>
+          <text x="2" y="92" font-size="9" fill="#7a7268">0</text>
+          <rect x="12" y="53.0" width="16" height="42.0" fill="#4a6e3a"/>
+          <text x="20" y="50.0" text-anchor="middle" font-size="9" fill="#7a7268">+30</text>
+          <rect x="42" y="75.4" width="16" height="19.6" fill="#4a6e3a"/>
+          <text x="50" y="72.4" text-anchor="middle" font-size="9" fill="#7a7268">+14</text>
+          <rect x="72" y="83.8" width="16" height="11.2" fill="#4a6e3a"/>
+          <text x="80" y="80.8" text-anchor="middle" font-size="9" fill="#7a7268">+8</text>
+          <rect x="102" y="90.8" width="16" height="4.2" fill="#4a6e3a"/>
+          <text x="110" y="87.8" text-anchor="middle" font-size="9" fill="#7a7268">+3</text>
+          <rect x="132" y="95.0" width="16" height="7.0" fill="#a13e2a"/>
+          <text x="140" y="113.0" text-anchor="middle" font-size="9" fill="#7a7268">-5</text>
+          <rect x="162" y="83.8" width="16" height="11.2" fill="#4a6e3a"/>
+          <text x="170" y="80.8" text-anchor="middle" font-size="9" fill="#7a7268">+8</text>
+          <rect x="192" y="83.8" width="16" height="11.2" fill="#4a6e3a"/>
+          <text x="200" y="80.8" text-anchor="middle" font-size="9" fill="#7a7268">+8</text>
+          <rect x="222" y="95.0" width="16" height="8.4" fill="#a13e2a"/>
+          <text x="230" y="114.4" text-anchor="middle" font-size="9" fill="#7a7268">-6</text>
+          <rect x="252" y="95.0" width="16" height="8.4" fill="#a13e2a"/>
+          <text x="260" y="114.4" text-anchor="middle" font-size="9" fill="#7a7268">-6</text>
+          <rect x="282" y="95.0" width="16" height="8.4" fill="#a13e2a"/>
+          <text x="290" y="114.4" text-anchor="middle" font-size="9" fill="#7a7268">-6</text>
+        </svg>
+        <div class="fig-legend">除首值外都很小,挤在零线附近 → 码字更短</div>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>为什么 DPCM 能压缩?</b>相邻采样点声音变化小,所以差值(绿=正 / 红=负)远小于原始绝对值。数值范围一收窄,熵就变低,用更短的码字即可——这正是"差值直方图更尖"的含义。首个 +30 是初始参考值,之后全是个位数。</div>
+</div>
 </section>
 
 <section>
@@ -160,7 +296,64 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <section>
 <h2><span class="num">3.</span>为什么是这三条?</h2>
 <p><strong>奈奎斯特为什么是"两倍"?</strong>一个正弦波的一个完整周期,至少要采到两个点(一个波峰、一个波谷)才能确定它的频率。采样率低于 2 倍最高频,高频波在两次采样之间"偷偷转了一整圈",系统看到的却是一条平缓的低频曲线——这就是假频。所以 <code>44.1kHz</code> 采样能覆盖 <code>22.05kHz</code> 以下的全部可听声音。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:540px" viewBox="0 0 320 165" xmlns="http://www.w3.org/2000/svg">
+      <line x1="20" y1="90" x2="308" y2="90" stroke="#c9bda5" stroke-width="0.8"/>
+      <path d="M 20.0,90.0 L 22.3,70.3 L 24.7,53.2 L 27.0,41.0 L 29.3,35.3 L 31.7,36.9 L 34.0,45.5 L 36.3,60.0 L 38.7,78.6 L 41.0,98.6 L 43.3,117.5 L 45.7,132.7 L 48.0,142.3 L 50.3,144.9 L 52.7,140.2 L 55.0,128.9 L 57.3,112.4 L 59.7,92.9 L 62.0,73.0 L 64.3,55.4 L 66.7,42.4 L 69.0,35.7 L 71.3,36.2 L 73.7,43.9 L 76.0,57.7 L 78.3,75.8 L 80.7,95.7 L 83.0,115.0 L 85.3,130.9 L 87.7,141.3 L 90.0,145.0 L 92.3,141.3 L 94.7,130.9 L 97.0,115.0 L 99.3,95.7 L 101.7,75.8 L 104.0,57.7 L 106.3,43.9 L 108.7,36.2 L 111.0,35.7 L 113.3,42.4 L 115.7,55.4 L 118.0,73.0 L 120.3,92.9 L 122.7,112.4 L 125.0,128.9 L 127.3,140.2 L 129.7,144.9 L 132.0,142.3 L 134.3,132.7 L 136.7,117.5 L 139.0,98.6 L 141.3,78.6 L 143.7,60.0 L 146.0,45.5 L 148.3,36.9 L 150.7,35.3 L 153.0,41.0 L 155.3,53.2 L 157.7,70.3 L 160.0,90.0 L 162.3,109.7 L 164.7,126.8 L 167.0,139.0 L 169.3,144.7 L 171.7,143.1 L 174.0,134.5 L 176.3,120.0 L 178.7,101.4 L 181.0,81.4 L 183.3,62.5 L 185.7,47.3 L 188.0,37.7 L 190.3,35.1 L 192.7,39.8 L 195.0,51.1 L 197.3,67.6 L 199.7,87.1 L 202.0,107.0 L 204.3,124.6 L 206.7,137.6 L 209.0,144.3 L 211.3,143.8 L 213.7,136.1 L 216.0,122.3 L 218.3,104.2 L 220.7,84.3 L 223.0,65.0 L 225.3,49.1 L 227.7,38.7 L 230.0,35.0 L 232.3,38.7 L 234.7,49.1 L 237.0,65.0 L 239.3,84.3 L 241.7,104.2 L 244.0,122.3 L 246.3,136.1 L 248.7,143.8 L 251.0,144.3 L 253.3,137.6 L 255.7,124.6 L 258.0,107.0 L 260.3,87.1 L 262.7,67.6 L 265.0,51.1 L 267.3,39.8 L 269.7,35.1 L 272.0,37.7 L 274.3,47.3 L 276.7,62.5 L 279.0,81.4 L 281.3,101.4 L 283.7,120.0 L 286.0,134.5 L 288.3,143.1 L 290.7,144.7 L 293.0,139.0 L 295.3,126.8 L 297.7,109.7 L 300.0,90.0" fill="none" stroke="#c9a9ad" stroke-width="1.3"/>
+      <path d="M 20.0,90.0 L 22.3,87.1 L 24.7,84.3 L 27.0,81.4 L 29.3,78.6 L 31.7,75.8 L 34.0,73.0 L 36.3,70.3 L 38.7,67.6 L 41.0,65.0 L 43.3,62.5 L 45.7,60.0 L 48.0,57.7 L 50.3,55.4 L 52.7,53.2 L 55.0,51.1 L 57.3,49.1 L 59.7,47.3 L 62.0,45.5 L 64.3,43.9 L 66.7,42.4 L 69.0,41.0 L 71.3,39.8 L 73.7,38.7 L 76.0,37.7 L 78.3,36.9 L 80.7,36.2 L 83.0,35.7 L 85.3,35.3 L 87.7,35.1 L 90.0,35.0 L 92.3,35.1 L 94.7,35.3 L 97.0,35.7 L 99.3,36.2 L 101.7,36.9 L 104.0,37.7 L 106.3,38.7 L 108.7,39.8 L 111.0,41.0 L 113.3,42.4 L 115.7,43.9 L 118.0,45.5 L 120.3,47.3 L 122.7,49.1 L 125.0,51.1 L 127.3,53.2 L 129.7,55.4 L 132.0,57.7 L 134.3,60.0 L 136.7,62.5 L 139.0,65.0 L 141.3,67.6 L 143.7,70.3 L 146.0,73.0 L 148.3,75.8 L 150.7,78.6 L 153.0,81.4 L 155.3,84.3 L 157.7,87.1 L 160.0,90.0 L 162.3,92.9 L 164.7,95.7 L 167.0,98.6 L 169.3,101.4 L 171.7,104.2 L 174.0,107.0 L 176.3,109.7 L 178.7,112.4 L 181.0,115.0 L 183.3,117.5 L 185.7,120.0 L 188.0,122.3 L 190.3,124.6 L 192.7,126.8 L 195.0,128.9 L 197.3,130.9 L 199.7,132.7 L 202.0,134.5 L 204.3,136.1 L 206.7,137.6 L 209.0,139.0 L 211.3,140.2 L 213.7,141.3 L 216.0,142.3 L 218.3,143.1 L 220.7,143.8 L 223.0,144.3 L 225.3,144.7 L 227.7,144.9 L 230.0,145.0 L 232.3,144.9 L 234.7,144.7 L 237.0,144.3 L 239.3,143.8 L 241.7,143.1 L 244.0,142.3 L 246.3,141.3 L 248.7,140.2 L 251.0,139.0 L 253.3,137.6 L 255.7,136.1 L 258.0,134.5 L 260.3,132.7 L 262.7,130.9 L 265.0,128.9 L 267.3,126.8 L 269.7,124.6 L 272.0,122.3 L 274.3,120.0 L 276.7,117.5 L 279.0,115.0 L 281.3,112.4 L 283.7,109.7 L 286.0,107.0 L 288.3,104.2 L 290.7,101.4 L 293.0,98.6 L 295.3,95.7 L 297.7,92.9 L 300.0,90.0" fill="none" stroke="#7c2233" stroke-width="2.2"/>
+      <circle cx="20.0" cy="90.0" r="4" fill="#1a1816"/>
+      <circle cx="66.7" cy="42.4" r="4" fill="#1a1816"/>
+      <circle cx="113.3" cy="42.4" r="4" fill="#1a1816"/>
+      <circle cx="160.0" cy="90.0" r="4" fill="#1a1816"/>
+      <circle cx="206.7" cy="137.6" r="4" fill="#1a1816"/>
+      <circle cx="253.3" cy="137.6" r="4" fill="#1a1816"/>
+      <circle cx="300.0" cy="90.0" r="4" fill="#1a1816"/>
+    </svg>
+    <div class="fig-legend"><span style="color:#c9a9ad">▬</span> 真实高频(采样点间转了好几圈) &nbsp;&nbsp; <span style="color:#7c2233">▬</span> 被误认的假低频 &nbsp;&nbsp; ● 采样点</div>
+  </div>
+  <div class="figure-cap"><b>假频是怎么来的。</b>采样太疏时,高频波在两个采样点之间"偷偷转了整整几圈",系统只连得起那几个黑点,于是把它误画成一条平缓的低频曲线。两条曲线在每个采样点严格重合——这就是为什么欠采样后再也分不清真高频与假低频。</div>
+</div>
 <p><strong>SQNR 里的 6.02 从哪来?</strong>推导自 <code>20·log10(2^N) = 20·N·log10(2) = 20·N×0.301 ≈ 6.02·N</code>。量化档位每翻一倍(多 1 bit),信号相对量化噪声的电压比就翻倍,而电压比翻倍 = 20·log10(2) ≈ 6.02 dB。这就是"每 bit 约 6 dB"的由来。8bit≈48dB(电话质量),16bit≈96dB(CD 质量)。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">2 bit · 4 档</div>
+        <svg class="fig-svg" style="max-width:236px" viewBox="0 0 210 130" xmlns="http://www.w3.org/2000/svg">
+          <line x1="15" y1="114.0" x2="195" y2="114.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="92.0" x2="195" y2="92.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="70.0" x2="195" y2="70.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="48.0" x2="195" y2="48.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="26.0" x2="195" y2="26.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <path d="M 15.0,70.0 L 16.5,66.5 L 18.0,63.1 L 19.5,59.7 L 21.0,56.4 L 22.5,53.2 L 24.0,50.0 L 25.5,47.0 L 27.0,44.1 L 28.5,41.4 L 30.0,38.9 L 31.5,36.5 L 33.0,34.4 L 34.5,32.5 L 36.0,30.8 L 37.5,29.3 L 39.0,28.2 L 40.5,27.2 L 42.0,26.5 L 43.5,26.1 L 45.0,26.0 L 46.5,26.1 L 48.0,26.5 L 49.5,27.2 L 51.0,28.2 L 52.5,29.3 L 54.0,30.8 L 55.5,32.5 L 57.0,34.4 L 58.5,36.5 L 60.0,38.9 L 61.5,41.4 L 63.0,44.1 L 64.5,47.0 L 66.0,50.0 L 67.5,53.2 L 69.0,56.4 L 70.5,59.7 L 72.0,63.1 L 73.5,66.5 L 75.0,70.0 L 76.5,73.5 L 78.0,76.9 L 79.5,80.3 L 81.0,83.6 L 82.5,86.8 L 84.0,90.0 L 85.5,93.0 L 87.0,95.9 L 88.5,98.6 L 90.0,101.1 L 91.5,103.5 L 93.0,105.6 L 94.5,107.5 L 96.0,109.2 L 97.5,110.7 L 99.0,111.8 L 100.5,112.8 L 102.0,113.5 L 103.5,113.9 L 105.0,114.0 L 106.5,113.9 L 108.0,113.5 L 109.5,112.8 L 111.0,111.8 L 112.5,110.7 L 114.0,109.2 L 115.5,107.5 L 117.0,105.6 L 118.5,103.5 L 120.0,101.1 L 121.5,98.6 L 123.0,95.9 L 124.5,93.0 L 126.0,90.0 L 127.5,86.8 L 129.0,83.6 L 130.5,80.3 L 132.0,76.9 L 133.5,73.5 L 135.0,70.0 L 136.5,66.5 L 138.0,63.1 L 139.5,59.7 L 141.0,56.4 L 142.5,53.2 L 144.0,50.0 L 145.5,47.0 L 147.0,44.1 L 148.5,41.4 L 150.0,38.9 L 151.5,36.5 L 153.0,34.4 L 154.5,32.5 L 156.0,30.8 L 157.5,29.3 L 159.0,28.2 L 160.5,27.2 L 162.0,26.5 L 163.5,26.1 L 165.0,26.0 L 166.5,26.1 L 168.0,26.5 L 169.5,27.2 L 171.0,28.2 L 172.5,29.3 L 174.0,30.8 L 175.5,32.5 L 177.0,34.4 L 178.5,36.5 L 180.0,38.9 L 181.5,41.4 L 183.0,44.1 L 184.5,47.0 L 186.0,50.0 L 187.5,53.2 L 189.0,56.4 L 190.5,59.7 L 192.0,63.1 L 193.5,66.5 L 195.0,70.0" fill="none" stroke="#a14958" stroke-width="1.1" stroke-dasharray="3 2"/>
+          <path d="M 15.0,59.0 L 21.4,59.0 L 21.4,59.0 L 27.9,59.0 L 27.9,37.0 L 34.3,37.0 L 34.3,37.0 L 40.7,37.0 L 40.7,37.0 L 47.1,37.0 L 47.1,37.0 L 53.6,37.0 L 53.6,37.0 L 60.0,37.0 L 60.0,37.0 L 66.4,37.0 L 66.4,59.0 L 72.9,59.0 L 72.9,59.0 L 79.3,59.0 L 79.3,81.0 L 85.7,81.0 L 85.7,103.0 L 92.1,103.0 L 92.1,103.0 L 98.6,103.0 L 98.6,103.0 L 105.0,103.0 L 105.0,103.0 L 111.4,103.0 L 111.4,103.0 L 117.9,103.0 L 117.9,103.0 L 124.3,103.0 L 124.3,103.0 L 130.7,103.0 L 130.7,81.0 L 137.1,81.0 L 137.1,59.0 L 143.6,59.0 L 143.6,59.0 L 150.0,59.0 L 150.0,37.0 L 156.4,37.0 L 156.4,37.0 L 162.9,37.0 L 162.9,37.0 L 169.3,37.0 L 169.3,37.0 L 175.7,37.0 L 175.7,37.0 L 182.1,37.0 L 182.1,37.0 L 188.6,37.0 L 188.6,59.0 L 195.0,59.0 L 195.0,59.0" fill="none" stroke="#7c2233" stroke-width="1.8"/>
+        </svg>
+        <div class="fig-legend">档位粗,阶梯离原波远 → 噪声大</div>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">3 bit · 8 档</div>
+        <svg class="fig-svg" style="max-width:236px" viewBox="0 0 210 130" xmlns="http://www.w3.org/2000/svg">
+          <line x1="15" y1="114.0" x2="195" y2="114.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="103.0" x2="195" y2="103.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="92.0" x2="195" y2="92.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="81.0" x2="195" y2="81.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="70.0" x2="195" y2="70.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="59.0" x2="195" y2="59.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="48.0" x2="195" y2="48.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="37.0" x2="195" y2="37.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <line x1="15" y1="26.0" x2="195" y2="26.0" stroke="#c9bda5" stroke-width="0.6" stroke-dasharray="2 3"/>
+          <path d="M 15.0,70.0 L 16.5,66.5 L 18.0,63.1 L 19.5,59.7 L 21.0,56.4 L 22.5,53.2 L 24.0,50.0 L 25.5,47.0 L 27.0,44.1 L 28.5,41.4 L 30.0,38.9 L 31.5,36.5 L 33.0,34.4 L 34.5,32.5 L 36.0,30.8 L 37.5,29.3 L 39.0,28.2 L 40.5,27.2 L 42.0,26.5 L 43.5,26.1 L 45.0,26.0 L 46.5,26.1 L 48.0,26.5 L 49.5,27.2 L 51.0,28.2 L 52.5,29.3 L 54.0,30.8 L 55.5,32.5 L 57.0,34.4 L 58.5,36.5 L 60.0,38.9 L 61.5,41.4 L 63.0,44.1 L 64.5,47.0 L 66.0,50.0 L 67.5,53.2 L 69.0,56.4 L 70.5,59.7 L 72.0,63.1 L 73.5,66.5 L 75.0,70.0 L 76.5,73.5 L 78.0,76.9 L 79.5,80.3 L 81.0,83.6 L 82.5,86.8 L 84.0,90.0 L 85.5,93.0 L 87.0,95.9 L 88.5,98.6 L 90.0,101.1 L 91.5,103.5 L 93.0,105.6 L 94.5,107.5 L 96.0,109.2 L 97.5,110.7 L 99.0,111.8 L 100.5,112.8 L 102.0,113.5 L 103.5,113.9 L 105.0,114.0 L 106.5,113.9 L 108.0,113.5 L 109.5,112.8 L 111.0,111.8 L 112.5,110.7 L 114.0,109.2 L 115.5,107.5 L 117.0,105.6 L 118.5,103.5 L 120.0,101.1 L 121.5,98.6 L 123.0,95.9 L 124.5,93.0 L 126.0,90.0 L 127.5,86.8 L 129.0,83.6 L 130.5,80.3 L 132.0,76.9 L 133.5,73.5 L 135.0,70.0 L 136.5,66.5 L 138.0,63.1 L 139.5,59.7 L 141.0,56.4 L 142.5,53.2 L 144.0,50.0 L 145.5,47.0 L 147.0,44.1 L 148.5,41.4 L 150.0,38.9 L 151.5,36.5 L 153.0,34.4 L 154.5,32.5 L 156.0,30.8 L 157.5,29.3 L 159.0,28.2 L 160.5,27.2 L 162.0,26.5 L 163.5,26.1 L 165.0,26.0 L 166.5,26.1 L 168.0,26.5 L 169.5,27.2 L 171.0,28.2 L 172.5,29.3 L 174.0,30.8 L 175.5,32.5 L 177.0,34.4 L 178.5,36.5 L 180.0,38.9 L 181.5,41.4 L 183.0,44.1 L 184.5,47.0 L 186.0,50.0 L 187.5,53.2 L 189.0,56.4 L 190.5,59.7 L 192.0,63.1 L 193.5,66.5 L 195.0,70.0" fill="none" stroke="#a14958" stroke-width="1.1" stroke-dasharray="3 2"/>
+          <path d="M 15.0,64.5 L 21.4,64.5 L 21.4,53.5 L 27.9,53.5 L 27.9,42.5 L 34.3,42.5 L 34.3,31.5 L 40.7,31.5 L 40.7,31.5 L 47.1,31.5 L 47.1,31.5 L 53.6,31.5 L 53.6,31.5 L 60.0,31.5 L 60.0,42.5 L 66.4,42.5 L 66.4,53.5 L 72.9,53.5 L 72.9,64.5 L 79.3,64.5 L 79.3,75.5 L 85.7,75.5 L 85.7,97.5 L 92.1,97.5 L 92.1,108.5 L 98.6,108.5 L 98.6,108.5 L 105.0,108.5 L 105.0,108.5 L 111.4,108.5 L 111.4,108.5 L 117.9,108.5 L 117.9,108.5 L 124.3,108.5 L 124.3,97.5 L 130.7,97.5 L 130.7,75.5 L 137.1,75.5 L 137.1,64.5 L 143.6,64.5 L 143.6,53.5 L 150.0,53.5 L 150.0,42.5 L 156.4,42.5 L 156.4,31.5 L 162.9,31.5 L 162.9,31.5 L 169.3,31.5 L 169.3,31.5 L 175.7,31.5 L 175.7,31.5 L 182.1,31.5 L 182.1,42.5 L 188.6,42.5 L 188.6,53.5 L 195.0,53.5 L 195.0,64.5" fill="none" stroke="#7c2233" stroke-width="1.8"/>
+        </svg>
+        <div class="fig-legend">档位翻倍,阶梯更贴合 → 噪声减半</div>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>每多 1 bit,SQNR 约 +6 dB。</b>位深从 2bit(4 档)升到 3bit(8 档),量化台阶数翻倍,红色阶梯更贴近虚线原波,量化噪声约减半——反映到分贝就是约 +6.02 dB。把这张图外推到 16bit(65536 档),阶梯细到与原波几乎重合,即 CD 的 96 dB。</div>
+</div>
 </section>
 
 <div class="worked">

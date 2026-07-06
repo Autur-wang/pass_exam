@@ -86,6 +86,17 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -165,7 +176,10 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <div class="worked">
   <div class="worked-head">例题 · 对 "ACB$" 编码(15 分核心题型)</div>
   <div class="worked-body">
-    <p>用上表的概率区间,对序列 <code>A C B $</code> 逐符号编码。每一步都套那两行公式,列出 <code>low / high / range</code> 的变化:</p>
+    <p><strong>【题目】</strong>某信源有 4 个符号,概率为 <code>P(A)=0.4</code>、<code>P(B)=0.3</code>、<code>P(C)=0.2</code>、<code>P($)=0.1</code>(<code>$</code> 为终止符)。按此顺序累加得各符号的概率区间:</p>
+    <p style="margin-left:var(--space-4);"><code>A → [0, 0.4)</code> &nbsp; <code>B → [0.4, 0.7)</code> &nbsp; <code>C → [0.7, 0.9)</code> &nbsp; <code>$ → [0.9, 1.0)</code></p>
+    <p>试对序列 <code>A C B $</code> 做算术编码:列出每读入一个符号后 <code>low / high / range</code> 的变化,给出最终区间,并求一个能落在该区间内的最短二进制小数作为码字。</p>
+    <p><strong>【解】</strong>每一步都套那两行缩窄公式(<code>new_low = low + range×Range_low</code>,<code>new_high = low + range×Range_high</code>):</p>
     <ol>
       <li><strong>初始化</strong>:<code>low = 0</code>,<code>high = 1</code>,<code>range = 1</code>。</li>
       <li><strong>读入 A</strong>,区间 [0, 0.4):<br>
@@ -205,6 +219,68 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
   </div>
 </div>
 
+<div class="figure"><div class="figure-body"><svg class="fig-svg" viewBox="0 0 356 410" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" style="max-width:356px">
+<text x="6" y="41.0" font-size="12" font-weight="700" fill="#7c2233">L0</text>
+<text x="6" y="54.0" font-size="9" fill="#7a7268">[0,</text>
+<text x="6" y="64.0" font-size="9" fill="#7a7268">1)</text>
+<rect x="70.0" y="30" width="108.0" height="26" fill="#7c2233" stroke="#1a1816" stroke-width="0.8"/>
+<text x="124.0" y="47.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#f5efe4">A</text>
+<rect x="178.0" y="30" width="81.0" height="26" fill="#cdbf9f" stroke="#1a1816" stroke-width="0.8"/>
+<text x="218.5" y="47.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">B</text>
+<rect x="259.0" y="30" width="54.0" height="26" fill="#c1b492" stroke="#1a1816" stroke-width="0.8"/>
+<text x="286.0" y="47.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">C</text>
+<rect x="313.0" y="30" width="27.0" height="26" fill="#b6a988" stroke="#1a1816" stroke-width="0.8"/>
+<text x="326.5" y="47.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">$</text>
+<line x1="70.0" y1="56" x2="70.0" y2="118" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<line x1="178.0" y1="56" x2="340.0" y2="118" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<polygon points="70.0,56 178.0,56 340.0,118 70.0,118" fill="#7c2233" opacity="0.06"/>
+<text x="6" y="129.0" font-size="12" font-weight="700" fill="#7c2233">L1</text>
+<text x="6" y="142.0" font-size="9" fill="#7a7268">[0,</text>
+<text x="6" y="152.0" font-size="9" fill="#7a7268">0.4)</text>
+<rect x="70.0" y="118" width="108.0" height="26" fill="#d9cbb0" stroke="#1a1816" stroke-width="0.8"/>
+<text x="124.0" y="135.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">A</text>
+<rect x="178.0" y="118" width="81.0" height="26" fill="#cdbf9f" stroke="#1a1816" stroke-width="0.8"/>
+<text x="218.5" y="135.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">B</text>
+<rect x="259.0" y="118" width="54.0" height="26" fill="#7c2233" stroke="#1a1816" stroke-width="0.8"/>
+<text x="286.0" y="135.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#f5efe4">C</text>
+<rect x="313.0" y="118" width="27.0" height="26" fill="#b6a988" stroke="#1a1816" stroke-width="0.8"/>
+<text x="326.5" y="135.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">$</text>
+<line x1="259.0" y1="144" x2="70.0" y2="206" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<line x1="313.0" y1="144" x2="340.0" y2="206" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<polygon points="259.0,144 313.0,144 340.0,206 70.0,206" fill="#7c2233" opacity="0.06"/>
+<text x="6" y="217.0" font-size="12" font-weight="700" fill="#7c2233">L2</text>
+<text x="6" y="230.0" font-size="9" fill="#7a7268">[0.28,</text>
+<text x="6" y="240.0" font-size="9" fill="#7a7268">0.36)</text>
+<rect x="70.0" y="206" width="108.0" height="26" fill="#d9cbb0" stroke="#1a1816" stroke-width="0.8"/>
+<text x="124.0" y="223.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">A</text>
+<rect x="178.0" y="206" width="81.0" height="26" fill="#7c2233" stroke="#1a1816" stroke-width="0.8"/>
+<text x="218.5" y="223.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#f5efe4">B</text>
+<rect x="259.0" y="206" width="54.0" height="26" fill="#c1b492" stroke="#1a1816" stroke-width="0.8"/>
+<text x="286.0" y="223.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">C</text>
+<rect x="313.0" y="206" width="27.0" height="26" fill="#b6a988" stroke="#1a1816" stroke-width="0.8"/>
+<text x="326.5" y="223.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">$</text>
+<line x1="178.0" y1="232" x2="70.0" y2="294" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<line x1="259.0" y1="232" x2="340.0" y2="294" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<polygon points="178.0,232 259.0,232 340.0,294 70.0,294" fill="#7c2233" opacity="0.06"/>
+<text x="6" y="305.0" font-size="12" font-weight="700" fill="#7c2233">L3</text>
+<text x="6" y="318.0" font-size="9" fill="#7a7268">[0.312,</text>
+<text x="6" y="328.0" font-size="9" fill="#7a7268">0.336)</text>
+<rect x="70.0" y="294" width="108.0" height="26" fill="#d9cbb0" stroke="#1a1816" stroke-width="0.8"/>
+<text x="124.0" y="311.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">A</text>
+<rect x="178.0" y="294" width="81.0" height="26" fill="#cdbf9f" stroke="#1a1816" stroke-width="0.8"/>
+<text x="218.5" y="311.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">B</text>
+<rect x="259.0" y="294" width="54.0" height="26" fill="#c1b492" stroke="#1a1816" stroke-width="0.8"/>
+<text x="286.0" y="311.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">C</text>
+<rect x="313.0" y="294" width="27.0" height="26" fill="#7c2233" stroke="#1a1816" stroke-width="0.8"/>
+<text x="326.5" y="311.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#f5efe4">$</text>
+<line x1="313.0" y1="320" x2="313.0" y2="350" stroke="#4a6e3a" stroke-width="0.9" stroke-dasharray="3 2"/>
+<line x1="340.0" y1="320" x2="340.0" y2="350" stroke="#4a6e3a" stroke-width="0.9" stroke-dasharray="3 2"/>
+<rect x="313.0" y="350" width="27.0" height="16" fill="#4a6e3a" stroke="#1a1816" stroke-width="0.8"/>
+<circle cx="339.3" cy="358.0" r="3.2" fill="#f5efe4" stroke="#1a1816" stroke-width="1"/>
+<text x="205.0" y="384.0" text-anchor="middle" font-size="10" fill="#4a6e3a" font-weight="700">最终区间 [0.3336, 0.336)</text>
+<text x="205.0" y="398.0" text-anchor="middle" font-size="10" fill="#4a4540">输出码点 ● = 43/128 = 0.3359375（落在区间内）</text>
+</svg></div><div class="figure-cap"><b>编码：区间的递归细分。</b>初始尺子 <code>[0,1)</code> 按 A·B·C·$ 概率切成四段；读入一个符号就<b>只保留它那一段</b>，再把这段放大成新尺子（虚线梯形＝“放大”）继续切。深红＝当前所选符号段。四步 A→C→B→$ 后区间缩到 <code>[0.3336, 0.336)</code>，任取其中一个最短二进制小数即为码字。怎么读：每往下一层，就是上一层深红段被拉满整条尺子。</div></div>
+
 <section>
 <h2><span class="num">3.</span>解码:反着走一遍(了解即可)</h2>
 <p>老师说解压部分了解即可,但过一遍能帮你彻底看懂编码。解码器拿到小数 <code>value = 0.3359375</code>,用同一张概率表反向定位:每一步找出 <code>value</code> 落在哪个符号区间,输出该符号,再把 value "放大还原"回单位区间,公式:<br>
@@ -221,10 +297,106 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <p>解出 <code>A C B $</code>,与原消息完全一致 ✓。注意第三步 <code>0.699… &lt; 0.7</code>,所以落在 B 而不是 C——这类"卡边界"判断是解码最容易出错的地方,务必用严格的半开区间 <code>[low, high)</code> 判断。</p>
 </section>
 
+<div class="figure"><div class="figure-body"><svg class="fig-svg" viewBox="0 0 356 340" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" style="max-width:356px">
+<text x="6" y="45.0" font-size="12" font-weight="700" fill="#7c2233">L0</text>
+<text x="6" y="58.0" font-size="8.5" fill="#7a7268">v=</text>
+<text x="6" y="68.0" font-size="8.5" fill="#7a7268">0.3359</text>
+<rect x="70.0" y="34" width="108.0" height="26" fill="#7c2233" stroke="#1a1816" stroke-width="0.8"/>
+<text x="124.0" y="51.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#f5efe4">A</text>
+<rect x="178.0" y="34" width="81.0" height="26" fill="#cdbf9f" stroke="#1a1816" stroke-width="0.8"/>
+<text x="218.5" y="51.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">B</text>
+<rect x="259.0" y="34" width="54.0" height="26" fill="#c1b492" stroke="#1a1816" stroke-width="0.8"/>
+<text x="286.0" y="51.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">C</text>
+<rect x="313.0" y="34" width="27.0" height="26" fill="#b6a988" stroke="#1a1816" stroke-width="0.8"/>
+<text x="326.5" y="51.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">$</text>
+<line x1="160.7" y1="28.0" x2="160.7" y2="64.0" stroke="#c19a3e" stroke-width="1.6"/>
+<polygon points="160.7,28.0 156.7,21.0 164.7,21.0" fill="#c19a3e" stroke="#1a1816" stroke-width="0.6"/>
+<line x1="70.0" y1="60" x2="70.0" y2="112" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<line x1="178.0" y1="60" x2="340.0" y2="112" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<text x="124.0" y="71.0" text-anchor="middle" font-size="8.5" fill="#7c2233">↓输出 A</text>
+<text x="6" y="123.0" font-size="12" font-weight="700" fill="#7c2233">L1</text>
+<text x="6" y="136.0" font-size="8.5" fill="#7a7268">v=</text>
+<text x="6" y="146.0" font-size="8.5" fill="#7a7268">0.8398</text>
+<rect x="70.0" y="112" width="108.0" height="26" fill="#d9cbb0" stroke="#1a1816" stroke-width="0.8"/>
+<text x="124.0" y="129.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">A</text>
+<rect x="178.0" y="112" width="81.0" height="26" fill="#cdbf9f" stroke="#1a1816" stroke-width="0.8"/>
+<text x="218.5" y="129.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">B</text>
+<rect x="259.0" y="112" width="54.0" height="26" fill="#7c2233" stroke="#1a1816" stroke-width="0.8"/>
+<text x="286.0" y="129.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#f5efe4">C</text>
+<rect x="313.0" y="112" width="27.0" height="26" fill="#b6a988" stroke="#1a1816" stroke-width="0.8"/>
+<text x="326.5" y="129.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">$</text>
+<line x1="296.8" y1="106.0" x2="296.8" y2="142.0" stroke="#c19a3e" stroke-width="1.6"/>
+<polygon points="296.8,106.0 292.8,99.0 300.8,99.0" fill="#c19a3e" stroke="#1a1816" stroke-width="0.6"/>
+<line x1="259.0" y1="138" x2="70.0" y2="190" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<line x1="313.0" y1="138" x2="340.0" y2="190" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<text x="286.0" y="149.0" text-anchor="middle" font-size="8.5" fill="#7c2233">↓输出 C</text>
+<text x="6" y="201.0" font-size="12" font-weight="700" fill="#7c2233">L2</text>
+<text x="6" y="214.0" font-size="8.5" fill="#7a7268">v=</text>
+<text x="6" y="224.0" font-size="8.5" fill="#7a7268">0.6992</text>
+<rect x="70.0" y="190" width="108.0" height="26" fill="#d9cbb0" stroke="#1a1816" stroke-width="0.8"/>
+<text x="124.0" y="207.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">A</text>
+<rect x="178.0" y="190" width="81.0" height="26" fill="#7c2233" stroke="#1a1816" stroke-width="0.8"/>
+<text x="218.5" y="207.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#f5efe4">B</text>
+<rect x="259.0" y="190" width="54.0" height="26" fill="#c1b492" stroke="#1a1816" stroke-width="0.8"/>
+<text x="286.0" y="207.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">C</text>
+<rect x="313.0" y="190" width="27.0" height="26" fill="#b6a988" stroke="#1a1816" stroke-width="0.8"/>
+<text x="326.5" y="207.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">$</text>
+<line x1="258.8" y1="184.0" x2="258.8" y2="220.0" stroke="#c19a3e" stroke-width="1.6"/>
+<polygon points="258.8,184.0 254.8,177.0 262.8,177.0" fill="#c19a3e" stroke="#1a1816" stroke-width="0.6"/>
+<line x1="178.0" y1="216" x2="70.0" y2="268" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<line x1="259.0" y1="216" x2="340.0" y2="268" stroke="#a14958" stroke-width="0.9" stroke-dasharray="3 2"/>
+<text x="218.5" y="227.0" text-anchor="middle" font-size="8.5" fill="#7c2233">↓输出 B</text>
+<text x="6" y="279.0" font-size="12" font-weight="700" fill="#7c2233">L3</text>
+<text x="6" y="292.0" font-size="8.5" fill="#7a7268">v=</text>
+<text x="6" y="302.0" font-size="8.5" fill="#7a7268">0.9974</text>
+<rect x="70.0" y="268" width="108.0" height="26" fill="#d9cbb0" stroke="#1a1816" stroke-width="0.8"/>
+<text x="124.0" y="285.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">A</text>
+<rect x="178.0" y="268" width="81.0" height="26" fill="#cdbf9f" stroke="#1a1816" stroke-width="0.8"/>
+<text x="218.5" y="285.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">B</text>
+<rect x="259.0" y="268" width="54.0" height="26" fill="#c1b492" stroke="#1a1816" stroke-width="0.8"/>
+<text x="286.0" y="285.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="400" fill="#4a4540">C</text>
+<rect x="313.0" y="268" width="27.0" height="26" fill="#7c2233" stroke="#1a1816" stroke-width="0.8"/>
+<text x="326.5" y="285.0" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#f5efe4">$</text>
+<line x1="339.3" y1="262.0" x2="339.3" y2="298.0" stroke="#c19a3e" stroke-width="1.6"/>
+<polygon points="339.3,262.0 335.3,255.0 343.3,255.0" fill="#c19a3e" stroke="#1a1816" stroke-width="0.6"/>
+<text x="339.3" y="307.0" text-anchor="end" font-size="8.5" fill="#4a6e3a" font-weight="700">→ 输出 $ 停止</text>
+</svg></div><div class="figure-cap"><b>解码：小数逐层落格。</b>拿到码点 <code>v=0.3359375</code>，每层看它落在哪一段（黄色指针），输出该符号，再按 <code>v←(v−low)/p</code> 把该段拉满、指针位置随之更新到下一层。<code>0.3359→A</code>、<code>0.8398→C</code>、<code>0.6992→B</code>、<code>0.9974→$</code>，还原出 <code>ACB$</code>。边界警示：L2 指针 <code>0.6992&lt;0.7</code> 卡在 B/C 交界左侧，必须用半开区间 <code>[low,high)</code> 判定，否则会误读成 C。</div></div>
+
 <section>
 <h2><span class="num">4.</span>为什么它能赢 Huffman</h2>
 <p>Huffman 给每个符号分配<strong>整数位</strong>码字,当某符号概率很高(比如 0.9)时,理论上它只值 <code>−log₂0.9 ≈ 0.15</code> 位,可 Huffman 至少得给它 1 位——浪费。算术编码把整条消息合成一个分数,<strong>能逼近熵 η</strong>,不受整数位约束。代价是实现更复杂、要处理浮点精度。简答题里"为什么算术编码常优于 Huffman"就答这一句:<em>它对整条消息编码、用分数码字逼近熵,绕开了每符号至少 1 位的下限</em>。</p>
 </section>
+
+<div class="figure"><div class="figure-body"><div class="fig-row"><div class="fig-col"><div class="fig-title">Huffman · 逐符号整数位</div><svg class="fig-svg" viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" style="max-width:240px">
+<text x="20" y="24" font-size="10.5" font-weight="700" fill="#1a1816">高概率符号 p=0.9</text>
+<rect x="20.0" y="40" width="15.2" height="24" fill="#4a6e3a" stroke="#1a1816" stroke-width="0.8"/>
+<text x="41.2" y="56" font-size="9.5" fill="#4a4540">理想 −log₂0.9 ≈ 0.15 位</text>
+<rect x="20.0" y="95" width="100.0" height="24" fill="#c19a3e" stroke="#1a1816" stroke-width="0.8"/>
+<rect x="35.2" y="95" width="84.8" height="24" fill="none" stroke="#7c2233" stroke-width="1" stroke-dasharray="3 2"/>
+<text x="126.0" y="111" font-size="9.5" fill="#4a4540">Huffman 强制 1 位</text>
+<text x="77.6" y="133" text-anchor="middle" font-size="9" fill="#7c2233" font-weight="700">↑ 浪费 0.85 位/符号</text>
+<line x1="20.0" y1="150" x2="20.0" y2="155" stroke="#7a7268" stroke-width="1"/>
+<text x="20.0" y="168" text-anchor="middle" font-size="9" fill="#7a7268">0</text>
+<line x1="120.0" y1="150" x2="120.0" y2="155" stroke="#7a7268" stroke-width="1"/>
+<text x="120.0" y="168" text-anchor="middle" font-size="9" fill="#7a7268">1</text>
+<line x1="220.0" y1="150" x2="220.0" y2="155" stroke="#7a7268" stroke-width="1"/>
+<text x="220.0" y="168" text-anchor="middle" font-size="9" fill="#7a7268">2</text>
+<line x1="20.0" y1="150" x2="220.0" y2="150" stroke="#7a7268" stroke-width="1"/>
+<text x="120.0" y="188" text-anchor="middle" font-size="9" fill="#7a7268">码长（位）· 只能取整数</text>
+</svg></div><div class="fig-col"><div class="fig-title">算术编码 · 整条消息一个小数</div><svg class="fig-svg" viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" style="max-width:240px">
+<text x="20" y="24" font-size="10.5" font-weight="700" fill="#1a1816">整条消息 ACB$</text>
+<rect x="20.0" y="40" width="200.0" height="12" fill="#7c2233" opacity="0.35" stroke="#1a1816" stroke-width="0.5"/>
+<rect x="20.0" y="62" width="80.0" height="12" fill="#7c2233" opacity="0.48" stroke="#1a1816" stroke-width="0.5"/>
+<rect x="76.0" y="84" width="16.0" height="12" fill="#7c2233" opacity="0.61" stroke="#1a1816" stroke-width="0.5"/>
+<rect x="82.4" y="106" width="4.8" height="12" fill="#7c2233" opacity="0.74" stroke="#1a1816" stroke-width="0.5"/>
+<rect x="86.7" y="128" width="1.2" height="12" fill="#7c2233" opacity="0.87" stroke="#1a1816" stroke-width="0.5"/>
+<line x1="20.0" y1="52" x2="86.7" y2="128" stroke="#a14958" stroke-width="0.8" stroke-dasharray="2 2"/>
+<line x1="220.0" y1="52" x2="87.2" y2="128" stroke="#a14958" stroke-width="0.8" stroke-dasharray="2 2"/>
+<circle cx="87.2" cy="150" r="4" fill="#f5efe4" stroke="#1a1816" stroke-width="1.2"/>
+<line x1="86.7" y1="140" x2="87.2" y2="140" stroke="#4a6e3a" stroke-width="2"/>
+<text x="87.2" y="172" text-anchor="middle" font-size="10" font-weight="700" fill="#4a6e3a">0.0101011₂</text>
+<text x="120.0" y="188" text-anchor="middle" font-size="9" fill="#7a7268">一个小数=整句话 · 位数≈熵 η</text>
+</svg></div></div></div><div class="figure-cap"><b>为何算术编码常胜 Huffman。</b>左：Huffman 每符号码长只能取<b>整数位</b>——一个 p=0.9 的符号理论只值 0.15 位，却被迫花 1 整位，虚线框即每符号被浪费的近 0.85 位。右：算术编码把整条消息塌缩成 <code>[0,1)</code> 里的<b>一个小数</b>，总码长≈ −log₂P(消息)，直接逼近信息熵 η，绕开“每符号≥1 位”的下限。代价是实现更复杂、需处理浮点精度。</div></div>
 
 <div class="selftest">
   <span class="selftest-label">自测题</span>

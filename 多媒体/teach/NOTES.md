@@ -9,7 +9,14 @@
 ## 视觉规范
 - 复用 `exam-review/` 的报纸风设计系统（米色纸 `#f5efe4` + 墨黑 + 酒红 accent `#7c2233`；衬线正文 + 无衬线标签）。
 - 全套微课共用同一套 CSS 变量与组件类，保证 21 节看起来出自同一系统。
-- 组件：`.intuition`（直觉类比框）、`.def`（定义卡）、`.worked`（例题分步）、`.selftest`（可折叠自测题）。
+- 组件：`.intuition`（直觉类比框）、`.def`（定义卡）、`.worked`（例题分步）、`.selftest`（可折叠自测题）、`.figure`+`.figure-cap`（图示卡，见下）。
+
+## 图文并茂规范（用户明确要求，2026-07-06）
+- **能画就别只写字**：凡是空间/颜色/波形/流程/几何类概念，必须配图。微课是本地 `file://` 打开，可放心用**内联 SVG + CSS 渐变/`mix-blend-mode`/`conic-gradient`** 现画，不引外部图片（保持自成一体、离线可看）。
+- **图示组件**：用 `.figure`（外框）+ `.figure-body`（居中放图）+ `.figure-cap`（图注，`<b>` 用酒红强调）。多图并排用 `.fig-row`/`.fig-col`。
+- **多举实例、多做对比**：抽象概念要钉到一个**具体实例**上（如 0004「同一个橙色·五套坐标系」表），并尽量给**并排对比图**（如加色圆 vs 减色圆）。
+- **改完必验证**：用无头 Chrome 截图回看渲染，别只靠肉眼读代码——`"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --screenshot=out.png --window-size=1000,H file://...`。
+- 参考样板：`lessons/0004-color-science-rgb-cie-hsv-lab.html`（光谱/视锥曲线、HSV 色相环、Lab a*b* 平面、CIE 马蹄图、加减色混合、橙色五空间对照）。
 
 ## 内容依据（可信来源）
 - 一手：`../多媒体系统导论_完整课件内容.md`（L02–L12 讲义正文）。

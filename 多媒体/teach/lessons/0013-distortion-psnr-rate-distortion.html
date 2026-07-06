@@ -86,6 +86,17 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -138,6 +149,181 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 </div>
 </section>
 
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col" style="flex:0 1 150px">
+        <div class="fig-title">① 原图 → 重建图</div>
+        <svg class="fig-svg" viewBox="0 0 132 300" xmlns="http://www.w3.org/2000/svg" style="max-width:150px">
+<text x="66" y="10" font-family="sans-serif" font-size="10" font-weight="700" fill="#7a7268" text-anchor="middle">原图 x</text>
+<rect x="1" y="16" width="26" height="26" fill="rgb(90,90,90)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="32.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">90</text>
+<rect x="27" y="16" width="26" height="26" fill="rgb(95,95,95)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="32.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">95</text>
+<rect x="53" y="16" width="26" height="26" fill="rgb(100,100,100)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="32.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">100</text>
+<rect x="79" y="16" width="26" height="26" fill="rgb(110,110,110)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="32.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">110</text>
+<rect x="105" y="16" width="26" height="26" fill="rgb(120,120,120)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="32.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">120</text>
+<rect x="1" y="42" width="26" height="26" fill="rgb(92,92,92)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="58.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">92</text>
+<rect x="27" y="42" width="26" height="26" fill="rgb(100,100,100)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="58.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">100</text>
+<rect x="53" y="42" width="26" height="26" fill="rgb(130,130,130)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="58.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">130</text>
+<rect x="79" y="42" width="26" height="26" fill="rgb(160,160,160)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="58.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">160</text>
+<rect x="105" y="42" width="26" height="26" fill="rgb(150,150,150)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="58.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">150</text>
+<rect x="1" y="68" width="26" height="26" fill="rgb(88,88,88)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="84.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">88</text>
+<rect x="27" y="68" width="26" height="26" fill="rgb(120,120,120)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="84.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">120</text>
+<rect x="53" y="68" width="26" height="26" fill="rgb(200,200,200)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="84.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">200</text>
+<rect x="79" y="68" width="26" height="26" fill="rgb(210,210,210)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="84.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">210</text>
+<rect x="105" y="68" width="26" height="26" fill="rgb(160,160,160)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="84.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">160</text>
+<rect x="1" y="94" width="26" height="26" fill="rgb(80,80,80)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="110.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">80</text>
+<rect x="27" y="94" width="26" height="26" fill="rgb(110,110,110)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="110.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">110</text>
+<rect x="53" y="94" width="26" height="26" fill="rgb(190,190,190)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="110.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">190</text>
+<rect x="79" y="94" width="26" height="26" fill="rgb(205,205,205)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="110.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">205</text>
+<rect x="105" y="94" width="26" height="26" fill="rgb(155,155,155)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="110.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">155</text>
+<rect x="1" y="120" width="26" height="26" fill="rgb(78,78,78)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="136.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">78</text>
+<rect x="27" y="120" width="26" height="26" fill="rgb(90,90,90)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="136.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">90</text>
+<rect x="53" y="120" width="26" height="26" fill="rgb(130,130,130)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="136.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">130</text>
+<rect x="79" y="120" width="26" height="26" fill="rgb(150,150,150)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="136.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">150</text>
+<rect x="105" y="120" width="26" height="26" fill="rgb(140,140,140)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="136.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">140</text>
+<text x="66" y="164" font-family="sans-serif" font-size="10" font-weight="700" fill="#7a7268" text-anchor="middle">重建 x̂</text>
+<rect x="1" y="170" width="26" height="26" fill="rgb(96,96,96)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="186.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">96</text>
+<rect x="27" y="170" width="26" height="26" fill="rgb(96,96,96)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="186.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">96</text>
+<rect x="53" y="170" width="26" height="26" fill="rgb(108,108,108)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="186.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">108</text>
+<rect x="79" y="170" width="26" height="26" fill="rgb(108,108,108)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="186.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">108</text>
+<rect x="105" y="170" width="26" height="26" fill="rgb(120,120,120)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="186.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">120</text>
+<rect x="1" y="196" width="26" height="26" fill="rgb(96,96,96)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="212.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">96</text>
+<rect x="27" y="196" width="26" height="26" fill="rgb(96,96,96)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="212.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">96</text>
+<rect x="53" y="196" width="26" height="26" fill="rgb(144,144,144)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="212.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">144</text>
+<rect x="79" y="196" width="26" height="26" fill="rgb(144,144,144)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="212.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">144</text>
+<rect x="105" y="196" width="26" height="26" fill="rgb(152,152,152)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="212.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">152</text>
+<rect x="1" y="222" width="26" height="26" fill="rgb(96,96,96)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="238.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">96</text>
+<rect x="27" y="222" width="26" height="26" fill="rgb(120,120,120)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="238.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">120</text>
+<rect x="53" y="222" width="26" height="26" fill="rgb(192,192,192)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="238.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">192</text>
+<rect x="79" y="222" width="26" height="26" fill="rgb(192,192,192)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="238.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">192</text>
+<rect x="105" y="222" width="26" height="26" fill="rgb(152,152,152)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="238.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">152</text>
+<rect x="1" y="248" width="26" height="26" fill="rgb(96,96,96)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="264.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">96</text>
+<rect x="27" y="248" width="26" height="26" fill="rgb(120,120,120)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="264.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">120</text>
+<rect x="53" y="248" width="26" height="26" fill="rgb(192,192,192)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="264.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">192</text>
+<rect x="79" y="248" width="26" height="26" fill="rgb(192,192,192)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="264.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">192</text>
+<rect x="105" y="248" width="26" height="26" fill="rgb(152,152,152)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="264.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">152</text>
+<rect x="1" y="274" width="26" height="26" fill="rgb(72,72,72)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="290.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">72</text>
+<rect x="27" y="274" width="26" height="26" fill="rgb(96,96,96)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="290.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">96</text>
+<rect x="53" y="274" width="26" height="26" fill="rgb(144,144,144)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="290.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">144</text>
+<rect x="79" y="274" width="26" height="26" fill="rgb(144,144,144)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="290.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">144</text>
+<rect x="105" y="274" width="26" height="26" fill="rgb(152,152,152)" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="290.0" font-family="sans-serif" font-size="8" fill="#111" text-anchor="middle">152</text>
+</svg>
+        <div class="fig-legend">格子深浅 = 像素灰度值。有损压缩后重建图变"块状"(相邻像素被压成同值)。</div>
+      </div>
+      <div class="fig-col" style="flex:0 1 150px">
+        <div class="fig-title">② 误差 → MSE/PSNR</div>
+        <svg class="fig-svg" viewBox="0 0 132 190" xmlns="http://www.w3.org/2000/svg" style="max-width:150px">
+<text x="66" y="10" font-family="sans-serif" font-size="10" font-weight="700" fill="#7a7268" text-anchor="middle">逐像素误差 x−x̂</text>
+<rect x="1" y="16" width="26" height="26" fill="#7c2233" fill-opacity="0.33" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="32.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">-6</text>
+<rect x="27" y="16" width="26" height="26" fill="#7c2233" fill-opacity="0.06" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="32.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">-1</text>
+<rect x="53" y="16" width="26" height="26" fill="#7c2233" fill-opacity="0.44" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="32.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">-8</text>
+<rect x="79" y="16" width="26" height="26" fill="#7c2233" fill-opacity="0.11" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="32.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">+2</text>
+<rect x="105" y="16" width="26" height="26" fill="#7c2233" fill-opacity="0.00" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="32.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">+0</text>
+<rect x="1" y="42" width="26" height="26" fill="#7c2233" fill-opacity="0.22" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="58.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">-4</text>
+<rect x="27" y="42" width="26" height="26" fill="#7c2233" fill-opacity="0.22" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="58.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">+4</text>
+<rect x="53" y="42" width="26" height="26" fill="#7c2233" fill-opacity="0.78" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="58.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">-14</text>
+<rect x="79" y="42" width="26" height="26" fill="#7c2233" fill-opacity="0.89" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="58.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">+16</text>
+<rect x="105" y="42" width="26" height="26" fill="#7c2233" fill-opacity="0.11" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="58.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">-2</text>
+<rect x="1" y="68" width="26" height="26" fill="#7c2233" fill-opacity="0.44" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="84.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">-8</text>
+<rect x="27" y="68" width="26" height="26" fill="#7c2233" fill-opacity="0.00" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="84.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">+0</text>
+<rect x="53" y="68" width="26" height="26" fill="#7c2233" fill-opacity="0.44" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="84.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">+8</text>
+<rect x="79" y="68" width="26" height="26" fill="#7c2233" fill-opacity="1.00" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="84.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">+18</text>
+<rect x="105" y="68" width="26" height="26" fill="#7c2233" fill-opacity="0.44" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="84.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">+8</text>
+<rect x="1" y="94" width="26" height="26" fill="#7c2233" fill-opacity="0.89" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="110.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">-16</text>
+<rect x="27" y="94" width="26" height="26" fill="#7c2233" fill-opacity="0.56" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="110.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">-10</text>
+<rect x="53" y="94" width="26" height="26" fill="#7c2233" fill-opacity="0.11" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="110.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">-2</text>
+<rect x="79" y="94" width="26" height="26" fill="#7c2233" fill-opacity="0.72" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="110.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">+13</text>
+<rect x="105" y="94" width="26" height="26" fill="#7c2233" fill-opacity="0.17" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="110.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">+3</text>
+<rect x="1" y="120" width="26" height="26" fill="#7c2233" fill-opacity="0.33" stroke="#1a1816" stroke-width="0.5"/>
+<text x="14.0" y="136.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">+6</text>
+<rect x="27" y="120" width="26" height="26" fill="#7c2233" fill-opacity="0.33" stroke="#1a1816" stroke-width="0.5"/>
+<text x="40.0" y="136.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">-6</text>
+<rect x="53" y="120" width="26" height="26" fill="#7c2233" fill-opacity="0.78" stroke="#1a1816" stroke-width="0.5"/>
+<text x="66.0" y="136.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">-14</text>
+<rect x="79" y="120" width="26" height="26" fill="#7c2233" fill-opacity="0.33" stroke="#1a1816" stroke-width="0.5"/>
+<text x="92.0" y="136.0" font-family="sans-serif" font-size="8" fill="#4a4540" text-anchor="middle">+6</text>
+<rect x="105" y="120" width="26" height="26" fill="#7c2233" fill-opacity="0.67" stroke="#1a1816" stroke-width="0.5"/>
+<text x="118.0" y="136.0" font-family="sans-serif" font-size="8" fill="#fff" text-anchor="middle">-12</text>
+<text x="66" y="164" font-family="sans-serif" font-size="10" fill="#4a4540" text-anchor="middle">MSE = Σ(误差)²/25 = <tspan font-weight="700" fill="#7c2233">84</tspan></text>
+<text x="66" y="180" font-family="sans-serif" font-size="10" fill="#4a4540" text-anchor="middle">→ PSNR ≈ <tspan font-weight="700" fill="#4a6e3a">28.9 dB</tspan></text>
+</svg>
+        <div class="fig-legend">红越深 = 该像素误差越大。把每格误差<b>平方后求平均</b>得 MSE,再套对数换成 dB 得 PSNR。</div>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>MSE 与 PSNR 是怎么算出来的。</b>左列:原图每个像素被压缩-重建后有微小偏差(块状化)。右列:逐像素相减得误差网格,红色越深误差越大;把所有误差<b>平方求平均</b>就是 MSE(能量,数值平方、非 dB),再用峰值 255² 归一化并取 <b>10·log₁₀</b> 换成分贝就是 PSNR。此例 MSE≈84、PSNR≈29 dB——与"MSE=100 → 28 dB"的锚点一致。<b>误差平方 ⇒ 系数是 10 不是 20。</b></div>
+</div>
+
 <section>
 <h2><span class="num">2.</span>三把尺子:SNR vs PSNR vs MSE</h2>
 <p>考试爱把这三个量摆在一起辨析。核心区别:MSE 是原始误差能量,SNR/PSNR 是取了对数、单位为分贝的<strong>比值</strong>——区别只在分子用"信号方差"还是"信号峰值"。</p>
@@ -171,6 +357,40 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 </div>
 </section>
 
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" viewBox="0 0 340 236" xmlns="http://www.w3.org/2000/svg" style="max-width:330px">
+  <!-- regions -->
+  <path d="M 48.0,26.0 L 52.6,31.6 L 57.2,37.0 L 61.8,42.4 L 66.4,47.7 L 71.0,52.8 L 75.6,57.9 L 80.2,62.9 L 84.8,67.8 L 89.4,72.6 L 94.0,77.3 L 98.6,82.0 L 103.2,86.5 L 107.8,90.9 L 112.4,95.3 L 117.0,99.5 L 121.6,103.7 L 126.2,107.7 L 130.8,111.7 L 135.4,115.6 L 140.0,119.3 L 144.6,123.0 L 149.2,126.6 L 153.8,130.1 L 158.4,133.5 L 163.0,136.8 L 167.6,140.1 L 172.2,143.2 L 176.8,146.2 L 181.4,149.2 L 186.0,152.0 L 190.6,154.8 L 195.2,157.4 L 199.8,160.0 L 204.4,162.5 L 209.0,164.8 L 213.6,167.1 L 218.2,169.3 L 222.8,171.4 L 227.4,173.4 L 232.0,175.3 L 236.6,177.2 L 241.2,178.9 L 245.8,180.5 L 250.4,182.1 L 255.0,183.5 L 259.6,184.9 L 264.2,186.1 L 268.8,187.3 L 273.4,188.4 L 278.0,189.3 L 282.6,190.2 L 287.2,191.0 L 291.8,191.7 L 296.4,192.3 L 301.0,192.8 L 305.6,193.3 L 310.2,193.6 L 314.8,193.8 L 319.4,194.0 L 324.0,194.0 L 324.0,194.0 L 324.0,26 L 48.0,26 Z" fill="#4a6e3a" fill-opacity="0.10"/>
+  <path d="M 48.0,26.0 L 52.6,31.6 L 57.2,37.0 L 61.8,42.4 L 66.4,47.7 L 71.0,52.8 L 75.6,57.9 L 80.2,62.9 L 84.8,67.8 L 89.4,72.6 L 94.0,77.3 L 98.6,82.0 L 103.2,86.5 L 107.8,90.9 L 112.4,95.3 L 117.0,99.5 L 121.6,103.7 L 126.2,107.7 L 130.8,111.7 L 135.4,115.6 L 140.0,119.3 L 144.6,123.0 L 149.2,126.6 L 153.8,130.1 L 158.4,133.5 L 163.0,136.8 L 167.6,140.1 L 172.2,143.2 L 176.8,146.2 L 181.4,149.2 L 186.0,152.0 L 190.6,154.8 L 195.2,157.4 L 199.8,160.0 L 204.4,162.5 L 209.0,164.8 L 213.6,167.1 L 218.2,169.3 L 222.8,171.4 L 227.4,173.4 L 232.0,175.3 L 236.6,177.2 L 241.2,178.9 L 245.8,180.5 L 250.4,182.1 L 255.0,183.5 L 259.6,184.9 L 264.2,186.1 L 268.8,187.3 L 273.4,188.4 L 278.0,189.3 L 282.6,190.2 L 287.2,191.0 L 291.8,191.7 L 296.4,192.3 L 301.0,192.8 L 305.6,193.3 L 310.2,193.6 L 314.8,193.8 L 319.4,194.0 L 324.0,194.0 L 324.0,194.0 L 48.0,194.0 Z" fill="#7c2233" fill-opacity="0.09"/>
+  <!-- axes -->
+  <line x1="48" y1="26" x2="48" y2="194" stroke="#1a1816" stroke-width="1.2"/>
+  <line x1="48" y1="194" x2="324" y2="194" stroke="#1a1816" stroke-width="1.2"/>
+  <!-- curve -->
+  <path d="M 48.0,26.0 L 52.6,31.6 L 57.2,37.0 L 61.8,42.4 L 66.4,47.7 L 71.0,52.8 L 75.6,57.9 L 80.2,62.9 L 84.8,67.8 L 89.4,72.6 L 94.0,77.3 L 98.6,82.0 L 103.2,86.5 L 107.8,90.9 L 112.4,95.3 L 117.0,99.5 L 121.6,103.7 L 126.2,107.7 L 130.8,111.7 L 135.4,115.6 L 140.0,119.3 L 144.6,123.0 L 149.2,126.6 L 153.8,130.1 L 158.4,133.5 L 163.0,136.8 L 167.6,140.1 L 172.2,143.2 L 176.8,146.2 L 181.4,149.2 L 186.0,152.0 L 190.6,154.8 L 195.2,157.4 L 199.8,160.0 L 204.4,162.5 L 209.0,164.8 L 213.6,167.1 L 218.2,169.3 L 222.8,171.4 L 227.4,173.4 L 232.0,175.3 L 236.6,177.2 L 241.2,178.9 L 245.8,180.5 L 250.4,182.1 L 255.0,183.5 L 259.6,184.9 L 264.2,186.1 L 268.8,187.3 L 273.4,188.4 L 278.0,189.3 L 282.6,190.2 L 287.2,191.0 L 291.8,191.7 L 296.4,192.3 L 301.0,192.8 L 305.6,193.3 L 310.2,193.6 L 314.8,193.8 L 319.4,194.0 L 324.0,194.0" fill="none" stroke="#7c2233" stroke-width="2.4"/>
+  <!-- R(0)=H point -->
+  <circle cx="48.0" cy="26.0" r="3.5" fill="#7c2233"/>
+  <text x="55" y="30" font-family="sans-serif" font-size="11" font-weight="700" fill="#7c2233">R(0)=H (熵·无损下界)</text>
+  <!-- Dmax point -->
+  <circle cx="324.0" cy="194.0" r="3.5" fill="#1a1816"/>
+  <text x="320" y="186" font-family="sans-serif" font-size="10" fill="#4a4540" text-anchor="end">R=0 (什么都不发)</text>
+  <!-- tradeoff point + dashed guides -->
+  <circle cx="125.3" cy="106.9" r="3" fill="#c19a3e"/>
+  <line x1="48" y1="106.9" x2="125.3" y2="106.9" stroke="#c19a3e" stroke-width="1" stroke-dasharray="3 2"/>
+  <line x1="125.3" y1="194" x2="125.3" y2="106.9" stroke="#c19a3e" stroke-width="1" stroke-dasharray="3 2"/>
+  <!-- region labels -->
+  <text x="219" y="73" font-family="sans-serif" font-size="11" font-weight="700" fill="#4a6e3a">可达区域</text>
+  <text x="219" y="86" font-family="sans-serif" font-size="9" fill="#4a6e3a">(码率够,能做到)</text>
+  <text x="87" y="177" font-family="sans-serif" font-size="11" font-weight="700" fill="#7c2233">不可能区域</text>
+  <text x="87" y="190" font-family="sans-serif" font-size="9" fill="#a14958">(码率不足)</text>
+  <!-- axis labels -->
+  <text x="186" y="228" font-family="sans-serif" font-size="12" font-weight="700" fill="#1a1816" text-anchor="middle">失真 D  (越右越糊) →</text>
+  <text x="14" y="110" font-family="sans-serif" font-size="12" font-weight="700" fill="#1a1816" text-anchor="middle" transform="rotate(-90 14 110)">码率 R (bit) ↑</text>
+</svg>
+  </div>
+  <div class="figure-cap"><b>率失真曲线 R(D):码率与失真的权衡边界。</b>曲线<b>单调下降</b>——允许的失真越大(越往右),所需码率越低;曲线<b>下凸</b>——越靠左的高质量端,再降一点失真要多付的码率越陡。曲线本身就是理论极限:上方<b>绿色可达区域</b>码率足够、能实现;下方<b>红色不可能区域</b>码率不足、任何编码都做不到。左端点 <b>R(0)=H</b>(信源熵)是无损压缩的码率下界;右端 D 大到可"什么都不发"时码率降为 0。金色点示意一次具体权衡:选定容忍失真 D,读出对应最低码率 R。</div>
+</div>
+
 <div class="worked">
   <div class="worked-head">例题 · 由 MSE 计算 PSNR</div>
   <div class="worked-body">
@@ -184,6 +404,49 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     </ol>
     <div class="result"><strong>结果:PSNR ≈ 28 dB。</strong>记住这个"锚点":<code>MSE = 100 → PSNR ≈ 28 dB</code>。若误用系数 20,会算出约 56 dB,整整差一倍——这正是阅卷常见扣分点。</div>
   </div>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" viewBox="0 0 340 204" xmlns="http://www.w3.org/2000/svg" style="max-width:330px">
+<text x="78" y="18" font-family="sans-serif" font-size="10" font-weight="700" fill="#7a7268">PSNR 越长越好 →  (MSE 越小 ⇒ PSNR 越大)</text>
+<rect x="78.0" y="26" width="71.2" height="142" fill="#7c2233" fill-opacity="0.1"/>
+<rect x="149.2" y="26" width="35.6" height="142" fill="#c19a3e" fill-opacity="0.12"/>
+<rect x="184.8" y="26" width="35.6" height="142" fill="#4a6e3a" fill-opacity="0.1"/>
+<rect x="220.4" y="26" width="35.6" height="142" fill="#4a6e3a" fill-opacity="0.2"/>
+<text x="72" y="47" font-family="sans-serif" font-size="10" font-weight="700" fill="#1a1816" text-anchor="end">MSE = 1</text>
+<rect x="78" y="30" width="171.2" height="26" fill="#7c2233" fill-opacity="0.82"/>
+<text x="255.2" y="47" font-family="sans-serif" font-size="10" font-weight="700" fill="#7c2233">≈ 48 dB</text>
+<text x="86" y="47" font-family="sans-serif" font-size="8.5" fill="#fff">极佳·几乎无损</text>
+<text x="72" y="83" font-family="sans-serif" font-size="10" font-weight="700" fill="#1a1816" text-anchor="end">MSE = 10</text>
+<rect x="78" y="66" width="135.6" height="26" fill="#7c2233" fill-opacity="0.82"/>
+<text x="219.6" y="83" font-family="sans-serif" font-size="10" font-weight="700" fill="#7c2233">≈ 38 dB</text>
+<text x="86" y="83" font-family="sans-serif" font-size="8.5" fill="#fff">良好</text>
+<text x="72" y="119" font-family="sans-serif" font-size="10" font-weight="700" fill="#1a1816" text-anchor="end">MSE = 100</text>
+<rect x="78" y="102" width="100.0" height="26" fill="#7c2233" fill-opacity="0.82"/>
+<text x="184.0" y="119" font-family="sans-serif" font-size="10" font-weight="700" fill="#7c2233">≈ 28 dB</text>
+<text x="86" y="119" font-family="sans-serif" font-size="8.5" fill="#fff">可接受 (锚点)</text>
+<text x="72" y="155" font-family="sans-serif" font-size="10" font-weight="700" fill="#1a1816" text-anchor="end">MSE = 650</text>
+<rect x="78" y="138" width="71.2" height="26" fill="#7c2233" fill-opacity="0.82"/>
+<text x="155.2" y="155" font-family="sans-serif" font-size="10" font-weight="700" fill="#7c2233">≈ 20 dB</text>
+<text x="86" y="155" font-family="sans-serif" font-size="8.5" fill="#fff">偏糊</text>
+<line x1="78" y1="170" x2="256" y2="170" stroke="#1a1816" stroke-width="1"/>
+<line x1="78.0" y1="170" x2="78.0" y2="174" stroke="#1a1816" stroke-width="1"/>
+<text x="78.0" y="185" font-family="sans-serif" font-size="9" fill="#7a7268" text-anchor="middle">0</text>
+<line x1="113.6" y1="170" x2="113.6" y2="174" stroke="#1a1816" stroke-width="1"/>
+<text x="113.6" y="185" font-family="sans-serif" font-size="9" fill="#7a7268" text-anchor="middle">10</text>
+<line x1="149.2" y1="170" x2="149.2" y2="174" stroke="#1a1816" stroke-width="1"/>
+<text x="149.2" y="185" font-family="sans-serif" font-size="9" fill="#7a7268" text-anchor="middle">20</text>
+<line x1="184.8" y1="170" x2="184.8" y2="174" stroke="#1a1816" stroke-width="1"/>
+<text x="184.8" y="185" font-family="sans-serif" font-size="9" fill="#7a7268" text-anchor="middle">30</text>
+<line x1="220.4" y1="170" x2="220.4" y2="174" stroke="#1a1816" stroke-width="1"/>
+<text x="220.4" y="185" font-family="sans-serif" font-size="9" fill="#7a7268" text-anchor="middle">40</text>
+<line x1="256.0" y1="170" x2="256.0" y2="174" stroke="#1a1816" stroke-width="1"/>
+<text x="256.0" y="185" font-family="sans-serif" font-size="9" fill="#7a7268" text-anchor="middle">50</text>
+<text x="167" y="197" font-family="sans-serif" font-size="10" font-weight="700" fill="#1a1816" text-anchor="middle">PSNR (dB)</text>
+</svg>
+  </div>
+  <div class="figure-cap"><b>MSE 越小 ⇒ PSNR 越大:典型质量档位。</b>MSE 每缩小 10 倍,PSNR 约<b>增加 10 dB</b>(因为 10·log₁₀10 = 10)。背景色带给出粗略经验档:<b>≥40 dB</b> 近乎无损、<b>30–40 dB</b> 良好、<b>20–30 dB</b> 可接受、<b>&lt;20 dB</b> 明显失真。中间那条 <b>MSE=100 → 28 dB</b> 就是例题里要记住的锚点。注意这只是经验参考,PSNR 高不等于人眼一定觉得好。</div>
 </div>
 
 <section>

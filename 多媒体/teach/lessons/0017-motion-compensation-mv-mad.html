@@ -90,6 +90,17 @@ tr:last-child td { border-bottom: none; }
 .matrix { font-family: var(--mono); font-size: 0.9em; background: var(--paper-soft); border: 1px solid var(--rule); padding: var(--space-3) var(--space-4); margin: var(--space-3) 0; white-space: pre; overflow-x: auto; line-height: 1.5; border-radius: 2px; }
 .matrix .cap { display: block; font-family: var(--sans); font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: var(--space-2); white-space: normal; }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -136,6 +147,52 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
   <li><strong>基于 MC 的预测</strong>:按 MV 从参考帧搬来"预测块"。</li>
   <li><strong>求预测误差</strong>:目标块 − 预测块 = 残差,只编码这个残差(它接近 0,极易压缩)。</li>
 </ol>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">目标帧 Target(当前帧)</div>
+        <svg class="fig-svg" viewBox="0 0 260 210" role="img" aria-label="目标帧中的当前宏块">
+          <rect x="18" y="18" width="224" height="150" fill="#ebe3d3" stroke="#1a1816" stroke-width="1.5"/>
+          <!-- faint grid -->
+          <g stroke="#c9bda5" stroke-width="0.6">
+            <line x1="18" y1="55" x2="242" y2="55"/><line x1="18" y1="93" x2="242" y2="93"/><line x1="18" y1="130" x2="242" y2="130"/>
+            <line x1="74" y1="18" x2="74" y2="168"/><line x1="130" y1="18" x2="130" y2="168"/><line x1="186" y1="18" x2="186" y2="168"/>
+          </g>
+          <!-- current macroblock -->
+          <rect x="130" y="93" width="37" height="37" fill="#a14958" fill-opacity="0.3" stroke="#7c2233" stroke-width="2.5"/>
+          <text x="148" y="115" font-family="sans-serif" font-size="11" font-weight="700" fill="#7c2233" text-anchor="middle">当前宏块</text>
+          <text x="148" y="187" font-family="sans-serif" font-size="11" fill="#4a4540" text-anchor="middle">要为它找 MV</text>
+        </svg>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">参考帧 Reference(已编码邻帧)</div>
+        <svg class="fig-svg" viewBox="0 0 260 210" role="img" aria-label="参考帧中的搜索窗与最佳匹配块和运动向量">
+          <rect x="18" y="18" width="224" height="150" fill="#ebe3d3" stroke="#1a1816" stroke-width="1.5"/>
+          <g stroke="#c9bda5" stroke-width="0.6">
+            <line x1="18" y1="55" x2="242" y2="55"/><line x1="18" y1="93" x2="242" y2="93"/><line x1="18" y1="130" x2="242" y2="130"/>
+            <line x1="74" y1="18" x2="74" y2="168"/><line x1="130" y1="18" x2="130" y2="168"/><line x1="186" y1="18" x2="186" y2="168"/>
+          </g>
+          <!-- search window -->
+          <rect x="78" y="55" width="141" height="113" fill="none" stroke="#7a7268" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <text x="148" y="49" font-family="sans-serif" font-size="10.5" fill="#7a7268" text-anchor="middle">搜索窗 (2p+1)×(2p+1)</text>
+          <!-- co-located position (same coords as current block) -->
+          <rect x="130" y="93" width="37" height="37" fill="none" stroke="#7a7268" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <text x="148" y="107" font-family="sans-serif" font-size="9" fill="#7a7268" text-anchor="middle">原位</text>
+          <!-- best match block -->
+          <rect x="93" y="120" width="37" height="37" fill="#4a6e3a" fill-opacity="0.28" stroke="#4a6e3a" stroke-width="2.5"/>
+          <text x="111" y="152" font-family="sans-serif" font-size="9.5" font-weight="700" fill="#4a6e3a" text-anchor="middle">最佳匹配</text>
+          <!-- MV arrow from co-located center to match center -->
+          <defs><marker id="mvarrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c2233"/></marker></defs>
+          <line x1="148" y1="111" x2="115" y2="136" stroke="#7c2233" stroke-width="2.5" marker-end="url(#mvarrow)"/>
+          <text x="118" y="120" font-family="sans-serif" font-size="12" font-weight="700" fill="#7c2233">MV</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>运动补偿一图流。</b>左:目标帧里有个<b>当前宏块</b>要压缩。右:在参考帧里,以宏块<b>原位</b>(虚线灰框,即位移 (0,0))为中心划出<b>搜索窗</b>,逐个候选位置比对,找到最像的<b>最佳匹配块</b>(绿框)。从原位中心指向匹配块中心的箭头就是<b>运动向量 MV=(u,v)</b>。编码时不存整块像素,只存这个 MV + 两块相减后的残差。怎么读:箭头越短说明运动越小、越省;搜索窗越大(p 越大)能找到的运动范围越广,但候选点 (2p+1)² 越多、越慢。</div>
+</div>
 </section>
 
 <section>
@@ -191,6 +248,49 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
       <li><strong>比较取最小:</strong> <code>0.5 &lt; 2.5 &lt; 6.5</code>,候选 ② 的 MAD 最小。</li>
     </ol>
     <div class="result"><strong>最优 MV = (2, 0)</strong>,对应 <code>MAD = 0.5</code>。含义:这个宏块相对参考帧向 (2,0) 方向挪了 2 个像素,匹配后残差极小,压缩效率最高。</div>
+
+    <div class="figure">
+      <div class="figure-body">
+        <svg class="fig-svg" viewBox="0 0 470 160" style="max-width:440px" role="img" aria-label="MAD 逐像素求绝对差再平均示意">
+          <defs><marker id="oparrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7a7268"/></marker></defs>
+          <!-- T grid -->
+          <text x="52" y="24" font-family="sans-serif" font-size="12" font-weight="700" fill="#7c2233" text-anchor="middle">目标块 T</text>
+          <g font-family="monospace" font-size="18" fill="#1a1816" text-anchor="middle">
+            <rect x="18" y="34" width="34" height="34" fill="#ebe3d3" stroke="#1a1816"/><rect x="52" y="34" width="34" height="34" fill="#ebe3d3" stroke="#1a1816"/>
+            <rect x="18" y="68" width="34" height="34" fill="#ebe3d3" stroke="#1a1816"/><rect x="52" y="68" width="34" height="34" fill="#ebe3d3" stroke="#1a1816"/>
+            <text x="35" y="57">12</text><text x="69" y="57">10</text><text x="35" y="91">8</text><text x="69" y="91">14</text>
+          </g>
+          <text x="103" y="76" font-family="serif" font-size="26" fill="#7a7268" text-anchor="middle">−</text>
+          <!-- R2 grid -->
+          <text x="154" y="24" font-family="sans-serif" font-size="12" font-weight="700" fill="#4a6e3a" text-anchor="middle">参考块 R₂</text>
+          <g font-family="monospace" font-size="18" fill="#1a1816" text-anchor="middle">
+            <rect x="120" y="34" width="34" height="34" fill="#ebe3d3" stroke="#1a1816"/><rect x="154" y="34" width="34" height="34" fill="#ebe3d3" stroke="#1a1816"/>
+            <rect x="120" y="68" width="34" height="34" fill="#ebe3d3" stroke="#1a1816"/><rect x="154" y="68" width="34" height="34" fill="#ebe3d3" stroke="#1a1816"/>
+            <text x="137" y="57">12</text><text x="171" y="57">11</text><text x="137" y="91">9</text><text x="171" y="91">14</text>
+          </g>
+          <text x="205" y="72" font-family="sans-serif" font-size="13" fill="#7a7268" text-anchor="middle">逐点</text>
+          <text x="205" y="88" font-family="sans-serif" font-size="13" fill="#7a7268" text-anchor="middle">|差|</text>
+          <line x1="222" y1="76" x2="244" y2="76" stroke="#7a7268" stroke-width="1.5" marker-end="url(#oparrow)"/>
+          <!-- diff grid -->
+          <text x="288" y="24" font-family="sans-serif" font-size="12" font-weight="700" fill="#a13e2a" text-anchor="middle">|T − R₂|</text>
+          <g font-family="monospace" font-size="18" fill="#a13e2a" text-anchor="middle">
+            <rect x="254" y="34" width="34" height="34" fill="#f5efe4" stroke="#a13e2a"/><rect x="288" y="34" width="34" height="34" fill="#f5efe4" stroke="#a13e2a"/>
+            <rect x="254" y="68" width="34" height="34" fill="#f5efe4" stroke="#a13e2a"/><rect x="288" y="68" width="34" height="34" fill="#f5efe4" stroke="#a13e2a"/>
+            <text x="271" y="57">0</text><text x="305" y="57">1</text><text x="271" y="91">1</text><text x="305" y="91">0</text>
+          </g>
+          <line x1="330" y1="76" x2="352" y2="76" stroke="#7a7268" stroke-width="1.5" marker-end="url(#oparrow)"/>
+          <text x="342" y="66" font-family="sans-serif" font-size="11" fill="#7a7268" text-anchor="middle">Σ</text>
+          <!-- result -->
+          <g font-family="monospace" font-size="14" fill="#1a1816">
+            <text x="360" y="60">Σ = 2</text>
+            <text x="360" y="82" font-size="12" fill="#7a7268">÷ N² = 4</text>
+          </g>
+          <rect x="356" y="94" width="98" height="30" fill="#4a6e3a" fill-opacity="0.18" stroke="#4a6e3a" stroke-width="1.5"/>
+          <text x="405" y="114" font-family="monospace" font-size="15" font-weight="700" fill="#4a6e3a" text-anchor="middle">MAD = 0.5</text>
+        </svg>
+      </div>
+      <div class="figure-cap"><b>MAD:两块叠差再平均。</b>把目标块 T 与候选参考块 R₂ <b>对齐</b>,逐个像素求差再取<b>绝对值</b>(第三格),把 N² 个绝对差<b>求和</b>得 Σ=2,最后<b>除以 N²=4</b> 得 MAD=0.5。怎么读:红框里的数越小越接近 0,说明两块越像;MAD 就是这些差的平均。边界易错:分母是 <b>N²</b>(此处 4)而不是 N,绝对值一个都不能漏。谁的 MAD 最小,谁就是最佳匹配。</div>
+    </div>
     <p style="margin-top:var(--space-5)"><strong>第二部分:画出 2D 对数搜索第一轮的搜索位置。</strong>设 <code>p=7</code>。初始步长 <code>step = 4</code>(取 ≥ p/2 的 2 的幂)。第一轮以中心 (0,0) 为基准,只测中心 + 上下左右四点,步长均为 step:</p>
     <div class="matrix"><span class="cap">第一轮 5 个搜索位置(● 为候选,坐标 = (水平,垂直)偏移)</span>              (0,+4)
                 ●
@@ -202,6 +302,58 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
               (0,−4)</div>
     <p>即第一轮测这 5 点:<code>(0,0)</code>、<code>(+4,0)</code>、<code>(−4,0)</code>、<code>(0,+4)</code>、<code>(0,−4)</code>。分别算 MAD,选出最小者作为新中心;<strong>下一轮把步长减半为 2</strong>,再以新中心测同样的"十字"5 点,如此迭代直到步长为 1。这就是"对数"之名的由来——每轮步长砍半,轮数约 <code>log₂ p</code>。</p>
     <p class="alias" style="font-family:var(--sans);font-size:13px;color:var(--ink-mute)">注:部分课件把第一轮描述为 9 个种子点(3×3 网格)。本节按"十字 5 点"的经典 2D 对数搜索版本作答;若题目明确给出 9 点则按题目走,原理一致——每轮定最小、移中心、步长减半。</p>
+
+    <div class="figure">
+      <div class="figure-body">
+        <svg class="fig-svg" viewBox="0 0 275 285" style="max-width:320px" role="img" aria-label="2D 对数搜索在搜索窗内逐轮收敛的候选点分布">
+          <!-- search window fill -->
+          <rect x="4" y="4" width="252" height="252" fill="#ebe3d3" stroke="#7a7268" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <!-- lattice gridlines -->
+          <g stroke="#ddd2bb" stroke-width="0.7">
+            <line x1="22" y1="4" x2="22" y2="256"/><line x1="40" y1="4" x2="40" y2="256"/><line x1="58" y1="4" x2="58" y2="256"/><line x1="76" y1="4" x2="76" y2="256"/><line x1="94" y1="4" x2="94" y2="256"/><line x1="112" y1="4" x2="112" y2="256"/><line x1="148" y1="4" x2="148" y2="256"/><line x1="166" y1="4" x2="166" y2="256"/><line x1="184" y1="4" x2="184" y2="256"/><line x1="202" y1="4" x2="202" y2="256"/><line x1="220" y1="4" x2="220" y2="256"/><line x1="238" y1="4" x2="238" y2="256"/>
+            <line x1="4" y1="22" x2="256" y2="22"/><line x1="4" y1="40" x2="256" y2="40"/><line x1="4" y1="58" x2="256" y2="58"/><line x1="4" y1="76" x2="256" y2="76"/><line x1="4" y1="94" x2="256" y2="94"/><line x1="4" y1="112" x2="256" y2="112"/><line x1="4" y1="148" x2="256" y2="148"/><line x1="4" y1="166" x2="256" y2="166"/><line x1="4" y1="184" x2="256" y2="184"/><line x1="4" y1="202" x2="256" y2="202"/><line x1="4" y1="220" x2="256" y2="220"/><line x1="4" y1="238" x2="256" y2="238"/>
+          </g>
+          <!-- center axes -->
+          <line x1="130" y1="4" x2="130" y2="256" stroke="#c9bda5" stroke-width="1.2"/>
+          <line x1="4" y1="130" x2="256" y2="130" stroke="#c9bda5" stroke-width="1.2"/>
+          <!-- round 1 cross (step 4) -->
+          <g stroke="#7c2233" stroke-width="1.6" stroke-dasharray="4 3">
+            <line x1="58" y1="130" x2="202" y2="130"/><line x1="130" y1="58" x2="130" y2="202"/>
+          </g>
+          <!-- round 2 cross (step 2) around (0,4) -->
+          <g stroke="#c19a3e" stroke-width="1.6" stroke-dasharray="4 3">
+            <line x1="94" y1="58" x2="166" y2="58"/><line x1="130" y1="22" x2="130" y2="94"/>
+          </g>
+          <!-- round 3 cross (step 1) around (0,6) -->
+          <g stroke="#4a6e3a" stroke-width="1.6" stroke-dasharray="3 2">
+            <line x1="112" y1="22" x2="148" y2="22"/><line x1="130" y1="4" x2="130" y2="40"/>
+          </g>
+          <!-- round 1 points -->
+          <g fill="#7c2233">
+            <circle cx="130" cy="130" r="6"/><circle cx="202" cy="130" r="6"/><circle cx="58" cy="130" r="6"/><circle cx="130" cy="202" r="6"/><circle cx="130" cy="58" r="6"/>
+          </g>
+          <!-- round 2 points -->
+          <g fill="#c19a3e">
+            <circle cx="130" cy="58" r="5"/><circle cx="166" cy="58" r="5"/><circle cx="94" cy="58" r="5"/><circle cx="130" cy="22" r="5"/><circle cx="130" cy="94" r="5"/>
+          </g>
+          <!-- round 3 points -->
+          <g fill="#4a6e3a">
+            <circle cx="130" cy="22" r="4"/><circle cx="148" cy="22" r="4"/><circle cx="112" cy="22" r="4"/><circle cx="130" cy="4" r="4"/><circle cx="130" cy="40" r="4"/>
+          </g>
+          <!-- winners rings -->
+          <circle cx="130" cy="58" r="9" fill="none" stroke="#1a1816" stroke-width="1.4"/>
+          <circle cx="130" cy="22" r="8" fill="none" stroke="#1a1816" stroke-width="1.4"/>
+          <!-- center label -->
+          <text x="136" y="145" font-family="sans-serif" font-size="10" fill="#4a4540">(0,0)</text>
+          <!-- axis offset labels -->
+          <text x="130" y="270" font-family="sans-serif" font-size="10" fill="#7a7268" text-anchor="middle">水平偏移 →  (窗 −7 … +7)</text>
+          <text x="250" y="126" font-family="sans-serif" font-size="9" fill="#7a7268" text-anchor="end">+u</text>
+          <text x="126" y="15" font-family="sans-serif" font-size="9" fill="#7a7268" text-anchor="end">+v</text>
+        </svg>
+        <div class="fig-legend"><span style="color:#7c2233">● 第一轮 step=4(十字5点)</span> &nbsp; <span style="color:#c19a3e">● 第二轮 step=2</span> &nbsp; <span style="color:#4a6e3a">● 第三轮 step=1</span> &nbsp; ◯ 每轮最小点(新中心)</div>
+      </div>
+      <div class="figure-cap"><b>2D 对数搜索:步长砍半,层层逼近。</b>第一轮以原位 (0,0) 为心、按 <b>step=4</b> 测十字 5 点(红)。假设 (0,+4) 最小(黑圈),就<b>把中心移过去、步长减半为 2</b>,再测十字 5 点(金)。若 (0,+6) 又最小,中心再移、<b>步长减半为 1</b>(绿),直到 step=1 停,输出最终最小点为 MV。怎么读:每一轮只算 5 个候选而不是整窗 (2p+1)²=225 个,轮数约 log₂p——这就是"对数"之名与提速的来源。边界:步长<b>只减不增</b>,中心永远跟着最小点走;此法找到的是<b>次优解</b>(可能陷入局部最小),不保证全局最优。</div>
+    </div>
   </div>
 </div>
 

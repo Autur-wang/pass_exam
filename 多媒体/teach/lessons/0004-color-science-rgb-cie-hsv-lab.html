@@ -86,6 +86,39 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-5); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 240px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-3); }
+
+/* additive / subtractive blend circles */
+.blend { position: relative; width: 200px; height: 180px; margin: 0 auto; border-radius: 4px; isolation: isolate; overflow: hidden; }
+.blend.add { background: #0d0d0d; }
+.blend.sub { background: #ffffff; border: 1px solid var(--rule); }
+.blend .c { position: absolute; width: 112px; height: 112px; border-radius: 50%; }
+.blend.add .c { mix-blend-mode: screen; }
+.blend.sub .c { mix-blend-mode: multiply; }
+
+/* visible spectrum */
+.spectrum { height: 40px; border-radius: 3px; border: 1px solid var(--rule);
+  background: linear-gradient(90deg,#6a00b0 0%,#3a34d6 16%,#2f7fe0 30%,#28c0d6 42%,#2fae4e 56%,#e6d21a 70%,#f08a1e 82%,#d0281e 100%); }
+.spectrum-scale { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 11px; color: var(--ink-mute); margin-top: 4px; }
+
+/* hue wheel */
+.huewheel { width: 168px; height: 168px; border-radius: 50%; margin: 0 auto; position: relative;
+  background: conic-gradient(from 90deg,#d0281e,#e6d21a,#2fae4e,#28c0d6,#3a34d6,#b0208a,#d0281e); }
+.huewheel::after { content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, rgba(255,255,255,0) 60%); }
+
+/* swatch + color reading table */
+.swatch { width: 100%; height: 60px; border-radius: 3px; border: 1px solid var(--rule); }
+.ctab td { vertical-align: middle; font-size: 0.92em; }
+.ctab code { white-space: nowrap; }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -127,6 +160,25 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <h2><span class="num">1.</span>颜色从哪来:光谱与人眼</h2>
 <p>颜色不是物体的固有属性,而是<strong>光</strong>与<strong>人眼</strong>共同作用的结果。可见光是波长在 <strong>400 nm ~ 700 nm</strong> 的电磁波;每段波长上有多少能量,画成曲线就是<strong>光谱能量分布</strong> E(λ)(SPD)。</p>
 <p>关键在人眼这一侧:视网膜上有三种视锥细胞,分别对<strong>红、绿、蓝</strong>最敏感。任何复杂的光谱进到眼里,都被压缩成<strong>三个数</strong>(三种视锥的响应量)。这就是"三色理论"——也是为什么显示器只用 RGB 三种光就能骗过眼睛,重现几乎所有颜色。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg viewBox="0 0 400 96" width="100%" style="max-width:520px;display:block;margin:0 auto" aria-label="三种视锥细胞的响应曲线">
+      <path d="M20,90 C60,90 78,14 108,14 C138,14 158,90 200,90" fill="none" stroke="#3a34d6" stroke-width="2.5"/>
+      <path d="M150,90 C190,90 208,16 236,16 C264,16 284,90 322,90" fill="none" stroke="#2fae4e" stroke-width="2.5"/>
+      <path d="M180,90 C222,90 244,22 272,22 C300,22 320,90 362,90" fill="none" stroke="#d0281e" stroke-width="2.5"/>
+      <text x="98" y="12" font-family="sans-serif" font-size="11" fill="#3a34d6">S(蓝)</text>
+      <text x="222" y="13" font-family="sans-serif" font-size="11" fill="#2fae4e">M(绿)</text>
+      <text x="300" y="19" font-family="sans-serif" font-size="11" fill="#d0281e">L(红)</text>
+    </svg>
+    <div class="spectrum" style="max-width:520px;margin:8px auto 0"></div>
+    <div class="spectrum-scale" style="max-width:520px;margin:4px auto 0">
+      <span>400 nm(紫)</span><span>500 nm(青绿)</span><span>600 nm(橙)</span><span>700 nm(红)</span>
+    </div>
+  </div>
+  <div class="figure-cap"><b>图 1 · 三色理论。</b>上方三条曲线是人眼三种视锥(S/M/L)对不同波长的敏感度;下方是可见光光谱。一束复杂的光打进来,视网膜只回三个数——<b>S、M、L 的响应量</b>。所以显示器用红绿蓝三盏灯,就能"配"出眼睛认得的几乎所有颜色。这也是为什么<b>一切颜色空间都是三维的</b>。</div>
+</div>
+
 <p><strong>这解释了一切颜色空间的根:颜色本质是三维的</strong>,所以所有颜色空间都是三个分量(CMYK 的 K 是为省墨额外加的)。</p>
 </section>
 
@@ -144,7 +196,88 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     <dd>L* 亮度(0 黑~100 白)、a*(绿−到红+)、b*(蓝−到黄+)。按<strong>韦伯定理</strong>设计,使得<strong>数值上等距 ≈ 视觉上等距</strong>。<span class="alias">视觉均匀:两点欧氏距离≈人眼感受的色差。色差计算、印刷质检的标准。</span></dd>
   </dl>
 </div>
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">HSV · 人调色的手感</div>
+        <div class="huewheel"></div>
+        <p style="font-family:var(--sans);font-size:12px;color:var(--ink-soft);margin:10px 0 0;line-height:1.5">
+          <b>H 色相</b>=绕圈的角度(0°红→120°绿→240°蓝)<br>
+          <b>S 饱和度</b>=中心(灰)→边缘(鲜)<br>
+          <b>V 明度</b>=整体调亮/调暗</p>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">L*a*b* · 量色差的尺</div>
+        <svg viewBox="0 0 200 200" width="168" height="168" style="display:block;margin:0 auto" aria-label="Lab 的 a b 平面">
+          <defs>
+            <linearGradient id="axA" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#2fae4e"/><stop offset="0.5" stop-color="#cfc8b8"/><stop offset="1" stop-color="#d0281e"/>
+            </linearGradient>
+            <linearGradient id="axB" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#e6d21a" stop-opacity="0.7"/><stop offset="0.5" stop-color="#cfc8b8" stop-opacity="0"/><stop offset="1" stop-color="#3a34d6" stop-opacity="0.7"/>
+            </linearGradient>
+          </defs>
+          <rect x="10" y="10" width="180" height="180" fill="url(#axA)"/>
+          <rect x="10" y="10" width="180" height="180" fill="url(#axB)"/>
+          <line x1="100" y1="10" x2="100" y2="190" stroke="#1a1816" stroke-width="1" opacity="0.5"/>
+          <line x1="10" y1="100" x2="190" y2="100" stroke="#1a1816" stroke-width="1" opacity="0.5"/>
+          <text x="176" y="94" font-family="sans-serif" font-size="11" fill="#1a1816">+a 红</text>
+          <text x="14" y="94" font-family="sans-serif" font-size="11" fill="#1a1816">−a 绿</text>
+          <text x="104" y="22" font-family="sans-serif" font-size="11" fill="#1a1816">+b 黄</text>
+          <text x="104" y="186" font-family="sans-serif" font-size="11" fill="#1a1816">−b 蓝</text>
+          <circle cx="150" cy="60" r="5" fill="#1a1816"/>
+          <circle cx="126" cy="78" r="5" fill="#1a1816"/>
+          <line x1="150" y1="60" x2="126" y2="78" stroke="#1a1816" stroke-width="1.5" stroke-dasharray="3 2"/>
+          <text x="120" y="52" font-family="sans-serif" font-size="11" fill="#7c2233">ΔE=色差</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>图 2 · 两种"给人用"的空间。</b>左:HSV 把颜色摆成一个轮盘,<b>转角度选色相、往外拉变鲜艳</b>——和你在取色器里的操作一模一样。右:Lab 的 a*b* 平面,横轴绿↔红、纵轴蓝↔黄;它被设计成<b>视觉均匀</b>,所以两点间的欧氏距离 ΔE ≈ 人眼真实感到的色差,这是印刷质检算色差的标准尺。</div>
+</div>
+
 <p><strong>色度图与色域(高频考点)。</strong>CIE 把 XYZ 归一化投影成二维<strong>色度图</strong>(马蹄形),边界是纯光谱色的<strong>光谱轨迹</strong>,白点在 (1/3, 1/3)。<strong>色域(Gamut)</strong>指某设备/颜色空间能准确表示的颜色子集——在色度图上是一个三角形(RGB 三顶点围出)。落在三角形外的颜色叫<strong>超色域(out-of-gamut)</strong>,设备无法显示,只能沿"该色→白点"连线与色域边界的交点做近似。这就是为什么照片打印出来常和屏幕上不完全一样:<strong>印刷的 CMYK 色域 ≠ 屏幕的 RGB 色域</strong>。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg viewBox="0 0 400 380" width="100%" style="max-width:420px;display:block;margin:0 auto" aria-label="CIE 色度图与色域三角形">
+      <defs>
+        <linearGradient id="horse" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stop-color="#3a34d6"/><stop offset="0.35" stop-color="#28c0d6"/>
+          <stop offset="0.55" stop-color="#2fae4e"/><stop offset="0.75" stop-color="#e6d21a"/>
+          <stop offset="1" stop-color="#d0281e"/>
+        </linearGradient>
+      </defs>
+      <!-- 光谱轨迹(马蹄) -->
+      <path d="M116.6,358 L80,306.8 L59.8,242 L43.5,145 L46.2,60 L72.6,26.4 L141,58.4 L204,110.4 L265,165.2 L316,210.8 L344,236.8 L363,254 Z"
+            fill="url(#horse)" opacity="0.82" stroke="#7a7268" stroke-width="1"/>
+      <!-- RGB 色域三角 -->
+      <polygon points="321.6,228 172,120 106,336" fill="none" stroke="#111" stroke-width="2"/>
+      <!-- CMYK 色域三角(更窄,虚线) -->
+      <polygon points="295.2,224 172,152 114.8,308" fill="none" stroke="#7c2233" stroke-width="2" stroke-dasharray="5 3"/>
+      <!-- 白点 -->
+      <circle cx="177.6" cy="228.4" r="4.5" fill="#fff" stroke="#111" stroke-width="1.2"/>
+      <!-- 顶点标注 -->
+      <text x="326" y="226" font-family="sans-serif" font-size="12" fill="#111">R</text>
+      <text x="164" y="114" font-family="sans-serif" font-size="12" fill="#111">G</text>
+      <text x="90" y="346" font-family="sans-serif" font-size="12" fill="#111">B</text>
+      <text x="184" y="232" font-family="sans-serif" font-size="11" fill="#111">白点</text>
+      <!-- 边界颜色标注 -->
+      <text x="18" y="150" font-family="sans-serif" font-size="11" fill="#28c0d6">青</text>
+      <text x="60" y="20" font-family="sans-serif" font-size="11" fill="#2fae4e">绿</text>
+      <text x="210" y="102" font-family="sans-serif" font-size="11" fill="#c9a21a">黄</text>
+      <text x="366" y="250" font-family="sans-serif" font-size="11" fill="#d0281e">红</text>
+      <text x="40" y="300" font-family="sans-serif" font-size="11" fill="#3a34d6">蓝</text>
+      <!-- 图例 -->
+      <line x1="240" y1="330" x2="262" y2="330" stroke="#111" stroke-width="2"/>
+      <text x="268" y="334" font-family="sans-serif" font-size="11" fill="#111">RGB 色域</text>
+      <line x1="240" y1="350" x2="262" y2="350" stroke="#7c2233" stroke-width="2" stroke-dasharray="5 3"/>
+      <text x="268" y="354" font-family="sans-serif" font-size="11" fill="#7c2233">CMYK 色域</text>
+    </svg>
+  </div>
+  <div class="figure-cap"><b>图 3 · CIE 色度图与色域(示意)。</b>马蹄形边界是<b>纯光谱色</b>(最鲜艳的单波长光),人眼能看的所有颜色都在马蹄<b>内部</b>。黑色实线三角是屏幕 RGB 能显示的色域,酒红虚线三角是打印机 CMYK 的色域——<b>明显更窄</b>。落在黑三角内、却在虚线三角<b>外</b>的那些鲜艳色,就是<b>超色域(out-of-gamut)</b>:屏幕能亮、纸上印不出,只能沿"该色→白点"连线拉回边界近似——这就是照片打印发暗偏色的真正原因。</div>
+</div>
 </section>
 
 <section>
@@ -161,10 +294,56 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 </tbody>
 </table>
 <p><strong>加性 vs 减性(易混):</strong>RGB 是<strong>加性</strong>(光相加,越加越亮,叠满是白);CMY 是<strong>减性</strong>(油墨从白光里"减掉"某色,越涂越暗,叠满近黑)。青(C)吸收红、品红(M)吸收绿、黄(Y)吸收蓝——所以 C=−R、M=−G、Y=−B。理论上 C+M+Y 叠出黑,但油墨叠黑既贵又发污,故印刷额外加一支纯黑墨 <strong>K</strong>,即 CMYK。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">加性 · RGB(光,黑底越加越亮)</div>
+        <div class="blend add">
+          <div class="c" style="background:#ff0000;left:44px;top:6px"></div>
+          <div class="c" style="background:#00ff00;left:10px;top:62px"></div>
+          <div class="c" style="background:#0000ff;left:78px;top:62px"></div>
+        </div>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">减性 · CMY(墨,白底越叠越暗)</div>
+        <div class="blend sub">
+          <div class="c" style="background:#00ffff;left:44px;top:6px"></div>
+          <div class="c" style="background:#ff00ff;left:10px;top:62px"></div>
+          <div class="c" style="background:#ffff00;left:78px;top:62px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>图 4 · 加性 vs 减性,看混色结果就懂。</b>左(黑底光相加):红+绿=<b>黄</b>、绿+蓝=<b>青</b>、红+蓝=<b>品红</b>、三色全叠=<b>白</b>。右(白底墨相减):青+品红=<b>蓝</b>、品红+黄=<b>红</b>、青+黄=<b>绿</b>、三色全叠≈<b>黑</b>。注意两图的<b>重叠色恰好互为对方的原色</b>——这就是 C=−R、M=−G、Y=−B 的直观来源。</div>
+</div>
 </section>
 
 <section>
-<h2><span class="num">4.</span>一个能算的转换:RGB ↔ CMY</h2>
+<h2><span class="num">4.</span>同一个橙色:五套坐标系怎么说它</h2>
+<p>回到开头那个类比——同一个地点,经纬度、门牌号、分拣码各有各的说法。下面拿<strong>一个具体的橙色</strong>(RGB 归一化 = 1.0, 0.5, 0.0,即常见的 <code>#FF8000</code>),看五套坐标系分别怎么"报出"它。这一张表把前面所有抽象概念钉在同一个颜色上:</p>
+<div class="figure">
+  <div class="figure-body">
+    <div class="swatch" style="background:#ff8000;max-width:420px;margin:0 auto"></div>
+    <p style="font-family:var(--sans);font-size:12px;color:var(--ink-mute);margin:8px 0 0">↑ 我们要描述的就是这一个橙色</p>
+  </div>
+</div>
+<table class="ctab">
+<thead><tr><th>坐标系</th><th>这个橙色的值</th><th>怎么读它 / 说明</th></tr></thead>
+<tbody>
+<tr><td><strong>RGB</strong></td><td><code>(1.0, 0.5, 0.0)</code><br>=(255,128,0)</td><td>红灯全开、绿灯半开、蓝灯全关。屏幕就是这样点亮它的。</td></tr>
+<tr><td><strong>CMY</strong></td><td><code>(0, 0.5, 1.0)</code></td><td>套 C=1−R 等:黄墨拉满(要吸蓝),青墨为 0(不吸红)。印刷这样调墨。</td></tr>
+<tr><td><strong>HSV</strong></td><td><code>H=30°, S=1, V=1</code></td><td>色相环上 30°(红黄之间)、最鲜艳、最亮。和你在取色器里的手感一致。</td></tr>
+<tr><td><strong>L*a*b*</strong></td><td>≈<code>L 67, a +43, b +74</code></td><td>亮度中上;a、b 都为正 → <strong>偏红且偏黄</strong>,合起来正是"橙"。用于量色差。</td></tr>
+<tr><td><strong>CMYK</strong></td><td><code>(0, 0.5, 1.0, 0)</code></td><td>由 CMY 得,黑版 K=min(C,M,Y)=0。这就是打印机的四色配方。</td></tr>
+</tbody>
+</table>
+<p><strong>一句话收束:</strong>五组数字指的是<strong>同一个橙色</strong>,差别只在"为谁服务"——RGB 给屏幕发光、CMYK 给墨水配比、HSV 给人调色、Lab 给仪器量色差、XYZ 在幕后当中转。这就是"为什么一个颜色需要这么多种说法"的完整答案。</p>
+</section>
+
+<section>
+<h2><span class="num">5.</span>一个能算的转换:RGB ↔ CMY</h2>
 <p>RGB→CMY 是课上唯一给出闭式公式的转换(在归一化到 [0,1] 的前提下),简单到可以直接考:</p>
 <div class="worked">
   <div class="worked-head">例题:把 RGB 转成 CMY</div>

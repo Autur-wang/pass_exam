@@ -86,6 +86,16 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -156,6 +166,60 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 </tbody>
 </table>
 <p><strong>提醒:</strong>"Huffman 码不唯一"是常见陷阱题——0/1 标在哪条枝、并列概率谁先合并都可以变,但<strong>平均码长 <code>l̄</code> 唯一确定</strong>。所以计算题最终对答案的是 <code>l̄</code>,不是具体码字。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">Shannon-Fano · 自顶向下</div>
+        <svg class="fig-svg" style="max-width:250px" viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+          <rect x="45" y="12" width="150" height="26" fill="#ddd2bb" stroke="#1a1816" stroke-width="1"/>
+          <text x="120" y="29" text-anchor="middle" font-size="11" fill="#1a1816">全集 {A B C D}</text>
+          <path d="M 95,40 L 72,68" stroke="#7c2233" stroke-width="1.4" marker-end="url(#dn9)"/>
+          <path d="M 145,40 L 168,68" stroke="#7c2233" stroke-width="1.4" marker-end="url(#dn9)"/>
+          <rect x="28" y="72" width="76" height="24" fill="#e3c3c9" stroke="#7c2233" stroke-width="1"/>
+          <text x="66" y="88" text-anchor="middle" font-size="10" fill="#7c2233">{A B} · 0</text>
+          <rect x="136" y="72" width="76" height="24" fill="#e3c3c9" stroke="#7c2233" stroke-width="1"/>
+          <text x="174" y="88" text-anchor="middle" font-size="10" fill="#7c2233">{C D} · 1</text>
+          <path d="M 50,96 L 42,126" stroke="#7c2233" stroke-width="1.2" marker-end="url(#dn9)"/>
+          <path d="M 82,96 L 90,126" stroke="#7c2233" stroke-width="1.2" marker-end="url(#dn9)"/>
+          <path d="M 158,96 L 150,126" stroke="#7c2233" stroke-width="1.2" marker-end="url(#dn9)"/>
+          <path d="M 190,96 L 198,126" stroke="#7c2233" stroke-width="1.2" marker-end="url(#dn9)"/>
+          <rect x="24" y="130" width="36" height="26" fill="#7c2233"/><text x="42" y="148" text-anchor="middle" font-size="12" fill="#f5efe4">A</text>
+          <rect x="72" y="130" width="36" height="26" fill="#7c2233"/><text x="90" y="148" text-anchor="middle" font-size="12" fill="#f5efe4">B</text>
+          <rect x="132" y="130" width="36" height="26" fill="#7c2233"/><text x="150" y="148" text-anchor="middle" font-size="12" fill="#f5efe4">C</text>
+          <rect x="180" y="130" width="36" height="26" fill="#7c2233"/><text x="198" y="148" text-anchor="middle" font-size="12" fill="#f5efe4">D</text>
+          <text x="120" y="180" text-anchor="middle" font-size="10" fill="#7c2233">先有整体 → 反复对半切 ↓</text>
+          <defs><marker id="dn9" markerWidth="7" markerHeight="7" refX="3.5" refY="6" orient="auto"><path d="M0,0 L7,0 L3.5,7 z" fill="#7c2233"/></marker></defs>
+        </svg>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">Huffman · 自底向上</div>
+        <svg class="fig-svg" style="max-width:250px" viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+          <rect x="24" y="130" width="36" height="26" fill="#7c2233"/><text x="42" y="148" text-anchor="middle" font-size="12" fill="#f5efe4">A</text>
+          <rect x="72" y="130" width="36" height="26" fill="#7c2233"/><text x="90" y="148" text-anchor="middle" font-size="12" fill="#f5efe4">B</text>
+          <rect x="132" y="130" width="36" height="26" fill="#7c2233"/><text x="150" y="148" text-anchor="middle" font-size="12" fill="#f5efe4">C</text>
+          <rect x="180" y="130" width="36" height="26" fill="#7c2233"/><text x="198" y="148" text-anchor="middle" font-size="12" fill="#f5efe4">D</text>
+          <path d="M 45,130 L 62,100" stroke="#4a6e3a" stroke-width="1.2" marker-end="url(#up9)"/>
+          <path d="M 87,130 L 70,100" stroke="#4a6e3a" stroke-width="1.2" marker-end="url(#up9)"/>
+          <path d="M 153,130 L 170,100" stroke="#4a6e3a" stroke-width="1.2" marker-end="url(#up9)"/>
+          <path d="M 195,130 L 178,100" stroke="#4a6e3a" stroke-width="1.2" marker-end="url(#up9)"/>
+          <rect x="28" y="76" width="76" height="24" fill="#d7e2cd" stroke="#4a6e3a" stroke-width="1"/>
+          <text x="66" y="92" text-anchor="middle" font-size="10" fill="#4a6e3a">[AB] 合并</text>
+          <rect x="136" y="76" width="76" height="24" fill="#d7e2cd" stroke="#4a6e3a" stroke-width="1"/>
+          <text x="174" y="92" text-anchor="middle" font-size="10" fill="#4a6e3a">[CD] 合并</text>
+          <path d="M 72,76 L 108,42" stroke="#4a6e3a" stroke-width="1.4" marker-end="url(#up9)"/>
+          <path d="M 168,76 L 132,42" stroke="#4a6e3a" stroke-width="1.4" marker-end="url(#up9)"/>
+          <rect x="80" y="14" width="80" height="26" fill="#ddd2bb" stroke="#1a1816" stroke-width="1"/>
+          <text x="120" y="31" text-anchor="middle" font-size="11" fill="#1a1816">根 (全体)</text>
+          <text x="120" y="180" text-anchor="middle" font-size="10" fill="#4a6e3a">先有叶子 → 反复并最小 ↑</text>
+          <defs><marker id="up9" markerWidth="7" markerHeight="7" refX="3.5" refY="0" orient="auto"><path d="M0,7 L7,7 L3.5,0 z" fill="#4a6e3a"/></marker></defs>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>方向相反,是这两个算法唯一需要死记的区别。</b>Shannon-Fano 从"一整个集合"出发<b>往下切</b>,每次把当前集合劈成频率相近的两半;Huffman 从"一堆孤立叶子"出发<b>往上并</b>,每次挑两个最小频率合并。往上并因为总是先照顾最小的,才能保证全局最优;往下切只能局部近似,所以不保证最优。</div>
+</div>
 </section>
 
 <section>
@@ -165,6 +229,34 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <div class="def" style="border-style:dashed;">
   <code style="background:none;font-size:1.05em;">η ≤ l̄ &lt; η + 1</code>
   <p style="margin:var(--space-2) 0 0;font-size:var(--text-sm);color:var(--ink-soft);">下界 <code>η</code> 是信息论极限,达不到更低;上界 <code>η+1</code> 保证 Huffman 最多比理论值多浪费不到 1 比特/符号。<strong>编码效率</strong> <code>= η / l̄</code>,越接近 1 越好。这条不等式是简答题和验算的黄金标尺。</p>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:400px" viewBox="0 0 330 172" xmlns="http://www.w3.org/2000/svg">
+      <line x1="40" y1="140" x2="320" y2="140" stroke="#1a1816" stroke-width="1"/>
+      <line x1="40" y1="140" x2="40" y2="14" stroke="#1a1816" stroke-width="1"/>
+      <line x1="40" y1="48.8" x2="320" y2="48.8" stroke="#4a6e3a" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="44" y="45" text-anchor="start" font-size="8" fill="#4a6e3a">熵地板</text>
+      <text x="35" y="143" text-anchor="end" font-size="9" fill="#7a7268">0</text>
+      <text x="35" y="63" text-anchor="end" font-size="9" fill="#7a7268">2.0</text>
+      <rect x="70" y="20" width="56" height="120" fill="#a14958"/>
+      <text x="98" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#7c2233">3.0</text>
+      <text x="98" y="154" text-anchor="middle" font-size="10" fill="#4a4540">定长码</text>
+      <rect x="162" y="46" width="56" height="94" fill="#7c2233"/>
+      <text x="190" y="40" text-anchor="middle" font-size="11" font-weight="700" fill="#7c2233">2.35</text>
+      <text x="190" y="154" text-anchor="middle" font-size="10" fill="#4a4540">Huffman l̄</text>
+      <rect x="254" y="48.8" width="56" height="91.2" fill="#4a6e3a"/>
+      <text x="282" y="43" text-anchor="middle" font-size="11" font-weight="700" fill="#4a6e3a">2.28</text>
+      <text x="282" y="154" text-anchor="middle" font-size="10" fill="#4a4540">熵 η</text>
+      <line x1="126" y1="20" x2="150" y2="20" stroke="#7a7268" stroke-width="0.8" stroke-dasharray="2 2"/>
+      <line x1="150" y1="20" x2="150" y2="46" stroke="#7a7268" stroke-width="1" marker-end="url(#g9)"/>
+      <text x="153" y="34" font-size="9" fill="#7a7268">省 0.65</text>
+      <defs><marker id="g9" markerWidth="7" markerHeight="7" refX="3.5" refY="6" orient="auto"><path d="M0,0 L7,0 L3.5,7 z" fill="#7a7268"/></marker></defs>
+    </svg>
+    <div class="fig-legend">定长码 3.0 → Huffman 2.35,已贴到熵地板 2.28,只差 0.07 bit</div>
+  </div>
+  <div class="figure-cap"><b>Huffman 有多接近理论极限?</b>同一信源:最笨的定长码要 3.0 bit/符号;Huffman 压到 <code>2.35</code>,离熵地板 <code>2.28</code> 仅 0.07 bit,编码效率 97%。绿色虚线是熵——信息论规定的物理地板,任何无损编码都压不破。<code>η ≤ l̄ &lt; η+1</code> 这条不等式,就是在说"红柱永远落在绿线和绿线+1 之间"。</div>
 </div>
 </section>
 
@@ -231,6 +323,79 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
       <strong>结论:</strong>Huffman 码字如上表,平均码长 <code>l̄ = 2.35</code> 比特/符号,熵 <code>η ≈ 2.28</code>,满足 <code>η ≤ l̄ &lt; η+1</code>,编码效率约 <strong>97%</strong>——比定长码的 3 比特省了约 22%,且逼近理论极限。
     </div>
   </div>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:520px" viewBox="20 12 452 332" xmlns="http://www.w3.org/2000/svg">
+      <line x1="161" y1="32" x2="55" y2="100" stroke="#7a7268" stroke-width="1.2"/>
+      <line x1="161" y1="32" x2="267" y2="100" stroke="#7a7268" stroke-width="1.2"/>
+      <line x1="267" y1="100" x2="170" y2="166" stroke="#7a7268" stroke-width="1.2"/>
+      <line x1="267" y1="100" x2="365" y2="166" stroke="#7a7268" stroke-width="1.2"/>
+      <line x1="170" y1="166" x2="135" y2="232" stroke="#7a7268" stroke-width="1.2"/>
+      <line x1="170" y1="166" x2="205" y2="232" stroke="#7a7268" stroke-width="1.2"/>
+      <line x1="365" y1="166" x2="310" y2="232" stroke="#7a7268" stroke-width="1.2"/>
+      <line x1="365" y1="166" x2="420" y2="232" stroke="#7a7268" stroke-width="1.2"/>
+      <line x1="310" y1="232" x2="285" y2="298" stroke="#7a7268" stroke-width="1.2"/>
+      <line x1="310" y1="232" x2="345" y2="298" stroke="#7a7268" stroke-width="1.2"/>
+      <circle cx="116" cy="61" r="8" fill="#f5efe4" stroke="#4a6e3a" stroke-width="1"/>
+      <text x="116" y="64" text-anchor="middle" font-size="10" font-weight="700" fill="#4a6e3a">0</text>
+      <circle cx="206" cy="61" r="8" fill="#f5efe4" stroke="#7c2233" stroke-width="1"/>
+      <text x="206" y="64" text-anchor="middle" font-size="10" font-weight="700" fill="#7c2233">1</text>
+      <circle cx="226" cy="128" r="8" fill="#f5efe4" stroke="#4a6e3a" stroke-width="1"/>
+      <text x="226" y="131" text-anchor="middle" font-size="10" font-weight="700" fill="#4a6e3a">0</text>
+      <circle cx="308" cy="128" r="8" fill="#f5efe4" stroke="#7c2233" stroke-width="1"/>
+      <text x="308" y="131" text-anchor="middle" font-size="10" font-weight="700" fill="#7c2233">1</text>
+      <circle cx="155" cy="194" r="8" fill="#f5efe4" stroke="#4a6e3a" stroke-width="1"/>
+      <text x="155" y="197" text-anchor="middle" font-size="10" font-weight="700" fill="#4a6e3a">0</text>
+      <circle cx="185" cy="194" r="8" fill="#f5efe4" stroke="#7c2233" stroke-width="1"/>
+      <text x="185" y="197" text-anchor="middle" font-size="10" font-weight="700" fill="#7c2233">1</text>
+      <circle cx="342" cy="194" r="8" fill="#f5efe4" stroke="#4a6e3a" stroke-width="1"/>
+      <text x="342" y="197" text-anchor="middle" font-size="10" font-weight="700" fill="#4a6e3a">0</text>
+      <circle cx="388" cy="194" r="8" fill="#f5efe4" stroke="#7c2233" stroke-width="1"/>
+      <text x="388" y="197" text-anchor="middle" font-size="10" font-weight="700" fill="#7c2233">1</text>
+      <circle cx="300" cy="260" r="8" fill="#f5efe4" stroke="#4a6e3a" stroke-width="1"/>
+      <text x="300" y="263" text-anchor="middle" font-size="10" font-weight="700" fill="#4a6e3a">0</text>
+      <circle cx="325" cy="260" r="8" fill="#f5efe4" stroke="#7c2233" stroke-width="1"/>
+      <text x="325" y="263" text-anchor="middle" font-size="10" font-weight="700" fill="#7c2233">1</text>
+      <circle cx="161" cy="32" r="15" fill="#ddd2bb" stroke="#1a1816" stroke-width="1"/>
+      <text x="161" y="35" text-anchor="middle" font-size="9" fill="#4a4540">1.00</text>
+      <circle cx="55" cy="100" r="16" fill="#7c2233" stroke="#1a1816" stroke-width="1"/>
+      <text x="55" y="105" text-anchor="middle" font-size="14" font-weight="700" fill="#f5efe4">A</text>
+      <text x="55" y="80" text-anchor="middle" font-size="8" fill="#7a7268">0.40</text>
+      <text x="55" y="130" text-anchor="middle" font-size="10" font-family="monospace" font-weight="700" fill="#7c2233">0</text>
+      <circle cx="267" cy="100" r="15" fill="#ddd2bb" stroke="#1a1816" stroke-width="1"/>
+      <text x="267" y="103" text-anchor="middle" font-size="9" fill="#4a4540">0.60</text>
+      <circle cx="170" cy="166" r="15" fill="#ddd2bb" stroke="#1a1816" stroke-width="1"/>
+      <text x="170" y="169" text-anchor="middle" font-size="9" fill="#4a4540">0.25</text>
+      <circle cx="365" cy="166" r="15" fill="#ddd2bb" stroke="#1a1816" stroke-width="1"/>
+      <text x="365" y="169" text-anchor="middle" font-size="9" fill="#4a4540">0.35</text>
+      <circle cx="135" cy="232" r="16" fill="#7c2233" stroke="#1a1816" stroke-width="1"/>
+      <text x="135" y="237" text-anchor="middle" font-size="14" font-weight="700" fill="#f5efe4">E</text>
+      <text x="135" y="212" text-anchor="middle" font-size="8" fill="#7a7268">0.10</text>
+      <text x="135" y="262" text-anchor="middle" font-size="10" font-family="monospace" font-weight="700" fill="#7c2233">100</text>
+      <circle cx="205" cy="232" r="16" fill="#7c2233" stroke="#1a1816" stroke-width="1"/>
+      <text x="205" y="237" text-anchor="middle" font-size="14" font-weight="700" fill="#f5efe4">C</text>
+      <text x="205" y="212" text-anchor="middle" font-size="8" fill="#7a7268">0.15</text>
+      <text x="205" y="262" text-anchor="middle" font-size="10" font-family="monospace" font-weight="700" fill="#7c2233">101</text>
+      <circle cx="310" cy="232" r="15" fill="#ddd2bb" stroke="#1a1816" stroke-width="1"/>
+      <text x="310" y="235" text-anchor="middle" font-size="9" fill="#4a4540">0.15</text>
+      <circle cx="420" cy="232" r="16" fill="#7c2233" stroke="#1a1816" stroke-width="1"/>
+      <text x="420" y="237" text-anchor="middle" font-size="14" font-weight="700" fill="#f5efe4">B</text>
+      <text x="420" y="212" text-anchor="middle" font-size="8" fill="#7a7268">0.20</text>
+      <text x="420" y="262" text-anchor="middle" font-size="10" font-family="monospace" font-weight="700" fill="#7c2233">111</text>
+      <circle cx="285" cy="298" r="16" fill="#7c2233" stroke="#1a1816" stroke-width="1"/>
+      <text x="285" y="303" text-anchor="middle" font-size="14" font-weight="700" fill="#f5efe4">F</text>
+      <text x="285" y="278" text-anchor="middle" font-size="8" fill="#7a7268">0.05</text>
+      <text x="285" y="328" text-anchor="middle" font-size="10" font-family="monospace" font-weight="700" fill="#7c2233">1100</text>
+      <circle cx="345" cy="298" r="16" fill="#7c2233" stroke="#1a1816" stroke-width="1"/>
+      <text x="345" y="303" text-anchor="middle" font-size="14" font-weight="700" fill="#f5efe4">D</text>
+      <text x="345" y="278" text-anchor="middle" font-size="8" fill="#7a7268">0.10</text>
+      <text x="345" y="328" text-anchor="middle" font-size="10" font-family="monospace" font-weight="700" fill="#7c2233">1101</text>
+    </svg>
+    <div class="fig-legend">酒红圆=符号叶子(内为字母,上为概率,下为码字);米色圆=合并节点(内为频率和);绿 0 / 红 1 = 左右分枝</div>
+  </div>
+  <div class="figure-cap"><b>这就是例题那棵树。</b>从根往下每走一步读一位:向左记 <code>0</code>、向右记 <code>1</code>,走到叶子即得码字。<b>叶子越深 = 码字越长 = 概率越小</b>——A(0.40)紧贴根只 1 位,F(0.05)沉到最底要 4 位。这正是"高频短码、低频长码"的几何形态;也一眼看出为何前缀无关:所有符号都在叶子上,谁也不在谁的路径中途。</div>
 </div>
 
 <div class="selftest">

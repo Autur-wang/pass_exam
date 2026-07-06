@@ -86,6 +86,17 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -153,6 +164,33 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 </tbody>
 </table>
 <p>记忆锚点:压缩比 <strong>7 → 20 → 50</strong> 逐级翻倍再翻倍,恰好对应"独立 → 单向 → 双向"参考能力的增强。平均一帧约 4.8 kB、整体约 27:1。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:440px" viewBox="0 0 400 216" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+      <!-- Row I -->
+      <rect x="14" y="18" width="38" height="38" fill="#7c2233"/>
+      <text x="33" y="43" font-size="22" font-weight="700" fill="#f5efe4" text-anchor="middle">I</text>
+      <rect x="62" y="22" width="200" height="20" fill="#7c2233"/>
+      <text x="270" y="37" font-size="13" font-weight="700" fill="#1a1816">18 kB · 7:1</text>
+      <text x="62" y="64" font-size="12" fill="#7a7268">帧内编码 · 可独立解码 · <tspan fill="#7c2233" font-weight="700">最大</tspan></text>
+      <!-- Row P -->
+      <rect x="14" y="86" width="38" height="38" fill="#a14958"/>
+      <text x="33" y="111" font-size="22" font-weight="700" fill="#f5efe4" text-anchor="middle">P</text>
+      <rect x="62" y="90" width="67" height="20" fill="#a14958"/>
+      <text x="137" y="105" font-size="13" font-weight="700" fill="#1a1816">6 kB · 20:1</text>
+      <text x="62" y="132" font-size="12" fill="#7a7268">前向预测(参考前一 I/P) · <tspan fill="#a14958" font-weight="700">较小</tspan></text>
+      <!-- Row B -->
+      <rect x="14" y="154" width="38" height="38" fill="#c19a3e"/>
+      <text x="33" y="179" font-size="22" font-weight="700" fill="#1a1816" text-anchor="middle">B</text>
+      <rect x="62" y="158" width="28" height="20" fill="#c19a3e"/>
+      <text x="98" y="173" font-size="13" font-weight="700" fill="#1a1816">2.5 kB · 50:1</text>
+      <text x="62" y="200" font-size="12" fill="#7a7268">双向预测 · <tspan fill="#8a6d20" font-weight="700">最小</tspan> · 不被别人参考</text>
+    </svg>
+    <div class="fig-legend">条形长度按典型帧大小(18 / 6 / 2.5 kB)等比绘制</div>
+  </div>
+  <div class="figure-cap"><b>三种帧:参考能力越强,体积越小。</b>怎么读:从上到下参考能力依次增强(独立→前向→双向),对应的帧体积与码流占用依次锐减,压缩比 7→20→50 翻倍再翻倍。边界:B 帧虽最省,却<b>不作任何帧的参考</b>——它是预测链的"末梢",丢了也不会连累别人,这正是它敢用最激进压缩的底气。</div>
+</div>
 </section>
 
 <section>
@@ -184,6 +222,54 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 <h2><span class="num">4.</span>MPEG-1 帧序列:显示顺序 ≠ 解码顺序</h2>
 <p>MPEG-1 在 H.261 的 I/P 基础上加入 B 帧。但 B 帧要参考它<strong>后面</strong>的 P/I 帧,而"后面的帧"必须先被解码出来——于是产生了一个关键现象:<strong>码流里帧的传输/解码顺序,和它们最终显示的顺序不一样</strong>。</p>
 
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:520px" viewBox="0 0 520 235" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+      <defs>
+        <marker id="g18arP" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7c2233"/></marker>
+        <marker id="g18arB" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#4a6e3a"/></marker>
+      </defs>
+      <!-- B bidirectional arcs (above), green -->
+      <g fill="none" stroke="#4a6e3a" stroke-width="1.6">
+        <path d="M53,100 Q83,55 114,100"  marker-end="url(#g18arB)"/>
+        <path d="M260,100 Q187,52 130,100" marker-end="url(#g18arB)"/>
+        <path d="M53,100 Q118,44 183,100" marker-end="url(#g18arB)"/>
+        <path d="M260,100 Q230,60 199,100" marker-end="url(#g18arB)"/>
+        <path d="M260,100 Q290,60 321,100" marker-end="url(#g18arB)"/>
+        <path d="M467,100 Q402,44 337,100" marker-end="url(#g18arB)"/>
+        <path d="M260,100 Q325,46 390,100" marker-end="url(#g18arB)"/>
+        <path d="M467,100 Q437,60 406,100" marker-end="url(#g18arB)"/>
+      </g>
+      <!-- P forward arcs (below), accent red -->
+      <g fill="none" stroke="#7c2233" stroke-width="1.8">
+        <path d="M53,158 Q156,205 258,158"  marker-end="url(#g18arP)"/>
+        <path d="M260,158 Q363,205 465,158" marker-end="url(#g18arP)"/>
+      </g>
+      <!-- Frame boxes -->
+      <g font-size="24" font-weight="700" text-anchor="middle">
+        <rect x="30"  y="100" width="46" height="58" fill="#7c2233"/><text x="53"  y="137" fill="#f5efe4">I</text>
+        <rect x="99"  y="100" width="46" height="58" fill="#c19a3e"/><text x="122" y="137" fill="#1a1816">B</text>
+        <rect x="168" y="100" width="46" height="58" fill="#c19a3e"/><text x="191" y="137" fill="#1a1816">B</text>
+        <rect x="237" y="100" width="46" height="58" fill="#a14958"/><text x="260" y="137" fill="#f5efe4">P</text>
+        <rect x="306" y="100" width="46" height="58" fill="#c19a3e"/><text x="329" y="137" fill="#1a1816">B</text>
+        <rect x="375" y="100" width="46" height="58" fill="#c19a3e"/><text x="398" y="137" fill="#1a1816">B</text>
+        <rect x="444" y="100" width="46" height="58" fill="#a14958"/><text x="467" y="137" fill="#f5efe4">P</text>
+      </g>
+      <!-- index numbers -->
+      <g font-size="11" fill="#7a7268" text-anchor="middle">
+        <text x="53" y="200">1</text><text x="122" y="200">2</text><text x="191" y="200">3</text>
+        <text x="260" y="200">4</text><text x="329" y="200">5</text><text x="398" y="200">6</text><text x="467" y="200">7</text>
+      </g>
+      <!-- time axis -->
+      <line x1="22" y1="220" x2="498" y2="220" stroke="#c9bda5" stroke-width="1"/>
+      <path d="M498,220 l-7,-3 l0,6 Z" fill="#c9bda5"/>
+      <text x="20" y="216" font-size="11" fill="#7a7268">显示顺序 / 时间</text>
+    </svg>
+    <div class="fig-legend"><span style="color:#7c2233;font-weight:700">━ 红色(下方)</span> = P 帧前向预测(仅参考过去) &nbsp; · &nbsp; <span style="color:#4a6e3a;font-weight:700">━ 绿色(上方)</span> = B 帧双向预测(参考过去+未来)</div>
+  </div>
+  <div class="figure-cap"><b>一个 GOP:I B B P B B P 的预测方向。</b>怎么读:箭头从<b>参考帧</b>指向<b>被预测的帧</b>。P 帧(4、7)只有一根红箭头从<b>过去</b>的 I/P 伸来——单向前向预测;每个 B 帧(2、3、5、6)头顶有两根绿箭头,分别来自<b>过去和未来</b>的 I/P 帧——双向预测。I 帧(1)无任何入箭头,独立自足。关键矛盾:B 帧依赖"未来"的 P 帧,可这条时间轴是<b>显示顺序</b>——未来帧尚未播出,却必须先解出来,这就逼出了下图的顺序错位。</div>
+</div>
+
 <div class="worked">
   <div class="worked-head">例题 · IBBPBBP… 的解码顺序与显示顺序</div>
   <div class="worked-body">
@@ -202,6 +288,47 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
       <strong>为什么:</strong>每个 B 帧的后向参考帧(P₄、P₇)必须<strong>先于该 B 帧解码</strong>。所以编码器把被参考的 I/P 帧提前,B 帧滞后——这正是显示顺序与解码顺序错位的根源。解码端解出后需重排缓冲,再按显示顺序输出。这也是 B 帧的两大代价之一:<strong>编解码依赖 + 额外时延</strong>,故不适合低时延应用(另一代价是双倍运动向量搜索计算量)。
     </div>
   </div>
+</div>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:520px" viewBox="0 0 520 240" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+      <text x="10" y="30" font-size="12" font-weight="700" fill="#7a7268">显示顺序(播放)</text>
+      <text x="10" y="228" font-size="12" font-weight="700" fill="#7a7268">编码/解码/传输顺序</text>
+      <!-- reorder connectors -->
+      <g stroke-width="1.6" fill="none">
+        <line x1="85"  y1="94" x2="85"  y2="146" stroke="#7a7268"/>
+        <line x1="150" y1="94" x2="215" y2="146" stroke="#c19a3e"/>
+        <line x1="215" y1="94" x2="280" y2="146" stroke="#c19a3e"/>
+        <line x1="280" y1="94" x2="150" y2="146" stroke="#7c2233" stroke-width="2.2"/>
+        <line x1="345" y1="94" x2="410" y2="146" stroke="#c19a3e"/>
+        <line x1="410" y1="94" x2="475" y2="146" stroke="#c19a3e"/>
+        <line x1="475" y1="94" x2="345" y2="146" stroke="#7c2233" stroke-width="2.2"/>
+      </g>
+      <!-- top row: display order  I1 B2 B3 P4 B5 B6 P7 -->
+      <g font-size="13" font-weight="700" text-anchor="middle">
+        <rect x="60"  y="50" width="50" height="44" fill="#7c2233"/><text x="85"  y="78" fill="#f5efe4">I₁</text>
+        <rect x="125" y="50" width="50" height="44" fill="#c19a3e"/><text x="150" y="78" fill="#1a1816">B₂</text>
+        <rect x="190" y="50" width="50" height="44" fill="#c19a3e"/><text x="215" y="78" fill="#1a1816">B₃</text>
+        <rect x="255" y="50" width="50" height="44" fill="#a14958"/><text x="280" y="78" fill="#f5efe4">P₄</text>
+        <rect x="320" y="50" width="50" height="44" fill="#c19a3e"/><text x="345" y="78" fill="#1a1816">B₅</text>
+        <rect x="385" y="50" width="50" height="44" fill="#c19a3e"/><text x="410" y="78" fill="#1a1816">B₆</text>
+        <rect x="450" y="50" width="50" height="44" fill="#a14958"/><text x="475" y="78" fill="#f5efe4">P₇</text>
+      </g>
+      <!-- bottom row: decode order  I1 P4 B2 B3 P7 B5 B6 -->
+      <g font-size="13" font-weight="700" text-anchor="middle">
+        <rect x="60"  y="146" width="50" height="44" fill="#7c2233"/><text x="85"  y="174" fill="#f5efe4">I₁</text>
+        <rect x="125" y="146" width="50" height="44" fill="#a14958"/><text x="150" y="174" fill="#f5efe4">P₄</text>
+        <rect x="190" y="146" width="50" height="44" fill="#c19a3e"/><text x="215" y="174" fill="#1a1816">B₂</text>
+        <rect x="255" y="146" width="50" height="44" fill="#c19a3e"/><text x="280" y="174" fill="#1a1816">B₃</text>
+        <rect x="320" y="146" width="50" height="44" fill="#a14958"/><text x="345" y="174" fill="#f5efe4">P₇</text>
+        <rect x="385" y="146" width="50" height="44" fill="#c19a3e"/><text x="410" y="174" fill="#1a1816">B₅</text>
+        <rect x="450" y="146" width="50" height="44" fill="#c19a3e"/><text x="475" y="174" fill="#1a1816">B₆</text>
+      </g>
+    </svg>
+    <div class="fig-legend"><span style="color:#7c2233;font-weight:700">━ 红线</span> = P 帧被提前(它是 B 的后向参考,必须先解) &nbsp; · &nbsp; <span style="color:#c19a3e;font-weight:700">━ 黄线</span> = B 帧被推后</div>
+  </div>
+  <div class="figure-cap"><b>同一段视频,两种顺序。</b>怎么读:每根斜线连接的是<b>同一帧</b>在两行里的位置。P₄ 在显示里排第 4,却被<b>抢到第 2 个解码</b>(红线向左跨越),因为 B₂、B₃ 都要拿它当后向参考——参考帧必须先就绪。于是解码顺序变成 <b>I₁ P₄ B₂ B₃ P₇ B₅ B₆</b>。边界代价:解码端解出后要用缓冲区<b>重排</b>再按显示顺序输出,带来额外时延,故 B 帧不适合实时通信(H.261 就没有 B 帧)。</div>
 </div>
 </section>
 

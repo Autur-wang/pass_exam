@@ -86,6 +86,17 @@ tr:last-child td { border-bottom: none; }
 .selftest .answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
 .selftest .answer strong.ok { color: var(--success); font-family: var(--sans); text-transform: uppercase; font-size: var(--text-sm); }
 
+/* === Figure (图示) === */
+.figure { border: 1px solid var(--ink); background: var(--paper); margin: var(--space-5) 0; }
+.figure-body { padding: var(--space-5) var(--space-4); text-align: center; }
+.figure-cap { font-family: var(--sans); font-size: var(--text-sm); line-height: 1.55; color: var(--ink-soft); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--rule); background: var(--paper-soft); text-align: left; }
+.figure-cap b { color: var(--accent); }
+.fig-row { display: flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+.fig-col { flex: 0 1 258px; }
+.fig-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-bottom: var(--space-2); }
+.fig-svg { width: 100%; max-width: 340px; height: auto; display:block; margin:0 auto; }
+.fig-legend { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: var(--space-2); }
+
 /* Next step */
 .nextstep { margin-top: var(--space-7); padding: var(--space-4) var(--space-5); border: 1px solid var(--rule); background: var(--paper-soft); font-family: var(--sans); font-size: var(--text-sm); }
 .nextstep strong { color: var(--accent); }
@@ -135,6 +146,66 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
     <dd><strong>线性</strong>:内容按固定顺序播放,用户不控制进程(如影院电影)。<strong>非线性</strong>:用户可通过交互跳转(如网页、超文本)。</dd>
   </dl>
 </div>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row">
+      <div class="fig-col">
+        <div class="fig-title">线性 · Linear</div>
+        <svg class="fig-svg" viewBox="0 0 250 120" role="img" aria-label="线性多媒体单向时间线">
+          <defs>
+            <marker id="arrL" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#4a4540"/>
+            </marker>
+          </defs>
+          <line x1="42" y1="50" x2="66" y2="50" stroke="#4a4540" stroke-width="2" marker-end="url(#arrL)"/>
+          <line x1="98" y1="50" x2="122" y2="50" stroke="#4a4540" stroke-width="2" marker-end="url(#arrL)"/>
+          <line x1="154" y1="50" x2="178" y2="50" stroke="#4a4540" stroke-width="2" marker-end="url(#arrL)"/>
+          <line x1="210" y1="50" x2="234" y2="50" stroke="#4a4540" stroke-width="2" marker-end="url(#arrL)"/>
+          <circle cx="30" cy="50" r="13" fill="#7c2233" stroke="#1a1816"/>
+          <circle cx="86" cy="50" r="13" fill="#a14958" stroke="#1a1816"/>
+          <circle cx="142" cy="50" r="13" fill="#a14958" stroke="#1a1816"/>
+          <circle cx="198" cy="50" r="13" fill="#a14958" stroke="#1a1816"/>
+          <text x="30"  y="54" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#f5efe4">1</text>
+          <text x="86"  y="54" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#f5efe4">2</text>
+          <text x="142" y="54" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#f5efe4">3</text>
+          <text x="198" y="54" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#f5efe4">4</text>
+          <text x="125" y="92" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4a4540">固定顺序 · 单向 · 不可跳转</text>
+          <text x="125" y="110" text-anchor="middle" font-family="sans-serif" font-size="11" font-style="italic" fill="#7a7268">例:影院电影</text>
+        </svg>
+      </div>
+      <div class="fig-col">
+        <div class="fig-title">非线性 · Non-linear</div>
+        <svg class="fig-svg" viewBox="0 0 250 120" role="img" aria-label="非线性多媒体图状可跳转结构">
+          <defs>
+            <marker id="arrN" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#4a4540"/>
+            </marker>
+            <marker id="arrNs" markerWidth="8" markerHeight="8" refX="0" refY="3" orient="auto">
+              <path d="M6,0 L0,3 L6,6 Z" fill="#4a4540"/>
+            </marker>
+          </defs>
+          <!-- links between hub and satellites, bidirectional -->
+          <line x1="125" y1="50" x2="55"  y2="24" stroke="#4a4540" stroke-width="1.6" marker-end="url(#arrN)" marker-start="url(#arrNs)"/>
+          <line x1="125" y1="50" x2="205" y2="24" stroke="#4a4540" stroke-width="1.6" marker-end="url(#arrN)" marker-start="url(#arrNs)"/>
+          <line x1="125" y1="50" x2="48"  y2="72" stroke="#4a4540" stroke-width="1.6" marker-end="url(#arrN)" marker-start="url(#arrNs)"/>
+          <line x1="125" y1="50" x2="205" y2="74" stroke="#4a4540" stroke-width="1.6" marker-end="url(#arrN)" marker-start="url(#arrNs)"/>
+          <!-- cross link between satellites -->
+          <line x1="55" y1="24" x2="205" y2="24" stroke="#c19a3e" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrN)" marker-start="url(#arrNs)"/>
+          <circle cx="55"  cy="24" r="12" fill="#a14958" stroke="#1a1816"/>
+          <circle cx="205" cy="24" r="12" fill="#a14958" stroke="#1a1816"/>
+          <circle cx="48"  cy="72" r="12" fill="#a14958" stroke="#1a1816"/>
+          <circle cx="205" cy="74" r="12" fill="#a14958" stroke="#1a1816"/>
+          <circle cx="125" cy="50" r="16" fill="#7c2233" stroke="#1a1816"/>
+          <text x="125" y="54" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="700" fill="#f5efe4">首页</text>
+          <text x="125" y="98" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4a4540">自由跳转 · 图状结构</text>
+          <text x="125" y="115" text-anchor="middle" font-family="sans-serif" font-size="11" font-style="italic" fill="#7a7268">例:超文本 / 网页</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>线性 vs 非线性多媒体。</b>左侧是一条<b>单向时间线</b>——节点只能 1→2→3→4 顺次前进,用户不控制进程;右侧是一张<b>可跳转的图</b>——任意节点间双向连通,还能横跨(黄色虚线)。<b>判据:</b>能不能主动"跳",能跳即非线性,交互性是它的前提。</div>
+</div>
 </section>
 
 <section>
@@ -150,6 +221,39 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 </tbody>
 </table>
 <p>常见的干扰项——"唯一性""不可压缩性""静态性"——都不是多媒体特征,反而与之矛盾。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" viewBox="0 0 340 262" role="img" aria-label="多媒体四大基本特征中心辐射图">
+      <!-- spokes (drawn first, under nodes) -->
+      <line x1="170" y1="130" x2="170" y2="58"  stroke="#c9bda5" stroke-width="2"/>
+      <line x1="170" y1="130" x2="170" y2="202" stroke="#c9bda5" stroke-width="2"/>
+      <line x1="170" y1="130" x2="100" y2="130" stroke="#c9bda5" stroke-width="2"/>
+      <line x1="170" y1="130" x2="240" y2="130" stroke="#c9bda5" stroke-width="2"/>
+      <!-- top: 多样性 -->
+      <rect x="120" y="18" width="100" height="42" rx="5" fill="#ebe3d3" stroke="#1a1816"/>
+      <text x="170" y="37" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="700" fill="#1a1816">多样性</text>
+      <text x="170" y="52" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#4a4540">多种媒体载体</text>
+      <!-- bottom: 交互性 -->
+      <rect x="118" y="202" width="104" height="42" rx="5" fill="#ebe3d3" stroke="#7c2233" stroke-width="2"/>
+      <text x="170" y="221" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="700" fill="#7c2233">交互性</text>
+      <text x="170" y="236" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#4a4540">用户参与 · 核心</text>
+      <!-- left: 实时性 -->
+      <rect x="2" y="109" width="98" height="42" rx="5" fill="#ebe3d3" stroke="#1a1816"/>
+      <text x="51" y="128" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="700" fill="#1a1816">实时性</text>
+      <text x="51" y="143" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#4a4540">时间敏感</text>
+      <!-- right: 集成性 -->
+      <rect x="240" y="109" width="98" height="42" rx="5" fill="#ebe3d3" stroke="#1a1816"/>
+      <text x="289" y="128" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="700" fill="#1a1816">集成性</text>
+      <text x="289" y="143" text-anchor="middle" font-family="sans-serif" font-size="10.5" fill="#4a4540">有机整合</text>
+      <!-- center -->
+      <circle cx="170" cy="130" r="40" fill="#7c2233" stroke="#1a1816"/>
+      <text x="170" y="126" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="700" fill="#f5efe4">多媒体</text>
+      <text x="170" y="142" text-anchor="middle" font-family="sans-serif" font-size="9.5" fill="#ddd2bb">四大特征</text>
+    </svg>
+  </div>
+  <div class="figure-cap"><b>多媒体的四大基本特征。</b>四个特征共同支撑"多媒体"这一概念:<b>多样性</b>说信息载体多样,<b>集成性</b>说它们被有机整合,<b>实时性</b>针对音视频等连续媒体的时间敏感,而<b>交互性</b>(红框)是多媒体区别于传统媒体的核心。<b>怎么用:</b>"选非"题时默念这四格,不在圈里的(如"唯一性")就是答案。</div>
+</div>
 </section>
 
 <section>
@@ -165,6 +269,40 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
 </tbody>
 </table>
 <p><strong>结论:</strong>计算题独占 60 分。本套微课把这四类计算题各拆成独立一节反复练——那才是通关的分水岭。完整逐题拆解见 <a href="../../exam-review/past-exams.html">真题与考点</a>。</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <div class="fig-row" style="align-items:center;">
+      <div class="fig-col" style="flex:0 1 220px;">
+        <svg class="fig-svg" viewBox="0 0 200 200" style="max-width:210px;" role="img" aria-label="题型分值分布环形图,计算题占六成">
+          <!-- 单选 20分 20% -->
+          <path d="M 100.00 18.00 A 82 82 0 0 1 177.99 74.66 L 145.65 85.17 A 48 48 0 0 0 100.00 52.00 Z" fill="#7a7268" stroke="#f5efe4" stroke-width="1.5"/>
+          <!-- 简答 10分 10% -->
+          <path d="M 177.99 74.66 A 82 82 0 0 1 177.99 125.34 L 145.65 114.83 A 48 48 0 0 0 145.65 85.17 Z" fill="#a14958" stroke="#f5efe4" stroke-width="1.5"/>
+          <!-- 计算 60分 60% -->
+          <path d="M 177.99 125.34 A 82 82 0 1 1 51.80 33.66 L 71.79 61.17 A 48 48 0 1 0 145.65 114.83 Z" fill="#7c2233" stroke="#f5efe4" stroke-width="1.5"/>
+          <!-- 综合论述 10分 10% -->
+          <path d="M 51.80 33.66 A 82 82 0 0 1 100.00 18.00 L 100.00 52.00 A 48 48 0 0 0 71.79 61.17 Z" fill="#c19a3e" stroke="#f5efe4" stroke-width="1.5"/>
+          <!-- segment labels -->
+          <text x="61" y="150" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#f5efe4">60分</text>
+          <text x="140" y="52" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#f5efe4">20分</text>
+          <!-- center hole label -->
+          <text x="100" y="96" text-anchor="middle" font-family="sans-serif" font-size="20" font-weight="700" fill="#1a1816">100</text>
+          <text x="100" y="114" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#7a7268">总分</text>
+        </svg>
+      </div>
+      <div class="fig-col" style="flex:0 1 220px; text-align:left;">
+        <div class="fig-legend" style="font-size:13px; line-height:2;">
+          <div><span style="display:inline-block;width:12px;height:12px;background:#7c2233;border:1px solid #1a1816;vertical-align:middle;margin-right:8px;"></span><b>计算 · 60 分</b>(4×15) — JPEG · 运动补偿 · 算术编码 · 检索指标</div>
+          <div><span style="display:inline-block;width:12px;height:12px;background:#7a7268;border:1px solid #1a1816;vertical-align:middle;margin-right:8px;"></span>单选 · 20 分(10×2) — 概念辨析</div>
+          <div><span style="display:inline-block;width:12px;height:12px;background:#a14958;border:1px solid #1a1816;vertical-align:middle;margin-right:8px;"></span>简答 · 10 分(2×5) — 率失真 · 图像检索</div>
+          <div><span style="display:inline-block;width:12px;height:12px;background:#c19a3e;border:1px solid #1a1816;vertical-align:middle;margin-right:8px;"></span>综合论述 · 10 分 — YCbCr 与色度二次采样</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="figure-cap"><b>100 分藏在哪。</b>整张卷子里<b>计算题一家独占六成</b>(60/100),是其余三类题(单选 20 + 简答 10 + 论述 10 = 40)的总和还多。<b>怎么读:</b>环上最长的深红弧就是复习的主战场——把四类计算题练熟,及格线就稳了。</div>
+</div>
 </section>
 
 <div class="selftest">
