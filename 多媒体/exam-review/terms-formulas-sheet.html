@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>名词公式速查表 · 逐讲收口</title>
+<style>
+:root {
+  --paper: #f5efe4;
+  --paper-soft: #ebe3d3;
+  --paper-deep: #ddd2bb;
+  --ink: #1a1816;
+  --ink-soft: #4a4540;
+  --ink-mute: #7a7268;
+  --accent: #7c2233;
+  --accent-soft: #a14958;
+  --highlight: #c19a3e;
+  --success: #4a6e3a;
+  --rule: #c9bda5;
+  --serif: Georgia, "Times New Roman", "Source Han Serif SC", "Songti SC", "STSong", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  --text-sm: 14px;
+  --text-base: 17px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 44px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --measure: 72ch;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--serif); font-size: var(--text-base); line-height: 1.65;
+  text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
+}
+.site-header { border-bottom: 1px solid var(--ink); background: var(--paper); padding: var(--space-5) var(--space-6) var(--space-3); }
+.masthead { max-width: 1080px; margin: 0 auto; text-align: center; padding-bottom: var(--space-3); border-bottom: 1px solid var(--rule); }
+.masthead-title { font-family: var(--serif); font-size: var(--text-2xl); font-weight: 700; letter-spacing: 0.04em; margin-bottom: var(--space-1); }
+.masthead-sub { font-family: var(--serif); font-style: italic; font-size: var(--text-sm); color: var(--ink-soft); letter-spacing: 0.08em; text-transform: uppercase; }
+.primary-nav { max-width: 1080px; margin: var(--space-3) auto 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); justify-content: center; font-family: var(--sans); font-size: var(--text-sm); }
+.primary-nav a { color: var(--ink); text-decoration: none; padding: 2px 6px; border-bottom: 1px solid transparent; transition: all 0.15s ease; }
+.primary-nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.primary-nav a.active { color: var(--accent); font-weight: 700; }
+.nav-divider { color: var(--ink-mute); user-select: none; }
+main { max-width: 1080px; margin: var(--space-7) auto; padding: 0 var(--space-6); }
+article { max-width: var(--measure); margin: 0 auto; }
+h1.title { font-size: var(--text-3xl); font-weight: 700; margin: 0 0 var(--space-3); line-height: 1.15; letter-spacing: 0.02em; }
+.lede { font-size: var(--text-lg); font-style: italic; color: var(--ink-soft); margin-bottom: var(--space-6); padding-bottom: var(--space-4); border-bottom: 1px solid var(--rule); }
+h2 { font-size: var(--text-2xl); margin: var(--space-7) 0 var(--space-4); padding-bottom: var(--space-2); border-bottom: 2px solid var(--ink); letter-spacing: 0.02em; clear: both; }
+h2 .num { display: inline-block; font-size: 0.65em; vertical-align: super; color: var(--accent); margin-right: var(--space-3); }
+h3 { font-size: var(--text-xl); margin: var(--space-6) 0 var(--space-3); color: var(--ink); font-weight: 700; }
+h4 { font-size: var(--text-lg); margin: var(--space-5) 0 var(--space-2); font-weight: 700; }
+p { margin: var(--space-3) 0; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent-soft); }
+a:hover { border-bottom-style: solid; }
+ul, ol { padding-left: var(--space-5); margin: var(--space-3) 0; }
+li { margin: var(--space-1) 0; }
+strong { font-weight: 700; color: var(--ink); }
+em { font-style: italic; }
+code { font-family: var(--mono); font-size: 0.92em; background: var(--paper-soft); padding: 1px 5px; border-radius: 3px; }
+table { width: 100%; border-collapse: collapse; margin: var(--space-4) 0; font-size: 0.94em; }
+th, td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 700; background: var(--paper-soft); border-bottom: 2px solid var(--ink); font-family: var(--sans); font-size: var(--text-sm); letter-spacing: 0.04em; text-transform: uppercase; }
+tr:last-child td { border-bottom: none; }
+.cheat-card { background: var(--paper); border: 2px solid var(--ink); padding: var(--space-5); margin: var(--space-5) 0; break-inside: avoid; }
+.cheat-card h3 { margin-top: 0; border-bottom: 2px solid var(--ink); padding-bottom: var(--space-2); font-family: var(--serif); letter-spacing: 0.04em; text-transform: uppercase; font-size: var(--text-lg); }
+.cheat-card table { font-size: 0.9em; }
+.cheat-card td code { font-size: 0.95em; }
+.term-en { font-family: var(--mono); font-size: 0.95em; color: var(--accent); font-weight: 700; }
+.term-zh { font-weight: 700; }
+.tag-lecture { display: inline-block; font-family: var(--sans); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 6px; background: var(--paper-soft); color: var(--ink-soft); border-radius: 2px; margin-left: var(--space-2); }
+article > p:first-of-type::first-letter { font-size: 3.2em; float: left; line-height: 0.9; margin: 0.05em var(--space-3) 0 0; font-weight: 700; color: var(--accent); }
+footer { max-width: 1080px; margin: var(--space-8) auto var(--space-6); padding: var(--space-5) var(--space-6); border-top: 2px solid var(--ink); text-align: center; font-family: var(--serif); font-style: italic; color: var(--ink-soft); font-size: var(--text-sm); }
+footer .meta { font-family: var(--sans); font-style: normal; letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; color: var(--ink-mute); margin-top: var(--space-3); }
+@media (max-width: 720px) {
+  :root { --text-3xl: 32px; --text-2xl: 24px; --text-xl: 20px; }
+  main { padding: 0 var(--space-4); margin: var(--space-5) auto; }
+  .primary-nav { font-size: 12px; gap: var(--space-2); }
+  article > p:first-of-type::first-letter { font-size: 2.6em; }
+}
+
+/* 名词公式速查表 双栏 */
+.tf-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); margin-top: var(--space-3); }
+.tf-panel h4 { margin: 0 0 var(--space-2); font-family: var(--sans); font-size: var(--text-sm); letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 2px solid var(--rule); padding-bottom: var(--space-1); }
+.tf-panel.terms h4 { color: var(--accent); }
+.tf-panel.formulas h4 { color: var(--success); }
+.tf-list { list-style: none; padding: 0; margin: 0; font-size: 0.9em; }
+.tf-list li { margin: 0 0 7px; line-height: 1.45; }
+.tf-term { font-weight: 700; color: var(--ink); }
+.tf-en { font-family: var(--sans); font-size: 0.82em; color: var(--ink-mute); }
+.tf-list code { font-size: 0.86em; }
+.tf-top { columns: 2; column-gap: var(--space-6); }
+.tf-top li { break-inside: avoid; }
+@media (max-width: 720px) { .tf-cols { grid-template-columns: 1fr; } .tf-top { columns: 1; } }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="masthead">
+    <div class="masthead-title">多媒体系统导论 · 期末冲刺</div>
+    <div class="masthead-sub">深圳大学 · 方山城 · 2026 春 · 第二讲至第十二讲</div>
+  </div>
+  <nav class="primary-nav">
+    <a href="index.html">主页</a>
+    <span class="nav-divider">·</span>
+    <a href="lectures/L02-L03-图像数据与颜色.html">L02-03</a>
+    <a href="lectures/L04-L05-视频与音频基础.html">L04-05</a>
+    <a href="lectures/L06-L07-压缩算法.html">L06-07</a>
+    <a href="lectures/L08-L10-压缩标准与视频压缩.html">L08-10</a>
+    <a href="lectures/L11-L12-检索与深度学习.html">L11-12</a>
+    <span class="nav-divider">·</span>
+    <a href="cheat-sheet.html">速查表</a>
+    <a href="terms-formulas-sheet.html" class="active">名词公式表</a>
+    <a href="mock-exam.html">模拟卷</a>
+    <a href="mock-exam-A.html">模拟卷A</a>
+    <a href="mock-exam-B.html">模拟卷B</a>
+    <a href="formulas.html">公式手册</a>
+    <a href="glossary.html">术语词典</a>
+  </nav>
+</header>
+
+<main>
+<article>
+
+<h1 class="title">名词公式速查表 · 逐讲收口</h1>
+<p class="lede">按讲次把「核心名词 + 核心公式」并排一页 · 复习完一讲即核对一讲 · L02–L12 全覆盖</p>
+
+<p>本表按<strong>讲次轴</strong>组织：左栏是该讲必考<strong>名词</strong>（中英 + 一句定义），右栏是必背<strong>公式</strong>（式子 + 用途）。与按主题轴的<a href="cheat-sheet.html">速查表</a>互补——那张适合建立跨讲联系，这张适合逐讲收口、查漏补缺。详细定义见<a href="glossary.html">术语词典</a>、完整推导见<a href="formulas.html">公式手册</a>。</p>
+
+<div class="cheat-card">
+<h3>★ 计算题必背公式 TOP（考前 60 秒）</h3>
+<ul class="tf-list tf-top">
+<li><code>数据量 = W × H × B / 8</code>（图像）；<code>× fps × 时长</code>（视频）</li>
+<li><code>4:2:0 = 1.5 B/px</code>，4:2:2=2，4:4:4=3</li>
+<li><code>H = −Σ pi·log2 pi</code>（熵，编码下界）</li>
+<li><code>PSNR = 10·log10(255² / MSE)</code></li>
+<li><code>SQNR ≈ 6.02N + 1.76 dB</code>；Nyquist <code>fs ≥ 2f_max</code></li>
+<li><code>MAD = (1/N²)Σ|T − R|</code>（运动估计）</li>
+<li>JPEG：DC-DPCM 差分 + AC-RLC (run,level)+EOB</li>
+<li><code>AP = Σ(命中 P@k) / 相关总数</code>；mAP = AP 均值</li>
+<li>CNN 输出 <code>(N + 2P − F)/S + 1</code></li>
+<li>算术编码：区间逐符号缩窄，取区间内最短二进制小数</li>
+</ul>
+</div>
+
+<div class="cheat-card">
+<h3>L02 · 图像数据</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">像素</span> <span class="tf-en">Pixel</span> — 图像最小离散单位</li>
+<li><span class="tf-term">位平面</span> <span class="tf-en">Bitplane</span> — 8-bit 图可拆成 8 个 1-bit 平面，最高位含主结构</li>
+<li><span class="tf-term">灰度图</span> <span class="tf-en">Gray</span> — 每像素 8-bit，0–255 共 256 级</li>
+<li><span class="tf-term">直方图</span> <span class="tf-en">Histogram</span> — 统计各灰度值的像素数；均衡化提对比度</li>
+<li><span class="tf-term">颜色查找表</span> <span class="tf-en">CLUT</span> — 8-bit 索引映射到 24-bit 真彩</li>
+<li><span class="tf-term">抖动</span> <span class="tf-en">Dithering</span> — 用空间分辨率换强度分辨率，1-bit 模拟灰度</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>Y = 0.299R + 0.587G + 0.114B</code> — RGB 转灰度（G 权重最大）</li>
+<li><code>Size = W × H × B / 8 (Byte)</code> — B = 每像素 bit；单位换算用 1024</li>
+<li><code>色数 = 256³ ≈ 16.8M</code> — 24-bit RGB 可表色数</li>
+<li><code>C=1−R, M=1−G, Y=1−B</code> — RGB → CMY（归一化）</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L03 · 颜色空间</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">加色/减色</span> <span class="tf-en">Additive/Subtractive</span> — RGB 叠加发光（屏幕）；CMY 吸光（印刷）</li>
+<li><span class="tf-term">CIE XYZ</span> <span class="tf-en">CIE XYZ</span> — 设备无关参考色空间，Y 表亮度</li>
+<li><span class="tf-term">HSV</span> <span class="tf-en">HSV</span> — 色相/饱和度/明度，贴合直觉</li>
+<li><span class="tf-term">YCbCr</span> <span class="tf-en">YCbCr</span> — Y 亮度 + Cb/Cr 色度，YUV 的数字版</li>
+<li><span class="tf-term">Gamma 校正</span> <span class="tf-en">Gamma</span> — 补偿显示器非线性，γ ≈ 2.2</li>
+<li><span class="tf-term">色域</span> <span class="tf-en">Gamut</span> — 设备可表颜色子集，色度图上的三角形</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>L = V^γ</code> — Gamma 显示；γ≈2.2（CRT/sRGB）</li>
+<li><code>4:4:4=3 B/px，4:2:2=2，4:2:0=1.5</code> — 色度二次采样每像素字节（4:2:0 效率最高=50%）</li>
+<li><code>R = Y + 1.402(Cr−128)</code> — YCbCr → R</li>
+<li><code>G = Y − 0.344(Cb−128) − 0.714(Cr−128)</code> — YCbCr → G</li>
+<li><code>B = Y + 1.772(Cb−128)</code> — YCbCr → B</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L04 · 视频基础</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">隔行/逐行</span> <span class="tf-en">Interlaced/Progressive</span> — 奇偶场交替 vs 逐行更新</li>
+<li><span class="tf-term">NTSC / PAL</span> <span class="tf-en">NTSC/PAL</span> — 29.97 fps（美日）/ 25 fps（欧中）</li>
+<li><span class="tf-term">色度二次采样</span> <span class="tf-en">Chroma Subsampling</span> — 4:2:0/4:2:2/4:4:4，省带宽</li>
+<li><span class="tf-term">HDTV / 4K</span> <span class="tf-en">HDTV/UHDTV</span> — 1920×1080 / 3840×2160</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>Size = W × H × fps × 时长 × B/px</code> — 未压缩视频数据量</li>
+<li><code>码率 = 像素数 × fps × BPP</code> — BPP = bits per pixel</li>
+<li><code>1080p@30 4:2:0 ≈ 93 MB/s</code> — ≈ 744 Mbps 原始码率</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L05 · 音频基础</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">奈奎斯特定理</span> <span class="tf-en">Nyquist</span> — fs ≥ 2·f_max 才能无混叠还原</li>
+<li><span class="tf-term">假频</span> <span class="tf-en">Aliasing</span> — 采样不足导致高频折叠为低频</li>
+<li><span class="tf-term">SNR / SQNR</span> <span class="tf-en">SNR/SQNR</span> — 信噪比 / 量化信噪比</li>
+<li><span class="tf-term">PCM / DPCM</span> <span class="tf-en">PCM/DPCM</span> — 采样→量化→编码 / 编码差值</li>
+<li><span class="tf-term">响度/音调/音色</span> <span class="tf-en">Loudness/Pitch/Timbre</span> — 对应振幅/频率/频谱结构</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>fs ≥ 2·f_max</code> — 奈奎斯特采样率下限</li>
+<li><code>SNR = 10·log10(Ps/Pn) = 20·log10(Vs/Vn)</code> — 功率 10、电压 20，别记混</li>
+<li><code>SQNR ≈ 6.02N + 1.76 (dB)</code> — 每加 1 bit ≈ +6 dB</li>
+<li><code>音频码率 = 采样率 × 量化bit × 通道数</code> — 单位 bps</li>
+<li><code>电话 8k×8 = 64 kbps；CD 44.1k×16×2 = 1411 kbps</code> — 两个必记数字</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L06 · 无损压缩</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">信息熵</span> <span class="tf-en">Entropy</span> — η=−Σpi·log2 pi，编码码长下界</li>
+<li><span class="tf-term">Huffman 编码</span> <span class="tf-en">Huffman</span> — 频次合并二叉树、变长前缀码</li>
+<li><span class="tf-term">算术编码</span> <span class="tf-en">Arithmetic</span> — 区间缩窄，可逼近熵</li>
+<li><span class="tf-term">游程编码</span> <span class="tf-en">RLC</span> — (run, value) 对，适合长串重复</li>
+<li><span class="tf-term">LZW</span> <span class="tf-en">LZW</span> — 动态建字典，GIF/TIFF 用</li>
+<li><span class="tf-term">Kraft 不等式</span> <span class="tf-en">Kraft</span> — Σ2^−li ≤ 1，前缀码存在条件</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>I(s) = −log2 p(s)</code> — 自信息（bit）</li>
+<li><code>η = −Σ pi·log2 pi</code> — 信息熵 = 平均自信息</li>
+<li><code>l̄ = Σ pi·li</code> — 平均码长</li>
+<li><code>η ≤ l̄ &lt; η + 1</code> — Huffman 码长界（≥η，非等于）</li>
+<li><code>CR = B0 / B1</code> — 压缩比，&gt;1 即压缩</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L07 · 有损压缩</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">均方误差</span> <span class="tf-en">MSE</span> — (1/N)Σ(xi−yi)²</li>
+<li><span class="tf-term">峰值信噪比</span> <span class="tf-en">PSNR</span> — 衡量失真，越大越好</li>
+<li><span class="tf-term">量化</span> <span class="tf-en">Quantization</span> — 连续值离散化，有损唯一来源</li>
+<li><span class="tf-term">标量/向量量化</span> <span class="tf-en">Scalar/Vector</span> — 逐元素 / 块级码本匹配</li>
+<li><span class="tf-term">离散余弦变换</span> <span class="tf-en">DCT</span> — 实数变换、能量集中于低频，本身可逆无损</li>
+<li><span class="tf-term">率失真</span> <span class="tf-en">R(D)</span> — 给定失真 D 下的最小码率</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>MSE = (1/N)·Σ(xi − yi)²</code> — 均方误差</li>
+<li><code>PSNR = 10·log10(255² / MSE)</code> — 8-bit 峰值 255</li>
+<li><code>F̂(u,v) = round(F(u,v) / Q(u,v))</code> — 量化（Q 为步长）</li>
+<li><code>D=0 ⇒ R=η</code> — 率失真曲线下凸，零失真=无损极限</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L08 · JPEG</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">DC / AC 系数</span> <span class="tf-en">DC/AC</span> — (0,0) 块均值 / 其余 63 个高频</li>
+<li><span class="tf-term">Z 字扫描</span> <span class="tf-en">ZigZag</span> — 8×8 块按 Z 序读出，集中低频</li>
+<li><span class="tf-term">量化</span> <span class="tf-en">Quantization</span> — JPEG 五步中唯一不可逆步骤</li>
+<li><span class="tf-term">量化因子</span> <span class="tf-en">qf</span> — 控制精细度，qf 越高越精细</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>DC-DPCM: d = DC_cur − DC_prev</code> — 相邻块 DC 差分编码</li>
+<li><code>AC-RLC: (run, level) … EOB</code> — run=前导 0 个数，level=非零值</li>
+<li><code>qf≥50: scaling = (100−qf)/50</code> — qf=50→1（标准表）</li>
+<li><code>qf&lt;50: scaling = 50/qf</code> — qf=25→2（更粗糙）</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L09 · 运动补偿</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">运动补偿 / 估计</span> <span class="tf-en">MC / ME</span> — 用 MV 预测当前块 / 搜索最优 MV</li>
+<li><span class="tf-term">运动向量</span> <span class="tf-en">MV</span> — (dx, dy)，块在参考帧的偏移</li>
+<li><span class="tf-term">宏块</span> <span class="tf-en">Macroblock</span> — 16×16 Y + 8×8×2 色度（4:2:0）</li>
+<li><span class="tf-term">2D 对数搜索</span> <span class="tf-en">2D-log</span> — 步长逐轮减半的快速搜索，避免全搜索</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>MAD = (1/N²)·Σ|T(i,j) − R(i,j)|</code> — 块匹配代价（绝对值，非平方）</li>
+<li><code>搜索窗口 = (2p+1)²</code> — p=搜索半径；p=15 → 961 个候选</li>
+<li><code>2D-log：中心+上下左右 5 点，步长减半</code> — 取 MAD 最小者为新中心至收敛</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L10 · 帧类型与标准</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">I / P / B 帧</span> <span class="tf-en">Intra/Predictive/Bi</span> — 帧内 / 前向预测 / 双向预测</li>
+<li><span class="tf-term">H.261 / H.264</span> <span class="tf-en">H.26x</span> — 视频会议 / AVC 省 50% 码率</li>
+<li><span class="tf-term">MPEG-1/2/4</span> <span class="tf-en">MPEG</span> — VCD / DVD / 对象编码协议族</li>
+<li><span class="tf-term">视频对象平面</span> <span class="tf-en">VOP</span> — MPEG-4 基于对象编码单元</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>I : P : B = 7 : 20 : 50</code> — 压缩比（B 帧最高）</li>
+<li><code>平均 ≈ 27 : 1</code> — MPEG 典型压缩水平</li>
+<li><code>B 帧需前后两参考帧</code> — 压缩比最高但延迟高</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L11 · 检索与特征</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">基于内容检索</span> <span class="tf-en">CBIR</span> — 按图像内容特征检索</li>
+<li><span class="tf-term">语义鸿沟</span> <span class="tf-en">Semantic Gap</span> — 底层特征 vs 人类语义的差异</li>
+<li><span class="tf-term">Harris 角点</span> <span class="tf-en">Harris</span> — R=det−k·trace²，不抗尺度</li>
+<li><span class="tf-term">SIFT / SURF</span> <span class="tf-en">SIFT/SURF</span> — 128 维 / 64 维，抗尺度旋转</li>
+<li><span class="tf-term">MSER / DoG / RANSAC</span> <span class="tf-en">MSER/DoG/RANSAC</span> — 仿射不变 / 尺度空间 / 鲁棒估计</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>R = det(M) − k·trace(M)²</code> — Harris 响应，k≈0.04–0.06</li>
+<li><code>SIFT 4×4×8 = 128 维；SURF 4×4×4 = 64 维</code> — 描述子维度</li>
+<li><code>Precision = 命中数 / 返回数</code> — 查准率</li>
+<li><code>Recall = 命中数 / 相关总数</code> — 查全率</li>
+<li><code>AP = Σ(命中位置 P@k) / 相关总数</code> — 平均精度；mAP = 各查询 AP 的均值</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<div class="cheat-card">
+<h3>L12 · 深度学习 / CNN</h3>
+<div class="tf-cols">
+  <div class="tf-panel terms">
+    <h4>核心名词</h4>
+    <ul class="tf-list">
+<li><span class="tf-term">卷积核 / 步长 / 填充</span> <span class="tf-en">Kernel/Stride/Padding</span> — F×F 权重 / 滑动步幅 / 边缘补 0</li>
+<li><span class="tf-term">局部感受野 / 参数共享</span> <span class="tf-en">Receptive Field / Weight Sharing</span> — 只连局部 + 同核扫全图，减参数</li>
+<li><span class="tf-term">池化</span> <span class="tf-en">Pooling</span> — Max/Avg 降采样，扩大感受野</li>
+<li><span class="tf-term">ReLU / Dropout</span> <span class="tf-en">ReLU/Dropout</span> — max(0,x) / 随机丢弃防过拟合</li>
+<li><span class="tf-term">经典网络</span> <span class="tf-en">AlexNet/VGG/GoogleNet/ResNet</span> — 60M / 138M / 5M / 25M 参数</li>
+    </ul>
+  </div>
+  <div class="tf-panel formulas">
+    <h4>核心公式</h4>
+    <ul class="tf-list">
+<li><code>输出 = (N + 2P − F) / S + 1</code> — 卷积输出边长（2P 别漏算一边）</li>
+<li><code>池化 = (N − F) / S + 1</code> — 无填充</li>
+<li><code>参数量 = (F·F·C + 1)·K</code> — C 输入通道，K 卷积核数</li>
+<li><code>224, F=3, S=1, P=1 → 224</code> — same 卷积保持尺寸</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+</article>
+</main>
+
+<footer>
+<p>名词公式速查表 · 逐讲收口 · L02–L12</p>
+<p class="meta">名词公式速查表 v1.0 · 按讲次并排名词与公式 · 期末冲刺</p>
+</footer>
+
+</body>
+</html>
