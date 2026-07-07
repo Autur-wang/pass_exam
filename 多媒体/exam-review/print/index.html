@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多媒体系统导论 · 打印中心</title>
+<style>
+:root {
+  --paper: #f5efe4;
+  --paper-soft: #ebe3d3;
+  --paper-deep: #ddd2bb;
+  --ink: #1a1816;
+  --ink-soft: #4a4540;
+  --ink-mute: #7a7268;
+  --accent: #7c2233;
+  --accent-soft: #a14958;
+  --highlight: #c19a3e;
+  --success: #4a6e3a;
+  --danger: #a13e2a;
+  --rule: #c9bda5;
+
+  --serif: Georgia, "Times New Roman", "Source Han Serif SC", "Songti SC", "STSong", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+
+  --text-sm: 14px;
+  --text-base: 17px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 44px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --measure: 72ch;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: var(--text-base);
+  line-height: 1.65;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* === Masthead === */
+.site-header {
+  border-bottom: 1px solid var(--ink);
+  background: var(--paper);
+  padding: var(--space-5) var(--space-6) var(--space-3);
+}
+
+.masthead {
+  max-width: 1080px;
+  margin: 0 auto;
+  text-align: center;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.masthead-title {
+  font-family: var(--serif);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-1);
+}
+
+.masthead-sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* === Nav === */
+.primary-nav {
+  max-width: 1080px;
+  margin: var(--space-3) auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  justify-content: center;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+}
+
+.primary-nav a {
+  color: var(--ink);
+  text-decoration: none;
+  padding: 2px 6px;
+  border-bottom: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.primary-nav a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.primary-nav a.active {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.nav-divider {
+  color: var(--ink-mute);
+  user-select: none;
+}
+
+/* === Main === */
+main {
+  max-width: 1080px;
+  margin: var(--space-7) auto;
+  padding: 0 var(--space-6);
+}
+
+article {
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+h1.title {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  margin: 0 0 var(--space-3);
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+}
+
+.lede {
+  font-size: var(--text-lg);
+  font-style: italic;
+  color: var(--ink-soft);
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+h2 {
+  font-size: var(--text-2xl);
+  margin: var(--space-7) 0 var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--ink);
+  letter-spacing: 0.02em;
+  clear: both;
+}
+
+h2 .num {
+  display: inline-block;
+  font-size: 0.65em;
+  vertical-align: super;
+  color: var(--accent);
+  margin-right: var(--space-3);
+}
+
+h3 {
+  font-size: var(--text-xl);
+  margin: var(--space-6) 0 var(--space-3);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+h4 {
+  font-size: var(--text-lg);
+  margin: var(--space-5) 0 var(--space-2);
+  font-weight: 700;
+}
+
+p { margin: var(--space-3) 0; }
+
+a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent-soft); }
+a:hover { border-bottom-style: solid; }
+
+ul, ol { padding-left: var(--space-5); margin: var(--space-3) 0; }
+li { margin: var(--space-1) 0; }
+
+strong { font-weight: 700; color: var(--ink); }
+em { font-style: italic; }
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  background: var(--paper-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+pre {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--paper-soft);
+  border-left: 3px solid var(--accent);
+  padding: var(--space-3) var(--space-4);
+  overflow-x: auto;
+  margin: var(--space-4) 0;
+  line-height: 1.5;
+}
+
+/* === Tables === */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-4) 0;
+  font-size: 0.94em;
+}
+
+th, td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+th {
+  font-weight: 700;
+  background: var(--paper-soft);
+  border-bottom: 2px solid var(--ink);
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+tr:last-child td { border-bottom: none; }
+
+/* === Frequency Tags === */
+.tag {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 8px;
+  border-radius: 2px;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+  font-weight: 700;
+}
+
+.tag-high { background: var(--accent); color: var(--paper); }
+.tag-mid { background: var(--highlight); color: var(--paper); }
+.tag-low { background: var(--ink-mute); color: var(--paper); }
+
+/* === Exam Point Card === */
+.exam-point {
+  background: var(--paper-soft);
+  border-left: 4px solid var(--accent);
+  padding: var(--space-4) var(--space-5);
+  margin: var(--space-4) 0;
+  position: relative;
+}
+
+.exam-point-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-2);
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+}
+
+.exam-point-id {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.exam-point h4 {
+  margin-top: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.exam-point dl {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0;
+  font-size: 0.94em;
+}
+
+.exam-point dt {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--accent);
+}
+
+.exam-point dd {
+  margin: 0;
+}
+
+/* === Exercise (details/summary) === */
+.exercise {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  margin: var(--space-4) 0;
+}
+
+.exercise-qid {
+  font-weight: 700;
+  color: var(--accent);
+  margin-right: var(--space-3);
+  font-family: var(--sans);
+}
+
+.exercise-type {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  background: var(--paper);
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-family: var(--sans);
+}
+
+.exercise-stem {
+  padding: var(--space-4) var(--space-4) 0;
+  font-size: var(--text-base);
+}
+
+.exercise-options {
+  list-style: upper-alpha;
+  padding-left: var(--space-6);
+  margin: var(--space-3) var(--space-4);
+}
+
+.exercise-toggle {
+  margin: var(--space-3) var(--space-4) var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--rule);
+}
+
+.exercise-toggle summary {
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  list-style: none;
+  padding: var(--space-2) 0;
+}
+
+.exercise-toggle summary::-webkit-details-marker { display: none; }
+
+.exercise-toggle summary::before {
+  content: '▸ ';
+  display: inline-block;
+  margin-right: 4px;
+  transition: transform 0.15s ease;
+}
+
+.exercise-toggle[open] summary::before {
+  content: '▾ ';
+}
+
+.exercise-answer {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--paper-soft);
+  border-left: 3px solid var(--success);
+}
+
+.exercise-answer strong {
+  color: var(--success);
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+/* === Mastery Checkbox === */
+.mastery {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  user-select: none;
+}
+
+.mastery input { cursor: pointer; }
+
+.mastery.checked {
+  color: var(--success);
+}
+
+/* === Cheat Sheet Card === */
+.cheat-card {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: var(--space-5);
+  margin: var(--space-5) 0;
+  break-inside: avoid;
+}
+
+.cheat-card h3 {
+  margin-top: 0;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: var(--space-2);
+  font-family: var(--serif);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: var(--text-lg);
+}
+
+.cheat-card table { font-size: 0.9em; }
+
+/* === Sprint Grid === */
+.sprint-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-4) 0;
+}
+
+.sprint-card {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: var(--space-4);
+  break-inside: avoid;
+}
+
+.sprint-card h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+}
+
+.sprint-card .sprint-list {
+  font-size: 0.92em;
+  line-height: 1.5;
+}
+
+.sprint-card .sprint-list li {
+  margin-bottom: var(--space-1);
+}
+
+/* === Dropcap for first paragraph === */
+article > p:first-of-type::first-letter {
+  font-size: 3.2em;
+  float: left;
+  line-height: 0.9;
+  margin: 0.05em var(--space-3) 0 0;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* === Footer === */
+footer {
+  max-width: 1080px;
+  margin: var(--space-8) auto var(--space-6);
+  padding: var(--space-5) var(--space-6);
+  border-top: 2px solid var(--ink);
+  text-align: center;
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+footer p { margin: var(--space-1) 0; }
+
+footer .meta {
+  font-family: var(--sans);
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin-top: var(--space-3);
+}
+
+/* === Responsive === */
+@media (max-width: 720px) {
+  :root {
+    --text-3xl: 32px;
+    --text-2xl: 24px;
+    --text-xl: 20px;
+  }
+  main { padding: 0 var(--space-4); margin: var(--space-5) auto; }
+  .primary-nav { font-size: 12px; gap: var(--space-2); }
+  .exam-point dl { grid-template-columns: 1fr; }
+  article > p:first-of-type::first-letter { font-size: 2.6em; }
+}
+</style>
+
+
+<style id="print-hub">
+.hub-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-4); margin:var(--space-5) 0 var(--space-7); }
+.pdf-card{ display:block; text-decoration:none; color:inherit; border:1px solid var(--rule);
+  border-left:4px solid var(--accent); background:var(--paper-soft); padding:var(--space-4) var(--space-5);
+  transition:all .15s ease; }
+.pdf-card:hover{ background:var(--paper-deep); border-left-color:var(--highlight); transform:translateX(2px); }
+.pdf-card .pc-title{ font-family:var(--sans); font-weight:700; font-size:var(--text-md); color:var(--ink); }
+.pdf-card .pc-title::before{ content:'PDF'; font-size:10px; letter-spacing:.08em; background:var(--accent); color:#fff;
+  padding:1px 6px; margin-right:8px; vertical-align:middle; border-radius:2px; }
+.pdf-card .pc-desc{ font-family:var(--serif); font-size:var(--text-sm); color:var(--ink-soft); margin-top:6px; line-height:1.5; }
+.lesson-list{ list-style:none; padding:0; margin:var(--space-4) 0 var(--space-7); columns:2; column-gap:var(--space-6); }
+.lesson-list li{ break-inside:avoid; margin-bottom:6px; }
+.lesson-list a{ text-decoration:none; color:var(--ink); font-size:var(--text-sm); border-bottom:1px solid transparent; }
+.lesson-list a:hover{ color:var(--accent); border-bottom-color:var(--accent); }
+.lesson-list a .ln{ font-family:var(--sans); color:var(--accent); font-weight:700; margin-right:6px; }
+.hub-note{ border:1px dashed var(--accent); background:var(--paper-soft); padding:var(--space-4) var(--space-5);
+  margin:var(--space-5) 0; font-size:var(--text-sm); color:var(--ink-soft); }
+.hub-note b{ color:var(--accent); }
+@media (max-width:640px){ .lesson-list{ columns:1; } }
+</style>
+
+</head>
+<body>
+<header class="site-header">
+  <div class="masthead">
+    <div class="masthead-title">多媒体系统导论 · 打印中心</div>
+    <div class="masthead-sub">深圳大学 · 方山城 · 2026 春 · 全部 A4 白底省墨 PDF</div>
+  </div>
+  <nav class="primary-nav">
+    <a href="../index.html">← 冲刺首页</a>
+    <span class="nav-divider">·</span>
+    <a href="../terms-formulas-sheet.html">速查表</a>
+    <span class="nav-divider">·</span>
+    <a href="../past-exams-explained.html">真题精讲</a>
+    <span class="nav-divider">·</span>
+    <a href="../mock-exam-A.html">模拟卷</a>
+  </nav>
+</header>
+
+<main class="wrap">
+<p class="lede">所有打印版汇总于此 · 点开任意 PDF 即可打印或下载 · 交互页的折叠答案在打印版中已全部展开。</p>
+
+<div class="hub-note">
+<b>打印建议：</b>模拟卷 A/B 答案已随题展开——若想“空白做题”，浏览器打印时把要打印的<b>页范围</b>设为题目页即可；
+或先做交互网页版（答案默认折叠），做完再打印本 PDF 对答案。
+</div>
+
+<h2>考前冲刺打印版</h2>
+<div class="hub-grid">
+<a class="pdf-card" href="terms-formulas-sheet.pdf"><div class="pc-title">名词公式速查表</div><div class="pc-desc">按讲次并排名词/公式 · 考前扫一遍的“脑内索引”</div></a>
+<a class="pdf-card" href="past-exams-explained.pdf"><div class="pc-title">真题精讲版</div><div class="pc-desc">2024 春真题逐题详解 · 单选/简答/计算/论述全解</div></a>
+<a class="pdf-card" href="mock-exam-A.pdf"><div class="pc-title">模拟卷 A（含答案）</div><div class="pc-desc">严格照 2024 春结构 · 答案随题展开</div></a>
+<a class="pdf-card" href="mock-exam-B.pdf"><div class="pc-title">模拟卷 B（含答案）</div><div class="pc-desc">第二套全真模拟 · 换数据练同型题</div></a>
+<a class="pdf-card" href="cheat-sheet.pdf"><div class="pc-title">考前速记卡</div><div class="pc-desc">最后一晚看的浓缩要点</div></a>
+<a class="pdf-card" href="formulas.pdf"><div class="pc-title">公式全集</div><div class="pc-desc">所有计算题公式一处集齐</div></a>
+<a class="pdf-card" href="glossary.pdf"><div class="pc-title">术语表</div><div class="pc-desc">标准名词定义 · 简答/选择兜底</div></a>
+</div>
+
+<h2>讲义打印版 · 21 讲全集</h2>
+<p style="font-size:var(--text-sm);color:var(--ink-soft);margin-bottom:var(--space-3);">
+每讲一份自包含 PDF，含内联图示与自测（答案已展开）。0020 / 0021 为本次更新的最新版。</p>
+<ul class="lesson-list">
+<li><a href="../../teach/lessons-print/0001-what-is-multimedia-exam-map.pdf"><span class="ln">0001</span>什么是多媒体 · 考试地图</a></li>
+<li><a href="../../teach/lessons-print/0002-pixel-bitmap-image-size.pdf"><span class="ln">0002</span>像素 · 位图 · 图像数据量计算</a></li>
+<li><a href="../../teach/lessons-print/0003-grayscale-histogram-dithering.pdf"><span class="ln">0003</span>灰度图 · 直方图 · 抖动</a></li>
+<li><a href="../../teach/lessons-print/0004-color-science-rgb-cie-hsv-lab.pdf"><span class="ln">0004</span>颜色科学 · RGB / CIE / HSV / Lab</a></li>
+<li><a href="../../teach/lessons-print/0005-ycbcr-gamma-correction.pdf"><span class="ln">0005</span>YCbCr 与 Gamma 校正</a></li>
+<li><a href="../../teach/lessons-print/0006-video-chroma-subsampling-420.pdf"><span class="ln">0006</span>视频制式 · 色度二次采样 4:2:0</a></li>
+<li><a href="../../teach/lessons-print/0007-digital-audio-nyquist-pcm-sqnr.pdf"><span class="ln">0007</span>数字音频 · 奈奎斯特 · PCM · SQNR</a></li>
+<li><a href="../../teach/lessons-print/0008-entropy-rlc.pdf"><span class="ln">0008</span>信息熵与游程编码 RLC</a></li>
+<li><a href="../../teach/lessons-print/0009-shannon-fano-huffman.pdf"><span class="ln">0009</span>Shannon-Fano 与 Huffman 编码</a></li>
+<li><a href="../../teach/lessons-print/0010-adaptive-huffman.pdf"><span class="ln">0010</span>自适应 Huffman 编码</a></li>
+<li><a href="../../teach/lessons-print/0011-lzw-dictionary-coding.pdf"><span class="ln">0011</span>LZW 字典编码（压缩 + 解压）</a></li>
+<li><a href="../../teach/lessons-print/0012-arithmetic-coding.pdf"><span class="ln">0012</span>算术编码（编码 + 解码）</a></li>
+<li><a href="../../teach/lessons-print/0013-distortion-psnr-rate-distortion.pdf"><span class="ln">0013</span>失真度量 MSE/PSNR 与率失真理论</a></li>
+<li><a href="../../teach/lessons-print/0014-quantization-uniform-vector.pdf"><span class="ln">0014</span>量化 · 均匀/非均匀 · 标量/向量</a></li>
+<li><a href="../../teach/lessons-print/0015-dct-transform-coding.pdf"><span class="ln">0015</span>DCT 变换编码</a></li>
+<li><a href="../../teach/lessons-print/0016-jpeg-pipeline.pdf"><span class="ln">0016</span>JPEG 完整流水线</a></li>
+<li><a href="../../teach/lessons-print/0017-motion-compensation-mv-mad.pdf"><span class="ln">0017</span>运动补偿 · MV · MAD · 2D 对数搜索</a></li>
+<li><a href="../../teach/lessons-print/0018-h261-mpeg-ipb-frames.pdf"><span class="ln">0018</span>H.261 与 MPEG · I / P / B 帧</a></li>
+<li><a href="../../teach/lessons-print/0019-cbir-sift-features.pdf"><span class="ln">0019</span>CBIR · 语义鸿沟 · 全局 vs 局部 · SIFT</a></li>
+<li><a href="../../teach/lessons-print/0020-retrieval-metrics-recall-precision-map.pdf"><span class="ln">0020</span>图像检索指标 · Recall / Precision / AP / mAP</a></li>
+<li><a href="../../teach/lessons-print/0021-cnn-conv-pooling-output-size.pdf"><span class="ln">0021</span>CNN 基础 · 卷积 · 池化 · 输出尺寸计算</a></li>
+</ul>
+</main>
+</body>
+</html>
