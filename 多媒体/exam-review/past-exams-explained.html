@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多媒体系统导论 · 真题精讲(2024 春)</title>
+<style>
+:root {
+  --paper: #f5efe4;
+  --paper-soft: #ebe3d3;
+  --paper-deep: #ddd2bb;
+  --ink: #1a1816;
+  --ink-soft: #4a4540;
+  --ink-mute: #7a7268;
+  --accent: #7c2233;
+  --accent-soft: #a14958;
+  --highlight: #c19a3e;
+  --success: #4a6e3a;
+  --danger: #a13e2a;
+  --rule: #c9bda5;
+
+  --serif: Georgia, "Times New Roman", "Source Han Serif SC", "Songti SC", "STSong", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+
+  --text-sm: 14px;
+  --text-base: 17px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 44px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --measure: 72ch;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: var(--text-base);
+  line-height: 1.65;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--ink);
+  background: var(--paper);
+  padding: var(--space-5) var(--space-6) var(--space-3);
+}
+
+.masthead {
+  max-width: 1080px;
+  margin: 0 auto;
+  text-align: center;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.masthead-title {
+  font-family: var(--serif);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-1);
+}
+
+.masthead-sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.primary-nav {
+  max-width: 1080px;
+  margin: var(--space-3) auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  justify-content: center;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+}
+
+.primary-nav a {
+  color: var(--ink);
+  text-decoration: none;
+  padding: 2px 6px;
+  border-bottom: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.primary-nav a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.primary-nav a.active {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.nav-divider {
+  color: var(--ink-mute);
+  user-select: none;
+}
+
+main {
+  max-width: 1080px;
+  margin: var(--space-7) auto;
+  padding: 0 var(--space-6);
+}
+
+article {
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+h1.title {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  margin: 0 0 var(--space-3);
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+}
+
+.lede {
+  font-size: var(--text-lg);
+  font-style: italic;
+  color: var(--ink-soft);
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+h2 {
+  font-size: var(--text-2xl);
+  margin: var(--space-7) 0 var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--ink);
+  letter-spacing: 0.02em;
+  clear: both;
+}
+
+h2 .num {
+  display: inline-block;
+  font-size: 0.65em;
+  vertical-align: super;
+  color: var(--accent);
+  margin-right: var(--space-3);
+}
+
+h3 {
+  font-size: var(--text-xl);
+  margin: var(--space-6) 0 var(--space-3);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+h4 {
+  font-size: var(--text-lg);
+  margin: var(--space-5) 0 var(--space-2);
+  font-weight: 700;
+}
+
+p { margin: var(--space-3) 0; }
+
+a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent-soft); }
+a:hover { border-bottom-style: solid; }
+
+ul, ol { padding-left: var(--space-5); margin: var(--space-3) 0; }
+li { margin: var(--space-1) 0; }
+
+strong { font-weight: 700; color: var(--ink); }
+em { font-style: italic; }
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  background: var(--paper-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-4) 0;
+  font-size: 0.94em;
+}
+
+th, td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+th {
+  font-weight: 700;
+  background: var(--paper-soft);
+  border-bottom: 2px solid var(--ink);
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+tr:last-child td { border-bottom: none; }
+
+.tag {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 8px;
+  border-radius: 2px;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+  font-weight: 700;
+}
+
+.tag-high { background: var(--accent); color: var(--paper); }
+.tag-mid { background: var(--highlight); color: var(--paper); }
+.tag-low { background: var(--ink-mute); color: var(--paper); }
+
+.exam-point {
+  background: var(--paper-soft);
+  border-left: 4px solid var(--accent);
+  padding: var(--space-4) var(--space-5);
+  margin: var(--space-4) 0;
+  position: relative;
+}
+
+.exam-point-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-2);
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+}
+
+.exam-point-id {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.exam-point h4 {
+  margin-top: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.exam-point dl {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0;
+  font-size: 0.94em;
+}
+
+.exam-point dt {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--accent);
+}
+
+.exam-point dd { margin: 0; }
+
+/* === Score bar (题型分值可视化) === */
+.score-bar {
+  display: flex;
+  width: 100%;
+  height: 34px;
+  border: 1px solid var(--ink);
+  margin: var(--space-4) 0 var(--space-2);
+  font-family: var(--sans);
+  font-size: 12px;
+  overflow: hidden;
+}
+.score-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--paper);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.score-seg.s-choice { background: var(--ink-mute); flex: 20; }
+.score-seg.s-short  { background: var(--highlight); flex: 10; }
+.score-seg.s-calc   { background: var(--accent); flex: 60; }
+.score-seg.s-essay  { background: var(--success); flex: 10; }
+.score-legend { font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-soft); }
+
+footer {
+  max-width: 1080px;
+  margin: var(--space-8) auto var(--space-6);
+  padding: var(--space-5) var(--space-6);
+  border-top: 2px solid var(--ink);
+  text-align: center;
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+footer p { margin: var(--space-1) 0; }
+
+footer .meta {
+  font-family: var(--sans);
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin-top: var(--space-3);
+}
+
+@media (max-width: 720px) {
+  :root {
+    --text-3xl: 32px;
+    --text-2xl: 24px;
+    --text-xl: 20px;
+  }
+  main { padding: 0 var(--space-4); margin: var(--space-5) auto; }
+  .primary-nav { font-size: 12px; gap: var(--space-2); }
+  .exam-point dl { grid-template-columns: 1fr; }
+}
+
+/* === 真题精讲组件 === */
+pre { font-family: var(--mono); font-size: 0.85em; background: var(--paper-soft); border-left: 3px solid var(--accent); padding: var(--space-3) var(--space-4); overflow-x: auto; margin: var(--space-3) 0; line-height: 1.5; }
+.qcard { border: 1px solid var(--rule); background: var(--paper); margin: var(--space-4) 0; }
+.qcard-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); background: var(--paper-soft); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--rule); font-family: var(--sans); font-size: var(--text-sm); flex-wrap: wrap; }
+.qcard-id { font-weight: 700; color: var(--accent); letter-spacing: 0.04em; }
+.qcard-topic { color: var(--ink-mute); font-size: 12px; font-family: var(--sans); }
+.qcard-body { padding: var(--space-3) var(--space-4) var(--space-4); }
+.qcard-body .stem { margin: 0 0 var(--space-3); }
+.qcard-calc { border: 2px solid var(--accent); }
+.calc-bar { background: var(--accent); color: var(--paper); padding: var(--space-2) var(--space-4); font-family: var(--sans); font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; display:flex; justify-content:space-between; flex-wrap:wrap; gap: var(--space-2); }
+.ans { background: var(--paper-soft); border-left: 3px solid var(--success); padding: var(--space-3) var(--space-4); margin: var(--space-3) 0; }
+.ans .lab, .jiang .lab { display: block; font-family: var(--sans); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-1); }
+.ans .lab { color: var(--success); }
+.jiang { border-left: 3px solid var(--highlight); padding: var(--space-2) var(--space-4); margin: var(--space-3) 0; background: var(--paper-soft); }
+.jiang .lab { color: var(--highlight); }
+.steps { counter-reset: step; list-style: none; padding-left: 0; margin: var(--space-3) 0; }
+.steps > li { position: relative; padding-left: 2.4em; margin: var(--space-3) 0; }
+.steps > li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 0; width: 1.7em; height: 1.7em; background: var(--accent); color: var(--paper); border-radius: 50%; font-family: var(--sans); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.result { background: var(--paper-soft); border-left: 3px solid var(--success); padding: var(--space-2) var(--space-4); margin-top: var(--space-3); }
+.repnote { font-size: var(--text-sm); color: var(--ink-mute); font-style: italic; }
+.toc { columns: 2; column-gap: var(--space-6); font-family: var(--sans); font-size: var(--text-sm); }
+.toc a { display: block; padding: 2px 0; }
+@media (max-width: 720px){ .toc { columns: 1; } }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="masthead">
+    <div class="masthead-title">多媒体系统导论 · 真题精讲</div>
+    <div class="masthead-sub">深圳大学 · 方山城 · 2024 春回忆卷 · 逐题精讲版</div>
+  </div>
+  <nav class="primary-nav">
+    <a href="index.html">主页</a>
+    <span class="nav-divider">·</span>
+    <a href="lectures/L02-L03-图像数据与颜色.html">L02-03</a>
+    <a href="lectures/L04-L05-视频与音频基础.html">L04-05</a>
+    <a href="lectures/L06-L07-压缩算法.html">L06-07</a>
+    <a href="lectures/L08-L10-压缩标准与视频压缩.html">L08-10</a>
+    <a href="lectures/L11-L12-检索与深度学习.html">L11-12</a>
+    <span class="nav-divider">·</span>
+    <a href="past-exams.html">真题</a>
+    <a href="past-exams-explained.html" class="active">真题精讲</a>
+    <a href="cheat-sheet.html">速查表</a>
+    <a href="mock-exam-A.html">模拟卷A</a>
+    <a href="mock-exam-B.html">模拟卷B</a>
+    <a href="formulas.html">公式手册</a>
+    <a href="glossary.html">术语词典</a>
+  </nav>
+</header>
+
+<main>
+<article>
+
+<h1 class="title">2024 春真题 · 逐题精讲</h1>
+<p class="lede">配套 <a href="past-exams.html">真题与考点</a>(那页是"考什么、对应哪讲"的地图),这页是"每题怎么答、怎么算"的解剖台。选择给答案+辨析,简答/论述给范文,四道计算题给完整分步解法。</p>
+
+<div class="jiang"><span class="lab">用法说明</span>真题为<strong>回忆卷</strong>,计算题只记得题型、不记得原始数字。本页计算题采用<strong>同型代表数据</strong>(与 <a href="mock-exam-A.html">模拟卷 A</a> 一致,全部经 Python 代码验证),重在把<strong>解法钉死</strong>——考场换个数字,套同样的步骤即可。</p></div>
+
+<div class="toc">
+<a href="#mcq">单选精讲 · 10 题(20 分)</a>
+<a href="#saq">简答范文 · 2 题(10 分)</a>
+<a href="#calc">计算精讲 · 4 题(60 分,重心)</a>
+<a href="#essay">综合论述 · 1 题(10 分)</a>
+</div>
+
+<section id="mcq">
+<h2><span class="num">I.</span>单选精讲 · 10 题(每题 2 分,共 20 分)</h2>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 1</span><span class="qcard-topic">多媒体应用 · L01</span></div>
+<div class="qcard-body">
+<p class="stem">文本处理(字处理)软件的主要用途是什么?</p>
+<div class="ans"><span class="lab">答案</span>文字的<strong>录入、编辑与排版</strong>(如 Word)。</div>
+<div class="jiang"><span class="lab">精讲</span>本章属「多媒体应用软件」概念题。字处理面向文字;图像/音频/视频各有专用工具。区分「应用类型」与「媒体类型」即可。</div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 2</span><span class="qcard-topic">多媒体概念 · 第一章</span></div>
+<div class="qcard-body">
+<p class="stem">下列哪一项<strong>不属于</strong>多媒体的基本特征?</p>
+<div class="ans"><span class="lab">答案</span><strong>不可压缩性</strong>。</div>
+<div class="jiang"><span class="lab">精讲</span>多媒体四大基本特征 = <strong>多样性、集成性、交互性、实时性</strong>。多媒体数据恰恰高度<strong>可</strong>压缩(否则视频没法传),「不可压缩」是反的。</div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 3</span><span class="qcard-topic">音频量化/传输 · L05</span></div>
+<div class="qcard-body">
+<p class="stem">压缩音频时,主要需要考虑哪些因素?</p>
+<div class="ans"><span class="lab">答案</span><strong>采样率、量化位数、声道数</strong>(并可利用听觉掩蔽做感知压缩)。</div>
+<div class="jiang"><span class="lab">精讲</span>音频数据量 = 采样率 × 量化 bit × 声道数;质量与体积都由这三项决定。屏幕分辨率/帧率是视频/图像的量,与音频无关。</div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 4</span><span class="qcard-topic">无损 vs 有损 · L06</span></div>
+<div class="qcard-body">
+<p class="stem">下列哪一项是音频的<strong>无损</strong>编码?</p>
+<div class="ans"><span class="lab">答案</span><strong>FLAC</strong>(及 ALAC)。</div>
+<div class="jiang"><span class="lab">精讲</span>MP3 / AAC / Ogg Vorbis 都是<strong>有损感知</strong>编码;FLAC 用熵编码(游程/Huffman 类)可<strong>逐比特还原</strong>。判断口诀:「能完全复原」才是无损。</div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 5</span><span class="qcard-topic">数据量单位 · L04</span></div>
+<div class="qcard-body">
+<p class="stem">求一段视频的数据量,并区分 MB 与 Mb。</p>
+<div class="ans"><span class="lab">答案</span>关键:<strong>1 Byte = 8 bit</strong>,MB(大写 B=字节)与 Mb(小写 b=比特)<strong>差 8 倍</strong>。</div>
+<div class="jiang"><span class="lab">精讲</span>例:900 MB × 8 = 7200 Mb = 7.2 Gb。视频数据量 = 宽×高×fps×时长×每像素字节。<strong>真题第 5 题的陷阱就在 b/B 混淆</strong>——最后一步换算务必看清大小写。</div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 6</span><span class="qcard-topic">均匀量化 · L07</span></div>
+<div class="qcard-body">
+<p class="stem">均匀标量量化中,被划分为等距区间的是?</p>
+<div class="ans"><span class="lab">答案</span><strong>输入信号的动态范围</strong>。</div>
+<div class="jiang"><span class="lab">精讲</span>均匀量化把「输入的取值范围」切成等宽区间(步长 Δ 恒定),每个区间映到一个重建电平。被等分的是<strong>输入幅度轴</strong>,不是误差、不是时间轴。</div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 7</span><span class="qcard-topic">音频数字化 · L05</span></div>
+<div class="qcard-body">
+<p class="stem">数字音频的获取与处理,正确顺序是?</p>
+<div class="ans"><span class="lab">答案</span><strong>采样 → 量化 → 编码</strong>。</div>
+<div class="jiang"><span class="lab">精讲</span>先采样(时间离散化,满足奈奎斯特 f<sub>s</sub>≥2f<sub>max</sub>)→ 再量化(幅度离散化,如 16 bit)→ 最后编码(PCM/熵编码)。顺序不能颠倒:没采样谈不上量化。</div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 8</span><span class="qcard-topic">VQ vs SQ · L07</span></div>
+<div class="qcard-body">
+<p class="stem">向量量化(VQ)与标量量化(SQ)的主要区别在于?</p>
+<div class="ans"><span class="lab">答案</span>VQ 把<strong>多个样本组成矢量整体查码本</strong>;SQ 逐样本独立量化。</div>
+<div class="jiang"><span class="lab">精讲</span>SQ 一次量化一个数;VQ 把 k 个样本拼成矢量,在码本里找最近码字,<strong>利用了样本间相关性</strong>,率失真更优,代价是要设计/存储码本。</div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 9</span><span class="qcard-topic">JPEG2000 · L08</span></div>
+<div class="qcard-body">
+<p class="stem">JPEG2000 相比 JPEG 的主要优势来自?</p>
+<div class="ans"><span class="lab">答案</span>采用<strong>离散小波变换(DWT)</strong>替代 8×8 分块 DCT。</div>
+<div class="jiang"><span class="lab">精讲</span>DWT 对整幅图做多分辨率分析,<strong>没有块效应</strong>,天然支持渐进传输与感兴趣区(ROI)编码。这是「为什么小波比分块 DCT 好」的标准答案。</div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">单选 10</span><span class="qcard-topic">运动估计 · L09</span></div>
+<div class="qcard-body">
+<p class="stem">2D 对数搜索(2D-log search)主要应用在何处?</p>
+<div class="ans"><span class="lab">答案</span><strong>视频运动估计</strong>中快速搜索最优运动矢量(MV)。</div>
+<div class="jiang"><span class="lab">精讲</span>它用「对数级递减的步长」逼近 MAD 最小点,避免全搜索的巨大计算量。属于块匹配运动估计的<strong>快速搜索策略</strong>。</div>
+</div></div>
+</section>
+
+<section id="saq">
+<h2><span class="num">II.</span>简答范文 · 2 题(每题 5 分,共 10 分)</h2>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">简答 1 · 高频</span><span class="qcard-topic">L07 有损压缩</span></div>
+<div class="qcard-body">
+<p class="stem">简述<strong>率失真理论(rate-distortion theory)</strong>,并说明率失真曲线 R(D) 上点的含义。</p>
+<div class="ans"><span class="lab">参考范文</span>① <strong>R(D) 的定义</strong>:在允许失真不超过 D 的前提下,编码所需的<strong>最小比特率</strong>;D(R) 是它的反函数。<br>② <strong>曲线形状</strong>:R(D) <strong>单调递减、下凸</strong>——给的码率越高,可达到的失真越小;码率越低失真越大。<br>③ <strong>两个端点</strong>:D=0(无失真)时 R = 信源熵 H,对应<strong>无损压缩的极限</strong>;D 增大则 R 下降,落在曲线上的点对应有损压缩。<br>④ <strong>意义</strong>:曲线是理论下界,任何实际编码器只能工作在曲线<strong>上方或曲线上</strong>,越贴近越优。<br><em>答题提示:务必画出 R-D 坐标图(横轴 D、纵轴 R,下凸曲线),并标注 D=0→R=H 这个端点。</em></div>
+</div></div>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">简答 2 · 中频</span><span class="qcard-topic">L11 CBIR</span></div>
+<div class="qcard-body">
+<p class="stem">图像检索中,如何计算图像间<strong>内容的相关性</strong>?</p>
+<div class="ans"><span class="lab">参考范文</span>① <strong>提取特征</strong>:全局(颜色直方图、纹理、形状)或局部(SIFT/SURF 关键点描述子),把每幅图表示为<strong>特征向量</strong>。<br>② <strong>定义距离/相似度</strong>:用 L1(曼哈顿)、L2(欧氏)、余弦相似度、直方图相交等度量两向量的接近程度,<strong>距离越小 → 内容越相关</strong>。<br>③ <strong>距离须满足四性质</strong>:非负、同一(d(x,x)=0)、对称(d(x,y)=d(y,x))、三角不等式。<br>④ <strong>语义鸿沟</strong>:低层特征相近未必语义相关,需靠标注的相关集(ground truth)评判;相关性结果最终用于计算 Precision/Recall/AP/mAP。</div>
+</div></div>
+</section>
+
+<section id="calc">
+<h2><span class="num">III.</span>计算精讲 · 4 题(每题 15 分,共 60 分)· 重心</h2>
+<p>真题的分数重心。四种题型各一道,把分步解法背到条件反射。想再练可上 <a href="mock-exam-A.html">模拟卷 A</a> / <a href="mock-exam-B.html">模拟卷 B</a>(同结构、换数字)。</p>
+<div class="qcard qcard-calc">
+<div class="calc-bar"><span>计算 1 · JPEG:Zig-zag → DC-DPCM / AC-RLC → Huffman</span><span>L08 JPEG</span></div>
+<div class="qcard-body">
+<p class="stem">给定某 8×8 亮度块<strong>量化后</strong>系数(只写非零,其余全 0),前一块 DC=12。要求:Zig-zag 展开 → DC 做 DPCM、AC 做游程(run,level) → 再对 AC 做 Huffman 编码。</p><pre>行,列从 0 计:
+(0,0)=16   (0,1)=0   (0,2)=-2
+(1,0)=-3   (1,1)=-1
+(2,1)=-1
+其余全部为 0</pre><p class="repnote">真题为回忆卷,此处用同型代表数据(与模拟卷 A 一致,已代码验证)。</p>
+<ol class="steps">
+<li><strong>Zig-zag 展开成一维。</strong>沿"之"字序从左上扫到右下:<code>16, 0, −3, 0, −1, −2, 0, 0, −1, 0, …(其余全 0)</code>。目的是把低频集中在前、把大量高频 0 赶到尾部,利于游程。</li><li><strong>DC 用 DPCM。</strong>只对直流分量编前后块差值:<code>本块 DC − 前块 DC = 16 − 12 = 4</code>。差分值 4 的<strong>类别(size)=3</strong>(需 3 bit 表示幅值),码流 = Huffman(DC,size=3) + 幅值 3 bit。</li><li><strong>AC 用游程(run, level)。</strong>去掉 DC 后的 AC 串 <code>0,−3,0,−1,−2,0,0,−1,0,…</code>,按(前导 0 个数, 非零值)配对:<br><code>(1,−3) (1,−1) (0,−2) (2,−1) EOB</code>。末尾全 0 用 <strong>EOB</strong> 收束。</li><li><strong>对每个 AC 对做 Huffman。</strong>JPEG 把每个 AC 写成 <strong>(RUN, SIZE)</strong> 查 Huffman 表得前缀码,后面紧跟 SIZE 位<strong>幅值码</strong>(负数取补):<table><thead><tr><th>(run, level)</th><th>run/size</th><th>幅值码</th></tr></thead><tbody><tr><td>(1,−3)</td><td>1/2</td><td>00</td></tr><tr><td>(1,−1)</td><td>1/1</td><td>0</td></tr><tr><td>(0,−2)</td><td>0/2</td><td>01</td></tr><tr><td>(2,−1)</td><td>2/1</td><td>0</td></tr><tr><td>EOB</td><td>0/0</td><td>—</td></tr></tbody></table>最终码流 = Huffman(run,size) 前缀码 + 幅值码 依次拼接。<span class="repnote">(考试给标准 Huffman 表时代入即可;不给表则写到"(run,size)+幅值"这一步。)</span></li>
+</ol>
+<div class="result"><strong>结论:</strong>Zig-zag <code>16,0,−3,0,−1,−2,0,0,−1</code>;DC-DPCM <code>=4</code>;AC-RLC <code>(1,−3)(1,−1)(0,−2)(2,−1)EOB</code>。<strong>五步链条:分块→DCT→量化→Zig-zag+DPCM/RLC→熵编码</strong>,量化是唯一有损步。</div>
+</div></div>
+<div class="qcard qcard-calc">
+<div class="calc-bar"><span>计算 2 · 视频压缩:最优 MV / MAD + 2D 对数搜索</span><span>L09 运动补偿</span></div>
+<div class="qcard-body">
+<p class="stem">当前帧一个 4×4 宏块 C,在参考帧 10×10 搜索区 R 中找最优运动矢量。约定 MV=(dx,dy)=向右 dx、向下 dy;MV=(0,0) 时 C 对齐 R 的 rows3–6、cols3–6;<code>MAD=(1/N²)Σ|C−R对应块|</code>,N=4,搜索范围 ±3。求最优 MV 及 MAD,并用 2D 对数搜索求解。</p><pre>C:                 R 搜索区(局部 0..9):
+24 25 28 33            c3 c4 c5 c6 c7 c8
+21 22 25 30        r2: 28 25 24 25 28 33
+20 21 24 29        r3: 25 22 21 22 25 30
+21 22 25 30        r4: 24 21 20 21 24 29
+                   r5: 25 22 21 22 25 30</pre><p class="repnote">同型代表数据(模拟卷 A,已代码验证);最优点处 C 与 R 子块完全重合。</p>
+<ol class="steps">
+<li><strong>理解 MAD。</strong>把 C 平移 (dx,dy) 后与 R 对应 4×4 子块逐像素求绝对差之和,再除以 16。MAD 越小越匹配,=0 表示完全重合。</li><li><strong>2D 对数搜索 · 第一轮(中心 (0,0),步长 step=2)。</strong>取"中心 + 上下左右"5 点算 MAD:<table><thead><tr><th>MV(dx,dy)</th><th>(0,0)</th><th>(+2,0)</th><th>(−2,0)</th><th>(0,+2)</th><th>(0,−2)</th></tr></thead><tbody><tr><td>MAD</td><td>4.5</td><td><strong>2</strong></td><td>8.5</td><td>7.375</td><td>4.25</td></tr></tbody></table>最小在 <strong>MV(+2,0),MAD=2</strong> → 作为下一轮中心。</li><li><strong>第二轮(中心 (+2,0),步长减半 step=1)。</strong><table><thead><tr><th>MV(dx,dy)</th><th>(+2,0)</th><th>(+3,0)</th><th>(+1,0)</th><th>(+2,+1)</th><th>(+2,−1)</th></tr></thead><tbody><tr><td>MAD</td><td>2</td><td>4.25</td><td>3</td><td>4</td><td><strong>0</strong></td></tr></tbody></table>最小在 <strong>MV(+2,−1),MAD=0</strong> → 收敛。</li><li><strong>作图说明。</strong>每轮以当前中心画"+"字,端点距中心=当前步长;标出各点 MAD、圈出最小者作下一轮中心,步长减半,直到最小落在中心或 step=1 后停。</li>
+</ol>
+<div class="result"><strong>结论:</strong>最优 <strong>MV=(+2,−1),MAD=0</strong>(C 与 R 的 rows2–5、cols5–8 子块完全重合)。<strong>易错:</strong>MAD 用绝对值不是平方(那是 MSE);2D 对数搜索每轮步长减半。</div>
+</div></div>
+<div class="qcard qcard-calc">
+<div class="calc-bar"><span>计算 3 · 算术编码:编码 + 解码</span><span>L06 无损压缩</span></div>
+<div class="qcard-body">
+<p class="stem">信源 4 符号,概率 <code>P(A)=0.4, P(B)=0.2, P(C)=0.3, P($)=0.1</code>($ 为终止符),累加区间 <code>A[0,0.4) B[0.4,0.6) C[0.6,0.9) $[0.9,1)</code>。对 <code>B A C $</code> 编码,给出最终区间与最短二进制码字;再用同表解码验证。</p><p class="repnote">同型代表数据(模拟卷 A,已用分数精确验证)。老师标注:编码为重点,解码了解即可。</p>
+<ol class="steps">
+<li><strong>逐符号缩窄区间。</strong>每读一个符号:<code>new_low=low+range×R_low,new_high=low+range×R_high</code>(range=high−low)。<table><thead><tr><th>读入</th><th>low</th><th>high</th></tr></thead><tbody><tr><td>B</td><td>0.4</td><td>0.6</td></tr><tr><td>A</td><td>0.4</td><td>0.48</td></tr><tr><td>C</td><td>0.448</td><td>0.472</td></tr><tr><td>$</td><td>0.4696</td><td>0.472</td></tr></tbody></table>最终区间 <strong>[0.4696, 0.472)</strong>。</li><li><strong>取区间内最短二进制小数作码字。</strong>在 [0.4696,0.472) 内找分母为 2 的幂的最短小数:<strong>241/512 = 0.470703…</strong>,即 <code>0.011110001</code>(9 位)。</li><li><strong>解码(反向定位)。</strong>取码值 v=0.470703,逐步判断落在哪个符号区间、再归一化:<br>① v∈[0.4,0.6)→<strong>B</strong>;② (v−0.4)/0.2=0.354∈[0,0.4)→<strong>A</strong>;③ (v−0.4)/0.08=0.884∈[0.6,0.9)→<strong>C</strong>;④ (v−0.448)/0.024=0.946∈[0.9,1)→<strong>$</strong>,停。</li>
+</ol>
+<div class="result"><strong>结论:</strong>码字 <strong>241/512 = 0.470703(0.011110001)</strong>;解码还原 <code>B A C $</code> ✓。<strong>要点:</strong>编码是"区间不断缩小",码字取区间内表示最短者;$ 是停止信号。</div>
+</div></div>
+<div class="qcard qcard-calc">
+<div class="calc-bar"><span>计算 4 · 图像检索指标:Precision / Recall / AP / mAP</span><span>L12 检索评价</span></div>
+<div class="qcard-body">
+<p class="stem">两个查询的返回排序(✔=相关,✘=不相关)与相关总数如下。求 Q1 各位置 Precision@k / Recall@k;求 AP(Q1)、AP(Q2);求 mAP。<code>AP=命中位置 Precision 之和 ÷ 相关总数</code>。</p><pre>Q1(相关总数=5):  ✔ ✘ ✔ ✔ ✘ ✔
+Q2(相关总数=4):  ✘ ✔ ✔ ✘ ✔ ✘</pre><p class="repnote">同型代表数据(模拟卷 A,已代码验证)。</p>
+<ol class="steps">
+<li><strong>Q1 逐位置扫。</strong>维护"累计命中数",<code>P@k=命中/k,R@k=命中/5</code>:<table><thead><tr><th>rank</th><th>命中</th><th>P@k</th><th>R@k</th></tr></thead><tbody><tr><td>1</td><td>✔</td><td>1.000</td><td>0.20</td></tr><tr><td>2</td><td>✘</td><td>0.500</td><td>0.20</td></tr><tr><td>3</td><td>✔</td><td>0.667</td><td>0.40</td></tr><tr><td>4</td><td>✔</td><td>0.750</td><td>0.60</td></tr><tr><td>5</td><td>✘</td><td>0.600</td><td>0.60</td></tr><tr><td>6</td><td>✔</td><td>0.667</td><td>0.80</td></tr></tbody></table></li><li><strong>AP(Q1)=只把命中行的 P 相加 ÷ 相关总数。</strong>命中在 rank 1,3,4,6:<code>(1.000+0.667+0.750+0.667)/5 = 3.0833/5 = 0.6167</code>。</li><li><strong>AP(Q2)同法。</strong>Q2 命中在 rank 2,3,5,P=0.500,0.667,0.600:<code>(0.500+0.667+0.600)/4 = 1.7667/4 = 0.4417</code>。</li><li><strong>mAP=各查询 AP 的均值。</strong><code>(0.6167+0.4417)/2 = 0.5292</code>。</li>
+</ol>
+<div class="result"><strong>结论:</strong>AP(Q1)=<strong>0.6167</strong>、AP(Q2)=<strong>0.4417</strong>、mAP=<strong>0.5292</strong>。<strong>易错:</strong>AP 分母是<strong>相关总数</strong>(不是返回数);只累加"命中位置"的 Precision;漏检的相关项按 P=0 计入,会拉低 AP。</div>
+</div></div>
+</section>
+
+<section id="essay">
+<h2><span class="num">IV.</span>综合论述 · 1 题(10 分)</h2>
+<div class="qcard">
+<div class="qcard-head"><span class="qcard-id">综合论述 · 高频</span><span class="qcard-topic">L04 + L08 · YCbCr 与色度二次采样</span></div>
+<div class="qcard-body">
+<p class="stem">围绕 <strong>YCbCr 与色度二次采样</strong>:(1) 4:4:4 / 4:2:2 / 4:2:0 哪种传输效率最高?画示意图并定量说明;(2) 4:2:0 如何发送数据、如何还原为 RGB?(3) 前 4 个像素 Cb/Cr 全保留,Y 只留 Y₀、Y₁(已知 Y₀=80、Y₁=120,且 Y₄=200),用线性插值重构 Y₂、Y₃。</p>
+<div class="ans"><span class="lab">参考范文</span>
+<strong>(1) 效率最高 = 4:2:0。</strong>每 2×2=4 像素:4:4:4 存 4Y+4Cb+4Cr=12 采样(3 B/px);4:2:2 存 4Y+2Cb+2Cr=8(2 B/px);4:2:0 存 4Y+1Cb+1Cr=6(<strong>1.5 B/px</strong>)。相对 4:4:4,4:2:0 只占 <strong>50%</strong>,压缩最狠。依据<strong>心理视觉冗余</strong>:人眼对亮度 Y 敏感、对色度 Cb/Cr 不敏感,大幅降采样色度几乎无感损。
+<pre>4:4:4        4:2:2        4:2:0
+Y Y          Y Y          Y Y
+Y Y          Y Y          Y Y
+每点都有色度  每行取一半色度  每 2×2 共享一组色度</pre>
+<strong>(2) 发送与还原。</strong>Y 逐像素全采样发送;Cb、Cr 每 2×2 块只发一个(左上或取平均)。还原 RGB:先对缺失的 Cb/Cr <strong>上采样/插值</strong>补回每像素,再逆变换<br>
+<code>R = Y + 1.402(Cr−128)</code><br>
+<code>G = Y − 0.344(Cb−128) − 0.714(Cr−128)</code><br>
+<code>B = Y + 1.772(Cb−128)</code>。<br>
+<strong>(3) 线性插值。</strong>已知 Y₀=80、Y₁=120、Y₄=200,缺 Y₂、Y₃。用 Y₁ 与 Y₄ 间线性插值(跨 3 步,每步 (200−120)/3≈26.67):<strong>Y₂ ≈ 120+26.67 ≈ 146.7</strong>,<strong>Y₃ ≈ 120+2×26.67 ≈ 173.3</strong>。(若按最近邻复制则 Y₂=Y₃=120;线性插值更精确,答题写明依据。)
+</div>
+</div></div>
+</section>
+
+<div class="jiang" style="margin-top:var(--space-7)"><span class="lab">下一步</span>精讲吃透后,去 <a href="mock-exam-A.html">模拟卷 A</a>、<a href="mock-exam-B.html">模拟卷 B</a> 掐表全真模拟;计算题薄弱就回 <a href="lectures/L08-L10-压缩标准与视频压缩.html">L08-10</a>、<a href="lectures/L11-L12-检索与深度学习.html">L11-12</a> 对应讲义重看。</p></div>
+
+</article>
+</main>
+
+<footer>
+<p>真题精讲 · 2024 春回忆卷逐题详解 · 100 分</p>
+<p class="meta">真题精讲 v1.0 · 计算题采用同型代表数据(代码验证) · 期末冲刺</p>
+</footer>
+
+</body>
+</html>
