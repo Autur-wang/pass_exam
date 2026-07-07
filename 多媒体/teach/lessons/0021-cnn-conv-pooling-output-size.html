@@ -388,6 +388,165 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
   </details>
 </div>
 
+<section>
+<h2><span class="num">5.</span>更多计算例题:五种常考题型</h2>
+<p>上面那道是"尺寸+参数一起算"的标准型。下面按考试常见的<strong>五种变体</strong>各来一道,每道都把套公式的顺序写死。做题口诀:<strong>先分子 <code>N−F+2p</code>,再除步长 <code>s</code>,最后才 +1;除不尽向下取整。</strong></p>
+
+<div class="worked">
+  <div class="worked-head">例题 2 · 无填充卷积(尺寸会缩小)</div>
+  <div class="worked-body">
+    <p>输入 <code>28×28</code>,卷积核 <code>5×5</code>,步长 <code>s=1</code>,<strong>不填充</strong>(<code>p=0</code>)。求输出边长。</p>
+    <ol>
+      <li>已知 <code>N=28</code>,<code>F=5</code>,<code>p=0</code>,<code>s=1</code>。</li>
+      <li>代公式①:<code>(N − F + 2p)/s + 1 = (28 − 5 + 0)/1 + 1 = 23 + 1 = 24</code>。</li>
+    </ol>
+    <div class="result"><strong>输出 <code>24×24</code>。</strong>无填充时,核在边缘"够不着",每条边各丢 <code>F−1=4</code> 个像素 → 尺寸从 28 缩到 24。这正是 VGG 要靠 <code>p=1</code> 补回尺寸的原因。</div>
+  </div>
+</div>
+
+<div class="worked">
+  <div class="worked-head">例题 3 · 池化的输出尺寸</div>
+  <div class="worked-body">
+    <p>输入特征图 <code>24×24</code>,做 <code>2×2</code> 最大池化,步长 <code>s=2</code>。求输出边长。</p>
+    <ol>
+      <li>池化沿用<strong>同一条尺寸公式</strong>,但<strong>几乎总是无填充</strong>(<code>p=0</code>):<code>输出 = (N − F)/s + 1</code>。</li>
+      <li>代入 <code>N=24</code>,<code>F=2</code>,<code>s=2</code>:<code>(24 − 2)/2 + 1 = 22/2 + 1 = 11 + 1 = 12</code>。</li>
+    </ol>
+    <div class="result"><strong>输出 <code>12×12</code>,尺寸减半。</strong>记住:<code>F=2、s=2</code> 的池化就是"边长除以 2"。池化<strong>不改变通道数</strong>,也<strong>没有参数</strong>——只缩高宽。</div>
+  </div>
+</div>
+
+<div class="worked">
+  <div class="worked-head">例题 4 · 多层串联,追踪特征图尺寸(大题最爱)</div>
+  <div class="worked-body">
+    <p>输入 <code>32×32</code>,依次经过:<strong>Conv1</strong>(<code>5×5</code>, <code>p=2</code>, <code>s=1</code>)→ <strong>Pool1</strong>(<code>2×2</code>, <code>s=2</code>)→ <strong>Conv2</strong>(<code>3×3</code>, <code>p=1</code>, <code>s=1</code>)→ <strong>Pool2</strong>(<code>2×2</code>, <code>s=2</code>)。求最终特征图边长。</p>
+    <p><strong>关键纪律:一层一层来,上一层的输出就是下一层的输入。</strong>列一张表最不容易错:</p>
+    <table>
+      <thead><tr><th>层</th><th>操作</th><th>输入</th><th>算式</th><th>输出</th></tr></thead>
+      <tbody>
+        <tr><td>Conv1</td><td>5×5, p2, s1</td><td>32</td><td>(32 − 5 + 4)/1 + 1</td><td><strong>32</strong></td></tr>
+        <tr><td>Pool1</td><td>2×2, s2</td><td>32</td><td>(32 − 2)/2 + 1</td><td><strong>16</strong></td></tr>
+        <tr><td>Conv2</td><td>3×3, p1, s1</td><td>16</td><td>(16 − 3 + 2)/1 + 1</td><td><strong>16</strong></td></tr>
+        <tr><td>Pool2</td><td>2×2, s2</td><td>16</td><td>(16 − 2)/2 + 1</td><td><strong>8</strong></td></tr>
+      </tbody>
+    </table>
+    <div class="result"><strong>最终 <code>8×8</code>。</strong>规律看得很清楚:<strong>带 <code>p=(F−1)/2</code> 的卷积保持尺寸不变</strong>(5×5 配 p2、3×3 配 p1),<strong>真正让特征图变小的是池化</strong>(每次减半:32→16→8)。所以数"缩了几次",基本就是数"经过几个 stride=2 的池化"。</div>
+  </div>
+</div>
+
+<div class="figure"><div class="figure-body">
+<svg class="fig-svg" style="max-width:480px" viewBox="0 0 480 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="特征图尺寸逐层追踪流水线 32 32 16 16 8">
+  <!-- box0 输入 32 -->
+  <rect x="16" y="34" width="58" height="58" fill="#ebe3d3" stroke="#1a1816" stroke-width="1.4"/>
+  <text x="45" y="26" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#7a7268">输入</text>
+  <text x="45" y="112" text-anchor="middle" font-size="12" font-family="monospace" font-weight="700" fill="#1a1816">32×32</text>
+  <!-- box1 32 -->
+  <rect x="121" y="34" width="58" height="58" fill="#ebe3d3" stroke="#1a1816" stroke-width="1.4"/>
+  <text x="150" y="112" text-anchor="middle" font-size="12" font-family="monospace" font-weight="700" fill="#1a1816">32×32</text>
+  <!-- box2 16 -->
+  <rect x="231" y="44" width="38" height="38" fill="#ebe3d3" stroke="#1a1816" stroke-width="1.4"/>
+  <text x="250" y="112" text-anchor="middle" font-size="12" font-family="monospace" font-weight="700" fill="#1a1816">16×16</text>
+  <!-- box3 16 -->
+  <rect x="321" y="44" width="38" height="38" fill="#ebe3d3" stroke="#1a1816" stroke-width="1.4"/>
+  <text x="340" y="112" text-anchor="middle" font-size="12" font-family="monospace" font-weight="700" fill="#1a1816">16×16</text>
+  <!-- box4 8 -->
+  <rect x="419" y="52" width="22" height="22" fill="#d9a441" stroke="#1a1816" stroke-width="1.4"/>
+  <text x="430" y="112" text-anchor="middle" font-size="12" font-family="monospace" font-weight="700" fill="#7c2233">8×8</text>
+  <!-- arrows -->
+  <line x1="78" y1="63" x2="116" y2="63" stroke="#4a4540" stroke-width="1.6"/><polygon points="116,59 123,63 116,67" fill="#4a4540"/>
+  <text x="99" y="52" text-anchor="middle" font-size="9" font-family="sans-serif" font-weight="700" fill="#7c2233">Conv 5×5</text>
+  <text x="99" y="62" text-anchor="middle" font-size="8" font-family="sans-serif" fill="#4a4540">p2 s1 · 不变</text>
+  <line x1="183" y1="63" x2="228" y2="63" stroke="#4a4540" stroke-width="1.6"/><polygon points="228,59 235,63 228,67" fill="#4a4540"/>
+  <text x="206" y="52" text-anchor="middle" font-size="9" font-family="sans-serif" font-weight="700" fill="#4a6e3a">Pool 2×2</text>
+  <text x="206" y="62" text-anchor="middle" font-size="8" font-family="sans-serif" fill="#4a4540">s2 · 减半</text>
+  <line x1="273" y1="63" x2="318" y2="63" stroke="#4a4540" stroke-width="1.6"/><polygon points="318,59 325,63 318,67" fill="#4a4540"/>
+  <text x="296" y="52" text-anchor="middle" font-size="9" font-family="sans-serif" font-weight="700" fill="#7c2233">Conv 3×3</text>
+  <text x="296" y="62" text-anchor="middle" font-size="8" font-family="sans-serif" fill="#4a4540">p1 s1 · 不变</text>
+  <line x1="363" y1="63" x2="416" y2="63" stroke="#4a4540" stroke-width="1.6"/><polygon points="416,59 423,63 416,67" fill="#4a4540"/>
+  <text x="390" y="52" text-anchor="middle" font-size="9" font-family="sans-serif" font-weight="700" fill="#4a6e3a">Pool 2×2</text>
+  <text x="390" y="62" text-anchor="middle" font-size="8" font-family="sans-serif" fill="#4a4540">s2 · 减半</text>
+  <text x="240" y="138" text-anchor="middle" font-size="10.5" font-family="sans-serif" fill="#4a4540">卷积(配 padding)保尺寸　·　池化 stride=2 是尺寸减半的唯一推手</text>
+</svg>
+</div><div class="figure-cap"><b>尺寸逐层追踪流水线。</b>五个方块是每一步后的特征图,大小按边长画:<code>32 → 32 → 16 → 16 → 8</code>。<b>蓝红两次 Conv</b> 都因为配了 <code>p=(F−1)/2</code> 而<b>尺寸不变</b>(只在换特征、加通道);<b>两次 Pool(s=2)</b>各把边长<b>砍半</b>。所以"最终多大"的答案,几乎只由<b>经过几个 stride=2 的下采样</b>决定——本例两次,<code>32 → 16 → 8</code>。<b>做题提醒:</b>一层写一行,上一行输出填进下一行输入,绝不跳步心算。</div></div>
+
+<div class="worked">
+  <div class="worked-head">例题 5 · AlexNet 首层的大步长卷积</div>
+  <div class="worked-body">
+    <p>AlexNet 输入 <code>227×227×3</code>,第一层用 <code>96</code> 个 <code>11×11</code> 卷积核,<strong>步长 <code>s=4</code></strong>,<code>p=0</code>。求输出特征图尺寸。</p>
+    <ol>
+      <li>代公式①:<code>(227 − 11 + 0)/4 + 1 = 216/4 + 1 = 54 + 1 = 55</code>。</li>
+      <li>输出通道 = 卷积核个数 = <code>96</code>,故输出 <code>55×55×96</code>。</li>
+    </ol>
+    <div class="result"><strong>输出 <code>55×55×96</code>。</strong>大步长(<code>s=4</code>)是"一上来就猛缩图"的手段:一步就把 227 压到 55。<span class="alias">有的教材写成 <code>224×224</code> 配 <code>p=2</code>,则 <code>⌊(224−11+4)/4⌋+1 = ⌊54.25⌋+1 = 55</code>,靠向下取整同样得 55。</span></div>
+  </div>
+</div>
+
+<div class="worked">
+  <div class="worked-head">例题 6 · 全连接层的参数量(看它为何最臃肿)</div>
+  <div class="worked-body">
+    <p>某网络最后一张特征图为 <code>7×7×512</code>,把它<strong>展平</strong>后接一个 <code>4096</code> 个神经元的全连接层。求这一层的参数量。</p>
+    <ol>
+      <li>展平:<code>7 × 7 × 512 = 25088</code> 个输入。</li>
+      <li>全连接=每个输出神经元与<strong>所有</strong>输入相连,各带 1 个偏置:<code>参数 = 输入数 × 输出数 + 输出数 = 25088 × 4096 + 4096</code>。</li>
+      <li>计算:<code>= 4096 × (25088 + 1) = 4096 × 25089 ≈ 1.028 × 10⁸</code>。</li>
+    </ol>
+    <div class="result"><strong>约 <code>1.03 亿(≈102.8M)</code>个参数——就这一层。</strong>对比例题 1 的卷积层只有 <code>760</code> 个:全连接层没有参数共享,一展平就"参数爆炸"。这正是 VGG 138M 参数大半堆在 FC、而 GoogleNet/ResNet 索性<strong>去掉 FC</strong> 的原因。</div>
+  </div>
+</div>
+
+<div class="intuition">
+  <span class="tag-label">经典考点:两个 3×3 为什么能替一个 5×5</span>
+  <p>把两个 <code>3×3</code> 卷积<strong>叠起来</strong>,第二层每个神经元透过第一层能"看到"输入的 <code>5×5</code> 区域——<strong>感受野等效于一个 <code>5×5</code> 卷积</strong>。但参数上(单通道单核):一个 <code>5×5</code> = <strong>25</strong> 个权重,两个 <code>3×3</code> = <code>2×9</code> = <strong>18</strong> 个,<strong>更省</strong>;而且中间多插了一次非线性激活(ReLU),<strong>表达力更强</strong>。这就是 VGG"只用小核堆深"的核心论据——考简答题常问,记住"<strong>同感受野、更少参数、更多非线性</strong>"九个字。</p>
+</div>
+
+<div class="selftest">
+  <span class="selftest-label">自测题 2 · 池化尺寸</span>
+  <p>输入特征图 <code>16×16</code>,做 <code>3×3</code> 池化,步长 <code>s=1</code>,<code>p=0</code>(重叠池化)。输出边长是多少?</p>
+  <ol class="opts">
+    <li><code>13</code></li>
+    <li><code>14</code></li>
+    <li><code>15</code></li>
+    <li><code>16</code></li>
+  </ol>
+  <details>
+    <summary></summary>
+    <div class="answer">
+      <strong class="ok">答案:B　14</strong>
+      <p>池化同样套 <code>(N − F)/s + 1 = (16 − 3)/1 + 1 = 13 + 1 = 14</code>。<br>
+      <em>易错点:</em>这里 <code>s=1</code>(重叠池化)而非常见的 <code>s=2</code>,所以尺寸只小一点点,不是减半。别一看"池化"就条件反射写"除以 2"——先看步长。</p>
+    </div>
+  </details>
+</div>
+
+<div class="selftest">
+  <span class="selftest-label">自测题 3 · 多层串联</span>
+  <p>输入 <code>64×64</code>,先过 <strong>Conv</strong>(<code>3×3</code>, <code>p=1</code>, <code>s=1</code>),再过 <strong>Max Pool</strong>(<code>2×2</code>, <code>s=2</code>)。输出边长是多少?</p>
+  <ol class="opts">
+    <li><code>16</code></li>
+    <li><code>62</code></li>
+    <li><code>32</code></li>
+    <li><code>31</code></li>
+  </ol>
+  <details>
+    <summary></summary>
+    <div class="answer">
+      <strong class="ok">答案:C　32</strong>
+      <p>一层一层来:<br>
+      Conv <code>3×3, p1, s1</code>:<code>(64 − 3 + 2)/1 + 1 = 63 + 1 = 64</code>——配了 <code>p=1</code>,<strong>尺寸不变</strong>。<br>
+      Pool <code>2×2, s2</code>:<code>(64 − 2)/2 + 1 = 31 + 1 = 32</code>——<strong>减半</strong>。<br>
+      <em>陷阱:</em>D 选项 <code>31</code> 是"忘了最后 +1";B <code>62</code> 是"卷积忘加 padding"。牢记卷积那步因 <code>p=1</code> 保持 64 不变,只有池化把它砍到 32。</p>
+    </div>
+  </details>
+</div>
+
+<div class="intuition">
+  <span class="tag-label">串联计算不翻车的三条纪律</span>
+  <p>① <strong>一层一行,绝不心算跳步</strong>——上一层输出照抄进下一层输入。<br>
+  ② <strong>先认"尺寸变不变"</strong>:卷积配 <code>p=(F−1)/2</code> 就保尺寸,池化(s=2)必减半,stride&gt;1 的卷积也会缩。<br>
+  ③ <strong>+1 永远最后做,除不尽向下取整</strong>——这两处是丢分重灾区。</p>
+</div>
+</section>
+
 <div class="nextstep">
   <strong>全课完 →</strong> 12 讲微课到此收官——从像素、色彩、音频、压缩编码,一路到检索与 CNN。接下来别再单点练了,去做<strong>整卷自测</strong>:先用 <a href="../../exam-review/past-exams.html">真题与考点</a> 核对每类计算题的老师口径,再上 <a href="../../exam-review/mock-exam.html">模拟卷</a> 掐表实战一遍。祝你稳过这 100 分。
 </div>
