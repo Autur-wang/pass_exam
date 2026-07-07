@@ -178,6 +178,77 @@ footer { max-width: 900px; margin: var(--space-8) auto var(--space-6); padding: 
   </div>
   <div class="figure-cap"><b>相关/检索四象限。</b>左圈是系统"检索到的",右圈是数据库里"真正相关的",交叠部分才是命中(<b>TP</b>)。<b>Precision</b> 拿交叠去除以整个左圈——你捞上来的里有几成是真鱼;<b>Recall</b> 拿交叠去除以整个右圈——池子里的真鱼你捞上来几成。左圈里非交叠的是误检(FP),右圈里非交叠的是漏检(FN),两圈之外全是 TN。<b>边界:</b>把左圈撑大(多返回结果)Recall 涨但 Precision 常跌,这正是二者的张力。</div>
 </div>
+
+<h3>另一种画法:混淆矩阵(Confusion Matrix)</h3>
+<p>上面的两圈图强调"集合交叠";在分类问题里,更常见的是把同样的四个量摆成一张 <strong>2×2 混淆矩阵</strong>——<strong>行</strong>是系统的<strong>预测</strong>(Predicted 1 / 0),<strong>列</strong>是<strong>真实标签</strong>(Actual 1 / 0)。以 Andrew Ng 讲的"罕见病检测"为例(y=1 表示患病,正是我们想检出的稀有类):</p>
+
+<div class="figure">
+  <div class="figure-body">
+    <svg class="fig-svg" style="max-width:460px" viewBox="0 0 460 344" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="2x2 混淆矩阵:TP15 FP5 FN10 TN70,列和25与75">
+      <!-- 顶部标题 · 真实标签 -->
+      <text x="250" y="30" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#7c2233">真实标签 · Actual Class</text>
+      <text x="200" y="68" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="700" fill="#1a1816">1</text>
+      <text x="300" y="68" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="700" fill="#1a1816">0</text>
+      <!-- 左侧标题 · 预测(竖排) -->
+      <text x="34" y="165" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#7c2233" transform="rotate(-90 34 165)">预测 · Predicted Class</text>
+      <text x="128" y="128" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="700" fill="#1a1816">1</text>
+      <text x="128" y="213" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="700" fill="#1a1816">0</text>
+      <!-- 四个格子 -->
+      <rect x="150" y="80"  width="100" height="85" fill="#4a6e3a" fill-opacity="0.22"/>
+      <rect x="250" y="80"  width="100" height="85" fill="#7c2233" fill-opacity="0.16"/>
+      <rect x="150" y="165" width="100" height="85" fill="#c19a3e" fill-opacity="0.26"/>
+      <rect x="250" y="165" width="100" height="85" fill="#7a7268" fill-opacity="0.13"/>
+      <!-- 网格线 -->
+      <rect x="150" y="80" width="200" height="170" fill="none" stroke="#1a1816" stroke-width="1.6"/>
+      <line x1="250" y1="80" x2="250" y2="250" stroke="#1a1816" stroke-width="1.2"/>
+      <line x1="150" y1="165" x2="350" y2="165" stroke="#1a1816" stroke-width="1.2"/>
+      <!-- 格子文字 -->
+      <text x="200" y="112" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#3d5c30">真阳性 TP</text>
+      <text x="200" y="140" text-anchor="middle" font-family="sans-serif" font-size="21" font-weight="700" fill="#3d5c30">15</text>
+      <text x="300" y="112" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#7c2233">假阳性 FP</text>
+      <text x="300" y="140" text-anchor="middle" font-family="sans-serif" font-size="21" font-weight="700" fill="#7c2233">5</text>
+      <text x="200" y="197" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#8a6a1c">假阴性 FN</text>
+      <text x="200" y="225" text-anchor="middle" font-family="sans-serif" font-size="21" font-weight="700" fill="#8a6a1c">10</text>
+      <text x="300" y="197" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#4a4540">真阴性 TN</text>
+      <text x="300" y="225" text-anchor="middle" font-family="sans-serif" font-size="21" font-weight="700" fill="#4a4540">70</text>
+      <!-- Precision = 第一行(虚线框) -->
+      <rect x="145" y="75" width="210" height="95" fill="none" stroke="#7c2233" stroke-width="1.6" stroke-dasharray="5 3"/>
+      <text x="366" y="112" text-anchor="start" font-family="sans-serif" font-size="12" font-weight="700" fill="#7c2233">Precision</text>
+      <text x="366" y="128" text-anchor="start" font-family="sans-serif" font-size="11" fill="#7c2233">分母=本行和</text>
+      <text x="366" y="143" text-anchor="start" font-family="sans-serif" font-size="11" fill="#7c2233">=15+5=20</text>
+      <!-- Recall = 第一列(虚线框) -->
+      <rect x="153" y="83" width="94" height="164" fill="none" stroke="#4a6e3a" stroke-width="1.6" stroke-dasharray="5 3"/>
+      <!-- 列和箭头 -->
+      <line x1="200" y1="254" x2="200" y2="280" stroke="#4a4540" stroke-width="1.3"/>
+      <polygon points="195,276 205,276 200,285" fill="#4a4540"/>
+      <line x1="300" y1="254" x2="300" y2="280" stroke="#4a4540" stroke-width="1.3"/>
+      <polygon points="295,276 305,276 300,285" fill="#4a4540"/>
+      <text x="200" y="305" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#4a6e3a">25</text>
+      <text x="300" y="305" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#4a4540">75</text>
+      <text x="200" y="326" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#4a6e3a">Recall 分母(真实为1)</text>
+      <text x="300" y="326" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#7a7268">真实为0总数</text>
+    </svg>
+  </div>
+  <div class="figure-cap"><b>混淆矩阵读法。</b>行=系统<b>预测</b>,列=<b>真实</b>标签。对角线(<b>TP、TN</b>)是判对,反对角线(<b>FP、FN</b>)是判错。三个量都以 TP=15 为分子:<b>红色虚线框(第一行)</b>是所有"预测为患病"的人,和为 20 → Precision=15/20;<b>绿色虚线框(第一列)</b>是所有"真实患病"的人,和为 25 → Recall=15/25。<b>Precision 与 Recall 唯一的区别,就是分母朝行还是朝列。</b></div>
+</div>
+
+<p>四个格子对号入座(以"检出患病"为正类):<strong>TP</strong> 真的有病、也判有病(命中);<strong>FP</strong> 没病却判有病(虚惊/误报);<strong>FN</strong> 有病却判没病(漏诊,最危险);<strong>TN</strong> 没病也判没病(正确排除)。它和检索的对应关系是:"预测为 1 / 判为阳性"就是<strong>检出的结果</strong>(维恩图左圈),"真实为 1"就是<strong>真正相关/真正患病</strong>(右圈)——两种画法说的是同一件事。</p>
+
+<div class="worked">
+  <div class="worked-head">从混淆矩阵读出 Precision 与 Recall</div>
+  <div class="worked-body">
+    <ol>
+      <li><strong>Precision(查准率):</strong>在所有<strong>"被判为患病"</strong>的人里,真患病的比例——只看矩阵<strong>第一行</strong>(预测=1)。 <code>Precision = TP/(TP+FP) = 15/(15+5) = 15/20 = 0.75</code>。每 100 个被判"有病"的人里,75 个是真的。</li>
+      <li><strong>Recall(查全率):</strong>在所有<strong>"真的患病"</strong>的人里,被成功查出的比例——只看矩阵<strong>第一列</strong>(真实=1)。 <code>Recall = TP/(TP+FN) = 15/(15+10) = 15/25 = 0.60</code>。真患病的 25 人里查出 15 人,还漏了 10 人(FN)。</li>
+    </ol>
+    <div class="result">同一个 <strong>TP=15</strong>,除以<strong>第一行之和(20)</strong>得 Precision=0.75,除以<strong>第一列之和(25)</strong>得 Recall=0.60。<strong>分母的方向不同,是这两个指标的全部区别。</strong></div>
+  </div>
+</div>
+
+<div class="intuition">
+  <span class="tag-label">为什么稀有类不能只看准确率</span>
+  <p>Ng 的标题特意写着"y=1 是想检出的<strong>稀有类</strong>"。这张表里患病只占 25/100。若模型偷懒<strong>把所有人都判成"没病"</strong>,它的准确率(Accuracy)=(TP+TN)/总数 仍高达 (0+75)/100 = <strong>75%</strong>,看着很美——可它的 <strong>Recall=0/25=0</strong>,一个病人都没查出来。这正是<strong>准确率在类别不均衡时会骗人</strong>、而必须用 Precision/Recall(以及检索里的 AP/mAP)的根本原因。</p>
+</div>
 </section>
 
 <section>
