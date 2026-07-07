@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>期末摸底卷 · 定位薄弱点 · 100 分</title>
+<style>
+:root {
+  --paper: #f5efe4;
+  --paper-soft: #ebe3d3;
+  --paper-deep: #ddd2bb;
+  --ink: #1a1816;
+  --ink-soft: #4a4540;
+  --ink-mute: #7a7268;
+  --accent: #7c2233;
+  --accent-soft: #a14958;
+  --highlight: #c19a3e;
+  --success: #4a6e3a;
+  --rule: #c9bda5;
+  --serif: Georgia, "Times New Roman", "Source Han Serif SC", "Songti SC", "STSong", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  --text-sm: 14px;
+  --text-base: 17px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 44px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --measure: 72ch;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--serif); font-size: var(--text-base); line-height: 1.65;
+  text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
+}
+.site-header { border-bottom: 1px solid var(--ink); background: var(--paper); padding: var(--space-5) var(--space-6) var(--space-3); }
+.masthead { max-width: 1080px; margin: 0 auto; text-align: center; padding-bottom: var(--space-3); border-bottom: 1px solid var(--rule); }
+.masthead-title { font-family: var(--serif); font-size: var(--text-2xl); font-weight: 700; letter-spacing: 0.04em; margin-bottom: var(--space-1); }
+.masthead-sub { font-family: var(--serif); font-style: italic; font-size: var(--text-sm); color: var(--ink-soft); letter-spacing: 0.08em; text-transform: uppercase; }
+.primary-nav { max-width: 1080px; margin: var(--space-3) auto 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); justify-content: center; font-family: var(--sans); font-size: var(--text-sm); }
+.primary-nav a { color: var(--ink); text-decoration: none; padding: 2px 6px; border-bottom: 1px solid transparent; transition: all 0.15s ease; }
+.primary-nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.primary-nav a.active { color: var(--accent); font-weight: 700; }
+.nav-divider { color: var(--ink-mute); user-select: none; }
+main { max-width: 1080px; margin: var(--space-7) auto; padding: 0 var(--space-6); }
+article { max-width: var(--measure); margin: 0 auto; }
+h1.title { font-size: var(--text-3xl); font-weight: 700; margin: 0 0 var(--space-3); line-height: 1.15; letter-spacing: 0.02em; }
+.lede { font-size: var(--text-lg); font-style: italic; color: var(--ink-soft); margin-bottom: var(--space-6); padding-bottom: var(--space-4); border-bottom: 1px solid var(--rule); }
+h2 { font-size: var(--text-2xl); margin: var(--space-7) 0 var(--space-4); padding-bottom: var(--space-2); border-bottom: 2px solid var(--ink); letter-spacing: 0.02em; clear: both; }
+h2 .num { display: inline-block; font-size: 0.65em; vertical-align: super; color: var(--accent); margin-right: var(--space-3); }
+h3 { font-size: var(--text-xl); margin: var(--space-6) 0 var(--space-3); color: var(--ink); font-weight: 700; }
+h4 { font-size: var(--text-lg); margin: var(--space-5) 0 var(--space-2); font-weight: 700; }
+p { margin: var(--space-3) 0; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent-soft); }
+a:hover { border-bottom-style: solid; }
+ul, ol { padding-left: var(--space-5); margin: var(--space-3) 0; }
+li { margin: var(--space-1) 0; }
+strong { font-weight: 700; color: var(--ink); }
+em { font-style: italic; }
+code { font-family: var(--mono); font-size: 0.92em; background: var(--paper-soft); padding: 1px 5px; border-radius: 3px; }
+pre { font-family: var(--mono); font-size: 0.88em; background: var(--paper-soft); border-left: 3px solid var(--accent); padding: var(--space-3) var(--space-4); overflow-x: auto; margin: var(--space-4) 0; line-height: 1.5; }
+table { width: 100%; border-collapse: collapse; margin: var(--space-4) 0; font-size: 0.94em; }
+th, td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 700; background: var(--paper-soft); border-bottom: 2px solid var(--ink); font-family: var(--sans); font-size: var(--text-sm); letter-spacing: 0.04em; text-transform: uppercase; }
+tr:last-child td { border-bottom: none; }
+.tag { display: inline-block; font-family: var(--sans); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 8px; border-radius: 2px; margin-left: var(--space-2); vertical-align: middle; font-weight: 700; }
+.tag-high { background: var(--accent); color: var(--paper); }
+.tag-mid { background: var(--highlight); color: var(--paper); }
+.tag-low { background: var(--ink-mute); color: var(--paper); }
+.exam-point { background: var(--paper-soft); border-left: 4px solid var(--accent); padding: var(--space-4) var(--space-5); margin: var(--space-4) 0; position: relative; }
+.exam-point-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-2); font-family: var(--sans); font-size: var(--text-sm); }
+.exam-point-id { color: var(--accent); font-weight: 700; letter-spacing: 0.04em; }
+.exam-point h4 { margin-top: 0; margin-bottom: var(--space-2); font-size: var(--text-lg); }
+.exam-point dl { display: grid; grid-template-columns: 90px 1fr; gap: var(--space-1) var(--space-3); margin: var(--space-2) 0; font-size: 0.94em; }
+.exam-point dt { font-family: var(--sans); font-weight: 700; font-size: var(--text-sm); color: var(--accent); }
+.exam-point dd { margin: 0; }
+.exercise { background: var(--paper); border: 1px solid var(--rule); margin: var(--space-4) 0; }
+.exercise-qid { font-weight: 700; color: var(--accent); margin-right: var(--space-3); font-family: var(--sans); }
+.exercise-type { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); background: var(--paper); padding: 1px 6px; border-radius: 2px; font-family: var(--sans); }
+.exercise-stem { padding: var(--space-4) var(--space-4) 0; font-size: var(--text-base); }
+.exercise-options { list-style: upper-alpha; padding-left: var(--space-6); margin: var(--space-3) var(--space-4); }
+.exercise-toggle { margin: var(--space-3) var(--space-4) var(--space-4); padding-top: var(--space-3); border-top: 1px dashed var(--rule); }
+.exercise-toggle summary { cursor: pointer; font-family: var(--sans); font-size: var(--text-sm); color: var(--accent); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; list-style: none; padding: var(--space-2) 0; }
+.exercise-toggle summary::-webkit-details-marker { display: none; }
+.exercise-toggle summary::before { content: '▸ '; display: inline-block; margin-right: 4px; }
+.exercise-toggle[open] summary::before { content: '▾ '; }
+.exercise-answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
+.exercise-answer strong { color: var(--success); font-family: var(--sans); font-size: var(--text-sm); letter-spacing: 0.04em; text-transform: uppercase; display: block; margin-bottom: var(--space-1); }
+.mastery { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-soft); user-select: none; }
+.mastery input { cursor: pointer; }
+.mastery.checked { color: var(--success); }
+.cheat-card { background: var(--paper); border: 2px solid var(--ink); padding: var(--space-5); margin: var(--space-5) 0; break-inside: avoid; }
+.cheat-card h3 { margin-top: 0; border-bottom: 2px solid var(--ink); padding-bottom: var(--space-2); font-family: var(--serif); letter-spacing: 0.04em; text-transform: uppercase; font-size: var(--text-lg); }
+.cheat-card table { font-size: 0.9em; }
+article > p:first-of-type::first-letter { font-size: 3.2em; float: left; line-height: 0.9; margin: 0.05em var(--space-3) 0 0; font-weight: 700; color: var(--accent); }
+footer { max-width: 1080px; margin: var(--space-8) auto var(--space-6); padding: var(--space-5) var(--space-6); border-top: 2px solid var(--ink); text-align: center; font-family: var(--serif); font-style: italic; color: var(--ink-soft); font-size: var(--text-sm); }
+footer .meta { font-family: var(--sans); font-style: normal; letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; color: var(--ink-mute); margin-top: var(--space-3); }
+@media (max-width: 720px) {
+  :root { --text-3xl: 32px; --text-2xl: 24px; --text-xl: 20px; }
+  main { padding: 0 var(--space-4); margin: var(--space-5) auto; }
+  .primary-nav { font-size: 12px; gap: var(--space-2); }
+  .exam-point dl { grid-template-columns: 1fr; }
+  article > p:first-of-type::first-letter { font-size: 2.6em; }
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="masthead">
+    <div class="masthead-title">多媒体系统导论 · 期末冲刺</div>
+    <div class="masthead-sub">深圳大学 · 方山城 · 2026 春 · 第二讲至第十二讲</div>
+  </div>
+  <nav class="primary-nav">
+    <a href="index.html">主页</a>
+    <span class="nav-divider">·</span>
+    <a href="lectures/L02-L03-图像数据与颜色.html">L02-03</a>
+    <a href="lectures/L04-L05-视频与音频基础.html">L04-05</a>
+    <a href="lectures/L06-L07-压缩算法.html">L06-07</a>
+    <a href="lectures/L08-L10-压缩标准与视频压缩.html">L08-10</a>
+    <a href="lectures/L11-L12-检索与深度学习.html">L11-12</a>
+    <span class="nav-divider">·</span>
+    <a href="cheat-sheet.html">速查表</a>
+    <a href="mock-exam.html">模拟卷</a>
+    <a href="diagnostic-exam.html" class="active">摸底卷</a>
+    <a href="mock-exam-A.html">模拟卷A</a>
+    <a href="mock-exam-B.html">模拟卷B</a>
+    <a href="error-list.html">易错清单</a>
+    <a href="sprint-plan.html">冲刺清单</a>
+    <a href="formulas.html">公式手册</a>
+    <a href="glossary.html">术语词典</a>
+  </nav>
+</header>
+
+<main>
+<article>
+
+<h1 class="title">期末摸底卷 · 定位薄弱点 · 100 分</h1>
+<p class="lede">广覆盖 L01–L12 / 每题标注所属讲次 / 答错哪题就回看哪一讲 / 60 分钟</p>
+<p><strong>用法：</strong>本卷用于<strong>开考前摸底</strong>——题目短、覆盖全，重在暴露知识盲区。做完对答案后，把答错题对应的「涉及 Lxx」记下来，优先回看那几讲的微课。</p>
+<section>
+<h2><span class="num">I.</span>一、概念速判（单选，每题 2 分，共 30 分）</h2>
+<div class="exercise" data-mastery="dg-q1">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q1</span><span class="exercise-type">单选</span> 多媒体的四大基本特征是？</p>
+<ul class="exercise-options"><li>A. 多样性、集成性、交互性、实时性</li><li>B. 高清、彩色、立体、无损</li><li>C. 文本、图像、音频、视频</li><li>D. 采样、量化、编码、传输</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>A
+<strong>解析</strong>注意区分「特征」与「媒体类型」——C 说的是媒体类型，D 是数字化流程。
+<strong>涉及</strong>L01
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q2">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q2</span><span class="exercise-type">单选</span> 线性多媒体与非线性多媒体的关键区别是？</p>
+<ul class="exercise-options"><li>A. 是否彩色</li><li>B. 用户能否交互式改变浏览路径</li><li>C. 是否压缩</li><li>D. 是否有声音</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>非线性=可交互跳转（如超媒体/网页）；线性=固定顺序播放（如录像带）。
+<strong>涉及</strong>L01
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q3">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q3</span><span class="exercise-type">单选</span> 一个像素用 24 bit 表示 RGB，则每通道位深为？</p>
+<ul class="exercise-options"><li>A. 6 bit</li><li>B. 8 bit</li><li>C. 12 bit</li><li>D. 24 bit</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>24 / 3 = 8 bit/通道，每通道 256 级。
+<strong>涉及</strong>L02
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q4">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q4</span><span class="exercise-type">单选</span> 位平面（bit-plane）指的是？</p>
+<ul class="exercise-options"><li>A. 图像的一行像素</li><li>B. 把所有像素同一比特位抽出组成的二值图</li><li>C. 调色板</li><li>D. 直方图</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>8-bit 图有 8 个位平面，最高位平面含最主要的结构信息。
+<strong>涉及</strong>L02
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q5">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q5</span><span class="exercise-type">单选</span> 直方图均衡化的作用是？</p>
+<ul class="exercise-options"><li>A. 压缩图像</li><li>B. 增强对比度、拉开灰度分布</li><li>C. 去噪</li><li>D. 旋转图像</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>通过灰度映射使直方图更均匀，从而提升对比度。
+<strong>涉及</strong>L02
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q6">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q6</span><span class="exercise-type">单选</span> 抖动（dithering）技术用于？</p>
+<ul class="exercise-options"><li>A. 提高分辨率</li><li>B. 用少量颜色的空间混合模拟更多色/灰度</li><li>C. 无损压缩</li><li>D. 边缘检测</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>如误差扩散，用二值点的空间分布在视觉上模拟中间色调。
+<strong>涉及</strong>L02
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q7">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q7</span><span class="exercise-type">单选</span> CIE-XYZ 颜色空间的特点是？</p>
+<ul class="exercise-options"><li>A. 与设备相关</li><li>B. 设备无关、覆盖全部可见色</li><li>C. 只表示灰度</li><li>D. 等同 RGB</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>XYZ 是设备无关的参考色空间，RGB/CMYK 都可映射到它。
+<strong>涉及</strong>L03
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q8">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q8</span><span class="exercise-type">单选</span> HSV 颜色空间的三个分量是？</p>
+<ul class="exercise-options"><li>A. 红、绿、蓝</li><li>B. 色相、饱和度、明度</li><li>C. 亮度、蓝色差、红色差</li><li>D. 青、品红、黄</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>Hue / Saturation / Value，更贴合人对颜色的直觉描述。
+<strong>涉及</strong>L03
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q9">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q9</span><span class="exercise-type">单选</span> 数字音频「采样 → 量化 → 编码」中，量化决定的是？</p>
+<ul class="exercise-options"><li>A. 时间分辨率</li><li>B. 幅度分辨率（位深）</li><li>C. 声道数</li><li>D. 文件格式</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>采样决定时间轴密度，量化决定幅度精度（如 16 bit）。
+<strong>涉及</strong>L05
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q10">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q10</span><span class="exercise-type">单选</span> DPCM（差分脉冲编码）相比 PCM 的优点是？</p>
+<ul class="exercise-options"><li>A. 无损且数据更大</li><li>B. 编码相邻样本的差值，差值动态范围小、更省比特</li><li>C. 提高采样率</li><li>D. 增加声道数</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>语音/图像相邻样本相关性强，差值集中在 0 附近，熵更低。
+<strong>涉及</strong>L05/L06
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q11">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q11</span><span class="exercise-type">单选</span> 游程编码（RLC）最适合哪类数据？</p>
+<ul class="exercise-options"><li>A. 随机噪声</li><li>B. 含大量连续重复值的数据（如量化后的 AC 系数）</li><li>C. 加密数据</li><li>D. 已压缩数据</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>RLC 把「连续相同值」记为 (值, 长度)，重复越多越省。
+<strong>涉及</strong>L06
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q12">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q12</span><span class="exercise-type">单选</span> Huffman 编码属于？</p>
+<ul class="exercise-options"><li>A. 变换编码</li><li>B. 变长前缀熵编码</li><li>C. 有损编码</li><li>D. 字典编码</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>按概率赋变长码、满足前缀性质、可无损还原、码长逼近熵。
+<strong>涉及</strong>L06
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q13">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q13</span><span class="exercise-type">单选</span> LZW 编码属于？</p>
+<ul class="exercise-options"><li>A. 基于字典的编码</li><li>B. 变换编码</li><li>C. 预测编码</li><li>D. 有损编码</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>A
+<strong>解析</strong>LZW 动态建字典，用索引替代重复串，无需先验概率。
+<strong>涉及</strong>L06
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q14">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q14</span><span class="exercise-type">单选</span> 率失真曲线 R(D) 上，D=0 的点对应？</p>
+<ul class="exercise-options"><li>A. 有损压缩极限</li><li>B. 无损压缩，R = 信源熵</li><li>C. 不存在</li><li>D. 码率为 0</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>零失真所需的最小码率 = 熵，即无损压缩的极限。
+<strong>涉及</strong>L07
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-q15">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q15</span><span class="exercise-type">单选</span> JPEG 中不可逆（产生损失）的步骤是？</p>
+<ul class="exercise-options"><li>A. Zig-zag 扫描</li><li>B. DCT 变换</li><li>C. 量化</li><li>D. Huffman 编码</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>C
+<strong>解析</strong>DCT / zigzag / Huffman 均可逆，量化是唯一丢信息的环节。
+<strong>涉及</strong>L08
+</div>
+</details>
+</div>
+</section>
+
+<section>
+<h2><span class="num">II.</span>二、快速计算（每题 5 分，共 40 分）</h2>
+<div class="exercise" data-mastery="dg-c1">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C1</span><span class="exercise-type">计算题</span> 一幅 1024×768 的 24-bit RGB 图像，未压缩大小是多少 MB？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>解答</strong>1024 × 768 × 3 B = 2,359,296 B = 2,359,296 / 1024² ≈ <b>2.25 MB</b>。
+<strong>涉及</strong>L02
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-c2">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C2</span><span class="exercise-type">计算题</span> 24-bit RGB 转 YCbCr 4:2:0 后，平均每像素多少字节？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>解答</strong>每 2×2 块 = 4×Y + 1×Cb + 1×Cr = 6 B，÷ 4 = <b>1.5 B/px</b>（较 4:4:4 的 3 B/px 省一半）。
+<strong>涉及</strong>L04
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-c3">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C3</span><span class="exercise-type">计算题</span> 某声音最高频率 20 kHz，按奈奎斯特定理，最低采样率应为多少？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>解答</strong>f<sub>s</sub> ≥ 2 × f<sub>max</sub> = 2 × 20 = <b>40 kHz</b>。
+<strong>涉及</strong>L05
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-c4">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C4</span><span class="exercise-type">计算题</span> 信源符号概率为 {1/2, 1/4, 1/8, 1/8}，求信息熵 H。</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>解答</strong>H = −Σ p·log₂p = ½·1 + ¼·2 + ⅛·3 + ⅛·3 = 0.5 + 0.5 + 0.375 + 0.375 = <b>1.75 bit/符号</b>。
+<strong>涉及</strong>L06
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-c5">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C5</span><span class="exercise-type">计算题</span> 一幅 8-bit 灰度图压缩后 MSE = 100，求 PSNR（dB）。</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>解答</strong>PSNR = 10·log₁₀(255²/MSE) = 10·log₁₀(65025/100) = 10·log₁₀(650.25) ≈ <b>28.13 dB</b>。
+<strong>涉及</strong>L08
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-c6">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C6</span><span class="exercise-type">计算题</span> 对 32×32 输入用 5×5 卷积核、stride=1、padding=2，输出特征图边长是多少？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>解答</strong>(W − F + 2P)/S + 1 = (32 − 5 + 4)/1 + 1 = <b>32</b>（same 卷积，尺寸不变）。
+<strong>涉及</strong>L12
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-c7">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C7</span><span class="exercise-type">计算题</span> 8-bit 均匀量化的理论信噪比 SQNR 约为多少 dB？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>解答</strong>SQNR ≈ 6.02·n + 1.76 = 6.02×8 + 1.76 ≈ <b>49.9 dB</b>（每加 1 bit 约 +6 dB）。
+<strong>涉及</strong>L05
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-c8">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C8</span><span class="exercise-type">计算题</span> 一段 640×480、30 fps、时长 10 s、4:2:0、8-bit 的视频，未压缩数据量是多少 MB？多少 Mb？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>解答</strong>每帧 640×480×1.5 B = 460,800 B；×30×10 = 138,240,000 B = / 1024² ≈ <b>131.84 MB</b>；×8 / 10⁶ = <b>1105.92 Mb</b>（注意 MB 与 Mb 差 8 倍）。
+<strong>涉及</strong>L02/L04
+</div>
+</details>
+</div>
+</section>
+
+<section>
+<h2><span class="num">III.</span>三、要点简答（每题 5 分，共 30 分）</h2>
+<div class="exercise" data-mastery="dg-s1">
+<div class="exercise-stem">
+<p><span class="exercise-qid">S1</span><span class="exercise-type">简答</span> 为什么彩色图像常先转 YCbCr 再压缩，而不直接压 RGB？（写 2 点）</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>要点</strong>① 人眼对亮度敏感、对色度不敏感 → 色度可大幅降采样；② YCbCr 去相关、能量集中于 Y，比高度相关的 RGB 更利于压缩（且兼容黑白设备）。
+<strong>涉及</strong>L03/L04
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-s2">
+<div class="exercise-stem">
+<p><span class="exercise-qid">S2</span><span class="exercise-type">简答</span> 均匀量化与非均匀量化的区别？各适合什么信号？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>要点</strong>均匀量化区间等宽、实现简单，适合分布均匀的信号；非均匀量化小幅度处密、大幅度处疏（μ 律/A 律），在大动态范围内信噪比更均衡，适合语音等能量集中于低幅的信号。
+<strong>涉及</strong>L07
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-s3">
+<div class="exercise-stem">
+<p><span class="exercise-qid">S3</span><span class="exercise-type">简答</span> JPEG 编码的 5 个主要步骤是？哪一步不可逆？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>要点</strong>颜色转换/降采样 → 8×8 分块 DCT → 量化 → Zig-zag + DC-DPCM/AC-RLC → 熵编码（Huffman）。其中<b>量化</b>不可逆（丢信息）。
+<strong>涉及</strong>L08
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-s4">
+<div class="exercise-stem">
+<p><span class="exercise-qid">S4</span><span class="exercise-type">简答</span> 为什么 DCT 变换编码要「先变换再编码」？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>要点</strong>DCT 是线性可逆变换，把能量集中到少数低频系数、去相关，使随后的量化 + 熵编码能高效压缩；变换本身不丢信息。
+<strong>涉及</strong>L07
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-s5">
+<div class="exercise-stem">
+<p><span class="exercise-qid">S5</span><span class="exercise-type">简答</span> 简述 I 帧、P 帧、B 帧的区别（各一句）。</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>要点</strong>I 帧帧内编码、可独立解码、压缩比最低；P 帧参考前一帧做帧间预测；B 帧参考前后帧做双向预测、压缩比最高。
+<strong>涉及</strong>L10
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="dg-s6">
+<div class="exercise-stem">
+<p><span class="exercise-qid">S6</span><span class="exercise-type">简答</span> 图像检索里 Precision 与 Recall 分别衡量什么？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>要点</strong>Precision = 检索结果中相关的比例（查准）；Recall = 数据库全部相关项中被检出的比例（查全）。二者常此消彼长。
+<strong>涉及</strong>L12
+</div>
+</details>
+</div>
+</section>
+
+</article>
+</main>
+
+<footer>
+<p>期末摸底卷 · 100 分 · 29 道题</p>
+<p class="meta">3 大题型 · 单选 15 + 计算 8 + 简答 6 · 60 分钟 · 用于定位薄弱讲次</p>
+</footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const states = JSON.parse(localStorage.getItem('mastery') || '{}');
+  document.querySelectorAll('[data-mastery]').forEach(el => {
+    const key = el.dataset.mastery;
+    const cb = el.querySelector('input[type=checkbox]');
+    const lbl = el.querySelector('.mastery');
+    if (states[key] && cb) {
+      cb.checked = true;
+      if (lbl) lbl.classList.add('checked');
+    }
+    if (cb) {
+      cb.addEventListener('change', () => {
+        states[key] = cb.checked;
+        localStorage.setItem('mastery', JSON.stringify(states));
+        if (lbl) lbl.classList.toggle('checked', cb.checked);
+      });
+    }
+  });
+});
+</script>
+
+</body>
+</html>

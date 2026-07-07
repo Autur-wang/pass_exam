@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模拟期末试卷 A · 100 分</title>
+<style>
+:root {
+  --paper: #f5efe4;
+  --paper-soft: #ebe3d3;
+  --paper-deep: #ddd2bb;
+  --ink: #1a1816;
+  --ink-soft: #4a4540;
+  --ink-mute: #7a7268;
+  --accent: #7c2233;
+  --accent-soft: #a14958;
+  --highlight: #c19a3e;
+  --success: #4a6e3a;
+  --rule: #c9bda5;
+  --serif: Georgia, "Times New Roman", "Source Han Serif SC", "Songti SC", "STSong", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  --text-sm: 14px;
+  --text-base: 17px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 44px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --measure: 72ch;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--serif); font-size: var(--text-base); line-height: 1.65;
+  text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
+}
+.site-header { border-bottom: 1px solid var(--ink); background: var(--paper); padding: var(--space-5) var(--space-6) var(--space-3); }
+.masthead { max-width: 1080px; margin: 0 auto; text-align: center; padding-bottom: var(--space-3); border-bottom: 1px solid var(--rule); }
+.masthead-title { font-family: var(--serif); font-size: var(--text-2xl); font-weight: 700; letter-spacing: 0.04em; margin-bottom: var(--space-1); }
+.masthead-sub { font-family: var(--serif); font-style: italic; font-size: var(--text-sm); color: var(--ink-soft); letter-spacing: 0.08em; text-transform: uppercase; }
+.primary-nav { max-width: 1080px; margin: var(--space-3) auto 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); justify-content: center; font-family: var(--sans); font-size: var(--text-sm); }
+.primary-nav a { color: var(--ink); text-decoration: none; padding: 2px 6px; border-bottom: 1px solid transparent; transition: all 0.15s ease; }
+.primary-nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.primary-nav a.active { color: var(--accent); font-weight: 700; }
+.nav-divider { color: var(--ink-mute); user-select: none; }
+main { max-width: 1080px; margin: var(--space-7) auto; padding: 0 var(--space-6); }
+article { max-width: var(--measure); margin: 0 auto; }
+h1.title { font-size: var(--text-3xl); font-weight: 700; margin: 0 0 var(--space-3); line-height: 1.15; letter-spacing: 0.02em; }
+.lede { font-size: var(--text-lg); font-style: italic; color: var(--ink-soft); margin-bottom: var(--space-6); padding-bottom: var(--space-4); border-bottom: 1px solid var(--rule); }
+h2 { font-size: var(--text-2xl); margin: var(--space-7) 0 var(--space-4); padding-bottom: var(--space-2); border-bottom: 2px solid var(--ink); letter-spacing: 0.02em; clear: both; }
+h2 .num { display: inline-block; font-size: 0.65em; vertical-align: super; color: var(--accent); margin-right: var(--space-3); }
+h3 { font-size: var(--text-xl); margin: var(--space-6) 0 var(--space-3); color: var(--ink); font-weight: 700; }
+h4 { font-size: var(--text-lg); margin: var(--space-5) 0 var(--space-2); font-weight: 700; }
+p { margin: var(--space-3) 0; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent-soft); }
+a:hover { border-bottom-style: solid; }
+ul, ol { padding-left: var(--space-5); margin: var(--space-3) 0; }
+li { margin: var(--space-1) 0; }
+strong { font-weight: 700; color: var(--ink); }
+em { font-style: italic; }
+code { font-family: var(--mono); font-size: 0.92em; background: var(--paper-soft); padding: 1px 5px; border-radius: 3px; }
+pre { font-family: var(--mono); font-size: 0.88em; background: var(--paper-soft); border-left: 3px solid var(--accent); padding: var(--space-3) var(--space-4); overflow-x: auto; margin: var(--space-4) 0; line-height: 1.5; }
+table { width: 100%; border-collapse: collapse; margin: var(--space-4) 0; font-size: 0.94em; }
+th, td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 700; background: var(--paper-soft); border-bottom: 2px solid var(--ink); font-family: var(--sans); font-size: var(--text-sm); letter-spacing: 0.04em; text-transform: uppercase; }
+tr:last-child td { border-bottom: none; }
+.tag { display: inline-block; font-family: var(--sans); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 8px; border-radius: 2px; margin-left: var(--space-2); vertical-align: middle; font-weight: 700; }
+.tag-high { background: var(--accent); color: var(--paper); }
+.tag-mid { background: var(--highlight); color: var(--paper); }
+.tag-low { background: var(--ink-mute); color: var(--paper); }
+.exam-point { background: var(--paper-soft); border-left: 4px solid var(--accent); padding: var(--space-4) var(--space-5); margin: var(--space-4) 0; position: relative; }
+.exam-point-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-2); font-family: var(--sans); font-size: var(--text-sm); }
+.exam-point-id { color: var(--accent); font-weight: 700; letter-spacing: 0.04em; }
+.exam-point h4 { margin-top: 0; margin-bottom: var(--space-2); font-size: var(--text-lg); }
+.exam-point dl { display: grid; grid-template-columns: 90px 1fr; gap: var(--space-1) var(--space-3); margin: var(--space-2) 0; font-size: 0.94em; }
+.exam-point dt { font-family: var(--sans); font-weight: 700; font-size: var(--text-sm); color: var(--accent); }
+.exam-point dd { margin: 0; }
+.exercise { background: var(--paper); border: 1px solid var(--rule); margin: var(--space-4) 0; }
+.exercise-qid { font-weight: 700; color: var(--accent); margin-right: var(--space-3); font-family: var(--sans); }
+.exercise-type { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); background: var(--paper); padding: 1px 6px; border-radius: 2px; font-family: var(--sans); }
+.exercise-stem { padding: var(--space-4) var(--space-4) 0; font-size: var(--text-base); }
+.exercise-options { list-style: upper-alpha; padding-left: var(--space-6); margin: var(--space-3) var(--space-4); }
+.exercise-toggle { margin: var(--space-3) var(--space-4) var(--space-4); padding-top: var(--space-3); border-top: 1px dashed var(--rule); }
+.exercise-toggle summary { cursor: pointer; font-family: var(--sans); font-size: var(--text-sm); color: var(--accent); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; list-style: none; padding: var(--space-2) 0; }
+.exercise-toggle summary::-webkit-details-marker { display: none; }
+.exercise-toggle summary::before { content: '▸ '; display: inline-block; margin-right: 4px; }
+.exercise-toggle[open] summary::before { content: '▾ '; }
+.exercise-answer { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper-soft); border-left: 3px solid var(--success); }
+.exercise-answer strong { color: var(--success); font-family: var(--sans); font-size: var(--text-sm); letter-spacing: 0.04em; text-transform: uppercase; display: block; margin-bottom: var(--space-1); }
+.mastery { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-family: var(--sans); font-size: var(--text-sm); color: var(--ink-soft); user-select: none; }
+.mastery input { cursor: pointer; }
+.mastery.checked { color: var(--success); }
+.cheat-card { background: var(--paper); border: 2px solid var(--ink); padding: var(--space-5); margin: var(--space-5) 0; break-inside: avoid; }
+.cheat-card h3 { margin-top: 0; border-bottom: 2px solid var(--ink); padding-bottom: var(--space-2); font-family: var(--serif); letter-spacing: 0.04em; text-transform: uppercase; font-size: var(--text-lg); }
+.cheat-card table { font-size: 0.9em; }
+article > p:first-of-type::first-letter { font-size: 3.2em; float: left; line-height: 0.9; margin: 0.05em var(--space-3) 0 0; font-weight: 700; color: var(--accent); }
+footer { max-width: 1080px; margin: var(--space-8) auto var(--space-6); padding: var(--space-5) var(--space-6); border-top: 2px solid var(--ink); text-align: center; font-family: var(--serif); font-style: italic; color: var(--ink-soft); font-size: var(--text-sm); }
+footer .meta { font-family: var(--sans); font-style: normal; letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; color: var(--ink-mute); margin-top: var(--space-3); }
+@media (max-width: 720px) {
+  :root { --text-3xl: 32px; --text-2xl: 24px; --text-xl: 20px; }
+  main { padding: 0 var(--space-4); margin: var(--space-5) auto; }
+  .primary-nav { font-size: 12px; gap: var(--space-2); }
+  .exam-point dl { grid-template-columns: 1fr; }
+  article > p:first-of-type::first-letter { font-size: 2.6em; }
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="masthead">
+    <div class="masthead-title">多媒体系统导论 · 期末冲刺</div>
+    <div class="masthead-sub">深圳大学 · 方山城 · 2026 春 · 第二讲至第十二讲</div>
+  </div>
+  <nav class="primary-nav">
+    <a href="index.html">主页</a>
+    <span class="nav-divider">·</span>
+    <a href="lectures/L02-L03-图像数据与颜色.html">L02-03</a>
+    <a href="lectures/L04-L05-视频与音频基础.html">L04-05</a>
+    <a href="lectures/L06-L07-压缩算法.html">L06-07</a>
+    <a href="lectures/L08-L10-压缩标准与视频压缩.html">L08-10</a>
+    <a href="lectures/L11-L12-检索与深度学习.html">L11-12</a>
+    <span class="nav-divider">·</span>
+    <a href="cheat-sheet.html">速查表</a>
+    <a href="mock-exam.html">模拟卷</a>
+    <a href="diagnostic-exam.html">摸底卷</a>
+    <a href="mock-exam-A.html" class="active">模拟卷A</a>
+    <a href="mock-exam-B.html">模拟卷B</a>
+    <a href="error-list.html">易错清单</a>
+    <a href="sprint-plan.html">冲刺清单</a>
+    <a href="formulas.html">公式手册</a>
+    <a href="glossary.html">术语词典</a>
+  </nav>
+</header>
+
+<main>
+<article>
+
+<h1 class="title">模拟期末试卷 A · 100 分</h1>
+<p class="lede">四大题型 / 严格照 2024 春真题结构 / 120 分钟 / 计算题占 60 分</p>
+<p><strong>题型分布严格照 2024 春真题：</strong>单选 10×2 = 20 分 · 简答 2×5 = 10 分 · 计算 4×15 = 60 分（JPEG / 运动补偿 / 算术编码 / 检索指标）· 综合论述 1×10 = 10 分。所有数值答案已用代码逐一验证。</p>
+<section>
+<h2><span class="num">I.</span>一、选择题（每题 2 分，共 20 分）</h2>
+<div class="exercise" data-mastery="mA-q1">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q1</span><span class="exercise-type">单选</span> 下列哪一项<strong>不属于</strong>多媒体的基本特征？</p>
+<ul class="exercise-options"><li>A. 多样性</li><li>B. 集成性</li><li>C. 不可压缩性</li><li>D. 交互性</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>C
+<strong>解析</strong>多媒体四大特征 = 多样性/集成性/交互性/实时性；「不可压缩」恰恰相反，多媒体数据高度可压缩。
+<strong>涉及</strong>L01
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-q2">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q2</span><span class="exercise-type">单选</span> 下列属于<strong>音频无损编码</strong>的是？</p>
+<ul class="exercise-options"><li>A. MP3</li><li>B. AAC</li><li>C. FLAC</li><li>D. Ogg Vorbis</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>C
+<strong>解析</strong>MP3/AAC/Vorbis 均为有损感知编码；FLAC（及 ALAC、游程/Huffman 类熵编码）可无损还原。
+<strong>涉及</strong>L05/L06
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-q3">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q3</span><span class="exercise-type">单选</span> 均匀标量量化中，被划分为等距区间的是？</p>
+<ul class="exercise-options"><li>A. 输出信号的幅度</li><li>B. 输入信号的动态范围</li><li>C. 采样时间轴</li><li>D. 量化误差</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>均匀量化把<b>输入信号的动态范围</b>切成等宽区间（step Δ 恒定），每区间映到一个重建电平。
+<strong>涉及</strong>L07
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-q4">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q4</span><span class="exercise-type">单选</span> 向量量化与标量量化的主要区别在于？</p>
+<ul class="exercise-options"><li>A. 向量量化一次量化一个样本</li><li>B. 向量量化把多个样本组成矢量整体查码本</li><li>C. 标量量化压缩率更高</li><li>D. 二者无本质区别</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>标量量化逐样本独立量化；向量量化把 k 个样本拼成矢量，在码本中找最近码字，利用样本间相关性，率失真更优。
+<strong>涉及</strong>L07
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-q5">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q5</span><span class="exercise-type">单选</span> JPEG2000 相比 JPEG 的主要优势来自？</p>
+<ul class="exercise-options"><li>A. 采用离散余弦变换 DCT</li><li>B. 采用离散小波变换 DWT</li><li>C. 采用算术编码替代 Huffman</li><li>D. 采用 4:2:0 采样</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>JPEG2000 用离散小波变换（DWT）替代 8×8 分块 DCT，无块效应、支持渐进/感兴趣区编码。
+<strong>涉及</strong>L08
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-q6">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q6</span><span class="exercise-type">单选</span> 2D 对数搜索（2D-log search）主要用于？</p>
+<ul class="exercise-options"><li>A. 图像直方图均衡</li><li>B. 视频运动估计中快速找最优运动矢量</li><li>C. Huffman 树构造</li><li>D. 颜色空间转换</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>2D 对数搜索是运动估计的快速搜索策略，用对数级步长逼近 MAD 最小的运动矢量，避免全搜索。
+<strong>涉及</strong>L09
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-q7">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q7</span><span class="exercise-type">单选</span> 数字音频的获取与处理，正确顺序是？</p>
+<ul class="exercise-options"><li>A. 量化 → 采样 → 编码</li><li>B. 采样 → 量化 → 编码</li><li>C. 编码 → 采样 → 量化</li><li>D. 采样 → 编码 → 量化</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>先按奈奎斯特采样（时间离散）→ 再量化（幅度离散）→ 最后编码（PCM/熵编码）。
+<strong>涉及</strong>L05
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-q8">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q8</span><span class="exercise-type">单选</span> 一段视频「大小 900 MB」，换算成比特是？</p>
+<ul class="exercise-options"><li>A. 900 Mb</li><li>B. 112.5 Mb</li><li>C. 7200 Mb</li><li>D. 7.2 Gb</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>D
+<strong>解析</strong>1 Byte = 8 bit，900 MB × 8 = 7200 Mb = 7.2 Gb。MB（大写 B = 字节）与 Mb（小写 b = 比特）差 8 倍，真题第 5 题的陷阱。
+<strong>涉及</strong>L02
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-q9">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q9</span><span class="exercise-type">单选</span> 无损图像压缩中，若像素预测器取 X̂ = A（左邻像素），则它属于？</p>
+<ul class="exercise-options"><li>A. 二维预测</li><li>B. 一维水平预测</li><li>C. 中值预测（LOCO-I）</li><li>D. 无预测</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>B
+<strong>解析</strong>仅用左邻 A 做预测是一维水平预测；用 A、B（上）、C（左上）组合才是二维/中值预测。
+<strong>涉及</strong>L06
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-q10">
+<div class="exercise-stem">
+<p><span class="exercise-qid">Q10</span><span class="exercise-type">单选</span> 关于 Gamma 校正，正确的是？</p>
+<ul class="exercise-options"><li>A. 为补偿显示器非线性、使亮度感知均匀</li><li>B. 为压缩色度带宽</li><li>C. 为提高采样率</li><li>D. 为无损压缩</li></ul>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>答案</strong>A
+<strong>解析</strong>CRT/显示器亮度对电压呈幂律（γ≈2.2），编码端预乘 γ 校正，使还原亮度线性、更匹配人眼对暗部的敏感。
+<strong>涉及</strong>L03
+</div>
+</details>
+</div>
+</section>
+
+<section>
+<h2><span class="num">II.</span>二、简答题（每题 5 分，共 10 分）</h2>
+<div class="exercise" data-mastery="mA-s1">
+<div class="exercise-stem">
+<p><span class="exercise-qid">S1</span><span class="exercise-type">简答</span> 简述<strong>率失真理论</strong>（rate-distortion theory），并说明率失真曲线 R(D) 上点的含义。</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>要点</strong>① R(D) = 允许失真不超过 D 时编码所需的<b>最小比特率</b>，D(R) 是其反函数；② 曲线<b>单调递减、下凸</b>——码率越高失真越小，反之越大；③ D=0（无失真）时 R = 信源熵 H，对应<b>无损压缩极限</b>，D&gt;0 的点对应有损压缩；④ 曲线是理论下界，任何实际编码器只能工作在曲线上方或曲线上，越贴近越优。
+<strong>涉及</strong>L07
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-s2">
+<div class="exercise-stem">
+<p><span class="exercise-qid">S2</span><span class="exercise-type">简答</span> 图像检索中，如何计算图像间<strong>内容的相关性</strong>？</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>要点</strong>① 先提取<b>特征</b>：全局（颜色直方图、纹理、形状）或局部（SIFT/SURF 描述子）；② 把每幅图表示为<b>特征向量</b>，用距离/相似度度量接近程度（欧氏距离、余弦相似度、直方图相交），距离越小越相关；③ 存在<b>语义鸿沟</b>：低层特征相近未必语义相关，需靠标注的相关集（ground truth）评判；④ 相关性结果用于计算 Recall/Precision/AP/mAP。
+<strong>涉及</strong>L11/L12
+</div>
+</details>
+</div>
+</section>
+
+<section>
+<h2><span class="num">III.</span>三、计算题（每题 15 分，共 60 分）</h2>
+<div class="exercise" data-mastery="mA-c1">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C1</span><span class="exercise-type">计算题</span> 给定某 8×8 亮度块<strong>量化后</strong>的系数矩阵（只写非零，其余全 0）：</p>
+<pre>行,列从 0 计：
+(0,0)=16   (0,1)=0   (0,2)=-2
+(1,0)=-3   (1,1)=-1
+(2,1)=-1
+其余全部为 0</pre>
+<p>前一个块的 DC 系数 = 12。求：<br>(1) 写出 Zig-zag 扫描后的系数序列（到最后一个非零即可）；<br>(2) 对 DC 做 DPCM，写出本块 DC 的差分值；<br>(3) 对 AC 系数做游程编码 RLC，写出 (run, level) 对，以 EOB 结尾。</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>(1) Zig-zag 序列</strong>16, 0, −3, 0, −1, −2, 0, 0, −1, 0, …（其余全 0）
+<strong>(2) DC-DPCM 差分</strong>16 − 12 = <b>4</b>（真题问差分：本块 DC=16，前块 DC=12）
+<strong>(3) AC 游程编码</strong>(1,−3) (1,−1) (0,−2) (2,−1) EOB
+<strong>解析</strong>Zig-zag 去掉 DC 后的 AC 串为 0,−3,0,−1,−2,0,0,−1,0,…；跳 1 个 0 到 −3→(1,−3)；跳 1 个 0 到 −1→(1,−1)；紧接 −2→(0,−2)；跳 2 个 0 到 −1→(2,−1)；其后全 0→EOB。
+<strong>涉及</strong>L08
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-c2">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C2</span><span class="exercise-type">计算题</span> 当前帧一个 4×4 宏块 C（像素值）：</p>
+<pre>24 25 28 33
+21 22 25 30
+20 21 24 29
+21 22 25 30</pre>
+<p>参考帧搜索区 R（10×10，局部坐标 row/col = 0…9）：</p>
+<pre>        c0 c1 c2 c3 c4 c5 c6 c7 c8 c9
+r0:     61 52 45 40 37 36 37 40 45 52
+r1:     54 45 38 33 30 29 30 33 38 45
+r2:     49 40 33 28 25 24 25 28 33 40
+r3:     46 37 30 25 22 21 22 25 30 37
+r4:     45 36 29 24 21 20 21 24 29 36
+r5:     46 37 30 25 22 21 22 25 30 37
+r6:     49 40 33 28 25 24 25 28 33 40
+r7:     54 45 38 33 30 29 30 33 38 45
+r8:     61 52 45 40 37 36 37 40 45 52
+r9:     70 61 54 49 46 45 46 49 54 61</pre>
+<p>约定：MV=(dx,dy) 表示向右 dx、向下 dy 平移；<strong>MV=(0,0) 时</strong> C 与 R 的 rows3–6、cols3–6 子块对齐（搜索区中心）。MAD(dx,dy) = (1/N²)Σ|C(i,j) − 对应块(i,j)|，N=4，搜索范围 ±3。求：<br>(1) 最优运动矢量 MV 及对应 MAD；<br>(2) 用 2D 对数搜索求解：写出<strong>第一轮</strong>（step=2）检查的 5 个位置及 MAD、下一轮中心，并续算<strong>第二轮</strong>（step=1）直到收敛。</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>(1) 最优运动矢量</strong>MV = (dx=+2, dy=−1)，此处 C 与 R 的 rows2–5、cols5–8 子块完全重合，<b>MAD = 0</b>。
+<strong>(2) 第一轮</strong>（中心 MV(0,0)，step=2）：<table><thead><tr><th>MV(dx,dy)</th><th>(0,0)</th><th>(+2,0)</th><th>(−2,0)</th><th>(0,+2)</th><th>(0,−2)</th></tr></thead><tbody><tr><td>MAD</td><td>9/2=4.5</td><td><b>2</b></td><td>17/2=8.5</td><td>59/8≈7.375</td><td>17/4=4.25</td></tr></tbody></table>最小在 <b>MV(+2,0)，MAD=2</b> → 下一轮以 (+2,0) 为中心。
+<b>第二轮</b>（中心 MV(+2,0)，step=1）：<table><thead><tr><th>MV(dx,dy)</th><th>(+2,0)</th><th>(+3,0)</th><th>(+1,0)</th><th>(+2,+1)</th><th>(+2,−1)</th></tr></thead><tbody><tr><td>MAD</td><td>2</td><td>17/4=4.25</td><td>3</td><td>4</td><td><b>0</b></td></tr></tbody></table>最小在 <b>MV(+2,−1)，MAD=0</b> → 收敛，最优 MV = (+2,−1)。
+<b>画法</b>每轮以当前中心画「+」字，端点距中心 = 当前步长；标出各点 MAD、圈出最小者作下一轮中心，步长减半，直到最小值落在中心或步长=1 后收敛。
+<strong>涉及</strong>L09
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-c3">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C3</span><span class="exercise-type">计算题</span> 信源 4 符号，概率 P(A)=0.4, P(B)=0.2, P(C)=0.3, P($)=0.1（$ 为终止符）。按 A,B,C,$ 顺序累加得区间：</p>
+<pre>A → [0, 0.4)   B → [0.4, 0.6)   C → [0.6, 0.9)   $ → [0.9, 1.0)</pre>
+<p>(1) 对序列 <code>B A C $</code> 做算术编码，列出每步 low/high，给出最终区间，并求落在区间内的最短二进制小数作为码字；<br>(2) 已知某码字落在 (1) 的最终区间内，用<strong>同一张概率表</strong>解码前 4 个符号，验证还原为 <code>B A C $</code>。</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>(1) 编码</strong>逐步 new_low = low + range×R_low，new_high = low + range×R_high：<table><thead><tr><th>读入</th><th>low</th><th>high</th></tr></thead><tbody><tr><td>B</td><td>0.4</td><td>0.6</td></tr><tr><td>A</td><td>0.4</td><td>0.48</td></tr><tr><td>C</td><td>0.448</td><td>0.472</td></tr><tr><td>$</td><td>0.4696</td><td>0.472</td></tr></tbody></table>最终区间 <b>[0.4696, 0.472)</b>。最短二进制小数 <b>241/512 = 0.470703…</b>，即 <code>0.011110001</code>（9 位）落在区间内。
+<strong>(2) 解码</strong>取码值 v = 0.470703：① v∈[0.4,0.6)→<b>B</b>，缩到 [0.4,0.6)；② (v−0.4)/0.2 = 0.3535∈[0,0.4)→<b>A</b>，缩到 [0.4,0.48)；③ (v−0.4)/0.08 = 0.8838∈[0.6,0.9)→<b>C</b>，缩到 [0.448,0.472)；④ (v−0.448)/0.024 = 0.9459∈[0.9,1.0)→<b>$</b>，停。还原 = <code>B A C $</code> ✓
+<strong>涉及</strong>L06
+</div>
+</details>
+</div>
+
+<div class="exercise" data-mastery="mA-c4">
+<div class="exercise-stem">
+<p><span class="exercise-qid">C4</span><span class="exercise-type">计算题</span> 某系统对两个查询返回排序结果（✔ = 相关，✘ = 不相关），数据库中相关图像总数如下：</p>
+<pre>查询 Q1（相关总数=5）：  ✔ ✘ ✔ ✔ ✘ ✔
+查询 Q2（相关总数=4）：  ✘ ✔ ✔ ✘ ✔ ✘</pre>
+<p>(1) 对 Q1 列出每个位置的 Precision@k 与 Recall@k；<br>(2) 求 Q1、Q2 的 AP；(3) 求两查询的 mAP。（AP = 各命中位置 Precision 之和 ÷ 相关总数）</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>(1) Q1 逐位</strong><table><thead><tr><th>rank</th><th>命中</th><th>P@k</th><th>R@k</th></tr></thead><tbody><tr><td>1</td><td>✔</td><td>1.000</td><td>0.20</td></tr><tr><td>2</td><td>✘</td><td>0.500</td><td>0.20</td></tr><tr><td>3</td><td>✔</td><td>0.667</td><td>0.40</td></tr><tr><td>4</td><td>✔</td><td>0.750</td><td>0.60</td></tr><tr><td>5</td><td>✘</td><td>0.600</td><td>0.60</td></tr><tr><td>6</td><td>✔</td><td>0.667</td><td>0.80</td></tr></tbody></table><strong>(2) AP</strong>AP(Q1) = (1.000+0.667+0.750+0.667)/5 = 3.0833/5 = <b>0.6167</b>；AP(Q2)：命中在 rank 2,3,5，P = 0.500,0.667,0.600，AP = 1.7667/4 = <b>0.4417</b>。
+<strong>(3) mAP</strong>(0.6167 + 0.4417)/2 = <b>0.5292</b>
+<strong>解析</strong>分母用「相关总数」（漏检的相关项按 P=0 计入），这是 AP 的标准定义。
+<strong>涉及</strong>L12
+</div>
+</details>
+</div>
+</section>
+
+<section>
+<h2><span class="num">IV.</span>四、综合论述（10 分）</h2>
+<div class="exercise" data-mastery="mA-d1">
+<div class="exercise-stem">
+<p><span class="exercise-qid">D1</span><span class="exercise-type">综合论述</span> 围绕 <strong>YCbCr 与色度二次采样</strong>：<br>(1) 4:4:4 / 4:2:2 / 4:2:0 中哪种传输效率最高？<strong>定量</strong>说明；<br>(2) 4:2:0 如何发送数据、如何还原为 RGB？<br>(3) 传输中前 4 个像素的 Cb、Cr 全保留，Y 通道只保留了 Y0、Y1；已知 Y0=80、Y1=120，且第 5 个像素 Y4=200 已知，用线性插值重构 Y2、Y3。</p>
+</div>
+<details class="exercise-toggle">
+<summary>显示答案与解析</summary>
+<div class="exercise-answer">
+<strong>(1) 效率</strong><b>4:2:0 最高</b>。每 2×2=4 像素：4:4:4 存 4Y+4Cb+4Cr=12 采样；4:2:2 存 4Y+2Cb+2Cr=8；4:2:0 存 4Y+1Cb+1Cr=6。相对 4:4:4，4:2:0 只占 6/12 = <b>50%</b>（每像素 1.5 B vs 3 B），压缩最狠而人眼对色度不敏感、几乎无感损。
+<strong>(2) 发送与还原</strong>Y 逐像素全采样发送；Cb、Cr 每 2×2 块只发一个（左上或均值）。还原 RGB：先对缺失的 Cb/Cr 上采样/插值补回每像素，再逆变换 R=Y+1.402(Cr−128)，G=Y−0.344(Cb−128)−0.714(Cr−128)，B=Y+1.772(Cb−128)。
+<strong>(3) 线性插值</strong>Y0=80, Y1=120, Y4=200；缺 Y2、Y3，用 Y1 与 Y4 间插值（跨 3 步，每步 (200−120)/3≈26.67）：<b>Y2 ≈ 120 + 26.67 ≈ 146.7</b>，<b>Y3 ≈ 120 + 2×26.67 ≈ 173.3</b>。（若按最近邻/复制则 Y2=Y3=Y1=120；线性插值更精确。）
+<strong>涉及</strong>L03/L04
+</div>
+</details>
+</div>
+</section>
+
+</article>
+</main>
+
+<footer>
+<p>模拟期末试卷 A · 100 分 · 17 道题</p>
+<p class="meta">4 大题型 · 单选 10 + 简答 2 + 计算 4 + 论述 1 · 120 分钟 · 贴合真题结构</p>
+</footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const states = JSON.parse(localStorage.getItem('mastery') || '{}');
+  document.querySelectorAll('[data-mastery]').forEach(el => {
+    const key = el.dataset.mastery;
+    const cb = el.querySelector('input[type=checkbox]');
+    const lbl = el.querySelector('.mastery');
+    if (states[key] && cb) {
+      cb.checked = true;
+      if (lbl) lbl.classList.add('checked');
+    }
+    if (cb) {
+      cb.addEventListener('change', () => {
+        states[key] = cb.checked;
+        localStorage.setItem('mastery', JSON.stringify(states));
+        if (lbl) lbl.classList.toggle('checked', cb.checked);
+      });
+    }
+  });
+});
+</script>
+
+</body>
+</html>
