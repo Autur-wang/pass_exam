@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0009 · 双向链表:多一根指针换来什么</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0009 课 · 线性结构 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>双向链表:多一根指针换来什么</h1>
+
+<p class="lede">单链表只能一路向前,回头无门。双向链表给每个节点再加一根 <code>prev</code> 指针——看似只多存一个字段,却解锁了单链表办不到的两件事:<strong>双向遍历</strong>,以及<strong>「拿到一个节点就能 O(1) 删掉它自己」</strong>。这节课算清这笔「一根指针」的买卖,并看它如何撑起面试里的当红系统题——<strong>LRU 缓存</strong>。</p>
+
+<div class="recall">
+<p>先回忆:上一课<a href="0008-linked-list.html">单链表</a>的自测里我们卡在一处——只给你指向中间某节点的指针,想删掉它却拿不到<strong>前驱</strong>,只能 O(n) 从 head 找回来。先想想:如果每个节点都随身记着自己的前驱,这个难题会怎样?</p>
+</div>
+
+<h2>一、直觉:每颗珠子系了两根绳</h2>
+
+<p>双向链表的节点是 <code>[prev | 数据 | next]</code>:next 指后一个,prev 指前一个。第一个节点的 prev 和最后一个节点的 next 都是 <code>NULL</code>。付出的代价一目了然——<strong>每个节点多存一根指针</strong>(空间),而且每次插入删除要<strong>同时维护两组指针</strong>(更容易写错)。换来的红利有两条:任意节点都能往回走(双向遍历),以及下面这条杀手锏。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 520 140" width="520" role="img" aria-label="双向链表示意:每个节点含 prev 与 next 两根指针,相邻节点互相指向">
+  <defs>
+    <marker id="arr9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="dgm-accent"/>
+    </marker>
+  </defs>
+  <!-- node 1 -->
+  <rect x="60" y="52" width="30" height="44" class="dgm-node"/>
+  <rect x="90" y="52" width="45" height="44" class="dgm-node"/>
+  <rect x="135" y="52" width="30" height="44" class="dgm-node"/>
+  <text x="112" y="79" text-anchor="middle" class="dgm-text" font-size="15">A</text>
+  <!-- node 2 -->
+  <rect x="235" y="52" width="30" height="44" class="dgm-node"/>
+  <rect x="265" y="52" width="45" height="44" class="dgm-node"/>
+  <rect x="310" y="52" width="30" height="44" class="dgm-node"/>
+  <text x="287" y="79" text-anchor="middle" class="dgm-text" font-size="15">B</text>
+  <!-- node 3 -->
+  <rect x="410" y="52" width="30" height="44" class="dgm-node"/>
+  <rect x="440" y="52" width="45" height="44" class="dgm-node"/>
+  <rect x="485" y="52" width="30" height="44" class="dgm-node"/>
+  <text x="462" y="79" text-anchor="middle" class="dgm-text" font-size="15">C</text>
+  <!-- 1->2 next -->
+  <line x1="150" y1="66" x2="235" y2="66" class="dgm-edge" stroke-width="2" marker-end="url(#arr9)"/>
+  <!-- 2->1 prev -->
+  <line x1="235" y1="82" x2="150" y2="82" class="dgm-edge" stroke-width="2" marker-end="url(#arr9)"/>
+  <!-- 2->3 next -->
+  <line x1="325" y1="66" x2="410" y2="66" class="dgm-edge" stroke-width="2" marker-end="url(#arr9)"/>
+  <!-- 3->2 prev -->
+  <line x1="410" y1="82" x2="325" y2="82" class="dgm-edge" stroke-width="2" marker-end="url(#arr9)"/>
+  <!-- null ends -->
+  <text x="45" y="79" text-anchor="middle" class="dgm-muted" font-size="14">∅</text>
+  <text x="510" y="118" text-anchor="middle" class="dgm-muted" font-size="14">∅</text>
+  <text x="75" y="46" text-anchor="middle" class="dgm-muted" font-size="9">prev</text>
+  <text x="150" y="46" text-anchor="middle" class="dgm-muted" font-size="9">next</text>
+</svg>
+</div>
+<figcaption>节点结构 <code>[prev | 数据 | next]</code>。相邻节点用<strong>两条方向相反</strong>的指针互指。上排是 next(向右),下排是 prev(向左)。</figcaption>
+</figure>
+
+<h2>二、杀手锏:已知节点,O(1) 删除自己</h2>
+
+<p>在单链表里删一个节点,难点是找它的前驱(O(n))。双向链表里,前驱就存在节点自己的 <code>prev</code> 字段里——删除只需:<code>node.prev.next = node.next</code>;<code>node.next.prev = node.prev</code>。两句话搞定,<strong>O(1)</strong>,和链表多长无关。这条性质看着不起眼,却是 LRU 缓存能做到 O(1) 的关键齿轮。</p>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>双向链表(Doubly Linked List)</dt>
+<dd>每个节点同时持有 <code>next</code> 与 <code>prev</code> 两根指针的链表,支持双向遍历;已知节点时插入/删除均 O(1)。<em>避免</em>:与单链表混称「链表」而不区分。</dd>
+<dt>哨兵节点 / 哑节点(sentinel / dummy)</dt>
+<dd>在头尾各放一个不存数据的占位节点,让「在头部插」「删末尾」也变成「在两个真实节点之间操作」,从而<strong>消除空表、首节点、尾节点的边界特判</strong>。<em>避免</em>:把哨兵当作真实数据参与计数。</dd>
+<dt>LRU(Least Recently Used)</dt>
+<dd>一种缓存淘汰策略:容量满时淘汰「最久未被访问」的项。经典实现 = 双向链表(记访问顺序) + 哈希表(O(1) 定位节点)。</dd>
+</dl>
+
+<h2>四、复杂度:与单链表并排看</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>单链表</th><th>双向链表</th></tr></thead>
+<tbody>
+<tr><td class="op">随机访问 <code>value_at(i)</code></td><td class="warn">O(n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">头部插入 / 删除</td><td class="best">O(1)</td><td class="best">O(1)</td></tr>
+<tr><td class="op">向前遍历(找前驱)</td><td class="warn">O(n)</td><td class="best">O(1)</td></tr>
+<tr><td class="op">已知节点处删除该节点</td><td class="warn">O(n) <small>(需找前驱)</small></td><td class="best">O(1)</td></tr>
+<tr><td class="op">每节点额外空间</td><td class="best">1 指针</td><td class="warn">2 指针</td></tr>
+</tbody>
+</table>
+<p>随机访问依然是 O(n)——多的那根指针只解决「方向」和「找前驱」,解决不了「没有连续内存」这个根子上的问题。所以双向链表和单链表一样,天生不擅长按下标读取。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>双向链表本身很少单独出题,它几乎总是作为<strong>更大结构的零件</strong>登场:</p>
+<ul>
+<li><strong>LRU 缓存(必考系统/数据结构题)</strong>:双向链表按「最近使用」排序,访问过的节点 O(1) 摘下、挪到头部;容量满就 O(1) 删尾部。哈希表存 <code>key → 节点指针</code>,让 get/put 都 O(1)。这道题几乎是「双向链表 + 哈希表」组合的标准答卷。</li>
+<li><strong>浏览器前进 / 后退、编辑器 undo-redo</strong>:天然的双向序列,当前位置一个指针,前后自由移动。</li>
+<li><strong>被追问「怎么去掉边界特判」</strong>:答<strong>哨兵节点</strong>。加了 dummy head / tail 后,插入删除永远发生在两个节点之间,不必再单独判断空表和首尾——面试官很吃这一手。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>指针更新顺序写错就断链。</strong>删除节点 <code>x</code> 时,必须先用 <code>x.prev</code> 和 <code>x.next</code> 把两侧接上,顺序要能自洽;插入时同理,新节点的 prev/next 与两侧邻居的指针要成对更新,漏掉任何一根都会让链表半路断掉或反向。养成习惯:改指针前先把要用到的邻居<strong>暂存到局部变量</strong>,再动手改。</p>
+<p>另一个坑:<strong>别以为多了 prev 就能随机访问 O(1)</strong>。双向链表的随机访问仍是 O(n),它只是遍历方向多了一个,没有绕过「内存不连续」这个根本限制。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>那根 <code>prev</code> 指针买到的,是「已知节点即可 O(1) 摘除/前移」的能力。正是这个能力,让双向链表成为 LRU 缓存的骨架——记住「双向链表管顺序、哈希表管定位」这对搭档,一道经典系统题就有了答案。</p>
+</div>
+
+<div class="implement">
+<p>在单链表实现基础上升级为双向链表,重点体会两处差异:</p>
+<p>① 给节点加 <code>prev</code> 字段,插入/删除时<strong>成对</strong>维护 next 与 prev;② 加一对<strong>哨兵 head/tail</strong>,重写 <code>push_front</code> / <code>push_back</code> / <code>erase(node)</code>,验证空表、单元素等边界不再需要特判。</p>
+<p>进阶:用「双向链表 + 哈希表」实现一个容量固定的 <strong>LRU 缓存</strong>,支持 O(1) 的 <code>get(key)</code> 与 <code>put(key, value)</code>。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:LRU 缓存为什么要「双向链表 + 哈希表」两件套?只用其中一个不行吗?</summary>
+<div class="answer">
+<p>两个各补对方的短板。<strong>只用双向链表</strong>:能 O(1) 维护访问顺序(最近用的挪到头、满了删尾),但要找「key 对应的节点」得 O(n) 遍历。<strong>只用哈希表</strong>:能 O(1) 按 key 定位,但哈希表<strong>不记顺序</strong>,没法知道谁「最久未用」。合起来:哈希表 <code>key → 节点</code> 负责 O(1) 定位,双向链表负责 O(1) 维护顺序与淘汰——正因为双向链表「已知节点就能 O(1) 摘除」,两者才能严丝合缝。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:相比单链表,双向链表多付出的主要成本是什么?(不止一项)</summary>
+<div class="answer">
+<p>两项:<strong>空间</strong>——每个节点多存一根 <code>prev</code> 指针;<strong>维护复杂度</strong>——每次插入/删除要同时更新两组指针,更容易写错、断链。它并没有改善随机访问(仍 O(n)),也没有降低时间量级——买到的只是「方向」和「已知节点 O(1) 删除」这两项能力。哨兵节点能缓解维护复杂度带来的边界 bug,但抵不掉那根多出来的指针。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲「链表(Linked Lists)」小节末尾的「双向链表」条目下:</p>
+<ul>
+<li><a href="https://www.coursera.org/learn/data-structures/lecture/jpGKD/doubly-linked-lists">双向链表 · 介绍(Coursera 视频)</a> —— 仓库为双向链表指定的一手视频。</li>
+<li><a href="https://www.coursera.org/lecture/data-structures-optimizing-performance/core-linked-lists-vs-arrays-rjBs9">核心:链表 vs 数组(Coursera 视频)</a> —— 回顾链表家族与数组的取舍。</li>
+</ul>
+<p>仓库注明双向链表「并不需要实现」——理解结构与 LRU 用法即可,动手时间优先花在单链表的 reverse 与快慢指针上。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师带你在纸上画一遍 LRU 缓存的 get/put,看双向链表的节点如何被 O(1) 摘下再挪到头部。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0008-linked-list.html"><span class="dir">← 上一课</span>链表:指针的舞蹈,与数组的取舍</a>
+  <a class="next" href="0010-stack.html"><span class="dir">下一课 →</span>栈:后进先出与调用栈</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

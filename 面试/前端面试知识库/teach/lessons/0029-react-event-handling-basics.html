@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0029 · React 怎么处理事件</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0029 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>React 怎么处理事件</h1>
+
+<p class="lede">这节课要回答一个很具体的问题:当你在 JSX 里写下 <code>onClick={handleClick}</code> 时,React 在背后做了什么与原生 <code>addEventListener</code> 不一样的事;以及鼠标、输入、表单、焦点、键盘这几类高频事件,分别该用哪个 handler、怎么给它起名字、要不要给它传参数。</p>
+
+<div class="recall">
+<p>开课前先回忆一下:第 21 课梳理"React 面试到底叠加了哪些新知识点"时,把"合成事件"列成了叠在原有五道关卡外壳上的 React 专属考点之一。再往前翻一步,回忆你自己写原生 JavaScript 时怎么给一个按钮绑定点击事件——大概是 <code>element.addEventListener('click', ...)</code> 这样一行代码。这节课要做的事,就是把这两条线接起来:React 里的 <code>onClick={...}</code> 和这行原生代码,到底是不是同一件事。</p>
+</div>
+
+<h2>一、合成事件与事件委托:React 事件系统和原生 JS 有什么不一样</h2>
+
+<p>原生 JavaScript 里,给一个元素绑定点击事件通常是这样:</p>
+
+<div class="codecompare">
+  <div class="side">
+    <p class="label">原生 JavaScript</p>
+    <pre><code>document.getElementById('btn').addEventListener('click', (event) => {
+  console.log('Clicked!');
+});</code></pre>
+  </div>
+  <div class="side">
+    <p class="label">React</p>
+    <pre><code>&lt;button onClick={() => console.log('Clicked!')}&gt;点击我&lt;/button&gt;</code></pre>
+  </div>
+</div>
+
+<p>写法上看起来只是把监听器搬进了 JSX 属性里,但 React 在背后多做了两件事。第一,它把原生事件包了一层,变成一个叫 <code>SyntheticEvent</code> 的标准化对象,目的是在不同浏览器之间保持一致的行为,同时对性能做优化。第二,React 用的是事件委托——它不会给每一个写了 <code>onClick</code> 的元素单独挂一个监听器,而是把事件统一绑定在 React 应用的根节点上(不是 document 根节点,也不是逐个元素),再靠冒泡把动作分发给对应的处理函数。</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">用户点击/按键</span><span class="n-sub">原生浏览器事件</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">冒泡到应用根节点</span><span class="n-sub">不是逐元素绑定</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">包装成 SyntheticEvent</span><span class="n-sub">跨浏览器一致 + 性能优化</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">分发给对应的 onClick</span><span class="n-sub">你写的处理函数</span></div>
+</div>
+
+<p>这个 <code>SyntheticEvent</code> 会作为第一个参数传给你的处理函数,多数场景下可以把它当成原生浏览器 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Event">Event</a> 对象来用;需要真正的原生事件时,可以通过 <code>event.nativeEvent</code> 拿到它:</p>
+
+<pre><code>function handleClick(event) {
+  console.log(event); // React SyntheticEvent
+  console.log(event.nativeEvent); // 原生浏览器事件
+  console.log(event.target); // &lt;button&gt;...&lt;/button&gt;
+}
+
+&lt;button onClick={handleClick}&gt;点击我&lt;/button&gt;;</code></pre>
+
+<p>延伸阅读见 react.dev 的<a href="https://react.dev/learn/responding-to-events">响应事件</a>一文。</p>
+
+<h2>二、写事件处理程序:命名规范与传参方式</h2>
+
+<p>React 里的事件处理程序,说到底就是响应用户交互(点击、按键、表单提交、鼠标移动)的普通函数。手册里出现的例子——<code>handleClick</code>、<code>handleSubmit</code>、<code>handleKeyPress</code>——用的是同一套命名习惯:"handle" 加上事件动作,对应到 JSX 属性上的 <code>onClick</code>、<code>onSubmit</code>,一眼就能看出"谁触发、谁处理"这层对应关系。</p>
+
+<p>更值得记住的是怎么把处理函数接到 JSX 属性上,这里有两种写法,取决于你要不要额外的参数:</p>
+
+<pre><code>// 不需要额外参数、只需要 event 对象本身:直接传函数引用
+&lt;button onClick={handleClick}&gt;点击我&lt;/button&gt;
+
+// 需要在 event 里取具体字段、或者要塞进额外参数:包一层箭头函数
+&lt;input onChange={(event) => setValue(event.target.value)}&gt;</code></pre>
+
+<p>第一种是把函数本身(不是函数调用的结果)交给 React,等事件真的发生时再由 React 去调用;第二种是用一个箭头函数包一层,在里面按需要访问 <code>event</code> 或者塞进别的参数。下面讲鼠标、输入、表单、焦点、键盘几类具体事件时,这两种写法会反复出现,先把这条判断标准记住,再看具体例子会更容易对上号。</p>
+
+<h2>三、鼠标事件:面试最常问的几个</h2>
+
+<p>鼠标事件处理程序接收 <a href="https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent">MouseEvent</a> 参数,用户点击、悬停时触发。</p>
+
+<table>
+<tr><th>事件</th><th>什么时候触发</th><th>面试出现频率</th></tr>
+<tr><td><code>onClick</code></td><td>元素被点击(鼠标按下 + 抬起)</td><td>常用</td></tr>
+<tr><td><code>onMouseEnter</code></td><td>鼠标进入元素</td><td>有时</td></tr>
+<tr><td><code>onMouseLeave</code></td><td>鼠标离开元素</td><td>有时</td></tr>
+<tr><td><code>onMouseOver</code></td><td>鼠标进入元素或其子元素</td><td>有时</td></tr>
+<tr><td><code>onMouseOut</code></td><td>鼠标离开元素或其子元素</td><td>有时</td></tr>
+<tr><td><code>onMouseDown</code></td><td>鼠标按钮被按下</td><td>很少,多数场景用 <code>onClick</code></td></tr>
+<tr><td><code>onMouseUp</code></td><td>鼠标按钮被释放</td><td>很少,多数场景用 <code>onClick</code></td></tr>
+<tr><td><code>onDoubleClick</code></td><td>元素被双击</td><td>很少</td></tr>
+</table>
+
+<p>这份列表里最值得记住的一组对比是 <code>onMouseEnter</code>/<code>onMouseLeave</code> 和 <code>onMouseOver</code>/<code>onMouseOut</code>——前者不<a href="https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/Event_bubbling">冒泡</a>,后者会冒泡。如果被问到二者区别,答案就是这一条。另外,悬停样式(比如鼠标进入时变色)最好用 CSS 的 <code>:hover</code> 伪类去做,CSS 能完成的事没必要上 JavaScript。</p>
+
+<h2>四、输入事件:onChange 与 onInput 怎么选</h2>
+
+<p>输入事件处理程序接收 <a href="https://developer.mozilla.org/en-US/docs/Web/API/InputEvent">InputEvent</a> 参数,可以加到 <code>&lt;input&gt;</code> 和 <code>&lt;textarea&gt;</code> 上:</p>
+
+<pre><code>function Foo() {
+  const [value, setValue] = useState('');
+
+  return (
+    &lt;input
+      onChange={(event) => setValue(event.target.value)}
+      value={value}
+      placeholder="Type here"
+    /&gt;
+  );
+}</code></pre>
+
+<p>这里有两个容易混的事件:<code>onChange</code>(值发生变化时触发)和 <code>onInput</code>(用户输入数据时触发,行为上类似 <code>onChange</code>,大多数场景直接用 <code>onChange</code> 代替就够)。真正需要记住的是它们和浏览器原生事件的对应关系不是字面意思那样直接——对 <code>&lt;input type="text"&gt;</code> 这类元素,浏览器原生的 <code>'change'</code> 事件通常只在控件失去焦点时才触发一次;但 React 的 <code>onChange</code> 故意做成了更像原生 <code>'input'</code> 事件的行为,每次按键都会触发。</p>
+
+<table>
+<tr><th>特性</th><th><code>onChange</code>(React)</th><th>原生 <code>'input'</code> 事件</th></tr>
+<tr><td>每次按键都触发?</td><td>是(React 特意这样设计)</td><td>是</td></tr>
+<tr><td>在 IME(中文/日文/韩文输入法)上触发?</td><td>否,只在提交时触发一次</td><td>是,每个字符都触发</td></tr>
+<tr><td>适用于 <code>contenteditable</code>?</td><td>否</td><td>是</td></tr>
+</table>
+
+<p>面试期间如果拿不准该用 <code>onChange</code> 还是 <code>onInput</code>,答案是:用 <code>onChange</code>。</p>
+
+<h2>五、表单事件、焦点事件与键盘事件:剩下三类速览</h2>
+
+<p><strong>表单事件</strong>(<code>onSubmit</code>、<code>onReset</code>)只适用于 <code>&lt;form&gt;</code> 元素。<code>onSubmit</code> 接收 <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubmitEvent">SubmitEvent</a> 参数,只在表单内的提交按钮触发时才会触发;<code>onReset</code> 接收通用 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Event">Event</a> 参数,对应重置按钮。由于大多数场景下你在写的是没有服务端配合的单页应用,通常需要在 <code>onSubmit</code> 里调用 <code>event.preventDefault()</code>,否则点击提交会触发整页刷新,把 React 应用打断:</p>
+
+<pre><code>function SimpleForm() {
+  const [input, setInput] = useState('');
+
+  function handleSubmit(event) {
+    event.preventDefault(); // 阻止页面重新加载
+    alert(`表单提交内容:${input}`);
+  }
+
+  return (
+    &lt;form onSubmit={handleSubmit}&gt;
+      &lt;input
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+      /&gt;
+      &lt;button type="submit"&gt;提交&lt;/button&gt;
+    &lt;/form&gt;
+  );
+}</code></pre>
+
+<p><strong>焦点事件</strong>(<code>onFocus</code>、<code>onBlur</code>)适用于能接收焦点的元素,比如 <code>&lt;input&gt;</code>、<code>&lt;textarea&gt;</code>、<code>&lt;select&gt;</code>、<code>&lt;button&gt;</code>,参数是 <a href="https://developer.mozilla.org/en-US/docs/Web/API/FocusEvent">FocusEvent</a>。和悬停样式一样,焦点样式也优先用 CSS 的 <code>:focus</code> 伪类。给一个本来不可聚焦的元素(比如 <code>&lt;div&gt;</code>)加上 <code>tabIndex</code>,能让它也接收焦点、变得可点击,但这主要用在自定义设计系统组件上;面试期间大多数情况下按默认可聚焦的那批元素处理就够。</p>
+
+<p><strong>键盘事件</strong>(<code>onKeyDown</code>、<code>onKeyUp</code>,以及已经弃用的 <code>onKeyPress</code>)接收 <a href="https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent">KeyboardEvent</a> 参数。<code>onKeyDown</code> 在按键被按下时触发,按住不放会持续触发;<code>onKeyUp</code> 在按键释放时触发,常用来检测"最终"输入完成。手册给的示例本来用的是已弃用的 <code>onKeyPress</code>,按最佳实践改成 <code>onKeyDown</code> 之后是这样:</p>
+
+<pre><code>function handleKeyDown(event) {
+  if (event.key === 'Enter') {
+    alert('Enter key pressed!');
+  }
+}
+
+&lt;input type="text" onKeyDown={handleKeyDown} /&gt;;</code></pre>
+
+<p><code>event.key</code>、<code>event.code</code> 和已经弃用的 <code>event.which</code>/<code>event.keyCode</code> 看起来很像,面试只需要记住一条:用 <code>event.key</code>。除此之外,<code>event.shiftKey</code>、<code>event.ctrlKey</code> 这类修饰键状态也能从同一个 <code>KeyboardEvent</code> 上读到,完整属性列表见 <a href="https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent#instance_properties">MDN 上 KeyboardEvent 的实例属性</a>。React 中处理键盘事件的几条最佳实践:优先用 <code>onKeyDown</code> 而不是已弃用的 <code>onKeyPress</code>;优先用 <code>event.key</code> 而不是已弃用的 <code>event.which</code>/<code>event.keyCode</code>;需要时调用 <code>event.preventDefault()</code>(比如阻止 <kbd>Enter</kbd> 提交表单);给不可聚焦的元素加 <code>tabIndex</code> 才能收到键盘事件;认真处理好键盘导航这类可访问性细节。多数面试场景其实不需要直接处理键盘事件——检测输入变化用 <code>onChange</code>/<code>onInput</code> 更直接,检测 <kbd>Enter</kbd> 提交表单用 <code>&lt;form&gt;</code> 的 <code>onSubmit</code> 更可靠。</p>
+
+<h2>六、关键定义</h2>
+
+<dl class="keydef">
+<dt>合成事件(SyntheticEvent)</dt>
+<dd>React 对原生浏览器事件包一层之后得到的对象,统一了不同浏览器的行为差异,同时对性能做了优化;多数场景可以把它当作原生 <code>Event</code> 来用,还能通过 <code>event.nativeEvent</code> 拿到真正的原生浏览器事件。<em>避免</em>把"合成"理解成"React 自己发明了一整套跟浏览器无关的新事件"——它包着的核心还是原生事件,只是多套了一层统一的外壳。</dd>
+<dt>事件委托</dt>
+<dd>React 不会给每个写了 <code>onClick</code> 的元素单独挂一个监听器,而是把事件统一绑定在 React 应用的根节点上,靠事件冒泡把动作分发给对应的处理函数,借此换取性能。<em>避免</em>以为这需要你自己在父元素上手写一个大 if/else 去判断"到底是谁触发的"——分发这一步是 React 在框架层面做完的,你写的 <code>onClick</code> 依旧是挂在具体元素上的语法,写法上感觉不到委托的存在。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>面试时被要求实现一个交互组件(下拉菜单、表单、评分组件),写每个事件处理函数之前先问自己两件事:这个 handler 要不要访问 <code>event</code> 里的具体字段或者带额外参数(决定是直接传引用还是包一层箭头函数),这个交互要不要考虑冒泡差异(比如悬停效果该用 <code>onMouseEnter</code> 还是 <code>onMouseOver</code>)。这两条问清楚,handler 的写法基本就不会跑偏。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把鼠标事件处理程序加到非交互元素上,或者用 <code>&lt;a href="#" onClick={...}&gt;</code> 模拟按钮。</strong>出于可访问性考虑,<code>onClick</code> 这类处理程序应该只加在 <code>&lt;button&gt;</code>、<code>&lt;a&gt;</code>、<code>&lt;input&gt;</code> 这样原生就能接收焦点和触发的交互元素上;加到 <code>&lt;div&gt;</code>、<code>&lt;span&gt;</code> 这类元素上,屏幕阅读器用户没法通过键盘或辅助工具触发这个交互。手册给的实际建议是:该用按钮的场景就直接用 <code>&lt;button onClick={...}&gt;</code>,配合 CSS 调整外观,而不是给一个看起来能点、实际不是交互元素的节点硬套一个 <code>onClick</code>。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>挑一个你最近写过的表单或按钮组件,把它的每个事件处理函数过一遍这节课的判断顺序——名字是不是"handle + 动作"这个模式、要不要额外参数(决定要不要包一层箭头函数)、如果是表单提交有没有调用 <code>event.preventDefault()</code>。三条对完,基本能揪出命名或传参上的小毛病。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>React 用合成事件统一包了一层原生事件、又把监听器委托到应用根节点上,这解释了它为什么能跨浏览器一致又相对省性能;写处理函数时记住"handle + 动作"这套命名习惯,以及"要不要额外参数决定直接传引用还是包一层箭头函数"这条判断标准,鼠标/输入/表单/焦点/键盘该用哪个具体 handler,基本可以从"是否冒泡""要不要贴近原生语义"这两个角度推出来,不需要死记硬背整张事件列表。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于 React 的事件委托机制,下面哪个说法最准确? (A) React 给每一个带 onClick 的 DOM 元素单独挂一个 addEventListener,写法和原生完全一样 (B) React 把事件统一绑定在应用的根节点上,依靠事件冒泡分发给对应的处理函数,而不是给每个元素单独挂监听器 (C) React 把所有事件都绑定在浏览器的 document 根节点上,这一点和绑定到应用根节点没有区别</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。React 用事件委托换性能,监听器绑在应用的根节点,靠冒泡分发给具体的处理函数。(A) 错在"和原生完全一样"——如果真是逐元素单独绑定,就不需要"委托"这个说法了,那正是 React 想省掉的开销;(C) 混淆了"应用根节点"和"document 根节点"这两个不同的位置,这节课强调的正是事件绑定在应用根节点,不是 document 根节点。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪个关于 onChange 和 onInput 在 React 里的说法准确? (A) 面试中如果不确定该用哪个,优先选 onChange——它在 React 里被设计成更接近浏览器原生 input 事件的行为,每次按键都会触发 (B) React 的 onChange 和浏览器原生 change 事件完全一样,只在输入框失去焦点时才触发一次 (C) onInput 在 React 里已经被弃用,和已经弃用的 onKeyPress 属于同一类,不应该再使用</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。React 特意让 onChange 表现得像原生 input 事件,每次按键都触发,这正是这节课强调的关键差异点。(B) 错在混淆了"React 的 onChange"和"浏览器原生 change 事件"——原生 change 通常要失焦才触发,但 React 的 onChange 不是这样;(C) 是编造的说法,手册没有说 onInput 被弃用,只是建议大多数场景用 onChange 代替它,真正弃用的是 onKeyPress 这类按键事件,和 onInput 是两件不同的事。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本节对应源材料"React 如何处理事件"与"React 中的事件处理程序"两节里给出的延伸阅读,建议先看这几个再回头刷题:</p>
+<ul>
+<li><a href="https://react.dev/learn/responding-to-events">react.dev · Responding to Events</a> —— React 官方对事件处理的完整讲解,这节课引用的合成事件例子出自这里。</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Event">MDN · Event</a> —— SyntheticEvent 在大多数场景下能当作这个原生对象来用的属性/方法基线。</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent#instance_properties">MDN · KeyboardEvent 实例属性</a> —— 手册自己在讲键盘事件属性时,直接把读者指向了这份完整列表。</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/Event_bubbling">MDN · Event bubbling</a> —— 理解 onMouseEnter/onMouseLeave 为什么不冒泡、onMouseOver/onMouseOut 为什么冒泡的基础概念。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清合成事件到底"合成"在哪,也可以让老师给你几个具体 UI 场景,现场练一遍该选鼠标、输入、表单里的哪个 handler。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0028-rules-of-hooks-and-custom-hooks.html"><span class="dir">← 上一课</span>Hooks 的规则 + 自定义 Hook 设计</a>
+  <a class="next" href="0030-react-event-interception.html"><span class="dir">下一课 →</span>事件拦截:面试进阶追问</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

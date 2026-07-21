@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0029 · 多模态 VLM:图像处理、CLIP/DALL-E 与架构</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第十部分 多模态与系统设计 · 第 0029 课</p>
+<h1>多模态 VLM:图像处理、CLIP/DALL-E 与架构</h1>
+<p class="lede">这节课一次答清多模态方向的一串高频题:<strong>「视觉语言模型怎么处理图像、要注意什么?」「视觉与文本如何有效整合、cross-modal attention 是什么?」「什么是 VLP?CLIP 与 DALL-E 各自怎么整合视觉与语言?」「多模态生成的独特挑战与数据稀疏怎么办?怎么对图像做 RAG?」以及「MM-LLM 的五部件架构」。</strong>(源:AI 工程师题库 Q15、Q51;60 题·多模态第 1、2、8、9、10、11 题;<code>mm_llms_guide</code>。)目标是让你能从「一张图进模型后发生了什么」讲到「一整套 MM-LLM 架构怎么搭、怎么训」,并答得住面试官关于工程落地的追问。</p>
+
+<div class="recall">
+<p>前面几课我们都在纯文本的世界里:token 化 → embedding → 注意力。<strong>先别往下看:如果现在给模型的不是文字而是一张图片,你觉得最自然的接法是什么?怎样才能让 Transformer 那套「对 token 做注意力」的机器,原封不动地也能「看图」?</strong></p>
+</div>
+
+<h2>一、VLM 怎么处理图像(以及要注意什么)</h2>
+<p>直觉先行:Transformer 只认一样东西——<strong>一串向量(token)</strong>。所以让它「看图」的关键,不是重造模型,而是<strong>把图像也变成一串 token,并且投影到与文本 token 相同的嵌入空间里</strong>。之后模型对图文 token 一视同仁地一起做注意力,文字就能「指着」图里的东西说话了。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">一张图</div>
+  <div class="arrow">→</div>
+  <div class="node">视觉编码器<br>(如 ViT/CLIP)</div>
+  <div class="arrow">→</div>
+  <div class="node">一串视觉 token</div>
+  <div class="arrow">→</div>
+  <div class="node">投影到文本<br>嵌入空间</div>
+  <div class="arrow">→</div>
+  <div class="node good">和文本 token<br>一起做注意力</div>
+</div>
+<figcaption>图像被编码成视觉 token、对齐进文本空间,之后图文 token 在同一个注意力机制里交互。</figcaption>
+</figure>
+
+<p>这套接法很优雅,但工程上有代价和短板,面试考的正是这些「要注意什么」:</p>
+<ul>
+<li><strong>图像很烧 token,也很烧钱。</strong>一张图常消耗数百个 token,且随分辨率上升而增加;上下文预算和账单是实打实被吃掉的。超高清文档还可能被切成多块(tiling)再分别喂入,token 进一步膨胀。</li>
+<li><strong>密集文档的逐字精读是弱项。</strong>要在一张扫描件里精确读出每一个金额/编号,VLM 常不如专门的 <strong>OCR</strong> 可靠;要准,就把 OCR 放进管线,别让模型「凭感觉认字」。</li>
+<li><strong>空间关系与计数容易翻车。</strong>「左边第三个物体是什么」「图里有几只杯子」这类空间/计数任务是已知薄弱环节。</li>
+<li><strong>工作分辨率会吃掉小细节。</strong>模型内部有个处理分辨率,过小的目标、细小文字可能在缩放中丢失。</li>
+<li><strong>务必在你自己的真实图像上评测。</strong>demo 里的漂亮效果不保证能迁移到你的数据分布(你的票据、你的截图、你的医学影像)。别假设 demo 质量 = 生产质量。</li>
+</ul>
+
+<h2>二、视觉与文本怎么整合:三种手段与 cross-modal attention</h2>
+<p>「有效整合」不是一个技巧,而是三层手段的组合(图像描述、VQA 这类任务都靠它们):</p>
+<div class="trio">
+  <div class="cell"><strong>联合嵌入空间</strong><br>把图和文映到一个<em>可直接比较</em>的公共空间<br><em>相近 = 语义相关</em></div>
+  <div class="cell"><strong>注意力(尤其 cross-modal)</strong><br>让文本引导「看图哪一块」<br>或反过来图引导读哪些词</div>
+  <div class="cell"><strong>Fusion 融合层</strong><br>拼接 / 逐元素相加 /<br>更复杂的交互</div>
+</div>
+
+<dl class="keydef">
+<dt>Cross-modal attention(跨模态注意力)</dt>
+<dd>让一种模态的 Query 去检索<strong>另一种模态</strong>的 Key/Value。比如文本的 Query 去看图像特征:「主语提到 dog」这个词就能把注意力集中到图里那只狗所在的区域。这和第 0002 课的自注意力是同一套机器,区别只是 Q 与 K/V 来自不同模态。</dd>
+</dl>
+
+<p>两条代表路线,面试常拿来对比,别混:</p>
+<ul>
+<li><strong>VisualBERT 式</strong>:在一个 transformer 内部用 <strong>cross-modal attention</strong>,根据文本上下文去关注图像的特定区域——图文在同一个模型里深度交互。</li>
+<li><strong>CLIP 式(注意:机制不同!)</strong>:图像编码器和文本编码器各自独立,靠<strong>对比学习(contrastive learning)</strong>在海量图文对上训练:拉近「对应」图文的嵌入相似度、推远「不对应」的。它学到的是一个高度对齐的<strong>联合嵌入空间</strong>,从而能用自然语言做零样本(zero-shot)视觉任务——比如给一张图,直接和一串候选文本标签比相似度就完成分类。</li>
+</ul>
+<p class="formula-note">一句话记差别:VisualBERT 让图文在模型<em>内部</em>互相看(fusion + cross-attn);CLIP 让图文各自编码、只在<em>嵌入空间</em>对齐(dual-encoder + contrastive)。前者强在细粒度理解,后者强在检索/零样本。</p>
+
+<h2>三、VLP、CLIP 与 DALL-E:理解与生成两个方向</h2>
+<dl class="keydef">
+<dt>VLP(Vision-Language Pre-training,视觉-语言预训练)</dt>
+<dd>先在<strong>大规模图文数据</strong>上预训练,学到通用的跨模态表示;再微调到具体下游任务。意义在于:预训练阶段捕捉了丰富的跨模态语义,使得下游任务(VQA、image captioning、跨模态检索)只用<strong>较小的数据</strong>就能达到很强的效果。这正是「预训练 + 微调」范式在多模态上的延续。</dd>
+</dl>
+
+<p>CLIP 和 DALL-E 常被放一起,是因为它们演示了视觉-语言整合的<strong>两个相反方向</strong>:</p>
+<div class="trio">
+  <div class="cell"><strong>CLIP</strong><br>方向:理解 / 对齐<br>用对比学习把图文对齐到<br>同一空间 → 零样本视觉</div>
+  <div class="cell"><strong>DALL-E</strong><br>方向:生成<br>从文本描述<em>生成</em>图像<br>(GPT 式架构适配图像生成)</div>
+  <div class="cell"><strong>合起来看</strong><br>一个负责「看懂」<br>一个负责「画出」<br>= 理解 ↔ 生成的两端</div>
+</div>
+<p>所以当面试官问「CLIP 与 DALL-E 如何整合视觉与语言」,标准答法不是把它们说成同一类东西,而是点出:<strong>CLIP 做的是对齐/理解,DALL-E 做的是文到图的生成</strong>,二者共同示范了跨模态整合的两个方向。</p>
+
+<h2>四、MM-LLM 的五部件架构</h2>
+<p>把上面这些零件系统化,就得到一套通用的 <strong>MM-LLM</strong> 组装图(源:<code>mm_llms_guide</code>,该文档自标注为 2024 年归档版——它教的是<em>架构基本功</em>;需说明当下现状已走向原生 omni-modal 的一体化模型如 GPT-4o、Gemini,但下面这套「编码器 + 连接器 + LLM 骨干」的骨架仍然成立)。五个部件:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">图/视频/音<br>输入</div>
+  <div class="arrow">→</div>
+  <div class="node">① Modality<br>Encoder</div>
+  <div class="arrow">→</div>
+  <div class="node">② Input<br>Projector</div>
+  <div class="arrow">→</div>
+  <div class="node">③ LLM<br>Backbone</div>
+  <div class="arrow">→</div>
+  <div class="node">④ Output<br>Projector</div>
+  <div class="arrow">→</div>
+  <div class="node good">⑤ Modality<br>Generator</div>
+</div>
+<figcaption>输入端把非文本编码、对齐进文本空间;LLM 负责推理并吐出文本 + 信号 token;输出端把信号 token 交给生成器产出非文本内容。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>① Modality Encoder(模态编码器)</dt>
+<dd>把图像、视频、音频等编码成特征向量。例:ViT、CLIP 的视觉编码器。</dd>
+<dt>② Input Projector(输入投影器)</dt>
+<dd>把编码出的特征<strong>对齐到文本的嵌入空间</strong>,使 LLM 能一起处理。实现可以是 Linear、MLP、Cross-attention 或 <strong>Q-Former</strong>(BLIP-2)。这是「把视觉 token 接进文本世界」的那个连接器。</dd>
+<dt>③ LLM Backbone(语言模型骨干)</dt>
+<dd>核心的理解、推理、决策单元;产出文本输出,以及给下游用的<strong>信号 token(signal token)</strong>——相当于「指挥生成器画什么」的指令。它继承了预训练 LLM 的零样本/少样本能力。</dd>
+<dt>④ Output Projector(输出投影器)</dt>
+<dd>把 LLM 吐出的信号 token 映射成生成器能读懂的特征。常用小型 Transformer 或 MLP。</dd>
+<dt>⑤ Modality Generator(模态生成器)</dt>
+<dd>真正产出非文本内容(图/音/视频),常用 <strong>Latent Diffusion</strong>(潜在扩散模型)。注意:只有需要「生成非文本」时才用到 ④⑤;纯「看图答题」的理解型 VLM 只需 ①②③。</dd>
+</dl>
+
+<p><strong>训练分两步(和 LLM 同构):</strong></p>
+<ul>
+<li><strong>MM-PT(多模态预训练)</strong>:用三类数据——<em>Gold Pairs</em>(精确匹配的图文对,如图 + 精准 caption)、<em>Interleaved</em>(图文交错的长文档,相关性较松、增强泛化与鲁棒)、以及 <em>Text-only</em>(纯文本)。为什么还要塞纯文本?<strong>为了保住底层 LLM 的语言能力,防止灾难性遗忘(catastrophic forgetting)</strong>——这是常考的一个「为什么」。</li>
+<li><strong>MM-IT(多模态指令微调)</strong>:用指令模板 + 任务数据(如 VQA)对齐到具体任务,之后再叠 <strong>RLHF</strong> 进一步对齐人类偏好。</li>
+</ul>
+
+<h2>五、多模态的独特挑战、数据稀疏与对图像做 RAG</h2>
+<p>多模态生成为什么比纯文本难?几个结构性挑战:</p>
+<ul>
+<li><strong>数据对齐</strong>:让图和文精确匹配本身就难,弱标注、噪声标注很常见。</li>
+<li><strong>复杂度与可扩展性</strong>:不同模态需要不同的处理管线,系统更重、更难扩。</li>
+<li><strong>跨模态连贯</strong>:生成的图要和文本描述前后一致、不自相矛盾。</li>
+<li><strong>多样的数据表示</strong>:像素、波形、文本 token,表示形态天差地别。</li>
+<li><strong>数据稀疏(data sparsity)</strong>:能覆盖「各种模态组合」的数据集经常缺——尤其是罕见组合。</li>
+</ul>
+
+<dl class="keydef">
+<dt>应对数据稀疏的常用手段</dt>
+<dd><strong>数据增强</strong>、<strong>迁移学习</strong>(用现成的单模态大模型打底,而非从零训)、<strong>few-shot / zero-shot</strong>、<strong>合成数据</strong>、以及<strong>正则化</strong>。核心思路:能借力单模态预训练就别硬凑成对数据。</dd>
+</dl>
+
+<p><strong>对图像做 RAG(AI 工程师 Q51):</strong>两条主流路子——</p>
+<ul>
+<li><strong>共享嵌入空间检索</strong>:把图和文都嵌入同一空间(CLIP 式对齐正是为此而生),用查询直接跨模态检索相关图/文。</li>
+<li><strong>先描述再检索</strong>:对图/表先<strong>生成文本描述(caption)</strong>,把描述丢进成熟的文本 RAG 管线检索;命中后,<strong>需要时再把原图一并传给模型</strong>看。</li>
+</ul>
+<p class="formula-note">诚实的现状:成熟、产品级的多模态 RAG 仍在快速演进。工程上的稳妥心法是——<strong>保持管线简单、可测</strong>,先用「图转文 + 文本 RAG」这类可解释路径跑通,再考虑上更复杂的联合嵌入。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「图像进模型后到底变成了什么?」——一串视觉 token,投影到文本嵌入空间,和文本 token 一起做注意力。别答成「模型直接看像素」。</li>
+<li>「那它有什么做不好的?」——密集文档逐字精读(该上 OCR)、空间/计数、小细节(受工作分辨率限制);还有 token 成本随分辨率涨。</li>
+<li>「CLIP 和 VisualBERT 整合方式一样吗?」——不一样:VisualBERT 是模型内部 cross-modal attention 做深度融合;CLIP 是双编码器 + 对比学习,只在嵌入空间对齐。</li>
+<li>「CLIP 和 DALL-E 什么关系?」——两个方向:CLIP 理解/对齐,DALL-E 文生图/生成。</li>
+<li>「MM-LLM 五部件说一下?训练为什么要掺纯文本?」——编码器 / 输入投影 / LLM 骨干 / 输出投影 / 生成器;纯文本是为防语言能力的灾难性遗忘。</li>
+<li>「多模态 RAG 怎么做?」——共享空间检索,或图转文再检索、需要时回传原图;强调保持管线简单可测。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(尤其注意绝对化措辞):</strong></p>
+<ul>
+<li>别把 CLIP 和 VisualBERT 说成「都是用 cross-modal attention 整合」——CLIP <strong>不</strong>在模型内做 cross-attn,它靠对比学习在嵌入空间对齐。这是最常被抓的混淆。</li>
+<li>别说「VLM 一定能读图里的字/一定能替代 OCR」:密集文档精读是弱项,要准就配 OCR。</li>
+<li>别说「demo 效果就是生产效果」:必须在你自己的真实图像分布上评测。</li>
+<li>别把五部件都当成「必配」:纯理解型 VLM 只需 ①②③,④⑤ 是生成非文本时才用。</li>
+<li>别宣称「多模态 RAG 已经很成熟、有标准最佳实践」:它仍在演进,面试里诚实地说「保持简单可测」比吹得太满更稳。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>CLIP 是怎么把视觉和语言对齐的?</p>
+<details><summary>A. 用 cross-modal attention 在一个 transformer 内部,根据文本去关注图像的特定区域</summary>这是 VisualBERT 式的做法。CLIP 用的是双编码器 + 对比学习,不在模型内部做 cross-attn。</details>
+<details><summary>B. 用对比学习,在海量图文对上拉近对应图文的嵌入、推远不对应的,得到对齐的联合空间 ✅</summary>正确。正因这个对齐空间,CLIP 才能用自然语言做零样本视觉任务。</details>
+<details><summary>C. 从文本描述出发,自回归地生成图像像素,再反过来对齐文字</summary>这是 DALL-E 那种「文生图」的生成方向,不是 CLIP 的对齐机制。</details>
+<details><summary>D. 先用 OCR 把图像里的文字读出来,再当作纯文本喂给语言模型处理</summary>OCR 是工程上补密集读字的手段,不是 CLIP 学对齐的方式。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>要把一份超高清扫描合同交给 VLM、逐条精确提取金额,最稳妥的做法是?</p>
+<details><summary>A. 把整页最高分辨率图直接丢给 VLM,完全依赖它自己认字</summary>密集文档逐字精读是 VLM 的已知弱项,直接依赖它读字风险高。</details>
+<details><summary>B. 相信官方 demo 的读字效果能迁移到你的合同,不必单独评测</summary>demo 质量不保证迁移到你的数据分布,这正是常见的翻车点。</details>
+<details><summary>C. 对需要逐字精确的密集文档配合 OCR,并在你自己的真实图像上评测效果 ✅</summary>正确。要准就上 OCR,并在真实数据上验证,而不是假设 demo 质量能迁移。</details>
+<details><summary>D. 把图缩到尽量小以节省 token,再让模型去读上面的细小文字</summary>缩图会在工作分辨率下丢掉小细节,恰恰读不准字,还本末倒置。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Learning Transferable Visual Models From Natural Language Supervision</strong>(Radford et al., 2021)——CLIP 原论文,对比学习对齐图文、零样本视觉的来源。</li>
+<li><strong>Zero-Shot Text-to-Image Generation</strong>(Ramesh et al., 2021)——DALL-E,文到图生成方向的代表。</li>
+<li><strong>VisualBERT: A Simple and Performant Baseline for Vision and Language</strong>(Li et al., 2019)——transformer 内 cross-modal attention 的示例。</li>
+<li><strong>An Image Is Worth 16×16 Words</strong>(Dosovitskiy et al., 2021)——ViT,视觉编码器把图切 patch 变 token 的基础。</li>
+<li><strong>BLIP-2</strong>(Li et al., 2023)——Q-Former 作为输入投影器的代表,连接视觉编码器与 LLM。</li>
+<li><strong>MM-LLMs: Recent Advances in Multimodal Large Language Models</strong>(arXiv:2401.13601)——本课五部件架构与 MM-PT/MM-IT 训练范式的来源(<code>mm_llms_guide</code> 归档版即基于此;当下请以原生 omni-modal 模型为准)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>图像 → 视觉 token → 投影进文本空间 → 图文一起做注意力;CLIP 靠对比学习对齐(理解),DALL-E 文生图(生成),VisualBERT 靠内部 cross-attn 深度融合;MM-LLM 五部件 = 编码器→输入投影→LLM 骨干→输出投影→生成器,训练掺纯文本防灾难性遗忘;VLM 弱在密集读字/计数/小细节,务必在你自己的真实图像上评测。</strong></p>
+<nav class="lesson-nav">
+<a href="0028-safety-and-security.html">← 上一课:安全与负责任 AI</a>
+<a class="next" href="0030-system-design.html">下一课:系统设计方法论与案例 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

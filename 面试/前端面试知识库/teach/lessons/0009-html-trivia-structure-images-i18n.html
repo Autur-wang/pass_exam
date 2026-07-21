@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0009 · HTML 高频问答:文档结构、图片与多语言</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0009 课 · 3 HTML/CSS/浏览器高频问答 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>HTML 高频问答:文档结构、图片与多语言</h1>
+
+<p class="lede">这节课把 quiz题库 里 8 道 HTML/i18n 方向的高频问答题,按三组问题重新归类讲清楚:文档骨架怎么声明与摆放(DOCTYPE、HTML5 的能力清单、CSS/JS 标签该放哪、<code>data-</code> 属性该不该用),图片与渲染怎么又快又省(<code>srcset</code>、渐进式渲染的几种手法),以及一个页面要服务多语言用户时,设计和交付各自该注意什么。</p>
+
+<div class="recall">
+<p>先回忆一下上一课:CSS 高频问答那几节里,你已经练过"给一个现象倒推浏览器在做什么"的思路——比如响应式布局怎么适配不同屏幕、渲染引擎在兼容性上做了哪些取舍。这节课换到 HTML 这一侧,同样是给你一串真实高频问答题,但问题从"CSS 怎么画"变成"文档骨架、图片资源、多语言内容分别该怎么组织与交付"。带着同一个习惯往下读:先弄清楚"浏览器/服务器实际在做什么",再去记结论。</p>
+</div>
+
+<h2>一、文档结构类:DOCTYPE、HTML5 构建块与标签摆放</h2>
+
+<h3>DOCTYPE 在干什么</h3>
+<p>DOCTYPE 是 Document Type 的缩写,和 DTD(Document Type Definition)绑在一起。DTD 定义这类文档该怎么搭(比如 <code>button</code> 能不能包含 <code>div</code>),DOCTYPE 则声明"这份文档打算遵守哪份 DTD"。网页少不了这句声明——浏览器认出正确的 DOCTYPE 就会用 no-quirks 模式解析;认不出就退回 quirks 模式,排版行为会变得不可预期。HTML5 的标准写法就是 <code>&lt;!DOCTYPE html&gt;</code>。</p>
+
+<table>
+<tr><th>要素</th><th>说明</th></tr>
+<tr><td>DOCTYPE</td><td>声明"这份文档应该遵守哪个 HTML 规范版本"。</td></tr>
+<tr><td>DTD</td><td>定义这类文档具体怎么搭,DOCTYPE 声明的正是"我遵守哪份 DTD"。</td></tr>
+<tr><td>no-quirks 模式</td><td>浏览器识别出正确 DOCTYPE 后触发,按规范解析。</td></tr>
+<tr><td>quirks 模式</td><td>浏览器认不出 DOCTYPE 时的退路,排版行为不可预期。</td></tr>
+</table>
+
+<h3>HTML5 是一个开放 Web 平台:8 个构建块</h3>
+<p>把 HTML5 当成一整个平台而不是一门标记语言来看,它对外提供的能力可以归成下面 8 块:</p>
+
+<table>
+<tr><th>构建块</th><th>解决什么</th></tr>
+<tr><td>语义</td><td>HTML 标签本身描述内容是什么。</td></tr>
+<tr><td>样式</td><td>自定义 HTML 标签的外观。</td></tr>
+<tr><td>连接性</td><td>以新方式与服务器通信。</td></tr>
+<tr><td>离线和存储</td><td>让网页在客户端本地存数据,离线也能更有效地运行。</td></tr>
+<tr><td>多媒体</td><td>让视频、音频成为开放 Web 里的一等公民。</td></tr>
+<tr><td>2D/3D 图形和效果</td><td>提供更丰富的呈现方式。</td></tr>
+<tr><td>性能和集成</td><td>更高的速度优化,更好利用硬件。</td></tr>
+<tr><td>设备访问</td><td>支持各种输入输出设备。</td></tr>
+</table>
+
+<h3>CSS <code>&lt;link&gt;</code> 放 <code>&lt;head&gt;</code>,JS <code>&lt;script&gt;</code> 放 <code>&lt;/body&gt;</code> 前</h3>
+<p>页面首次加载时,HTML 和 CSS 会同时被解析——HTML 建 DOM,CSS 建 CSSOM,两者都要就位才能画出视觉效果。把 CSS <code>&lt;link&gt;</code> 放进 <code>&lt;head&gt;</code>,是为了让样式表在浏览器准备渲染时已经加载好;放在文档底部会挡住渐进式渲染——有些浏览器会直接阻塞渲染,让用户卡在一片空白页上;另一些浏览器则会先显示未设置样式的内容,出现"闪一下"的 FOUC。<code>&lt;script&gt;</code> 标签则相反:它下载、执行的过程会挡住 HTML 解析,放在 <code>&lt;/body&gt;</code> 前能让 HTML 先解析完、先显示给用户。</p>
+
+<div class="codecompare">
+<div class="side bad"><p class="label">✗ script 堆进 head,没有 defer</p><pre><code>&lt;head&gt;
+  &lt;link rel="stylesheet" href="style.css"&gt;
+  &lt;script src="app.js"&gt;&lt;/script&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  ...
+&lt;/body&gt;</code></pre></div>
+<div class="side good"><p class="label">✓ CSS 留在 head,script 挪到 body 末尾</p><pre><code>&lt;head&gt;
+  &lt;link rel="stylesheet" href="style.css"&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  ...
+  &lt;script src="app.js"&gt;&lt;/script&gt;
+&lt;/body&gt;</code></pre></div>
+</div>
+
+<p>这条规则里,源材料点出的一个例外情况是:脚本里还留着 <code>document.write()</code> 时——不过这如今已经不是推荐写法了。另外要留意,把脚本挪到结尾会造成"空缓存下页面加载更快"的错觉:脚本确实不再挡文档剩余部分的下载,但脚本本身要等整份文档解析完才开始执行;如果一定要把 <code>&lt;script&gt;</code> 留在 <code>&lt;head&gt;</code> 里,加上 <code>defer</code> 属性能让浏览器提前发起下载请求,在缓存命中的场景下反而感觉加载更快。顺带一提,HTML5 规范里 <code>&lt;head&gt;</code> 和 <code>&lt;body&gt;</code> 标签本身是可选的,但这种省字节的写法还没被广泛采用,收益也有限。</p>
+
+<h3><code>data-</code> 属性该用在哪</h3>
+<p>在 JS 框架流行之前,开发者常用 <code>data-</code> 属性直接在 DOM 里存点额外数据,不必去发明非标准属性。第三方库也这么用,比如 Bootstrap 用 <code>data-bs-toggle</code>/<code>data-bs-target</code> 让一个按钮触发页面别处的模态框(<a href="https://getbootstrap.com/docs/5.2/components/modal/#via-data-attributes">示例</a>):</p>
+<pre><code>&lt;button type="button" data-bs-toggle="modal" data-bs-target="#myModal"&gt;
+  Launch modal
+&lt;/button&gt;</code></pre>
+<p>现在这种用法不太被鼓励——用户在浏览器"检查元素"里就能直接改数据属性,数据模型更适合放在 JS 环境里,靠虚拟 DOM 协调或双向绑定跟 DOM 保持同步。但有一个用法一直站得住脚:给端到端测试(Playwright、Puppeteer、Selenium)加一个选择器,比如 <code>data-test-id="my-element"</code>,不用为了测试去污染本该服务其他用途的 class 或 id。</p>
+
+<h2>二、图片与渲染类:<code>srcset</code> 与渐进式渲染</h2>
+
+<h3>srcset:同一张图,按屏幕宽度和密度挑版本</h3>
+<p>想根据用户设备的显示宽度给不同图片,就用 <code>srcset</code>——高密度屏幕给更清晰的图能提升体验,低端设备给更小的图能省流量、提性能。以 <code>srcset="small.jpg 500w, medium.jpg 1000w, large.jpg 2000w"</code> 为例,在 320px 设备宽度下:</p>
+
+<table>
+<tr><th>候选</th><th>宽度描述符</th><th>320px 下的比值</th><th>典型上选场景</th></tr>
+<tr><td>small.jpg</td><td>500w</td><td>500/320 ≈ 1.5625</td><td>1x(普通)屏幕——比值最接近 1</td></tr>
+<tr><td>medium.jpg</td><td>1000w</td><td>1000/320 ≈ 3.125</td><td>2x(视网膜)屏幕——比值离 2 最近且不低于 2</td></tr>
+<tr><td>large.jpg</td><td>2000w</td><td>2000/320 ≈ 6.25</td><td>更高密度或更宽的设备</td></tr>
+</table>
+
+<p>浏览器不是无条件挑最大的文件,而是拿设备的目标密度去找"比值够用、又最接近"的候选:1x 屏幕选 small.jpg,因为 1.5625 离 1 最近;2x 屏幕不会选 500w,因为 1.5625 小于 2,图会显得糊,于是选比值更接近 2 的 1000w。</p>
+
+<h3>渐进式渲染:让用户尽快看到东西</h3>
+<p>渐进式渲染是一组让网页尽快把内容摆到用户眼前的技术,在宽带普及前很流行,如今因为移动网络又多又不稳定,依然在用:</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">图片懒加载</span><span class="n-sub"><code>loading="lazy"</code> 或用 JS 监听滚动位置</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">优先渲染首屏</span><span class="n-sub">只带最少 CSS/内容/脚本,其余等 <code>DOMContentLoaded</code>/<code>load</code> 再补</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">异步 HTML 片段</span><span class="n-sub">后端边生成边把片段刷给浏览器</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">框架时代的延伸</span><span class="n-sub">渐进式水合 / 流式 SSR / 选择性水合</span></div>
+</div>
+
+<p>"异步 HTML 片段"这套手法的完整案例见<a href="https://innovation.ebayinc.com/stories/async-fragments-rediscovering-progressive-html-rendering-with-marko/">这篇 eBay 工程博客</a>;框架时代的三种延伸分别是<a href="https://www.patterns.dev/posts/progressive-hydration/">渐进式水合</a>、<a href="https://www.patterns.dev/posts/server-side-rendering/">流式服务器端渲染</a>、<a href="https://www.patterns.dev/posts/react-selective-hydration/">选择性水合</a>,思路都是同一件事的不同实现:别等全部东西都准备好才给用户看。</p>
+
+<h2>三、多语言类(i18n):设计阶段与交付阶段</h2>
+
+<h3>设计阶段要注意的事</h3>
+
+<table>
+<tr><th>维度</th><th>要点</th></tr>
+<tr><td>SEO 层面</td><td><code>&lt;html lang="..."&gt;</code> 声明语言;URL 里带区域设置(如 en_US、zh_CN);用 <code>&lt;link rel="alternate" hreflang="..."&gt;</code> 告诉搜索引擎同一内容还有其他语言版本;给不匹配的语言配一个 <code>hreflang="x-default"</code> 兜底页。</td></tr>
+<tr><td>区域设置 ≠ 语言</td><td>语言区域设置(locale)管的是数字、日期、货币怎么显示,按地区划分,不完全等同于国家边界。</td></tr>
+<tr><td>同一语言,不同"版本"</td><td>使用广泛的语言在不同地区可能有不同语法/拼写/字符,比如 en-US 和 en-GB、zh-CN 和 zh-TW,不能假设一种版本能代表整个语言。</td></tr>
+<tr><td>预测但不要限制</td><td>服务器可以用 <code>Accept-Language</code> 头加 IP 猜访问者的语言区域设置,但猜测不是万无一失的(比如用户开了 VPN),要留一个能轻松手动切换的入口。</td></tr>
+<tr><td>文本长度差异</td><td>同一句话在不同语言里长度不同,标题、标签、按钮这类短文本最容易被撑破布局;正文这类自由流动的文本受影响较小。</td></tr>
+<tr><td>阅读方向</td><td>希伯来语、阿拉伯语等是从右到左书写,布局和元素位置要能适配。</td></tr>
+<tr><td>别拼接翻译字符串</td><td>类似 <code>"今天的日期是 " + date</code> 的写法会在语序不同的语言里崩掉,应该用带参数替换的模板字符串。</td></tr>
+<tr><td>日期/货币格式</td><td>不同地区习惯不同,比如美式"月在前"和欧洲"日在前"。</td></tr>
+<tr><td>别把文字做进图片</td><td>图片里嵌文字不好翻译,每种语言都要单独出一张图,对设计师不是可持续的工作流程。</td></tr>
+<tr><td>颜色的文化含义</td><td>同一种颜色在不同语言/文化里被感知的方式不一样,配色要考虑这一点。</td></tr>
+</table>
+
+<p>这部分设计原则的参考出处见<a href="https://devblogs.microsoft.com/setup/the-differences-between-locales-and-languages">区域设置和语言之间的差异</a>。</p>
+
+<h3>交付阶段:把对的语言送到对的人面前</h3>
+<p>浏览器发请求时通常会在 <code>Accept-Language</code> 里带语言偏好;服务器可以据此返回对应语言的文档版本,并在 <code>&lt;html lang="..."&gt;</code> 里声明当前用的是哪种语言。要让搜索引擎知道同一内容还有别的语言版本,用带 <code>rel="alternate"</code> 和 <code>hreflang="..."</code> 的 <code>&lt;link&gt;</code> 逐一标注。渲染这份内容,常见两条路:</p>
+
+<table>
+<tr><th>渲染方式</th><th>怎么做</th></tr>
+<tr><td>服务端渲染</td><td>HTML 标记先留字符串占位符,服务端按语言从代码配置或翻译服务取内容,动态生成该语言版本的页面。</td></tr>
+<tr><td>客户端渲染</td><td>提取对应区域设置的字符串,和基于 JavaScript 的视图结合后再渲染出来。</td></tr>
+</table>
+
+<p>这道题有一个前提要记住:讨论的是"同一页面只用一种语言一致地显示",不是"一页混排多语言"的场景。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>渐进式渲染(Progressive Rendering)</dt>
+<dd>让浏览器尽快把内容摆到用户眼前的一组技术组合——图片懒加载、优先渲染首屏内容、异步 HTML 片段,以及框架时代的渐进式水合/流式 SSR/选择性水合都算在内。<em>避免</em>把它等同于"随便延迟加载点什么就算渐进式渲染";它的目标是尽快显示,不是尽量晚加载。</dd>
+<dt>语言区域设置(locale)与语言</dt>
+<dd>语言决定用什么词汇和语法,区域设置(locale)决定数字、日期、货币怎么显示,同一种语言在不同地区可能对应不同区域设置(如 en-US 和 en-GB)。<em>避免</em>把 <code>lang="en"</code> 当成"这页面已经适配好所有英语国家的格式";没标区域设置,日期和货币的展示规则仍然不确定。</dd>
+<dt>DOCTYPE</dt>
+<dd>声明文档遵守哪个 HTML 规范版本的标记,浏览器识别后进入 no-quirks 模式解析,识别不出则退回 quirks 模式。<em>避免</em>把它当成一句可删可留的历史遗留样板——少了它,浏览器排版行为会整体变得不可预期。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>这几道题在真实工作里最常出现的场景,不是被面试官逐字追问定义,而是 code review 时被抓这些细节:图片组件是不是该加 <code>srcset</code>/<code>loading="lazy"</code>、多语言项目里字符串是不是被硬拼接了、<code>&lt;script&gt;</code> 标签堆在 <code>&lt;head&gt;</code> 里却没打 <code>defer</code> 导致首屏变慢。把这节课当成一份检查清单,比背定义更有用。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"把 <code>&lt;script&gt;</code> 挪到 <code>&lt;/body&gt;</code> 前"当成性能优化的万能解药。</strong>挪位置只解决了脚本会不会挡 HTML 解析这一件事;脚本里还留着 <code>document.write()</code>,或者其实更想让浏览器提前发起下载请求,答案是在 <code>&lt;head&gt;</code> 里加 <code>defer</code>,不是死记"脚本放最后"。同理,<code>data-</code> 属性也常被当成"存应用状态的地方"——它本来是给没有更合适属性时的兜底方案,以及给 E2E 测试当选择器用,不是数据模型的主战场。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>打开手头一个真实项目的入口 HTML,做两件事:①检查 <code>&lt;head&gt;</code> 里的 <code>&lt;script&gt;</code> 标签有没有 <code>defer</code>/<code>async</code>,或者是不是该挪到 <code>&lt;/body&gt;</code> 前;②找一张响应式场景下的关键图片(比如首页 banner),看它有没有用 <code>srcset</code> 按宽度给出多个版本——没有的话,哪怕只是练习,也写一行加上。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>这 8 道题拆开看是零散的 trivia,拼起来只有一条逻辑:让用户尽快看到东西(渐进式渲染、CSS/JS 标签摆放、<code>srcset</code>),同时让不同语言/地区的用户看到对的东西(<code>lang</code>、<code>hreflang</code>、<code>Accept-Language</code>、别拼接字符串)——记住这条主线,比死记 8 个孤立答案更抗遗忘。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:<code>srcset="small.jpg 500w, medium.jpg 1000w, large.jpg 2000w"</code>,在 320px 设备宽度下,如果客户端是视网膜屏(2x),浏览器倾向选择哪张图,为什么? (A) large.jpg,因为分辨率越高的屏幕就该选最大的图 (B) small.jpg,因为 500w 是资源列表里的第一个值 (C) medium.jpg,因为它的比值(3.125)是几个候选里最接近 2 且不低于 2 的,能保证视网膜屏不糊</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。浏览器是拿设备目标密度去找"比值够用、又最接近"的候选,不是无条件选最大文件——large.jpg 的比值 6.25 对 2x 来说是浪费,(A) 把"分辨率越高就选最大"当成规则,忽略了比值匹配的逻辑。(B) 错在 500w 对应比值 1.5625,低于 2,在视网膜屏上会显得模糊,这恰恰是 1x 场景该选的答案,不是 2x。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于把 CSS <code>&lt;link&gt;</code> 放进 <code>&lt;head&gt;</code>、JS <code>&lt;script&gt;</code> 放在 <code>&lt;/body&gt;</code> 前,下面哪个说法最准确? (A) 把 <code>&lt;script&gt;</code> 放在 <code>&lt;head&gt;</code> 里且不加任何属性,和放在 <code>&lt;/body&gt;</code> 前效果完全一样,只是写法习惯不同 (B) 把 <code>&lt;script&gt;</code> 放在 <code>&lt;/body&gt;</code> 前能让 HTML 先解析、先显示给用户,但脚本里若留着 <code>document.write()</code>,这个位置的收益会被打破,这也是该规则的一个例外情况 (C) CSS <code>&lt;link&gt;</code> 应该放在 <code>&lt;body&gt;</code> 末尾,这样才不会挡住页面的首次渲染</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>,这也是源材料明确点出的例外情况。(A) 错在把 <code>&lt;script&gt;</code> 放 <code>&lt;head&gt;</code> 且没有 <code>defer</code>/<code>async</code> 时会阻塞 HTML 解析,和放在 <code>&lt;/body&gt;</code> 前的效果并不相同。(C) 正好说反了——CSS <code>&lt;link&gt;</code> 要放进 <code>&lt;head&gt;</code> 才能保证渐进式渲染、避免 FOUC,放到 <code>&lt;body&gt;</code> 末尾反而会挡住渐进式渲染,让用户先看到一片空白或未设置样式的内容。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<ul>
+<li><a href="https://innovation.ebayinc.com/stories/async-fragments-rediscovering-progressive-html-rendering-with-marko/">Async fragments: rediscovering progressive HTML rendering with Marko</a> —— eBay 工程博客,渐进式渲染里"异步 HTML 片段"技术的完整案例。</li>
+<li><a href="https://www.patterns.dev/posts/progressive-hydration/">Progressive Hydration</a> —— patterns.dev 对渐进式水合的图解说明。</li>
+<li><a href="https://www.patterns.dev/posts/server-side-rendering/">Server-Side Rendering</a> —— patterns.dev 对流式 SSR 等渲染模式的系统梳理。</li>
+<li><a href="https://devblogs.microsoft.com/setup/the-differences-between-locales-and-languages">The differences between locales and languages</a> —— 多语言设计一节里区分"语言区域设置"与"语言"的参考出处。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"为什么 <code>&lt;script&gt;</code> 放底部会挡渲染",也可以让老师帮你对着自己项目里的一份 HTML,逐条过一遍这节课的检查清单。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0008-css-trivia-responsive-browser-compat.html"><span class="dir">← 上一课</span>CSS 高频问答 III:响应式、视觉效果与浏览器兼容</a>
+  <a class="next" href="0010-browser-web-api-a11y-trivia.html"><span class="dir">下一课 →</span>浏览器、Web API 与可访问性综合问答</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

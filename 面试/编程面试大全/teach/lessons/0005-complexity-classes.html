@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0005 · 常见复杂度类:从 O(1) 到 O(2ⁿ)</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0005 课 · 复杂度基石 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>常见复杂度类:从 O(1) 到 O(2ⁿ)</h1>
+
+<p class="lede">上一课你学会了「只看增长率」的思维方式。这节把它落成一张<strong>可以背下来的清单</strong>：面试里真正常见的六七个复杂度类各自长什么样、从哪来、能扛多大的 n。学完你能做一件很值钱的事——<strong>看一眼输入规模，就反推出面试官期望的复杂度</strong>。</p>
+
+<div class="recall">
+<p>先回忆：<a href="0004-big-o-intuition.html">上一课</a>的「翻倍测试」——n 变 2 倍，工作量变几倍，就落在哪条曲线上。先自己填：n 翻倍工作量不变是 ____ 类；翻倍就翻倍是 ____ 类；翻倍变 4 倍是 ____ 类。填得出来，这节就是给这几类配上「从哪来」和「能扛多大」。</p>
+</div>
+
+<h2>一、七个类,各有各的典型来源</h2>
+
+<p>复杂度类不是凭空记的——每一类都对应一批<strong>你一眼能认出的代码形状</strong>。看到那个形状，复杂度就出来了：</p>
+
+<ul>
+<li><strong>O(1) 常数</strong>：不随 n 变。哈希表查一个键、按下标取数组第 i 个、算术运算。</li>
+<li><strong>O(log n) 对数</strong>：每一步把问题<strong>砍掉一半</strong>。二分查找、在平衡二叉搜索树里查找、堆的插入/弹出。</li>
+<li><strong>O(n) 线性</strong>：把每个元素<strong>看一遍</strong>。一重循环扫数组、遍历链表。</li>
+<li><strong>O(n log n) 线性对数</strong>：好排序的门槛。归并排序、堆排序、快排（平均），以及「排序 + 一遍扫描」的套路。</li>
+<li><strong>O(n²) 平方</strong>：<strong>双重循环</strong>、每个元素和其余每个元素两两比。朴素排序（冒泡/选择/插入）、朴素两两配对。</li>
+<li><strong>O(2ⁿ) 指数</strong>：枚举<strong>所有子集</strong>——每个元素「选或不选」。朴素求幂集、不剪枝的回溯。</li>
+<li><strong>O(n!) 阶乘</strong>：枚举<strong>所有排列</strong>——朴素解旅行商、生成全排列。</li>
+</ul>
+
+<h2>二、能扛多大的 n(按对数长度看)</h2>
+
+<p>下面这张图把「每一类大约能处理多大的 n」画在<strong>对数刻度</strong>上（每一格代表 10 倍），这样天差地别的规模才塞得进一屏。条越长，能吞的数据越多:</p>
+
+<figure class="diagram">
+<div class="bars">
+  <div class="row"><div class="lbl">O(n) 线性</div><div class="track"><div class="val c" style="width:100%">n 到 ~10⁸</div></div></div>
+  <div class="row"><div class="lbl">O(n log n)</div><div class="track"><div class="val b" style="width:80%">n 到 ~10⁶</div></div></div>
+  <div class="row"><div class="lbl">O(n²) 平方</div><div class="track"><div class="val a" style="width:47%">n 到 ~10⁴</div></div></div>
+  <div class="row"><div class="lbl">O(2ⁿ) 指数</div><div class="track"><div class="val base" style="width:16%">n 到 ~22</div></div></div>
+  <div class="row"><div class="lbl">O(n!) 阶乘</div><div class="track"><div class="val base" style="width:13%">n 到 ~11</div></div></div>
+</div>
+<figcaption>粗略按「1 秒能做约 10⁸ 次操作」估算的经验上限（O(1)/O(log n) 几乎不受 n 限制，未画）。注意条长是<strong>对数</strong>的——O(n²) 那条只比 O(n log n) 短一点，但实际能扛的 n 差了整整 100 倍。</figcaption>
+</figure>
+
+<h2>三、一张对照表</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">复杂度类</th><th>典型来源</th><th>n=10⁶ 时操作量级</th><th>大致可承受 n</th></tr></thead>
+<tbody>
+<tr><td class="op">O(1)</td><td>哈希查找 / 数组下标</td><td class="best">1</td><td class="best">无限制</td></tr>
+<tr><td class="op">O(log n)</td><td>二分 / 平衡树</td><td class="best">≈20</td><td class="best">几乎无限制</td></tr>
+<tr><td class="op">O(n)</td><td>线性扫描</td><td>10⁶</td><td>~10⁸</td></tr>
+<tr><td class="op">O(n log n)</td><td>归并 / 堆排 / 快排(平均)</td><td>≈2×10⁷</td><td>~10⁶</td></tr>
+<tr><td class="op">O(n²)</td><td>双重循环 / 朴素排序</td><td class="warn">10¹²</td><td class="warn">~10⁴</td></tr>
+<tr><td class="op">O(2ⁿ)</td><td>子集枚举 / 不剪枝回溯</td><td class="warn">天文数字</td><td class="warn">~22</td></tr>
+<tr><td class="op">O(n!)</td><td>排列枚举 / 朴素 TSP</td><td class="warn">天文数字</td><td class="warn">~11</td></tr>
+</tbody>
+</table>
+<p>「可承受 n」是经验数量级，不是硬阈值——它假设每次操作是常数时间、机器每秒约做 10⁸ 次。重点不在记死数字，而在建立一种<strong>反射</strong>：题目给的 n 一出来，脑子里就该跳出「哪些复杂度还活着、哪些已经出局」。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>复杂度类(Complexity Class)</dt>
+<dd>一组增长率相同的算法的归类，如 O(n)、O(n log n)。面试里你选算法，本质就是在选让自己落进哪个类。</dd>
+<dt>O(n log n) 门槛</dt>
+<dd>比较排序的理论下界是 Ω(n log n)——只靠两两比较，没法比这更快。所以「先排序」这一步的成本天然是 O(n log n)，是很多解法的基准线。</dd>
+<dt>指数级(O(2ⁿ) / O(n!))</dt>
+<dd>随 n 爆炸式增长、n 稍大就跑不动的一类。只有当输入很小（n 约 ≤ 20），或题目本质无多项式解时，它才是可接受的答案。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>这节最实用的产出，是把「输入规模」当成<strong>面试官悄悄给的提示</strong>来读:</p>
+<ul>
+<li><strong>n ≤ 20 左右</strong>：指数级 / 阶乘可接受——大概率是回溯、状压 DP、子集/排列枚举类问题。</li>
+<li><strong>n ≤ 1000~2000</strong>：O(n²) 能过——放心用双重循环、区间 DP 这类平方解法。</li>
+<li><strong>n ≥ 10⁵</strong>：必须 O(n log n) 以内——排序、二分、哈希、单调栈/双指针，把 O(n²) 的暴力砍掉。</li>
+<li><strong>n ≥ 10⁷~10⁸</strong>：基本只剩 O(n) 或 O(log n)——一遍扫描、哈希、前缀和。</li>
+</ul>
+<p>面试时把这个反推说出声：「n 到 10⁵，O(n²) 会超时，所以我要找 O(n log n) 的做法」——这句话本身就是加分项。</p>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:纠结对数的底。</strong>O(log₂n)、O(log₁₀n)、O(ln n) 在大 O 里<strong>是同一个</strong> O(log n)——换底只差一个常数因子（logₐn = log_b n / log_b a），而常数在大 O 里一律抹掉。所以别在面试里认真区分「以 2 为底还是以 10 为底」，那说明没抓住大 O 的要点。</p>
+<p><strong>坑二:把 O(n log n) 当成 O(n)。</strong>那个 log n 因子是实打实的额外一档——n=10⁶ 时它约是 20 倍。「排序后再扫一遍」是 O(n log n)，不是 O(n)；只有当你能用哈希或计数把排序省掉，才真降到 O(n)。混淆这两类，等于把一道题的目标复杂度记错了一档。</p>
+</div>
+
+<div class="implement">
+<p>动手核对：给自己出五道「看规模猜复杂度」的闪卡，正面写一个约束、背面写目标复杂度与典型手段，反复抽背——① n≤18；② n≤500；③ n≤2000；④ n≤2×10⁵；⑤ n≤5×10⁷。抽到能脱口而出「哪些复杂度出局、该往哪个方向想」才算过关。再挑一道你做过的题，回看它的 n 约束，验证当初的解法复杂度是否正好卡在容许线内。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条：</strong>每个复杂度类都对应一种能一眼认出的代码形状；而题目给的 n，就是面试官在告诉你「答案该落在哪个类里」。看规模、反推复杂度，再选算法。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一道题 n 最大到 2×10⁵，时限 1 秒。下面哪种复杂度<strong>最可能超时</strong>?</summary>
+<div class="answer">
+<p>正确答案是 <strong>O(n²)</strong>。n=2×10⁵ 时 n² = 4×10¹⁰，远超 1 秒能做的约 10⁸ 次操作，必然超时。O(n log n) 约 2×10⁵×18 ≈ 4×10⁶、O(n) 约 2×10⁵，都轻松过。<br>这题的用意就是那条反推法：<strong>n≥10⁵ 时 O(n²) 出局，必须做到 O(n log n) 以内</strong>。看到这个规模，第一反应就该是排序、二分、哈希或双指针。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:「因为我的二分用的是以 2 为底的对数，所以比别人以 10 为底的 O(log₁₀n) 更快。」这话对吗?</summary>
+<div class="answer">
+<p>不对。<strong>对数的底在大 O 里不重要</strong>——log₂n 和 log₁₀n 只差一个常数因子（约 3.32 倍），而大 O 抹掉一切常数，两者都是 O(log n)、属于同一个复杂度类，谈不上谁「更快」。<br>会纠结底数，恰恰暴露了没吃透大 O 的核心：它比较的是<strong>增长率的量级</strong>，不是带系数的精确值。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:题目说「n 最多 16，求所有满足条件的子集」。你该优先往哪个方向想?</summary>
+<div class="answer">
+<p>优先想<strong>指数级枚举 / 回溯 / 状压</strong>——n=16 意味着子集只有 2¹⁶ = 65536 个，全枚举完全跑得动。这么小的 n + 「所有子集」的措辞，是在明示 O(2ⁿ) 这一档是被允许的。<br>反面提醒：如果你在 n=16 的题上死磕「怎么优化到多项式」，多半是想复杂了——小 n 常常就是让你放心暴力的信号。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲的「算法复杂度 / Big-O / 渐进分析法」小节。配合下面几条:</p>
+<ul>
+<li><a href="http://bigocheatsheet.com/">Big-O 速查表(bigocheatsheet.com)</a> —— 各数据结构与排序算法的复杂度一览，本节这张对照表就是它的浓缩版。</li>
+<li><a href="https://www.youtube.com/watch?v=z1mkCe3kVUA">Skiena 讲算法复杂度(视频)</a> —— 把各复杂度类的来龙去脉讲得系统。</li>
+<li><a href="https://www.youtube.com/playlist?list=PL9xmBV_5YoZMxejjIyFHWa-4nKg6sdoIv">[回顾] 在 18 分钟内分析算法(播放列表)</a> —— 想快速刷一遍各类分析套路。</li>
+</ul>
+<p>随手对照也可查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的，回到会话里问你的 AI 老师——可以让老师随机报一个 n 约束，让你现场喊出「哪些复杂度出局」。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0004-big-o-intuition.html"><span class="dir">← 上一课</span>大 O 记号:只看增长率</a>
+  <a class="next" href="0006-amortized-analysis.html"><span class="dir">下一课 →</span>摊还分析:偶尔昂贵,平均便宜</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

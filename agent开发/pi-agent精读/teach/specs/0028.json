@@ -1,0 +1,88 @@
+{
+ "num": "0028",
+ "slug": "cut-point-selection",
+ "title": "在哪切：有效切点、向后遍历与 Turn 分割",
+ "narrowTopic": "只讲『从哪里下刀』——有效切割点为什么排除 toolResult、为什么从后往前累积、为什么允许会切断 Turn 的 assistant 切点，以及 turnPrefix 如何弥补。",
+ "analogySeed": "剪辑一卷录像带：user 和 assistant 的画面处可以剪，但『我调用了 read 工具』和『工具返回的结果』这两帧必须连在一起——在中间剪断，模型就会看到『我调了工具，结果呢？』。而且要从最新一头往回量 20 分钟再下剪刀，因为最近发生的事最重要。",
+ "keyPoints": [
+  "结构约束：ToolResult 必须紧跟触发它的 AssistantMessage(含 ToolCall)之后；若把 ToolCall 留保留区、ToolResult 切进压缩区，模型会看到『调了工具但结果不见了』——上下文断裂。",
+  "有效切割点规则：user 和 assistant 都是合法切点，toolResult 不是。findValidCutPoints 会把所有 toolResult 位置排除。",
+  "切点的语义：切点不是『被切掉的最后一条』，而是『保留区的第一条』。切在 user 上，这个 user 开头的完整 Turn（user+后续 assistant+toolResult）全部进保留区，被压缩的是它之前的消息。",
+  "向后遍历：findCutPoint 从最新消息往回累积 token，累积量 >= keepRecentTokens(20,000) 就停，在停止位置之后找最近的有效切点下刀。",
+  "为什么从后往前：最近的上下文最重要——模型需要知道『刚才做了什么/读了什么文件/用户最新说了什么』，比 10 轮前讨论的更关键。",
+  "两类切点性质不同：user 切点天然保证 Turn 完整；assistant 切点会切断 Turn（它对应的 user 在压缩区，自己在保留区），isSplitTurn 为 true。",
+  "为什么仍允许 assistant 切点：若只允许 user 切点，保留区起点可能被迫拉到很早的 user，保留区过大、token 预算装不下，压缩失败甚至压不动。",
+  "turnPrefix 机制：被切断 Turn 的前缀（user 起点到切点之间的 assistant+toolResult）用专门的 TURN_PREFIX 3 段格式单独摘要，与主摘要并行(Promise.all)生成后合并。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "有效切割点的 entry 序列图与规则说明：entry 0-8 的类型条带 + '有效切割点=[1,2,4,5,7]，3/6/8(tool)全被排除'（第三节『不是哪里都能切』的 ASCII 图与那句 When we cut at an assistant message... 的注释）",
+   "cite": "教程 §三 / findValidCutPoints:L305"
+  },
+  {
+   "desc": "findCutPoint 向后遍历伪代码：从 entries.length-1 往回累积 estimateTokens，>= keepRecentTokens 时返回第一个 >= i 的 cutPoint（第三节『向后遍历』的 TypeScript 代码块）",
+   "cite": "教程 §三 / findCutPoint:L392-454"
+  },
+  {
+   "desc": "Turn 分割判断逻辑：isUserMessage 决定 turnStartIndex，isSplitTurn = !isUserMessage && turnStartIndex !== -1 的三行代码（第五节开头的 TypeScript 片段）",
+   "cite": "教程 §五 / findCutPoint:L444-453"
+  },
+  {
+   "desc": "turnPrefix 机制示意图：entry 1-9 条带标出 turnStart=1、turnPrefixMessages(2-6)、kept(7-9)，说明切点在 assistant(7) 时 user(1) 进主摘要、2-6 单独生成 turnPrefix 摘要（第五节『turnPrefix 机制』的 ASCII 图）",
+   "cite": "教程 §五 / turnPrefixMessages:L698-705"
+  }
+ ],
+ "designRationale": [
+  "为什么排除 toolResult 作切点：这是 LLM 对话协议的硬约束——toolResult 必须紧跟 toolCall，切断会让模型『调了工具找不到结果』。这是不可妥协的正确性约束，不是优化项。",
+  "为什么从后往前累积而非从前往后：判断依据是『最近的上下文最重要』，逆向遍历确保优先保住近期消息，把要压缩的旧消息留在前面。",
+  "为什么允许会切断 Turn 的 assistant 切点：只允许 user 切点会让保留区起点被迫前移、保留区过大装不下预算，导致压缩效率低甚至失败。允许 assistant 切点才能精确控制保留的 token 量。",
+  "为什么用 turnPrefix 弥补而非禁止 split turn：Pi 选择『优先保证压缩能生效』，用轻量的 3 段 turnPrefix 摘要补偿被切断 Turn 的完整性损失——这是效率与完整性之间的显式权衡。"
+ ],
+ "quiz": [
+  {
+   "stem": "findValidCutPoints 把所有 toolResult 位置都排除在合法切点之外。这条规则背后的硬约束是什么？",
+   "options": [
+    "toolResult 消息通常太大，压缩它收益最高",
+    "toolResult 必须紧跟触发它的 toolCall，切断会让模型『调了工具却找不到结果』",
+    "toolResult 的 token 无法用 chars/4 估算",
+    "toolResult 属于系统消息，不能被 LLM 读取"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对，这是 LLM 对话协议的正确性硬约束，不是优化。延伸：user/assistant 之所以是合法切点，正因为在它们后面切不会拆散任何 toolCall-toolResult 对。",
+   "noMsg": "想想如果把 toolCall 留在保留区、把它的 toolResult 切进压缩区，模型看到的对话会缺什么？这是完整性问题还是性能问题？"
+  },
+  {
+   "stem": "findCutPoint 为什么是『从最新消息往回累积 token』，而不是从最旧的往后走？",
+   "options": [
+    "因为向后遍历的算法复杂度更低",
+    "因为最旧的消息 token 估算最不准",
+    "因为 toolResult 大多集中在对话开头",
+    "因为最近的上下文最重要——模型更需要『刚才读了什么/用户最新说了什么』，逆向遍历优先保住近期消息"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。逆向遍历直到累积够 keepRecentTokens(20K)，天然把近期消息留在保留区。延伸：这也是为什么这个函数被描述成『找哪里值得保留』而非『找哪里能切』。",
+   "noMsg": "问自己：对继续工作而言，是 10 轮前讨论的内容重要，还是刚才读了哪个文件、用户最新的指令重要？遍历方向应该优先保护哪一头？"
+  },
+  {
+   "stem": "assistant 切点会切断 Turn（它对应的 user 落在压缩区）。既然如此麻烦，为什么 Pi 不干脆只允许 user 切点来彻底避免 split turn？",
+   "options": [
+    "因为 user 切点会破坏 toolCall-toolResult 对",
+    "因为只有 assistant 消息才携带文件操作信息",
+    "因为只允许 user 切点会让保留区起点被迫前移、保留区过大装不下 token 预算，导致压缩效率低甚至压不动",
+    "因为 user 切点的 token 估算总是偏高"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对，这是效率与完整性的权衡：允许 assistant 切点才能精确控制保留 token 量，代价是切断的 Turn 用 turnPrefix 摘要弥补。延伸：turnPrefix 用的是比主摘要更轻量的 3 段格式，而非 6 section。",
+   "noMsg": "看第五节那个例子：若向后累积到 entry 6 预算用完，但最近的 user 是 entry 1，只允许 user 切点会被迫保留 entry 1-8。这么多 entry 的 token 塞得下预算吗？"
+  }
+ ],
+ "_chapter": "第9章-上下文压缩",
+ "_chapterCN": "上下文压缩：当对话太长怎么办",
+ "prevFile": "0027-why-compact-and-when-to-trigger.html",
+ "prevNum": "0027",
+ "nextFile": "0029-structured-summary-and-rebuild.html",
+ "nextNum": "0029",
+ "crumbLabel": "第 9 章 · 上下文压缩",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第9章-上下文压缩-当对话太长怎么办.md",
+ "filename": "0028-cut-point-selection.html"
+}

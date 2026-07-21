@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0002 · 自注意力与多头:一行公式撑起整个大模型</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第一部分 基础与 Transformer · 第 0002 课</p>
+<h1>自注意力与多头:一行公式撑起整个大模型</h1>
+<p class="lede">这节课一口气答清面试最常开场的三道基础题:<strong>「自注意力怎么工作?」「为什么需要多头?」「高层看 Transformer 在干什么?」</strong>(源:60 题·LLM 第 7、9 题;AI 工程师题库 Q6)。目标是让你能空手写出 <span class="nowrap">$\operatorname{softmax}(QK^\top/\sqrt{d_k})\,V$</span>,并答得住面试官最爱追的两个「为什么」。</p>
+
+<div class="recall">
+<p>Transformer 之所以取代 RNN,一个核心动机:RNN 处理序列要一步步递推,离得远的两个词要走很多步才能「互相看到」,又慢又易遗忘。<strong>先别往下看:如果想让序列里任意两个位置「一步」就建立联系,你会怎么设计?</strong></p>
+</div>
+
+<h2>一、直觉:注意力就是「带权检索」</h2>
+<p>忘掉矩阵。自注意力做的事本质是<strong>一次加权求和</strong>:每个位置的新表示,是序列里所有位置的信息按「相关度」加权混合出来的——相关度越高,权重越大。这正是它一步打通长距离依赖的原因。</p>
+<p>用查字典的比喻最好懂,三个角色 <strong>Q / K / V</strong> 各司其职:</p>
+
+<div class="trio">
+  <div class="cell"><strong>Q(Query)</strong><br>我要找什么<br><em>你带着的问题</em></div>
+  <div class="cell"><strong>K(Key)</strong><br>每条信息的「标签」<br><em>书脊上的索引</em></div>
+  <div class="cell"><strong>V(Value)</strong><br>每条信息的「内容」<br><em>书里真正的正文</em></div>
+</div>
+<p>流程:拿 <strong>Q</strong> 去和每个 <strong>K</strong> 比相似度(点积)→ 分数经 softmax 变成一组和为 1 的权重 → 用这组权重加权求和所有 <strong>V</strong>。相似的键,它的值就被更多地读进来。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">输入 $X$</div>
+  <div class="arrow">→</div>
+  <div class="node">三套线性投影<br>$W_Q,W_K,W_V$</div>
+  <div class="arrow">→</div>
+  <div class="node">$Q,\;K,\;V$</div>
+  <div class="arrow">→</div>
+  <div class="node">打分<br>$QK^\top/\sqrt{d_k}$</div>
+  <div class="arrow">→</div>
+  <div class="node">$\operatorname{softmax}$<br>→ 权重</div>
+  <div class="arrow">→</div>
+  <div class="node good">加权求和<br>$\times V$ → 输出</div>
+</div>
+<figcaption>同一个输入 $X$ 被投影成三份角色,再走「打分 → 归一化 → 加权取值」。</figcaption>
+</figure>
+
+<h2>二、关键定义与公式</h2>
+<dl class="keydef">
+<dt>缩放点积注意力(Scaled Dot-Product Attention)</dt>
+<dd>$$\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V$$</dd>
+<dd><em>$Q,K\in\mathbb{R}^{n\times d_k}$、$V\in\mathbb{R}^{n\times d_v}$;$n$ 是序列长度,$d_k$ 是每个头的维度。$QK^\top$ 得到 $n\times n$ 的注意力分数矩阵,行代表「谁在看」,列代表「看谁」。</em></dd>
+</dl>
+<p>三份角色都来自同一个输入,只是乘了三个<strong>可学习</strong>的权重矩阵:$Q=XW_Q,\;K=XW_K,\;V=XW_V$。「自注意力」的「自」就在这里——Q、K、V 全部源于同一段序列自己(区别于交叉注意力,那里 Q 来自解码器、K/V 来自编码器)。</p>
+
+<h2>三、面试最爱的两个「为什么」</h2>
+
+<h3>为什么 Q 和 K 要用<em>不同</em>的权重矩阵?</h3>
+<p>若 $W_Q=W_K$,注意力分数 $QK^\top$ 就近似对称,且一个词和自己的点积几乎总是最大——每个位置只会拼命关注自己,退化成没用的「自恋注意力」。用两套不同投影,才能表达<strong>非对称</strong>关系:「主语」该重点看「谓语」,但「谓语」未必同样看「主语」。语言里的依赖本就是有方向的。</p>
+
+<h3>为什么要除以 $\sqrt{d_k}$?</h3>
+<p>设 $q,k$ 各维独立、均值 0、方差 1,则点积 $q\cdot k=\sum_{i=1}^{d_k} q_i k_i$ 的方差随维度线性放大:</p>
+$$\operatorname{Var}(q\cdot k)=d_k \quad\Rightarrow\quad \text{标准差}\approx\sqrt{d_k}$$
+<p class="formula-note">维度越大,点积绝对值越容易冲到很大。</p>
+<p>点积一大,softmax 输入就被推到饱和区——输出几乎变成 one-hot,梯度趋近 0,训练几乎学不动。除以 $\sqrt{d_k}$ 把方差拉回 1 附近,softmax 停在梯度健康的区间。<strong>注意:除的是每个头的维度 $d_k$,不是 $d_{\text{model}}$。</strong></p>
+
+<h2>四、为什么需要多头(Multi-Head)?</h2>
+<p>单头注意力只能学一种「关注模式」。多头把注意力并行成 $h$ 份,每份有自己的 $W_Q,W_K,W_V$,各自在不同的<strong>表示子空间</strong>里捕捉不同关系,最后拼接再线性变换:</p>
+$$\operatorname{MultiHead}(X)=\operatorname{Concat}(\text{head}_1,\dots,\text{head}_h)\,W_O,\quad \text{head}_i=\operatorname{Attention}(XW_Q^i,\,XW_K^i,\,XW_V^i)$$
+<p>三点好处,面试答这三条就够:</p>
+<ul>
+<li><strong>更丰富的表示</strong>:一个头盯句法、另一个头盯语义/指代,并行捕捉多种依赖。</li>
+<li><strong>更稳的注意力</strong>:不同头分别关注局部与全局,平衡短距与长距信息。</li>
+<li><strong>几乎不增计算</strong>:每个头维度降到 $d_k=d_{\text{model}}/h$,总计算量与单头同量级——是「用同样的钱买到多视角」。</li>
+</ul>
+
+<div class="implement">
+<p>把公式翻译成代码,自己敲一遍(注意 mask 加在 softmax <em>之前</em>):</p>
+<pre><code>import torch, torch.nn.functional as F
+
+def attention(Q, K, V, mask=None):
+    d_k = Q.size(-1)
+    scores = Q @ K.transpose(-2, -1) / d_k ** 0.5   # [n, n]
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, float('-inf'))
+    weights = F.softmax(scores, dim=-1)             # 每行和为 1
+    return weights @ V                              # 加权求和</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「Q、K、V 分别是什么、从哪来?」——同一输入乘三套可学习权重;别答成「三个不同的输入」。</li>
+<li>「自注意力的时间/空间复杂度?」——$O(n^2 d)$,瓶颈在 $n\times n$ 的分数矩阵;这正是长上下文又慢又贵的根因(引出第 0003 课 FlashAttention/MQA)。</li>
+<li>「为什么除以 $\sqrt{d_k}$?不除会怎样?」——考你懂不懂 softmax 饱和与梯度消失。</li>
+<li>「多头之间会不会冗余?」——会,研究发现部分头可剪枝;但训练时多头显著提升表达,是标准配置。</li>
+<li>「decoder-only 模型的注意力有何不同?」——因果(causal)注意力,每个 token 只能看它之前的,这才使「预测下一个词」成立。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>缩放因子是 $\sqrt{d_k}$(单头维度),<strong>不是</strong> $\sqrt{d_{\text{model}}}$。多头下 $d_k=d_{\text{model}}/h$。</li>
+<li>因果 mask 要在 softmax <em>之前</em>把被遮位置设为 $-\infty$,使其 softmax 后权重为 0;在之后置 0 会破坏归一化。</li>
+<li>说「Q、K 可以共享权重」是错的——会导致注意力对称退化(见上)。</li>
+<li>别说「多头一定比单头强/一定更省计算」:多头的价值是<strong>多视角表达</strong>,总计算量与单头<em>同量级</em>而非更省;个别头确有冗余可剪。绝对化措辞是面试扣分点。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>缩放点积注意力里除以 $\sqrt{d_k}$,最主要为了解决什么?</p>
+<details><summary>A. 把注意力权重归一化到 0~1 之间</summary>归一化是 softmax 干的事,不需要额外缩放。</details>
+<details><summary>B. 点积随维度增大而变大,推 softmax 进饱和区导致梯度消失 ✅</summary>正确。缩放把点积方差拉回 1 附近,让 softmax 停在梯度健康区间。</details>
+<details><summary>C. 加速矩阵乘法的计算</summary>缩放是逐元素除,不改变矩阵乘的计算量。</details>
+<details><summary>D. 防止模型过拟合</summary>与正则化无关。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于多头注意力,下列哪句最准确?</p>
+<details><summary>A. 多头把模型总计算量提升了 h 倍</summary>不对。每头维度降到 $d_{\text{model}}/h$,总量与单头同量级。</details>
+<details><summary>B. 多头让不同头在不同子空间并行捕捉不同关系,提升表达,且总计算量与单头同量级 ✅</summary>正确。这才是多头的核心价值。</details>
+<details><summary>C. 多头的每个头必须共享同一套 Q/K/V 权重</summary>恰恰相反,每头有各自独立的投影权重。</details>
+<details><summary>D. 多头能消除自注意力的 O(n²) 复杂度</summary>无关。复杂度瓶颈仍在 $n\times n$ 分数矩阵。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Attention Is All You Need</strong>(Vaswani et al., 2017)——缩放点积注意力、多头与 Transformer 的原始论文,§3.2 就是本课公式。</li>
+<li>想弄清「$\sqrt{d_k}$ 从哪来」,顺着论文脚注读方差推导;本课 $\operatorname{Var}(q\cdot k)=d_k$ 即出自此。</li>
+<li>下一步:位置编码与长上下文瓶颈(第 0003 课)、预训练机制与 GPT/BERT 之别(第 0004 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>注意力 = 用 Q·K 相似度做权重、对 V 加权求和;除以 $\sqrt{d_k}$ 防 softmax 饱和;多头 = 多视角并行、同量级计算。</strong></p>
+<nav class="lesson-nav">
+<a href="0001-generative-vs-discriminative.html">← 上一课:生成式 vs 判别式与 GAN/VAE</a>
+<a href="0003-positional-encoding-long-context.html">下一课:位置编码与长上下文瓶颈 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

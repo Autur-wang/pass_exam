@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-LESSONS = Path("/Users/wangzihao/Code/pass_exam/operating_systems/lessons")
+LESSONS = Path("/Users/bytedance/pass_exam/operating_systems/lessons")
 
 # 章节测试链接（lesson → 章节测试）
 # 一个 lesson 可能涉及多个章节，所以可能挂多个

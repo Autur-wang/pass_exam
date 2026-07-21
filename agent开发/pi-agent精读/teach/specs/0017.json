@@ -1,0 +1,89 @@
+{
+ "num": "0017",
+ "slug": "errors-are-messages",
+ "title": "永不抛出:工具出错也是一条消息",
+ "narrowTopic": "工具执行的任何错误(尤其 execute 抛的未知异常)如何被翻译成 isError:true 的消息,以及「工具内部识别+框架兜底」的两层错误处理。",
+ "analogySeed": "医院的分诊台:不管你是感冒、骨折还是叫不出名字的怪病,都不会被直接轰出医院,而是统一登记成一张病历卡交给医生——医生(模型)看卡上写的越具体,越知道下一步该怎么治。",
+ "keyPoints": [
+  "承接前文:五步管道每步出错都被编码成 isError:true 的消息。但若 tool.execute 内部抛未捕获异常呢?文件不存在、权限拒绝、超时、JSON 解析失败——不处理就会穿透管道打断 Agent Loop。",
+  "6 种错误 1 种产物:工具未找到、prepareArguments 抛异常、Schema 验证失败、beforeToolCall 阻止、tool.execute 抛异常、afterToolCall 抛异常——最终形态全是一条 isError:true 的 ToolResultMessage,没有一种以「抛异常」逃出管道。",
+  "关键防护在 executePreparedToolCall 的 try-catch,做三件事:①异常被 catch 不穿透(ENOENT/EACCES/TIMEOUT/SyntaxError 统统止步);②异常被「翻译」成正常结果(createErrorToolResult 把异常转成 content 装错误文本的 AgentToolResult);③进度事件先发完再编码错误(catch 里 await Promise.all(updateEvents),否则 UI 会看到「先报错再吐进度」的乱序画面)。finally 里兜底关闭 acceptingUpdates 闸门。",
+  "异常与消息的区别不在内容,而在接收者:异常的接收者是调用栈(打断循环),消息的接收者是模型(消化错误后继续)。Pi 把异常翻译成消息,让工具出错成为模型可见、可处理的正常信息流。",
+  "为什么让模型自己决定比框架决定好:read 报文件不存在→模型可先 ls;edit 报 oldText 不匹配→模型可先 read 再调整;bash 报模块未找到→模型可先 npm install。每种场景正确的下一步都不同,只有模型有足够上下文判断。",
+  "错误描述越具体,模型纠错越强:「Offset 200 is beyond end of file (100 lines total)」远胜「Read failed」——后者只能盲目重试,前者让模型立刻明白 offset 给大了。所以工具内部绝不能随便 throw new Error(\"failed\")。",
+  "两层错误处理分层负责:第一层工具内部主动识别已知错误、包装成具体描述(Bash 用 appendStatus 把「已输出内容+具体原因」打包,识别不了才 throw err);第二层框架被动兜底,只在工具没识别时把 error.message 原样透传,不创造新描述。",
+  "埋钩子引向下一章:工具执行发出的 tool_execution_start/update/end 事件到底谁在监听?为什么 Agent 内核完全不需要知道 UI 的存在?这些消息又长什么样?——正是下一章「消息系统」要打开的问题。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "错误统一出口对照表(6 行:工具未找到/prepareArguments 抛异常/Schema 验证失败/beforeToolCall 阻止/tool.execute 抛异常/afterToolCall 抛异常 → 全部产出 isError:true 的 ToolResultMessage)",
+   "cite": "教程 §四 / 错误的统一出口"
+  },
+  {
+   "desc": "executePreparedToolCall 的双重防护代码(acceptingUpdates 标志、try 里 execute+await updateEvents、catch 里 createErrorToolResult、finally 关闸)",
+   "cite": "教程 §四 / agent-loop.ts:628-669"
+  },
+  {
+   "desc": "Bash 工具 catch 块「主动识别+重新包装」示范(aborted/timeout/exitCode 分支各用 appendStatus 打包,最后 throw err 原样抛出交框架兜底)",
+   "cite": "教程 §四 / bash.ts:390-407"
+  },
+  {
+   "desc": "模糊错误 vs 具体 error.message 对比(\"Read failed\" 对比 \"Offset 200 is beyond end of file (100 lines total)\")",
+   "cite": "教程 §四 / 错误描述越具体那段"
+  }
+ ],
+ "designRationale": [
+  "为什么把异常「伪装」成一条正常消息而不抛给外层:让模型自己决定下一步比框架替它决定更好——框架不知道文件不存在是路径写错还是该换文件,模型知道(它有对话历史里的上下文和用户意图)。",
+  "为什么 catch 里要先 await Promise.all(updateEvents) 再编码错误:保证已发出的 tool_execution_update 全部送达后才发出错消息,否则事件乱序,UI 会看到「先报错再吐最后一行进度」的诡异画面。",
+  "为什么工具内部要主动包装具体描述而不全靠框架兜底:createErrorToolResult 不做统一描述、只搬运 error.message,工具写得越具体模型看到的越有用——具体描述等于给模型一份「怎么改才对」的提示。",
+  "为什么识别不了的异常要 throw err 原样抛出而非 throw new Error(\"失败\"):笼统描述会把所有未知错误涂成同一种颜色让模型无法区分,原样透传至少保留 error.message 的真实信息,再由框架兜底成消息。",
+  "错误处理哲学一句话:错误信息是给模型的反馈,不是给框架的终止信号——这是 Agent 比传统脚本更「智能」的关键,错误成为下一步决策的输入而非流程终点。"
+ ],
+ "quiz": [
+  {
+   "stem": "Pi 把工具异常翻译成消息而不是抛给外层框架,最核心的理由是什么?",
+   "options": [
+    "抛异常的性能开销太大",
+    "让模型自己根据具体错误决定下一步(重试/换路径/解释),比框架统一决定更好",
+    "TypeScript 不允许在异步函数里抛异常",
+    "框架层没有 try-catch,接不住异常"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。文件不存在到底是路径写错还是该换文件,只有模型有足够上下文判断。把错误编码成消息,模型就能像人一样自我纠错,循环不因工具出错而崩。延伸:这就是「错误信息是给模型的反馈,不是给框架的终止信号」。",
+   "noMsg": "回看「为什么伪装成消息是最佳处理」那节——关键词是「让谁自己决定下一步」。"
+  },
+  {
+   "stem": "executePreparedToolCall 的 catch 块里,为什么要先 await Promise.all(updateEvents) 再返回错误结果?",
+   "options": [
+    "为了等待垃圾回收完成",
+    "为了给工具第二次执行的机会",
+    "为了确保已发出的进度事件全部送达,避免 UI 出现「先报错再吐进度」的乱序画面",
+    "为了让 TypeBox 重新验证参数"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。不先等进度事件发完就编码错误,UI 会看到工具先报错、再吐出最后一行进度的诡异顺序。延伸:这和 0015 里 acceptingUpdates 关闸是同一类「事件顺序正确性」的防御性细节。",
+   "noMsg": "回看双重防护代码解释的「三件事」中的第 3 件——它和事件的「顺序」有关。"
+  },
+  {
+   "stem": "自定义工具遇到一个自己也识别不了的异常,按 Pi 的最佳实践应该怎么做?",
+   "options": [
+    "直接 throw err 原样抛出,让框架兜底把 error.message 透传给模型",
+    "throw new Error(\"操作失败\") 给一个统一的兜底描述",
+    "吞掉异常,返回一个空的成功结果",
+    "把异常写进日志后返回 undefined"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。识别不了就原样 throw err,框架兜底 catch 会把 error.message 搬运给模型。写 throw new Error(\"操作失败\") 反而把所有未知错误涂成同一种颜色,模型无法区分。延伸:能识别的错误则要主动包装成「是什么错、为什么、怎么办」——这就是 Bash 工具的两层做法。",
+   "noMsg": "回看「写自定义工具的最佳实践」两条原则——对「识别不了的」错误,教程明确反对写哪种笼统描述?"
+  }
+ ],
+ "_chapter": "第5章 工具系统",
+ "_chapterCN": "工具系统——Agent 的手脚是怎么被管住的",
+ "prevFile": "0016-parallel-vs-sequential-scheduling.html",
+ "prevNum": "0016",
+ "nextFile": "0018-three-standard-llm-messages.html",
+ "nextNum": "0018",
+ "crumbLabel": "第 5 章 · 工具系统",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md",
+ "filename": "0017-errors-are-messages.html"
+}

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>编程面试速查表 · 复杂度 / 结构 / 排序 / 题型 / 系统设计</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+/* 速查表专属:更紧凑、更适合打印 */
+main { max-width: 52rem; }
+h2 { margin-top: 1.8rem; font-size: 1.12rem; }
+table { font-size: .85em; margin: .6rem 0; }
+th, td { padding: .35em .55em; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+@media (max-width: 40rem) { .two { grid-template-columns: 1fr; } }
+.tag { display:inline-block; font-family:"SF Mono",Menlo,monospace; font-size:.8em; background:var(--code-bg); border:1px solid var(--border); border-radius:4px; padding:.05em .4em; }
+@media print { .lesson-footer, .toplinks { display:none; } body{font-size:10pt;} h2{margin-top:1rem;} }
+</style>
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 速查表 · <a href="../index.html">门户</a> · <a href="../GLOSSARY.md">术语表</a> · 建议打印随身</p>
+<h1>编程面试速查表</h1>
+<p class="lede">面试前 10 分钟扫一遍。复杂度、结构操作、排序性质、「看到什么→用什么」、系统设计作答框架,一页收齐。每一条都能在对应微课里展开。</p>
+
+<h2>一、数据结构操作复杂度(平均 / 最坏)</h2>
+<table class="bigo">
+<thead><tr><th class="op">结构</th><th>访问</th><th>查找</th><th>插入</th><th>删除</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td class="op">数组 / 动态数组</td><td class="best">O(1)</td><td>O(n)</td><td>末尾摊还 O(1)</td><td>O(n)</td><td class="op">连续内存、缓存友好;中间增删要搬移</td></tr>
+<tr><td class="op">链表</td><td>O(n)</td><td>O(n)</td><td class="best">头部 O(1)</td><td class="best">已知节点 O(1)</td><td class="op">不连续、缓存不友好</td></tr>
+<tr><td class="op">栈 / 队列</td><td>O(n)</td><td>O(n)</td><td class="best">O(1)</td><td class="best">O(1)</td><td class="op">只在端部操作;队列用环形数组</td></tr>
+<tr><td class="op">哈希表</td><td>—</td><td class="best">O(1) / <span class="warn">O(n)</span></td><td class="best">O(1) / <span class="warn">O(n)</span></td><td class="best">O(1) / <span class="warn">O(n)</span></td><td class="op">最坏全冲突退化;不保证顺序</td></tr>
+<tr><td class="op">BST(不平衡)</td><td>O(h)</td><td>O(h)</td><td>O(h)</td><td>O(h)</td><td class="op">h 平均 log n、<span class="warn">最坏 n(退化)</span></td></tr>
+<tr><td class="op">平衡树(红黑/AVL)</td><td>O(log n)</td><td>O(log n)</td><td>O(log n)</td><td>O(log n)</td><td class="op">最坏也保证;map/set 底层</td></tr>
+<tr><td class="op">堆 / 优先队列</td><td class="best">取极值 O(1)</td><td>O(n)</td><td>O(log n)</td><td>弹极值 O(log n)</td><td class="op">建堆 O(n);只保证堆顶</td></tr>
+<tr><td class="op">Trie</td><td colspan="3" style="text-align:center">插/查/前缀均 O(L)</td><td>O(L)</td><td class="op">L=串长,与词数无关</td></tr>
+<tr><td class="op">并查集</td><td colspan="4" style="text-align:center">union / find 摊还 O(α(n)) ≈ O(1)</td><td class="op">路径压缩 + 按秩合并</td></tr>
+</tbody>
+</table>
+
+<h2>二、排序性质对照</h2>
+<table class="bigo">
+<thead><tr><th class="op">算法</th><th>平均</th><th>最坏</th><th>空间</th><th>稳定</th><th>原地</th></tr></thead>
+<tbody>
+<tr><td class="op">冒泡 / 插入</td><td>O(n²)</td><td>O(n²)</td><td class="best">O(1)</td><td class="best">是</td><td class="best">是</td></tr>
+<tr><td class="op">选择</td><td>O(n²)</td><td>O(n²)</td><td class="best">O(1)</td><td class="warn">否</td><td class="best">是</td></tr>
+<tr><td class="op">归并</td><td class="best">O(n log n)</td><td class="best">O(n log n)</td><td class="warn">O(n)</td><td class="best">是</td><td class="warn">否</td></tr>
+<tr><td class="op">快排</td><td class="best">O(n log n)</td><td class="warn">O(n²)</td><td>O(log n)</td><td class="warn">否</td><td class="best">是</td></tr>
+<tr><td class="op">堆排</td><td class="best">O(n log n)</td><td class="best">O(n log n)</td><td class="best">O(1)</td><td class="warn">否</td><td class="best">是</td></tr>
+<tr><td class="op">计数 / 基数</td><td class="best">O(n+k)</td><td class="best">O(n+k)</td><td class="warn">O(n+k)</td><td class="best">是</td><td class="warn">否</td></tr>
+</tbody>
+</table>
+<p style="font-size:.85em;color:var(--muted)">比较排序下界 Ω(n log n);计数/基数非比较可突破,但要求值域有界。快排最坏靠随机化 pivot 规避。库排序常用快排(小数组转插入)或 Timsort(归并+插入,稳定)。</p>
+
+<h2>三、看到什么 → 用什么</h2>
+<div class="two">
+<table>
+<thead><tr><th>题目信号</th><th>技术</th></tr></thead>
+<tbody>
+<tr><td>有序 + 找目标/边界</td><td class="tag">二分查找</td></tr>
+<tr><td>求满足条件的最小/最大值(答案单调)</td><td class="tag">二分答案</td></tr>
+<tr><td>把 O(n²) 降到 O(n)、去重、计数</td><td class="tag">哈希表</td></tr>
+<tr><td>数组上的连续区间/子数组</td><td class="tag">滑动窗口/双指针</td></tr>
+<tr><td>Top-K / 第 K 大 / 流式中位数</td><td class="tag">堆</td></tr>
+<tr><td>前缀匹配 / 自动补全</td><td class="tag">Trie</td></tr>
+<tr><td>动态连通性 / 岛屿合并</td><td class="tag">并查集</td></tr>
+</tbody>
+</table>
+<table>
+<thead><tr><th>题目信号</th><th>技术</th></tr></thead>
+<tbody>
+<tr><td>无权图最短路 / 层序</td><td class="tag">BFS + 队列</td></tr>
+<tr><td>非负权图最短路</td><td class="tag">Dijkstra</td></tr>
+<tr><td>连通分量 / 路径存在 / 网格</td><td class="tag">DFS</td></tr>
+<tr><td>有依赖求顺序 / 判环(有向)</td><td class="tag">拓扑排序</td></tr>
+<tr><td>列出所有组合/排列/子集</td><td class="tag">回溯</td></tr>
+<tr><td>方案数/最值 且子问题重叠</td><td class="tag">动态规划</td></tr>
+<tr><td>局部最优即全局(可证)</td><td class="tag">贪心</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>四、复杂度类 ↔ 可承受的输入规模</h2>
+<table class="bigo">
+<thead><tr><th>n 上限</th><th>期望复杂度</th><th>典型解法</th></tr></thead>
+<tbody>
+<tr><td>n ≤ 20</td><td>O(2ⁿ) / O(n!)</td><td class="op">子集/排列暴力、回溯</td></tr>
+<tr><td>n ≤ 500</td><td>O(n³)</td><td class="op">Floyd、区间 DP</td></tr>
+<tr><td>n ≤ 5000</td><td>O(n²)</td><td class="op">朴素 DP、双重循环</td></tr>
+<tr><td>n ≤ 10⁶</td><td>O(n log n)</td><td class="op">排序、堆、分治</td></tr>
+<tr><td>n ≥ 10⁷</td><td>O(n) / O(log n)</td><td class="op">线性扫、哈希、二分</td></tr>
+</tbody>
+</table>
+
+<h2>五、系统设计:45 分钟作答框架</h2>
+<div class="flow">
+  <div class="step decision">① 澄清需求 —— 别急着画图</div>
+  <div class="down">↓</div>
+  <div class="step">② 估容量 —— QPS / 存储 / 带宽,用「每个人都该知道的数字」量级</div>
+  <div class="down">↓</div>
+  <div class="step">③ 定 API 与数据模型 —— 接口签名 + 主要表/字段</div>
+  <div class="down">↓</div>
+  <div class="step">④ 画主干 —— 客户端 / 负载均衡 / 服务 / 缓存 / 存储</div>
+  <div class="down">↓</div>
+  <div class="step terminal">⑤ 逐点深挖瓶颈 —— 缓存、分片、复制、一致性哈希、消息队列</div>
+</div>
+<p style="font-size:.85em;color:var(--muted)"><strong>CAP</strong>:分区(P)发生时,一致性(C)与可用性(A)二选一——平时不需放弃。<strong>缓存三坑</strong>:穿透(查不存在的键→布隆过滤器/空值)、雪崩(集中过期→加随机抖动)、击穿(热点键过期→互斥锁重建)。<strong>一致性哈希</strong>:增删节点只迁移环上相邻区间,优于取模分片。</p>
+
+<h2>六、高频「会被追问」清单</h2>
+<ul style="font-size:.9em">
+<li>动态数组 push 为什么<strong>摊还 O(1)</strong>?→ 翻倍扩容,每个元素平均只被搬运常数次。</li>
+<li>哈希表最坏为什么 O(n)?→ 全部键冲突落到同一桶,退化成链表。</li>
+<li>快排什么时候退化 O(n²)、怎么避免?→ 已排序 + 固定 pivot;随机化/三数取中。</li>
+<li>建堆是 O(n) 还是 O(n log n)?→ 自底向上 heapify 是 <strong>O(n)</strong>。</li>
+<li>验证 BST 只比父子够吗?→ 不够,要传<strong>上下界</strong>。</li>
+<li>Dijkstra 能处理负权吗?→ 不能,负权用 Bellman-Ford。</li>
+<li>三次握手为什么三次?→ 防止历史失效连接请求突然到达而建立错误连接。</li>
+<li>浮点为什么不能用 == 比较?→ 二进制无法精确表示多数十进制小数,用 epsilon。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>每一行的展开都在对应微课里。回<a href="../index.html">门户</a>按主题深入,或让 AI 老师就任一条追问「为什么」。</p>
+</footer>
+</main>
+</body>
+</html>

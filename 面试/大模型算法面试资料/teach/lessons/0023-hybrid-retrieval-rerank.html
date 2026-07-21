@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0023 · 混合检索、Rerank 与多跳</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第六部分 RAG 与知识库 · 第 0023 课</p>
+<h1>混合检索、Rerank 与多跳</h1>
+<p class="lede">上一课把文档切块、向量化、灌进向量库,你以为检索就万事大吉了。可一旦用户搜的是型号「A100-80G」、错误码「ORA-01555」、人名缩写,纯向量检索经常<strong>漏检</strong>。这节课讲清楚:为什么要在语义检索之外补一路 BM25,为什么召回之后还要再来一次 Rerank,以及多跳问题怎么拆——这三样几乎是 RAG 系统设计题的必考三连。</p>
+
+<div class="recall">
+<p>上一课(分块、Embedding、向量库)我们靠余弦相似度找「语义相近」的块。<strong>先别往下看,想一个反例:用户查一个从没在训练语料里高频出现过的专有名词或精确编号,纯向量检索为什么可能把正确的那一块排到很后面?</strong></p>
+</div>
+
+<h2>一、问题:纯向量检索会漏检什么</h2>
+<p>向量检索(Dense Retrieval)的强项是<strong>语义</strong>:把 query 和 chunk 都压成一个稠密向量,比余弦相似度。「怎么退款」能召回「退货流程说明」,即便字面一个词都不重合——这是它的价值。</p>
+<p>但它的短板恰恰是<strong>字面精确匹配</strong>:</p>
+<ul>
+<li><strong>稀有词 / 专有名词</strong>:冷僻型号、错误码、API 名、人名缩写,embedding 模型没见过几次,向量表达很糊,语义空间里区分不开。</li>
+<li><strong>精确关键词</strong>:用户明确要「含这个词」的文档,向量检索却可能被一个「语义相似但没这个词」的块挤掉。</li>
+<li><strong>信息被稀释</strong>:一个长 chunk 平均池化成一个向量,关键 token 的信号被淹没。</li>
+</ul>
+<p>解决思路不是替换,而是<strong>互补</strong>:再拉一路擅长词面匹配的稀疏检索(Sparse Retrieval),两路结果融合。这就是<strong>混合检索(Hybrid Retrieval)</strong>。稀疏检索的代表算法,就是几十年经验沉淀下来的 <strong>BM25</strong>。</p>
+
+<div class="trio">
+  <div class="cell"><strong>Dense(向量)</strong><br>比语义<br><em>「退款」↔「退货流程」</em></div>
+  <div class="cell"><strong>Sparse(BM25)</strong><br>比词面<br><em>「A100-80G」精确命中</em></div>
+  <div class="cell"><strong>Hybrid</strong><br>两路融合<br><em>语义 + 关键词都不漏</em></div>
+</div>
+
+<h2>二、BM25:稀疏检索的三个支柱</h2>
+<p>BM25 给「query 里的词」和「文档」算一个相关性打分,核心是把三件事乘起来:<strong>词频饱和</strong>、<strong>逆文档频率(IDF)</strong>、<strong>文档长度归一化</strong>。完整公式:</p>
+$$\text{BM25}(D,Q)=\sum_{i=1}^{n}\text{IDF}(q_i)\cdot\frac{f(q_i,D)\cdot(k_1+1)}{f(q_i,D)+k_1\cdot\left(1-b+b\cdot\dfrac{|D|}{\text{avgdl}}\right)}$$
+<p class="formula-note">$q_i$ 是 query 里第 $i$ 个词;$f(q_i,D)$ 是它在文档 $D$ 里的词频;$|D|$ 是文档长度,$\text{avgdl}$ 是平均文档长度;$k_1,b$ 是超参。</p>
+
+<h3>支柱 1:IDF——稀有词更值钱</h3>
+$$\text{IDF}(q_i)=\log\frac{N-n(q_i)+0.5}{n(q_i)+0.5}$$
+<p class="formula-note">$N$ 是文档总数,$n(q_i)$ 是包含 $q_i$ 的文档数。</p>
+<p>衡量一个词的<strong>区分能力</strong>。「的」「是」几乎每篇都有,$n(q_i)$ 大,IDF 低;冷门专有名词只在少数文档出现,IDF 高、权重大。这正好补上了向量检索对稀有词不敏感的那块。</p>
+
+<h3>支柱 2:词频饱和——出现 20 次和 21 次差别不大</h3>
+<p>看分式那部分:分子分母都含 $f(q_i,D)$,当词频 $f$ 增大时,整体<strong>不是线性增长而是趋于饱和</strong>,上界约为 $k_1+1$。直觉:一个词出现 1 次和 2 次的差别,远大于出现 20 次和 21 次的差别——堆词不该无限加分,否则会被关键词堆砌骗过去。参数 $k_1$ 控制饱和速度:$k_1$ 越大越接近线性,越小越早饱和,经验取值大致在 $1.2\sim2.0$。</p>
+
+<h3>支柱 3:文档长度归一化——别让长文占便宜</h3>
+<p>看分母里的 $\left(1-b+b\cdot\frac{|D|}{\text{avgdl}}\right)$。长文档词多,偶然撞上 query 词的概率天然更高,不惩罚的话长文会拿到不公平的高分。$b$ 控制归一化强度:$b=0$ 不归一,$b=1$ 完全归一,经验常取 $0.5\sim0.75$。当 $|D|$ 大于平均长度时分母变大、得分被压低。</p>
+
+<h2>三、融合:两路分数怎么合到一起</h2>
+<p>Dense 出一个 top-N,BM25 出一个 top-N,怎么合成一个榜?两种主流做法:</p>
+<h3>线性加权</h3>
+$$\text{score}=\alpha\cdot\text{score}_{\text{vec}}+(1-\alpha)\cdot\text{score}_{\text{bm25}}$$
+<p>简单,但两路分数量纲不同(余弦在 $[-1,1]$,BM25 是无上界的正分),必须先各自归一化,$\alpha$ 也要调,对分布敏感。</p>
+<h3>RRF(Reciprocal Rank Fusion)——只看排名,不看分数</h3>
+$$\text{RRF}(d)=\sum_{r\in R}\frac{1}{k+\text{rank}_r(d)}$$
+<p class="formula-note">$R$ 是各路检索结果;$\text{rank}_r(d)$ 是文档 $d$ 在第 $r$ 路里的名次(从 1 开始);$k$ 是平滑常数,常用一个几十量级的值(如 60)。</p>
+<p>妙在<strong>只用名次、不用原始分数</strong>,天然免掉了量纲归一化的麻烦,鲁棒又好实现。一篇文档要是<strong>两路都排名靠前</strong>,两个倒数相加就顶上去了——这正是我们想要的「语义和词面都认可」的证据叠加。工程里 hybrid 融合默认给 RRF 是很常见的选择。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">Query</div>
+  <div class="node">向量检索<br>top-N</div>
+  <div class="node">BM25<br>top-N</div>
+  <div class="node">融合<br>RRF / 加权</div>
+  <div class="node">Rerank<br>cross-encoder</div>
+  <div class="node good">top-k<br>→ 送进 LLM</div>
+</div>
+<figcaption>混合检索的典型管线:两路并行召回 → 融合成一个候选集 → 精排 → 取头部几条喂给生成。</figcaption>
+</figure>
+
+<h2>四、Rerank:召回负责「广」,精排负责「准」</h2>
+<p>为什么融合完还要再排一次?因为召回阶段用的是 <strong>bi-encoder(双塔)</strong>:query 和 doc <strong>分开</strong>各自编码成向量,再比相似度。好处是 doc 向量能<strong>离线预计算</strong>、检索时只算 query 一次,快到能在百万级库里做 ANN。代价是 query 和 doc 从头到尾<strong>没有交互</strong>,精度有上限。</p>
+<p><strong>Rerank</strong> 换成 <strong>cross-encoder(交叉编码)</strong>:把 query 和候选 doc <strong>拼在一起</strong>送进同一个模型,让二者的 token 在注意力里充分交互,输出一个相关性分数。精度明显更高,但每个候选都要过一次模型,<strong>算不起全库</strong>——所以只能对召回出来的几十个候选做精排。</p>
+<p>这就是清晰的分工:<strong>召回(recall)图广、图快,尽量别漏;精排(rerank)图准,把真正相关的顶到最前。</strong>先广撒网(top-50/100),再精挑(top-3/5 喂 LLM)。为什么不直接全库 cross-encoder?算力扛不住,这是纯粹的工程权衡。</p>
+
+<table>
+<thead><tr><th></th><th>Bi-Encoder(召回)</th><th>Cross-Encoder(精排)</th></tr></thead>
+<tbody>
+<tr><td>Query 与 Doc</td><td>分开编码,无交互</td><td>拼在一起,充分交互</td></tr>
+<tr><td>Doc 向量可预计算</td><td>可以(离线建库)</td><td>不行(依赖 query)</td></tr>
+<tr><td>速度</td><td>快,可全库 ANN</td><td>慢,只能排候选</td></tr>
+<tr><td>精度</td><td>较低</td><td>较高</td></tr>
+<tr><td>用在哪一步</td><td>召回 top-N</td><td>对 top-N 精排出 top-k</td></tr>
+</tbody>
+</table>
+
+<h2>五、查询理解增强:在检索之前先把问题问好</h2>
+<p>检索质量的天花板,一半取决于 query 本身写得好不好。常见增强手段:</p>
+<ul>
+<li><strong>查询改写(Rewrite)</strong>:把口语化、指代不清的 query 改成检索友好的说法(尤其多轮对话里把「它」还原成具体实体)。</li>
+<li><strong>查询扩展(Expansion)</strong>:补上同义词、别称、相关术语,提高召回。</li>
+<li><strong>HyDE(Hypothetical Document Embeddings)</strong>:先让 LLM 对 query <strong>生成一段假设性答案</strong>,再拿这段「假答案」的向量去检索。直觉是——答案和答案在语义空间里,往往比问题和答案更接近。注意假答案可能带幻觉,是启发式增强,不是保证更好。</li>
+<li><strong>查询分解(Decomposition)</strong>:处理多跳问题的关键,下一节展开。</li>
+</ul>
+
+<h2>六、多跳:把一个大问题拆成几步查</h2>
+<p><strong>多跳(Multi-Hop)</strong>问题是指答案要<strong>跨多个文档、分几步推</strong>才能得到。例:「<em>发明相对论的人出生在哪个国家?</em>」——第一跳先查出「相对论 → 爱因斯坦」,第二跳再拿「爱因斯坦」去查出生国。一次性检索几乎不可能同时命中这两条信息。</p>
+<p>标准做法是<strong>查询分解</strong>:把复杂查询拆成若干简单子查询,逐一检索,把子结果<strong>喂回下一跳</strong>或最后一起合成答案。关键点在于后一跳往往<strong>依赖前一跳的结果</strong>(要先知道是爱因斯坦,才能查他的出生地),所以常是串行的、带中间状态的检索,而不是一次并行召回。</p>
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">多跳问题</div>
+  <div class="node">分解<br>子问题 1 / 2</div>
+  <div class="node">检索子问题 1<br>→ 得实体</div>
+  <div class="node">用实体检索<br>子问题 2</div>
+  <div class="node good">合成<br>最终答案</div>
+</div>
+<figcaption>多跳 = 分解 → 逐跳检索(后跳依赖前跳结果)→ 合成。</figcaption>
+</figure>
+<p><strong>知识图谱辅助</strong>一句话:当实体间关系明确、可结构化时,把知识建成图(实体为点、关系为边),多跳就变成<strong>沿边遍历</strong>(GraphRAG 思路),比纯文本检索更擅长处理这类关系推理;代价是要先把图建出来、维护起来。</p>
+
+<dl class="keydef">
+<dt>混合检索(Hybrid Retrieval)</dt>
+<dd>并行跑向量检索(语义)与 BM25(词面),再把两路结果融合,兼顾语义相似与关键词精确匹配。</dd>
+<dt>RRF(Reciprocal Rank Fusion)</dt>
+<dd>只用名次融合多路结果:$\text{RRF}(d)=\sum_{r}\frac{1}{k+\text{rank}_r(d)}$。免量纲归一化,两路都靠前的文档得分叠加。</dd>
+<dt>Rerank / Cross-Encoder</dt>
+<dd>把 query 与候选 doc 拼一起送模型做交互式打分,对召回出的少量候选精排,精度高但算不起全库。</dd>
+<dt>多跳(Multi-Hop)</dt>
+<dd>答案需跨多文档分步推导;靠查询分解逐跳检索、后跳依赖前跳结果,再合成。</dd>
+</dl>
+
+<div class="implement">
+<p>用 RRF 融合两路检索名次,最小可读实现(名次从 1 开始,$k$ 取 60):</p>
+<pre><code>def rrf_fuse(rank_lists, k=60):
+    # rank_lists: [["docB","docA",...], ["docD","docB",...]]  各路已排好序的 doc id
+    scores = {}
+    for ranked in rank_lists:
+        for rank, doc in enumerate(ranked, start=1):
+            scores[doc] = scores.get(doc, 0.0) + 1.0 / (k + rank)
+    return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+# 两路都出现在前列的 doc,两个 1/(k+rank) 相加,自然被顶到最上面</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「纯向量检索有什么问题,为什么要混合检索?」——向量强语义弱字面,稀有词/精确匹配/编号容易漏;补一路 BM25 兼顾词面。</li>
+<li>「说说 BM25 的三要素。」——词频饱和(堆词不无限加分)、IDF(稀有词权重高)、文档长度归一化(压长文虚高)。能写出公式加分。</li>
+<li>「两路检索结果怎么融合?RRF 好在哪?」——线性加权需归一化调 $\alpha$;RRF 只看名次、免量纲、鲁棒,两路都靠前的会叠加。</li>
+<li>「召回都做了,为什么还要 Rerank?」——召回是 bi-encoder 无交互、图快;精排是 cross-encoder 交互式打分、图准但算不起全库,先广后精。</li>
+<li>「多跳问题怎么处理?」——查询分解成子问题,逐跳检索、后跳用前跳结果,最后合成;关系型可上知识图谱/GraphRAG。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>混合检索是<strong>互补</strong>不是替换——别答「有 BM25 就不要向量了」,反之亦然。</li>
+<li>线性加权融合前<strong>必须归一化</strong>两路分数(余弦有界、BM25 无上界),否则一路会压死另一路;RRF 才不需要。</li>
+<li>Rerank 用的是 <strong>cross-encoder</strong>(query+doc 拼一起),不是再跑一次双塔向量;混淆二者会答不清「为什么更准」。</li>
+<li>Cross-encoder <strong>不能</strong>预计算 doc 向量、<strong>不能</strong>全库跑,只对召回候选精排——说「直接全库 rerank」是不现实的。</li>
+<li>多跳的子查询常是<strong>串行有依赖</strong>的(后跳要前跳结果),不是简单并行召回再拼。</li>
+<li>HyDE 生成的假答案可能带幻觉,是启发式增强,别说成「一定提升」。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>BM25 公式里 $\frac{f(q_i,D)\cdot(k_1+1)}{f(q_i,D)+k_1(\dots)}$ 这一项随词频增大呈饱和而非线性,主要为了防止什么?</p>
+<details><summary>A. 长文档因为词多而拿到不公平的高分</summary>那是长度归一化项 $\frac{|D|}{\text{avgdl}}$ 干的事,不是词频饱和。</details>
+<details><summary>B. 关键词被大量堆砌就无限加分,被垃圾内容骗过 ✅</summary>正确。词频贡献趋于饱和(上界约 $k_1+1$),出现 20 次和 21 次几乎没差别,避免堆词刷分。</details>
+<details><summary>C. 常见停用词(的、是)权重过高</summary>那是 IDF 负责压低,不是词频饱和项。</details>
+<details><summary>D. 两路检索分数量纲不一致</summary>那是融合阶段(归一化/RRF)的问题,与 BM25 内部词频无关。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于召回(bi-encoder)与精排(cross-encoder)的分工,哪句是对的?</p>
+<details><summary>A. Cross-encoder 可以预计算 doc 向量,所以能直接对全库精排</summary>错。cross-encoder 要 query 和 doc 拼一起才能打分,无法离线预计算 doc 向量,算不起全库。</details>
+<details><summary>B. Bi-encoder 精度更高,所以精排该用 bi-encoder</summary>反了。bi-encoder 无交互精度有上限,cross-encoder 才是精排用的高精度选择。</details>
+<details><summary>C. 召回图广图快尽量别漏,精排对少量候选做交互式打分图准 ✅</summary>正确。bi-encoder 可全库快召回,cross-encoder 只对候选精排,先广后精。</details>
+<details><summary>D. 有了 rerank 就不需要召回,直接精排即可</summary>错。全库 cross-encoder 算力扛不住,必须先召回缩小候选集。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>The Probabilistic Relevance Framework: BM25 and Beyond</strong>(Robertson &amp; Zaragoza, 2009)——BM25 的系统性综述,三要素的由来。</li>
+<li><strong>Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods</strong>(Cormack et al., 2009)——RRF 的原始提出。</li>
+<li><strong>Precise Zero-Shot Dense Retrieval without Relevance Labels</strong>(Gao et al., 2022)——HyDE 的原始论文。</li>
+<li>接着看:检索质量之外的另一大痛点——第 0024 课「幻觉」;上游怎么把库建好见第 0022 课分块与向量库。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>向量补 BM25(语义+词面)→ RRF 融合 → cross-encoder 精排;多跳靠分解逐跳查。</strong></p>
+<nav class="lesson-nav">
+<a href="0022-chunking-embedding-vectordb.html">← 上一课:分块、Embedding 与向量库</a>
+<a href="0024-hallucination.html">下一课:幻觉 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0017 · 永不抛出:工具出错也是一条消息</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 5 章 · 工具系统 ›
+  <a href="./0016-parallel-vs-sequential-scheduling.html">上一课</a> ›
+  <strong>Lesson 0017</strong>
+</div>
+
+<p class="kicker">Lesson 0017 · 第 5 章 工具系统</p>
+<h1>永不抛出<br>—— 工具出错,也只是一条消息</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课讲完调度器怎么并行/串行地把工具调用发出去,
+  这一课回答一个更扎心的问题——如果某个 <code>tool.execute()</code> 内部炸了(文件不存在、
+  权限拒绝、超时、JSON 解析失败),这颗雷会不会把整条 Agent Loop 一起炸掉?
+  Pi 的答案是:<strong>不会。异常永远不会以「异常」的身份逃出工具执行这一步。</strong>
+</div>
+
+<div class="recall">
+  🔁 <b>回忆上一课:</b> 调度器决定「工具调用什么时候发、几个一起发」,但它没回答「工具发出去之后,
+  如果炸了怎么办」。这节课把镜头对准 <code>tool.execute()</code> 内部这一步——五步管道里最容易出错、
+  也最难防的一环。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 讲清楚 <span class="sys-pill">6 种错误 → 1 种产物</span>
+  的统一出口规律,并说出 <code>executePreparedToolCall</code> 那段 try-catch-finally
+  做的<strong>三件事</strong>,以及为什么让模型自己决定下一步,比框架替它决定更聪明。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:医院的分诊台。</b>
+  不管你是感冒、骨折,还是一种叫不出名字的怪病,分诊台都不会把你直接轰出医院——
+  而是统一登记成<b>一张病历卡</b>交给医生。病历卡上写得越具体(「腹痛 3 天,右下腹压痛」
+  远胜「不舒服」),医生(模型)就越知道下一步该怎么治。
+  Pi 对工具错误做的正是这件事:不管错误多稀奇,都统一「登记」成一条消息,交给模型这位「医生」。
+</div>
+
+<h2>1 · 6 种错误,1 种产物</h2>
+<p>
+  五步管道(参数预处理 → Schema 验证 → 权限拦截 → 工具执行 → 结果后处理)里,每一步都可能出错。
+  但把六种出错场景摆在一起,你会看到一个惊人的规律——<strong>右列永远长一个样</strong>:
+</p>
+<table class="bd">
+  <thead><tr><th>哪一步出错</th><th>怎么处理</th><th>最终产物</th></tr></thead>
+  <tbody>
+    <tr><td>工具未找到</td><td>直接返回错误结果,不进入管道</td><td><code>isError:true</code>,content:"Tool xxx not found"</td></tr>
+    <tr><td>prepareArguments 抛异常</td><td>被 try-catch 捕获</td><td><code>isError:true</code>,content:异常信息</td></tr>
+    <tr><td>Schema 验证失败</td><td>被 try-catch 捕获</td><td><code>isError:true</code>,content:验证错误描述</td></tr>
+    <tr><td>beforeToolCall 阻止</td><td>返回阻止结果</td><td><code>isError:true</code>,content:阻止原因</td></tr>
+    <tr><td><strong>tool.execute 抛异常</strong></td><td>被 executePreparedToolCall 的 try-catch 捕获</td><td><code>isError:true</code>,content:异常信息</td></tr>
+    <tr><td>afterToolCall 抛异常</td><td>被 finalizeExecutedToolCall 的 try-catch 捕获</td><td><code>isError:true</code>,content:异常信息</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么这张表值得多看一眼?</b> 没有一种错误以「抛异常」的形式逃出管道——所有分诊结果都收敛成同一种
+  <code>ToolResultMessage</code>。这不是巧合,是设计:管道的每一环都自带 try-catch「兜底网」,
+  异常一进来就被网住,翻译成消息再放行。
+</div>
+<cite>🔎 出处:教程第 5 章 §四 / 错误的统一出口。</cite>
+
+<h2>2 · 核心防线:executePreparedToolCall 的双重防护</h2>
+<p>
+  六种错误里,最容易「防不住」的就是 <code>tool.execute()</code>——它是开发者写的业务代码,
+  什么姿势的异常都可能抛出来。包住它的就是这段代码:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// packages/agent/src/agent-loop.ts:628-669</span>
+<span class="ln">2</span><span class="key">async</span> <span class="key">function</span> <span class="fn">executePreparedToolCall</span>(prepared, signal, emit) {
+<span class="ln">3</span>    <span class="key">const</span> updateEvents: Promise&lt;<span class="key">void</span>&gt;[] = [];
+<span class="cm"><span class="ln">4</span>    <span class="key">let</span> acceptingUpdates = <span class="key">true</span>;          // 工具 Promise settle 后关闭</span>
+<span class="ln">5</span>
+<span class="ln">6</span>    <span class="key">try</span> {
+<span class="ln">7</span>        <span class="key">const</span> result = <span class="key">await</span> prepared.tool.<span class="fn">execute</span>(
+<span class="ln">8</span>            prepared.toolCall.id,
+<span class="ln">9</span>            prepared.args,
+<span class="ln">10</span>            signal,
+<span class="ln">11</span>            (partialResult) =&gt; {
+<span class="cm"><span class="ln">12</span>                <span class="key">if</span> (!acceptingUpdates) <span class="key">return</span>;     // settle 后的孤儿回调直接忽略</span>
+<span class="ln">13</span>                updateEvents.<span class="fn">push</span>(<span class="cm">/* ... 发 tool_execution_update ... */</span>);
+<span class="ln">14</span>            },
+<span class="ln">15</span>        );
+<span class="ln">16</span>        acceptingUpdates = <span class="key">false</span>;
+<span class="ln">17</span>        <span class="key">await</span> Promise.<span class="fn">all</span>(updateEvents);
+<span class="ln">18</span>        <span class="key">return</span> { result, isError: <span class="key">false</span> };
+<span class="ln">19</span>
+<span class="ln">20</span>    } <span class="key">catch</span> (error) {
+<span class="ln">21</span>        acceptingUpdates = <span class="key">false</span>;
+<span class="cm"><span class="ln">22</span>        // 关键:先等所有进度事件发完,再把异常编码成消息</span>
+<span class="ln">23</span>        <span class="key">await</span> Promise.<span class="fn">all</span>(updateEvents);
+<span class="ln">24</span>        <span class="key">return</span> {
+<span class="ln">25</span>            result: <span class="fn">createErrorToolResult</span>(
+<span class="ln">26</span>                error <span class="key">instanceof</span> Error ? error.message : <span class="fn">String</span>(error)
+<span class="ln">27</span>            ),
+<span class="ln">28</span>            isError: <span class="key">true</span>,
+<span class="ln">29</span>        };
+<span class="ln">30</span>    } <span class="key">finally</span> {
+<span class="cm"><span class="ln">31</span>        acceptingUpdates = <span class="key">false</span>;          // 兜底:无论如何都关闭闸门</span>
+<span class="ln">32</span>    }
+<span class="ln">33</span>}
+</pre>
+<p>这段代码做了<strong>三件事</strong>,每一件都对应一个工程上的关键决策:</p>
+<table class="bd">
+  <thead><tr><th>动作</th><th>做了什么</th></tr></thead>
+  <tbody>
+    <tr><td>① 异常被 catch,不穿透</td><td><code>ENOENT</code>/<code>EACCES</code>/<code>TIMEOUT</code>/<code>SyntaxError</code>——统统在这里止步,不再往外传</td></tr>
+    <tr><td>② 异常被「翻译」成正常结果</td><td><code>createErrorToolResult(error.message)</code> 把异常对象转成一个 <code>AgentToolResult</code>,长得跟正常结果一模一样,只是 content 里装的是错误文本</td></tr>
+    <tr><td>③ 进度事件先发完,再编码错误</td><td>catch 里先 <code>await Promise.all(updateEvents)</code>,确保已发出的 <code>tool_execution_update</code> 全部送达,才发出错消息</td></tr>
+  </tbody>
+</table>
+<div class="tradeoff">
+  🔑 <b>为什么③这一步不能省?</b> 如果不先等进度事件发完就编码错误,UI 会看到工具「先报错、
+  再吐出最后一行进度」的诡异顺序——这和 0016 讲过的事件顺序正确性是同一类防御性细节。
+  finally 里再兜底关一次 <code>acceptingUpdates</code> 闸门,保证无论走哪条分支,
+  settle 后的孤儿回调都不会再往外发事件。
+</div>
+<cite>🔎 出处:教程第 5 章 §四 / agent-loop.ts:628-669。</cite>
+
+<h2>3 · 为什么「伪装成消息」是最佳处理方式</h2>
+<p>
+  你可能会想:异常抛出去给外层统一处理不也行吗?为什么要费劲翻译成一条「长得像正常结果」的消息?
+</p>
+<div class="analogy">
+  回到分诊台的类比:<b>异常的接收者是调用栈</b>(把你直接送进 ICU,打断一切正常流程);
+  <b>消息的接收者是模型</b>(病历卡交给医生,医生消化信息后继续问诊)。
+  异常和消息描述的是同一件事,区别只在于——<em>谁来接收、接收之后能不能继续</em>。
+</div>
+<table class="bd">
+  <thead><tr><th>错误场景</th><th>模型看到错误消息后的合理反应</th></tr></thead>
+  <tbody>
+    <tr><td><code>read("/path/a.ts")</code> 报"文件不存在"</td><td>先 <code>ls</code> 看看目录里有什么,找到正确文件名再读</td></tr>
+    <tr><td><code>edit</code> 报"oldText 找不到匹配"</td><td>先 <code>read</code> 文件查看实际内容,调整 oldText 后重试</td></tr>
+    <tr><td><code>bash("npm run build")</code> 报"模块未找到"</td><td><code>npm install</code> 后再 build</td></tr>
+    <tr><td><code>bash("rm -rf /")</code> 被 beforeToolCall 阻止</td><td>看到阻止原因,换一种安全的写法或向用户解释</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么模型比框架更适合决定下一步?</b> 框架不知道「文件不存在」是路径写错了还是该换个文件;
+  模型知道——它知道自己刚才想干什么,知道项目结构(前面 read/grep 的结果都在对话历史里),
+  知道用户的真实意图。如果框架直接抛异常打断循环,等于放弃了模型的自我纠错能力,
+  用户只能在 Agent 崩溃后手动重启。<br><br>
+  <b>一句话哲学:</b> 错误信息是给模型的反馈,不是给框架的终止信号——这正是 Agent 比传统脚本
+  更「智能」的关键,错误成为下一步决策的<strong>输入</strong>,而不是流程的<strong>终点</strong>。
+</div>
+<cite>🔎 出处:教程第 5 章 §四 / 为什么"伪装成消息"是最佳处理方式。</cite>
+
+<h2>4 · 错误描述越具体,模型纠错越强</h2>
+<p>
+  到这里你可能会想:「反正框架会兜底,那我工具内部随便 <code>throw new Error("failed")</code>
+  不就行了?」——<strong>绝对不行。</strong> 错误消息的内容直接决定模型能不能纠错:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 模糊错误(不可取)</span>
+<span class="ln">2</span>{
+<span class="ln">3</span>  content: [{ text: <span class="str">"Read failed"</span> }],
+<span class="ln">4</span>  isError: <span class="key">true</span>
+<span class="ln">5</span>}
+<span class="ln">6</span>
+<span class="cm"><span class="ln">7</span>// 具体 error.message(推荐)</span>
+<span class="ln">8</span>{
+<span class="ln">9</span>  content: [{
+<span class="ln">10</span>    text: <span class="str">"Offset 200 is beyond end of file (100 lines total)"</span>
+<span class="ln">11</span>  }],
+<span class="ln">12</span>  isError: <span class="key">true</span>
+<span class="ln">13</span>}
+</pre>
+<p>
+  模型看到 "Read failed",只能盲目重试或放弃;看到
+  "Offset 200 is beyond end of file (100 lines total)",能立刻明白「哦,文件只有 100 行,
+  offset 给大了」,下次直接给 <code>offset: 50</code> 就成了。
+  <strong>具体的错误描述等于给模型一份「怎么改才对」的提示。</strong>
+</p>
+<cite>🔎 出处:教程第 5 章 §四 / 错误描述越具体那段。</cite>
+
+<h2>5 · 两层错误处理,分层负责</h2>
+<p>
+  Pi 自己的工具从不「靠框架兜底交差」,而是内部就把描述写得很具体。看 Bash 工具的 catch 块——
+  一段教科书级别的「主动识别 + 重新包装」:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// bash.ts:390-407</span>
+<span class="ln">2</span>} <span class="key">catch</span> (err) {
+<span class="cm"><span class="ln">3</span>    <span class="key">const</span> snapshot = <span class="key">await</span> finishOutput();              // 先把已经输出的内容固定下来</span>
+<span class="ln">4</span>    <span class="key">const</span> { text } = <span class="fn">formatOutput</span>(snapshot, <span class="str">""</span>);
+<span class="ln">5</span>    <span class="key">if</span> (err <span class="key">instanceof</span> Error &amp;&amp; err.message === <span class="str">"aborted"</span>) {
+<span class="ln">6</span>        <span class="key">throw</span> <span class="key">new</span> Error(<span class="fn">appendStatus</span>(text, <span class="str">"Command aborted"</span>));
+<span class="cm"><span class="ln">7</span>        // 重新包装:附上"中止前的输出" + "中止状态"</span>
+<span class="ln">8</span>    }
+<span class="ln">9</span>    <span class="key">if</span> (err <span class="key">instanceof</span> Error &amp;&amp; err.message.<span class="fn">startsWith</span>(<span class="str">"timeout:"</span>)) {
+<span class="ln">10</span>        <span class="key">const</span> timeoutSecs = err.message.<span class="fn">split</span>(<span class="str">":"</span>)[1];
+<span class="ln">11</span>        <span class="key">throw</span> <span class="key">new</span> Error(<span class="fn">appendStatus</span>(text, <span class="str">`Command timed out after ${timeoutSecs} seconds`</span>));
+<span class="ln">12</span>    }
+<span class="ln">13</span>    <span class="key">if</span> (exitCode !== <span class="key">0</span> &amp;&amp; exitCode !== <span class="key">null</span>) {
+<span class="ln">14</span>        <span class="key">throw</span> <span class="key">new</span> Error(<span class="fn">appendStatus</span>(outputText, <span class="str">`Command exited with code ${exitCode}`</span>));
+<span class="ln">15</span>    }
+<span class="cm"><span class="ln">16</span>    <span class="key">throw</span> err;    // ← 关键:识别不了的异常,原样抛出,交给框架兜底</span>
+<span class="ln">17</span>}
+</pre>
+<p>
+  注意 Bash 的策略——它<strong>主动识别</strong>已知的错误类型(中止、超时、非零退出码),
+  每种都用 <code>appendStatus(text, ...)</code> 把「已经输出的内容」和「具体原因」打包成新的 Error。
+  只有遇到实在识别不了的异常,才 <code>throw err</code> 原样抛出。
+</p>
+<div class="diagram">两层错误处理,分层负责
+
+第一层(工具内部,主动):识别已知错误类型,包装成具体可读的描述
+└── Read/Edit/Bash 都是这样——Bash 甚至把"已输出的内容"附在错误里
+└── 目的:给模型提供"为什么失败、怎么改才对"的具体线索
+
+第二层(框架兜底,被动):executePreparedToolCall 的 catch
+└── 只在工具没识别出来时生效
+└── 不创造新的错误描述,只把 error.message 原样透传给模型
+└── 目的:保证任何异常都不会穿透到 Agent Loop</div>
+<div class="tradeoff">
+  🔑 <b>写自定义工具的两个原则:</b><br>
+  1. <b>能识别的错误一定要包装</b>——附上「是什么错、为什么、怎么办」的线索。
+  "文件不存在"比"操作失败"强 10 倍;"文件 /a.ts 不存在,目录下有 [b.ts, c.ts]"
+  比"文件不存在"又强 10 倍。<br>
+  2. <b>识别不了的不要硬编码描述</b>——直接 <code>throw err</code>,让框架兜底 catch 把
+  <code>err.message</code> 透传出去。<strong>不要写 <code>throw new Error("操作失败")</code>
+  这种笼统描述</strong>——那等于把所有未知错误都涂成同一种颜色,模型无法区分。
+</div>
+<cite>🔎 出处:教程第 5 章 §四 / Pi 的真实做法:两层错误处理,分层负责;bash.ts:390-407。</cite>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① Pi 把工具异常翻译成消息而不是抛给外层框架,最核心的理由是什么?</p>
+    <button class="opt">抛异常的性能开销太大</button>
+    <button class="opt">让模型自己根据具体错误决定下一步(重试/换路径/解释),比框架统一决定更好</button>
+    <button class="opt">TypeScript 不允许在异步函数里抛异常</button>
+    <button class="opt">框架层没有 try-catch,接不住异常</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② executePreparedToolCall 的 catch 块里,为什么要先 await Promise.all(updateEvents) 再返回错误结果?</p>
+    <button class="opt">为了等待垃圾回收完成</button>
+    <button class="opt">为了给工具第二次执行的机会</button>
+    <button class="opt">为了确保已发出的进度事件全部送达,避免 UI 出现"先报错再吐进度"的乱序画面</button>
+    <button class="opt">为了让 TypeBox 重新验证参数</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">③ 自定义工具遇到一个自己也识别不了的异常,按 Pi 的最佳实践应该怎么做?</p>
+    <button class="opt">直接 throw err 原样抛出,让框架兜底把 error.message 透传给模型</button>
+    <button class="opt">throw new Error("操作失败") 给一个统一的兜底描述</button>
+    <button class="opt">吞掉异常,返回一个空的成功结果</button>
+    <button class="opt">把异常写进日志后返回 undefined</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>为什么不干脆让框架统一生成"操作失败,请重试"这种通用描述,省得每个工具自己写?</em>」
+  「<em>acceptingUpdates 这个闸门如果不关,孤儿回调具体会造成什么后果?</em>」
+  「<em>工具执行发出的 tool_execution_start/update/end 事件,到底谁在监听、为什么 Agent 内核完全不需要知道 UI 的存在?</em>」——
+  最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md">第 5 章 · 工具系统——Agent 的手脚是怎么被管住的</a>——
+  原文 §四 还有更完整的"错误的统一出口"全景与 createErrorToolResult 的三行实现,值得通读。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0018):</strong> 工具执行过程中发出的
+  <code>tool_execution_start/update/end</code> 事件,到底长什么样、谁在监听?
+  我们要打开「消息系统」这扇门,搞清楚三种标准 LLM 消息各自的角色。
+</p>
+
+<footer>
+  Lesson 0017 · 第 5 章 工具系统 ·
+  下一课:<a href="./0018-three-standard-llm-messages.html">0018 三种标准 LLM 消息 →</a> ·
+  上一课:<a href="./0016-parallel-vs-sequential-scheduling.html">0016 并行 vs 串行调度</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。文件不存在到底是路径写错还是该换文件,只有模型有足够上下文判断。把错误编码成消息,模型就能像人一样自我纠错,循环不因工具出错而崩。延伸:这就是"错误信息是给模型的反馈,不是给框架的终止信号"。',
+               '✓ 对。不先等进度事件发完就编码错误,UI 会看到工具先报错、再吐出最后一行进度的诡异顺序。延伸:这和 0016 里 acceptingUpdates 关闸是同一类"事件顺序正确性"的防御性细节。',
+               '✓ 对。识别不了就原样 throw err,框架兜底 catch 会把 error.message 搬运给模型。写 throw new Error("操作失败") 反而把所有未知错误涂成同一种颜色,模型无法区分。延伸:能识别的错误则要主动包装成"是什么错、为什么、怎么办"——这就是 Bash 工具的两层做法。'];
+  var msgNo = ['回看"为什么伪装成消息是最佳处理"那节——关键词是"让谁自己决定下一步"。',
+               '回看双重防护代码解释的"三件事"中的第 3 件——它和事件的"顺序"有关。',
+               '回看"写自定义工具的最佳实践"两条原则——对"识别不了的"错误,教程明确反对写哪种笼统描述?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

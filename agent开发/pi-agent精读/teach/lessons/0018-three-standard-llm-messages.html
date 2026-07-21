@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0018 · 第一层:LLM 只认三种消息</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 6 章 · 消息系统 ›
+  <a href="./0017-errors-are-messages.html">上一课</a> ›
+  <strong>Lesson 0018</strong>
+</div>
+
+<p class="kicker">Lesson 0018 · 第 6 章 消息系统</p>
+<h1>第一层:LLM 只认三种消息</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课(0017)讲完"错误也是消息"——工具失败不抛异常,而是变成一条
+  <code>isError: true</code> 的 <code>ToolResultMessage</code>。这节课把镜头拉远一步:抛开
+  "错误"这个特例,<strong>LLM 能理解的消息,一共只有三种</strong>。我们要拆开这三种消息的字段,
+  搞清它们各自长什么样、为什么这么设计。
+</div>
+
+<div class="recall">
+  ⏮ <strong>回忆上一课</strong>:0017 说工具执行失败时,五步管道不抛异常,而是把错误包成一条
+  <code>ToolResultMessage</code>,靠 <code>isError</code> 字段告诉 LLM"这次没成功"。
+  可我们从没正面拆开过 <code>ToolResultMessage</code> 本身——它除了 <code>isError</code>
+  还有哪些字段?这正是今天要补的一课。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出 <span class="sys-pill">Message</span> 联合类型的三个成员
+  ——UserMessage / AssistantMessage / ToolResultMessage——并说出每个字段的用途,以及
+  <strong>为什么 AssistantMessage 的 content 必须是数组</strong>而不是字符串。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:信封的规格</b>
+  上一章末尾,工具产出了一条 ToolResultMessage。可我们五章都在说"消息",却从没拆开看过它长什么样。
+  就像你天天寄信,却没看过信封到底有几种规格——<b>LLM 这个"收件方"其实只认三种信封</b>:
+  用户写的信(UserMessage)、AI 回的信(AssistantMessage)、快递员送回的回执(ToolResultMessage)。
+  信里能装什么、信封上有哪些必填栏,今天全部拆开看。
+</div>
+
+<h2>1 · Message 联合类型:封闭的三个成员</h2>
+<p>
+  LLM 能理解的消息格式,在 Pi 里叫 <strong>Message</strong> 类型,定义在最底层的
+  <code>packages/ai/src/types.ts</code>——注意是<em>最底层</em>的包,连 Agent 概念都没有,
+  纯粹是"跟 LLM API 打交道"这一层的格式约定。它只有三个成员:
+</p>
+<pre><span class="ln">1</span>Message 联合类型(LLM 标准格式)
+<span class="ln">2</span>│
+<span class="ln">3</span>├── UserMessage        ← 用户说的话 / 发的图片
+<span class="ln">4</span>├── AssistantMessage   ← LLM 的回复(含思考、工具调用)
+<span class="ln">5</span>└── ToolResultMessage  ← 工具执行后的结果
+</pre>
+<div class="why">
+  <b>为什么是"三种"而不是随便加?</b> 因为这是 LLM Provider API 本身的约定——OpenAI、Anthropic
+  的对话接口只认 user / assistant / tool(-result) 这几个角色。Pi 的 <code>Message</code>
+  类型如实映射了这个约定,<strong>它是封闭的</strong>:不能随便往里加第四种成员。
+  这个"封闭性"很关键——下一节(0019)会讲 Agent 内部其实还有一堆自定义消息类型
+  (BashExecutionMessage、CompactionSummary 等),但它们都<em>不属于</em> Message,
+  必须先翻译成这三种之一,LLM 才认得。
+</div>
+
+<h2>2 · UserMessage:最简单的一种</h2>
+<p>用户输入,字段最少:</p>
+<pre><span class="ln">1</span>{
+<span class="ln">2</span>    role: <span class="str">"user"</span>,
+<span class="ln">3</span>    content: string | (TextContent | ImageContent)[],  <span class="cm">// 纯文本或内容块数组</span>
+<span class="ln">4</span>    timestamp: number                                    <span class="cm">// Unix 毫秒时间戳</span>
+<span class="ln">5</span>}
+</pre>
+<p>
+  <code>content</code> 可以是一个纯字符串,也可以是一个内容块数组(<code>TextContent</code> 或
+  <code>ImageContent</code>)。这意味着用户消息<strong>既能发文字,也能发图片</strong>——
+  两种表示法共存于同一个字段类型里,靠联合类型区分。
+</p>
+
+<h2>3 · AssistantMessage:字段最多的一种</h2>
+<p>LLM 的回复,字段最多,信息量也最大:</p>
+<pre><span class="ln">1</span>{
+<span class="ln">2</span>    role: <span class="str">"assistant"</span>,
+<span class="ln">3</span>    content: (TextContent | ThinkingContent | ToolCall)[],  <span class="cm">// 三种内容块</span>
+<span class="ln">4</span>    api: Api,                   <span class="cm">// 使用的 API 类型(如 "anthropic-messages")</span>
+<span class="ln">5</span>    provider: ProviderId,       <span class="cm">// 提供商(如 "anthropic")</span>
+<span class="ln">6</span>    model: string,              <span class="cm">// 模型名(如 "claude-sonnet-4-6")</span>
+<span class="ln">7</span>    usage: Usage,               <span class="cm">// token 用量统计</span>
+<span class="ln">8</span>    stopReason: StopReason,     <span class="cm">// 停止原因(第3章讲过的5种值)</span>
+<span class="ln">9</span>    errorMessage?: string,      <span class="cm">// 错误信息</span>
+<span class="ln">10</span>    timestamp: number
+<span class="ln">11</span>}
+</pre>
+<p>
+  最值得关注的是 <code>content</code> 字段——它<strong>不是字符串,而是一个内容块数组</strong>,
+  可以包含三种东西:
+</p>
+<pre><span class="ln">1</span>AssistantMessage 的 content 内容块
+<span class="ln">2</span>│
+<span class="ln">3</span>├── TextContent       ← 普通文本
+<span class="ln">4</span>│     { type: <span class="str">"text"</span>, text: <span class="str">"..."</span> }
+<span class="ln">5</span>│
+<span class="ln">6</span>├── ThinkingContent   ← 思考过程(第3章讲过,模型"在想"但不直接告诉用户的部分)
+<span class="ln">7</span>│     { type: <span class="str">"thinking"</span>, thinking: <span class="str">"..."</span> }
+<span class="ln">8</span>│
+<span class="ln">9</span>└── ToolCall          ← 工具调用(第5章讲过,触发五步管道的入口)
+<span class="ln">10</span>      { type: <span class="str">"toolCall"</span>, id: <span class="str">"..."</span>, name: <span class="str">"read"</span>, arguments: { path: <span class="str">"..."</span> } }
+</pre>
+<p>
+  <strong>一条助手消息可能同时包含文本和工具调用。</strong> 比如 LLM 一边说"让我帮你看看这个文件",
+  一边发出一个 Read 工具调用——这两个内容会放在同一个 <code>AssistantMessage</code> 的
+  <code>content</code> 数组里。第 3 章讲的"模型回复中包含 ToolCall"就是这个结构。
+</p>
+<div class="why">
+  <b>为什么 content 设计成数组,而不是一个字符串?</b> 因为一次回复要同时容纳
+  <strong>普通文本、思考过程、工具调用</strong>三类内容——三者的性质完全不同(说给用户听的、
+  模型自己的推理、发给执行系统的指令),但它们又需要<em>共存于同一条消息</em>里,保持时间顺序
+  (先说了什么、后调了什么工具)。只有数组才能让三种异质内容按发生顺序排在一起。
+  如果 content 是字符串,工具调用就得塞进别的字段,文本和工具调用的先后关系就丢了。
+</div>
+<p>
+  <span class="sys-pill">进阶细节</span> content 块里还有一些 <code>*Signature</code> 字段
+  (<code>textSignature</code>、<code>thinkingSignature</code> 等),是某些 Provider(OpenAI、Google)
+  要求的<strong>不透明签名 ID</strong>,下一轮请求必须原样回传。被安全过滤器编辑过的内容密文也存在这里。
+</p>
+<div class="why">
+  <b>为什么内容块里还有 *Signature 字段?</b> 那是 OpenAI/Google 等 Provider 要求原样回传的
+  不透明签名 ID,是"Provider 之间的上下文连续性机制"。日常理解不必深究——知道它存在、
+  知道不能随便丢弃就够了。
+</div>
+
+<h2>4 · ToolResultMessage:精准关联回调用</h2>
+<p>工具执行的结果,是第 5 章五步管道的终点产物:</p>
+<pre><span class="ln">1</span>{
+<span class="ln">2</span>    role: <span class="str">"toolResult"</span>,
+<span class="ln">3</span>    toolCallId: string,                             <span class="cm">// 对应哪个 ToolCall</span>
+<span class="ln">4</span>    toolName: string,                               <span class="cm">// 工具名</span>
+<span class="ln">5</span>    content: (TextContent | ImageContent)[],        <span class="cm">// 结果内容</span>
+<span class="ln">6</span>    details?: TDetails,                             <span class="cm">// 结构化详情(给 UI 看的)</span>
+<span class="ln">7</span>    isError: boolean,                               <span class="cm">// 是否执行失败(第5章的"永不抛出"产物)</span>
+<span class="ln">8</span>    timestamp: number
+<span class="ln">9</span>}
+</pre>
+<p>
+  <code>ToolResultMessage</code> 通过 <code>toolCallId</code> 字段和 <code>AssistantMessage</code>
+  里的 <code>ToolCall</code> 对应起来。第 3 章提到的"工具结果必须精准关联回调用请求"就是靠这个字段。
+  <code>details</code> 字段携带结构化信息给 UI 渲染用,<strong>LLM 通常不需要看这个字段</strong>。
+</p>
+<div class="why">
+  <b>为什么 ToolResultMessage 要带 toolCallId?</b> 因为一轮回复可能发出<strong>多个</strong>工具调用
+  (比如同时读三个文件),结果必须精准关联回是哪一个 ToolCall——靠这个 id 一一对应,不能靠顺序猜、
+  也不能靠工具名猜(同一个工具可能被调用多次)。
+</div>
+<div class="tradeoff">
+  🔑 <b>为什么 details 字段 LLM 通常不看?</b> 它是给 UI 渲染用的结构化详情,LLM 只需要
+  <code>content</code> 里的文本就够理解结果。这是典型的<strong>职责分离</strong>:
+  同一条 ToolResultMessage 服务两个读者(LLM 和 UI),但各取所需——LLM 读 content,
+  UI 读 details。这个"一条消息、两个读者"的矛盾,会在下一课(0019)进一步展开。
+</div>
+
+<h2>5 · 串成一个完整对话</h2>
+<p>把这三种消息串起来,一个典型的对话片段长这样:</p>
+<pre><span class="ln">1</span>messages 数组:
+<span class="ln">2</span>│
+<span class="ln">3</span>├── [0] UserMessage
+<span class="ln">4</span>│       role: <span class="str">"user"</span>
+<span class="ln">5</span>│       content: <span class="str">"帮我看看 auth.ts"</span>
+<span class="ln">6</span>│
+<span class="ln">7</span>├── [1] AssistantMessage
+<span class="ln">8</span>│       role: <span class="str">"assistant"</span>
+<span class="ln">9</span>│       content: [
+<span class="ln">10</span>│           { type: <span class="str">"text"</span>, text: <span class="str">"让我帮你看看这个文件"</span> },
+<span class="ln">11</span>│           { type: <span class="str">"toolCall"</span>, id: <span class="str">"tc_001"</span>, name: <span class="str">"read"</span>, arguments: { path: <span class="str">"auth.ts"</span> } }
+<span class="ln">12</span>│       ]
+<span class="hl">13</span>│       stopReason: <span class="str">"toolUse"</span>     ← 第3章讲过:调了工具,循环继续
+<span class="ln">14</span>│
+<span class="ln">15</span>├── [2] ToolResultMessage
+<span class="ln">16</span>│       role: <span class="str">"toolResult"</span>
+<span class="ln">17</span>│       toolCallId: <span class="str">"tc_001"</span>      ← 和上面的 id 对应
+<span class="ln">18</span>│       content: [{ type: <span class="str">"text"</span>, text: <span class="str">"import { auth } from '...' ..."</span> }]
+<span class="ln">19</span>│       isError: <span class="key">false</span>            ← 第5章讲过:正常结果
+<span class="ln">20</span>│
+<span class="ln">21</span>└── [3] AssistantMessage
+<span class="ln">22</span>        role: <span class="str">"assistant"</span>
+<span class="ln">23</span>        content: [{ type: <span class="str">"text"</span>, text: <span class="str">"auth.ts 是一个认证模块..."</span> }]
+<span class="hl">24</span>        stopReason: <span class="str">"stop"</span>        ← 没调工具,循环结束
+</pre>
+<p>
+  这就是 LLM 能理解的世界——用户说了什么、AI 回了什么、工具返回了什么,就这么三种。
+  <code>stopReason</code> 是驱动 Agent Loop 是否继续循环的开关:<code>"toolUse"</code>
+  意味着还有工具调用等着执行,循环继续;<code>"stop"</code> 意味着这轮回复没调工具,循环结束。
+</p>
+
+<div class="diagram">Message 联合类型 —— LLM 只认这三种信封
+
+   ┌──────────────┐   ┌──────────────────────┐   ┌──────────────────┐
+   │ UserMessage  │   │  AssistantMessage     │   │ ToolResultMessage│
+   │ role: user   │   │  role: assistant      │   │ role: toolResult │
+   │ content:     │   │  content: [           │   │ toolCallId ──────┼──┐
+   │  string 或   │   │   text? / thinking? / │   │ content: [...]   │  │
+   │  内容块[]    │   │   toolCall? ]         │   │ isError: bool    │  │
+   └──────────────┘   │  stopReason ──────────┼─┐ └──────────────────┘  │
+                       └──────────────────────┘ │                       │
+                    "toolUse"→循环继续 ──────────┘                       │
+                    "stop"   →循环结束                                   │
+                                                                         │
+                       ToolCall.id === ToolResultMessage.toolCallId ◄────┘
+                       (靠 id 一一对应,不靠顺序、不靠工具名)
+</div>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① LLM 能理解的 Message 联合类型,一共有几种成员?</p>
+    <button class="opt">七种,包括 BashExecution、CompactionSummary 等自定义消息</button>
+    <button class="opt">两种:User 和 Assistant,工具结果并进 Assistant</button>
+    <button class="opt">三种:UserMessage、AssistantMessage、ToolResultMessage</button>
+    <button class="opt">不固定,应用可以随时往里加</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② 为什么 AssistantMessage 的 content 设计成内容块数组,而不是一个字符串?</p>
+    <button class="opt">因为一条回复要同时容纳文本、思考过程(Thinking)、工具调用(ToolCall)三类内容</button>
+    <button class="opt">因为字符串在 TypeScript 里性能太差</button>
+    <button class="opt">因为 LLM API 强制要求所有字段都用数组</button>
+    <button class="opt">因为要兼容图片,和 UserMessage 保持一致</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">③ ToolResultMessage 靠哪个字段,把自己精准关联回是哪一次工具调用?</p>
+    <button class="opt">toolName,靠工具名匹配</button>
+    <button class="opt">toolCallId,和 AssistantMessage 里 ToolCall 的 id 对应</button>
+    <button class="opt">timestamp,靠时间先后顺序推断</button>
+    <button class="opt">role,role 相同就算同一次调用</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>Message 联合类型是"封闭的"——那 Agent 内部想记录 Bash 命令执行记录、Git 分支切换这些
+  "非对话"数据,又该往哪放?</em>」「<em>details 字段"给 UI 看、LLM 不看"——如果 Agent 需要根据
+  details 里的结构化信息做决策(不只是展示),该怎么办?</em>」
+  「<em>为什么 stopReason 只需要区分 toolUse / stop 就能驱动整个循环?</em>」
+  ——第一个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第6章-消息系统-Agent的记忆如何组织与传递.md">第 6 章 · 消息系统——Agent的记忆如何组织与传递</a>——
+  原文接下来会讲 Agent 内部的自定义消息如何通过 <code>convertToLlm()</code> 翻译边界变回这三种标准消息,值得通读一遍建立全局观。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0019):</strong> 我们会揭开"Agent 消息的两层结构"——
+  Agent 内部其实不止这三种消息,BashExecutionMessage、CompactionSummary、BranchSummary
+  等自定义消息也活在系统里,它们和 LLM 认识的三种标准消息是什么关系?谁来做翻译?
+</p>
+
+<footer>
+  Lesson 0018 · 第 6 章 消息系统 ·
+  下一课:<a href="./0019-agent-message-two-layers.html">0019 Agent 消息的两层结构 →</a> ·
+  上一课:<a href="./0017-errors-are-messages.html">0017 错误也是消息</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。Message 是封闭的三成员联合,定义在 packages/ai/src/types.ts。延伸一点:正因为它"封闭",下一节那些自定义消息才必须活在另一层。',
+               '✓ 对。数组让 text+thinking+toolCall 共存于一条消息——这正是第3章"回复中包含 ToolCall"的底层结构。延伸:UserMessage 的 content 也能是数组,但那是为了发图片。',
+               '✓ 对。这就是第3章说的"工具结果必须精准关联回调用请求"。延伸:一轮可能发多个工具调用,只有 id 能一一对上,靠 toolName 或时间都会错乱。'];
+  var msgNo = ['回到 §二开头看 Message 联合类型的树状图——注意区分"LLM 认识的"和"Agent 内部用的",后者是下一节的内容。',
+               '看 §二 AssistantMessage content 的内容块树状图,数一数它能装几种 type 的块,答案就在那三种块里。',
+               '看 §二 ToolResultMessage 结构里哪个字段的注释写着"对应哪个 ToolCall",再看完整对话示例里 tc_001 是怎么被引用的。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

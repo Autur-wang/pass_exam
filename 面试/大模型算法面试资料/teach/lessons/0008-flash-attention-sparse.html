@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0008 · FlashAttention 与稀疏 / 长上下文注意力</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第二部分 注意力与架构进阶 · 第 0008 课</p>
+<h1>FlashAttention 与稀疏 / 长上下文注意力</h1>
+<p class="lede">注意力的复杂度 $O(n^2)$ 人尽皆知,但面试真正想听的是:这个 $n^2$ 到底贵在<strong>算</strong>还是贵在<strong>搬</strong>?为什么 FlashAttention 明明多做了计算却更快?它是「近似」还是「精确」?稀疏注意力和它又是不是一回事?答清这几点,你就把长上下文这条主线讲透了。</p>
+
+<div class="recall">
+<p>上一课(MHA / GQA / MLA)讲的是<strong>「KV 存什么、存多少」</strong>——通过共享或压缩 K、V 来省推理显存。这一课换一个正交的角度:同样一堆注意力,能不能<strong>「算得更聪明」</strong>,在结果不变的前提下更快、更省显存?<strong>先想一下:标准注意力里那个 $n\times n$ 的分数矩阵,它最大的开销你觉得是浮点运算,还是别的东西?</strong></p>
+</div>
+
+<h2>一、先看瓶颈:注意力卡在「搬数据」,不是「算不动」</h2>
+<p>回忆第 0002 课的公式:</p>
+$$\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V$$
+<p>朴素实现分三步走,每一步都要和显存(HBM)打交道:</p>
+<ol>
+<li>算 $S=QK^\top/\sqrt{d_k}$,得到 $n\times n$ 的分数矩阵,<strong>写回 HBM</strong>;</li>
+<li>把 $S$ <strong>从 HBM 读回来</strong>做 softmax,得到 $P$,再<strong>写回 HBM</strong>;</li>
+<li>把 $P$ <strong>再读回来</strong>乘 $V$,得到输出。</li>
+</ol>
+<p>关键在于:$Q,K,V$ 本身是 $n\times d$,而中间的 $S$、$P$ 是 $n\times n$。当序列 $n$ 很长时,这个 $n\times n$ 矩阵又大、又要在慢速的 HBM 上来回搬好几趟。GPU 的算力(做矩阵乘)其实绰绰有余,真正的等待发生在<strong>数据搬运</strong>上——这类任务叫 <strong>memory-bound(访存受限)</strong>,而不是 compute-bound。</p>
+
+<pre>
+GPU 内存层级(越往上越快、越小)
+┌───────────────────────────────────┐
+│  SRAM(片上)   容量小   极快      │ ← 真正的计算在这里发生
+├───────────────────────────────────┤
+│  HBM(显存)    容量大   相对慢    │ ← Q,K,V,输出,以及 n×n 分数都住这
+└───────────────────────────────────┘
+
+朴素注意力:  QK^T ──写 n×n 回 HBM──▶ softmax ──写 n×n 回 HBM──▶ ×V
+             └──── 这块 n×n 矩阵在 HBM 上来回搬了好几趟 ────┘
+</pre>
+<p>所以「注意力贵」有两层含义常被混为一谈:<strong>计算量</strong>是 $O(n^2 d)$ 次浮点运算,<strong>显存 / 访存</strong>是那块 $O(n^2)$ 的中间矩阵。FlashAttention 主攻的是<strong>后者</strong>。</p>
+
+<h2>二、FlashAttention:切块 + 在线 softmax,让分数矩阵永不落地</h2>
+<p>核心直觉一句话:<strong>既然搬 $n\times n$ 矩阵最贵,那就干脆不生成它。</strong>把 $Q,K,V$ 切成能塞进 SRAM 的小块(tiling),在 SRAM 里把一块 Q 对一块 K、V 的注意力算完、累加进输出,再换下一块——整个过程中,完整的 $n\times n$ 分数矩阵<strong>从不写回 HBM</strong>。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">把 $Q,K,V$<br>切成小块</div>
+  <div class="node">一块块<br>载入 SRAM</div>
+  <div class="node">块内算<br>$q k^\top$ 局部分数</div>
+  <div class="node">在线 softmax<br>更新 max / sum</div>
+  <div class="node good">累加进输出 $O$<br>分数矩阵不落地</div>
+</div>
+<figcaption>数据只在 SRAM 里流转,HBM 上只留下 $Q,K,V$ 和最终输出 $O$——中间那块 $n\times n$ 矩阵被彻底省掉了。</figcaption>
+</figure>
+
+<h3>难点:分块后 softmax 怎么算?——在线 softmax</h3>
+<p>麻烦在于 softmax 是「按整行」归一化的:要算 $\operatorname{softmax}$,数值稳定版需要先知道这一行的<strong>最大值</strong> $m$(减掉它防溢出),还要知道<strong>全行指数和</strong> $\ell$ 做分母。可切块之后,一次只看到这一行的一小段,看不到全行。</p>
+<p><strong>在线 softmax(online softmax)</strong>解决这个问题:一边扫块,一边维护「到目前为止」的运行最大值 $m$、运行归一化和 $\ell$ 与运行输出 $O$。每来一个新块,发现更大的最大值就把之前累积的量按比例<strong>校正</strong>一下,再把新块并进去。数学上,处理到第 $j$ 个 K/V 块时(局部最大值记 $\tilde m_j$):</p>
+$$m^{(j)}=\max\!\big(m^{(j-1)},\,\tilde m_j\big)$$
+$$\ell^{(j)}=e^{\,m^{(j-1)}-m^{(j)}}\,\ell^{(j-1)}+\textstyle\sum e^{\,s-m^{(j)}}$$
+$$O^{(j)}=e^{\,m^{(j-1)}-m^{(j)}}\,O^{(j-1)}+\textstyle\sum e^{\,s-m^{(j)}}\,v$$
+<p class="formula-note">那个 $e^{\,m^{(j-1)}-m^{(j)}}$ 就是「校正系数」:最大值一旦被刷新,旧的累加量要乘上它才能和新块用同一个基准对齐。全部块扫完后,输出再统一除以 $\ell$。</p>
+<p>结果是:这样算出来的答案与一次性算全矩阵的标准 softmax <strong>数学上完全相等</strong>。所以要牢记——</p>
+
+<div class="keydef">
+<dl class="keydef">
+<dt>FlashAttention 是精确算法,不是近似</dt>
+<dd>它只改变<strong>计算顺序与数据存放</strong>(分块 + 在线 softmax + 融合成一个 kernel),输出与标准注意力逐元素相等。它省的是 HBM 访存和显存,<strong>不</strong>省浮点运算,也<strong>不</strong>丢任何注意力连接。</dd>
+<dt>memory-bound(访存受限)</dt>
+<dd>运行时间主要花在数据在存储层级间搬运、而非浮点计算上的一类任务。标准注意力对长序列就是典型的 memory-bound,因此减少 HBM 读写就能直接变快——即便代价是多算一点。</dd>
+<dt>在线 softmax(online / streaming softmax)</dt>
+<dd>用运行最大值 $m$ 和运行和 $\ell$ 增量式地计算 softmax,无需一次看到整行。是 FlashAttention 能分块又保持数值稳定的关键。</dd>
+</dl>
+</div>
+
+<h3>为什么「多做计算」反而更快?</h3>
+<p>这里有个反直觉的点,面试很爱追。FlashAttention 在<strong>反向传播</strong>时,不去存储前向那块巨大的注意力矩阵,而是需要时<strong>重新算一遍</strong>(recomputation)。听起来是浪费算力,但因为瓶颈是访存不是算力,「用少量额外计算换大量 HBM 读写的节省」在 memory-bound 场景下是稳赚的。这就是它被称作 <strong>IO-aware(访存感知)</strong>算法的原因:优化目标从「少算」变成了「少搬」。
+
+<div class="implement">
+<p>把「分块 + 在线 softmax」翻译成代码自己跑一遍(概念版,便于理解;真实实现是融合的 CUDA kernel,不是这样的双重 Python 循环):</p>
+<pre><code>import torch
+
+def flash_attention(Q, K, V, block=128):
+    n, d = Q.shape
+    O = torch.zeros(n, d)
+    for i in range(0, n, block):                 # 外层:遍历 Q 的块
+        q = Q[i:i+block]                          # 一块 Q 载入"SRAM"
+        rows = q.size(0)
+        m = torch.full((rows, 1), -float('inf'))  # 运行最大值
+        l = torch.zeros(rows, 1)                  # 运行归一化和
+        acc = torch.zeros(rows, d)                # 运行输出(未归一化)
+        for j in range(0, n, block):             # 内层:遍历 K/V 的块
+            k, v = K[j:j+block], V[j:j+block]
+            s = q @ k.T / d ** 0.5               # 只算局部分数块,不落地全矩阵
+            m_new = torch.maximum(m, s.max(-1, keepdim=True).values)
+            p = torch.exp(s - m_new)             # 用刷新后的 max 重新指数化
+            scale = torch.exp(m - m_new)         # 旧累加量的校正系数
+            l = scale * l + p.sum(-1, keepdim=True)
+            acc = scale * acc + p @ v            # 校正旧输出 + 并入新块
+            m = m_new
+        O[i:i+block] = acc / l                    # 扫完所有块后统一归一化
+    return O
+</code></pre>
+<p>把它和第 0002 课那份「一次性算全矩阵」的实现对拍,输出应当在数值误差内完全一致——这正是「精确、非近似」的直观验证。</p>
+</div>
+
+<h2>三、稀疏 / 滑动窗口注意力:直接少算一些连接</h2>
+<p>FlashAttention 让 $O(n^2)$ 的计算「算得更省」,但计算量本身还是 $n^2$。要在超长序列上把<strong>计算复杂度本身</strong>压下来,得换思路:<strong>不再让每个 token 关注所有 token,而是只保留一部分连接。</strong>这就是稀疏注意力(sparse attention)。常见模式:</p>
+<ul>
+<li><strong>滑动窗口 / 局部(sliding window / local):</strong>每个 token 只看邻近的 $w$ 个 token。计算量降到 $O(n\cdot w)$,当 $w$ 固定时近似<strong>线性</strong>。</li>
+<li><strong>全局(global)token:</strong>少数特殊位置(如句首标记)可以「看所有、被所有看」,负责跨越长距离传递信息。</li>
+<li><strong>组合:</strong>局部窗口 + 少量全局 token(有的还加随机连接),既保住近线性开销,又不完全丢掉长程依赖。</li>
+</ul>
+
+<pre>
+全连接注意力(O(n^2))          滑动窗口 + 全局(近线性)
+    t1 t2 t3 t4 t5                  t1 t2 t3 t4 t5
+t1 [ ■  ■  ■  ■  ■ ]           t1 [ ■  ■  ·  ·  G ]   ← 只看邻居
+t2 [ ■  ■  ■  ■  ■ ]           t2 [ ■  ■  ■  ·  G ]     + 一个全局列 G
+t3 [ ■  ■  ■  ■  ■ ]           t3 [ ·  ■  ■  ■  G ]
+t4 [ ■  ■  ■  ■  ■ ]           t4 [ ·  ·  ■  ■  G ]
+t5 [ ■  ■  ■  ■  ■ ]           t5 [ G  G  G  G  ■ ]   ← 全局 token 看所有
+   每个位置都要算(全黑)          大量位置被跳过(留白 = 不计算)
+</pre>
+<p>和 FlashAttention 最本质的区别:<strong>稀疏注意力是「近似」</strong>——它主动丢掉了一部分注意力连接,换来近线性开销,代价是可能损失某些长程依赖的建模能力。FlashAttention 一个连接都不丢。二者<strong>正交、可叠加</strong>:完全可以用一个 IO 高效的 kernel 去执行一个稀疏的注意力模式。</p>
+
+<table>
+<thead><tr><th></th><th>FlashAttention</th><th>稀疏 / 滑动窗口</th></tr></thead>
+<tbody>
+<tr><td>结果</td><td>与标准注意力<strong>精确相等</strong></td><td><strong>近似</strong>(丢弃部分连接)</td></tr>
+<tr><td>省的是</td><td>HBM 访存、显存占用</td><td>计算复杂度(降到近线性)</td></tr>
+<tr><td>计算量</td><td>仍是 $O(n^2)$ FLOPs</td><td>约 $O(n\cdot w)$</td></tr>
+<tr><td>主要手段</td><td>tiling + 在线 softmax + kernel 融合</td><td>限制每个 token 的可见范围</td></tr>
+</tbody>
+</table>
+
+<h2>四、长上下文其实是一套组合拳</h2>
+<p>真实系统里,把上下文做长通常不是靠单一技巧,而是叠加使用:FlashAttention(精确、IO 高效)负责让注意力算得省,稀疏 / 窗口模式负责把复杂度压到近线性,再配合位置编码的外推(如 RoPE 的缩放,见第 0005 课)以及第 0007 课的 KV Cache 压缩,共同支撑起长上下文——不是某一招单打独斗。</p>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「标准注意力的瓶颈在哪?为什么说它 memory-bound?」——$n\times n$ 中间矩阵在 HBM 上反复读写,访存时间盖过了计算时间,算力其实没吃满。</li>
+<li>「FlashAttention 是近似算法吗?」——<strong>不是</strong>,结果和标准注意力逐元素相等,只是换了计算顺序、不落地中间矩阵。这是最高频的辨析题。</li>
+<li>「它为什么更省显存?反向怎么办?」——从不 materialize $n\times n$,显存从 $O(n^2)$ 降到 $O(n)$ 量级;反向靠<strong>重算</strong>注意力而非存储它。</li>
+<li>「在线 softmax 解决了什么?」——分块后看不到整行,用运行 max / sum 增量归一化并保持数值稳定。</li>
+<li>「FlashAttention 和稀疏注意力的区别?」——精确 vs 近似;省访存 vs 省计算量;二者正交可叠加。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别说「FlashAttention 把注意力降到线性」。它的 <strong>FLOPs 仍是 $O(n^2)$</strong>,省的是访存和显存;把复杂度降到近线性的是<strong>稀疏</strong>注意力。</li>
+<li>别把 FlashAttention 归为近似方法。它和 Linformer / Performer 那类<strong>线性近似</strong>注意力是两回事——后者才改变了计算的数学结果。</li>
+<li>在线 softmax 里对旧累加量的校正系数 $e^{\,m^{(j-1)}-m^{(j)}}$ 不能漏,漏了就等于用了不一致的基准,结果会错。</li>
+<li>不要凭记忆报具体加速倍数或显存节省百分比——这些依赖硬件、序列长度、实现版本,面试重原理而非背数字。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>相比标准(朴素)注意力实现,FlashAttention 主要节省的是什么?</p>
+<details><summary>A. 注意力的浮点计算量(FLOPs),把 $O(n^2)$ 降到线性</summary>错。FLOPs 仍是 $O(n^2)$;把计算量降到近线性的是稀疏注意力,不是 FlashAttention。</details>
+<details><summary>B. 通过丢弃部分不重要的注意力连接来近似加速</summary>错。那是稀疏注意力的做法;FlashAttention 一个连接都不丢,结果精确。</details>
+<details><summary>C. HBM 的读写次数与显存占用,且结果与标准注意力精确相等 ✅</summary>正确。靠分块 + 在线 softmax 让 $n\times n$ 矩阵不落地,是访存优化,结果数学等价。</details>
+<details><summary>D. 通过降低数值精度(如用 FP8)来换取速度</summary>错。降精度是另一条正交的路线,不是 FlashAttention 的核心机制。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 FlashAttention 与稀疏 / 滑动窗口注意力,下列哪一项正确?</p>
+<details><summary>A. FlashAttention 结果精确、稀疏注意力是近似;二者正交,可叠加使用 ✅</summary>正确。前者优化访存且不改结果,后者靠限制可见范围把复杂度降到近线性,可以组合。</details>
+<details><summary>B. 两者都是近似算法,都会损失长程依赖</summary>错。FlashAttention 不丢任何连接,结果精确,不损失依赖。</details>
+<details><summary>C. 稀疏注意力精确,FlashAttention 才是近似</summary>错,正好说反了。</details>
+<details><summary>D. 两者互斥,一个模型只能选其一</summary>错。可以用 IO 高效的 kernel 去执行稀疏模式,二者正交。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness</strong>(Dao et al., 2022)——tiling + 在线 softmax + kernel 融合的原始论文,标题里的 "Exact" 与 "IO-Awareness" 就是本课两个核心词。</li>
+<li><strong>FlashAttention-2</strong>(Dao, 2023)——在其基础上改进了并行度与工作划分。</li>
+<li><strong>Online normalizer calculation for softmax</strong>(Milakov &amp; Gimelshein, 2018)——在线 softmax 的数学基础。</li>
+<li><strong>Self-attention Does Not Need $O(n^2)$ Memory</strong>(Rabe &amp; Staats, 2021)——「注意力不必占 $O(n^2)$ 显存」的思路来源。</li>
+<li><strong>Longformer</strong>(Beltagy et al., 2020)与 <strong>Big Bird</strong>(Zaheer et al., 2020)、<strong>Generating Long Sequences with Sparse Transformers</strong>(Child et al., 2019)——局部窗口 + 全局 / 随机连接等稀疏模式的代表作。</li>
+<li>相邻课:上承第 0007 课(MHA/GQA/MLA 省 KV 显存),下接第 0009 课(MoE 负载均衡)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>FlashAttention 让 $n\times n$ 分数矩阵不落地(精确、省访存、不省 FLOPs);稀疏注意力靠少算连接把复杂度降到近线性(近似)——瓶颈是「搬」不是「算」。</strong></p>
+<nav class="lesson-nav">
+<a href="0007-attention-variants-mha-gqa-mla.html">← 上一课:MHA / GQA / MLA</a>
+<a href="0009-moe-load-balancing.html">下一课:MoE 负载均衡 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,82 @@
+{
+ "num": "0030",
+ "slug": "session-tree-two-dimensions-and-append-only",
+ "title": "会话为什么是一棵树",
+ "narrowTopic": "会话存储的两个正交维度(存哪里/长什么样),以及为什么用 append-only 树而非线性数组——回退只是移指针不删数据",
+ "analogySeed": "走迷宫遇到死路时,你不会擦掉已走过的路线,而是退回岔路口——把'我在哪'这个指针移回去,走错的那条路仍留在地图上,以后还能回来看。这就是 append-only 树的回退。",
+ "keyPoints": [
+  "会话存储要拆成两个正交维度:存哪里(介质)和长什么样(结构),两者可独立选择,别把'用了文件'和'必须 append-only'粘成一团",
+  "介质上 coding-agent 选本地 JSONL 文件而非数据库:单用户本地运行、会话跟项目走(每个项目的 .pi/sessions/ 就是它的对话档案)、零依赖零运维、可 cat/grep 调试",
+  "结构上 Pi 选树(Session Tree)而非线性数组,因为对话有重试/分支/回退,线性数组'删掉后面再重写'做不到'分叉不丢数据'",
+  "Session Tree 是只追加、不修改、不删除(append-only)的树,每条消息是一个带 parentId 的节点,leafId 指向当前所在位置",
+  "回退不是删数据而是移动 leafId 指针:branch() 核心就一行 leafId=目标id,O(1),被抛弃的旧分支(e3-e5)一个都不删,完整保留在树和文件里",
+  "分支的本质是两个节点共享同一个 parent(e6 和 e3 都 parentId=e2);跟着'调试认证 bug 的 8 步'例子,能看到树从空长成有两个分支"
+ ],
+ "codeRefs": [
+  {
+   "desc": "§一末尾'存哪里/长什么样'两维度对照表:存哪里一行(mysql 等数据库 vs 本地 JSONL 文件),长什么样一行(线性数组 vs 树 Session Tree)",
+   "cite": "教程 第10章 §一"
+  },
+  {
+   "desc": "§二第6步的 branch() 回退代码,函数体只有 this.leafId = \"e2\" 一行注释'只改这一行',以及回退后 e3-e5 变旧分支仍保留的树形 ASCII",
+   "cite": "教程 第10章 §二 / session-manager.ts branch"
+  },
+  {
+   "desc": "§二第7步 e6 节点块:parentId 也是 e2,与 e3 同父,原文标注'两个节点共享同一个 parent 就是树上的两个分支'",
+   "cite": "教程 第10章 §二"
+  }
+ ],
+ "designRationale": [
+  "为什么把'会话怎么存'拆成'存哪里'和'长什么样'两个正交维度:混在一起会压缩选择空间,让人误以为'用了文件就必须 append-only',其实两维度可独立组合",
+  "为什么选树而非线性数组:对话不总是线性的(重试/分支/回退),线性数组的这些操作意味着删掉后面再重写,保留不了两条并存的分支以供对比",
+  "为什么坚持 append-only(只追加不删):删掉的历史分支再也找不回来,而新思路可能走不通、需要退回旧分支;磁盘便宜、数据无价",
+  "为什么回退设计成移动 leafId 而非删节点:移指针是 O(1) 且旧数据完整保留,符合 append-only 铁律,而删除既有成本又不可逆"
+ ],
+ "quiz": [
+  {
+   "stem": "本章把'会话数据怎么存'拆成了哪两个正交的子问题?",
+   "options": [
+    "用文件还是数据库,以及用 JSON 还是 JSONL",
+    "存在哪里(介质),以及长什么样(数据结构)",
+    "会话存多久,以及单个会话能存多大",
+    "谁有权限读,以及谁有权限写"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。介质(mysql 还是本地文件)和结构(线性数组还是树)是正交的——你甚至能'用数据库存一棵树'。延伸:正因正交,别把'用了文件'和'必须 append-only'粘成一团。",
+   "noMsg": "回看 §一 开头——本章反复强调这两个维度'正交',一个回答'存在哪里',一个回答'逻辑形态是什么'。"
+  },
+  {
+   "stem": "线性数组存对话最大的问题是什么,以至于 Pi 改用树?",
+   "options": [
+    "数组太占内存",
+    "数组按会话 id 查询太慢",
+    "回退/分支时只能'删掉后面再重写',做不到'分叉不丢数据'",
+    "数组结构存不下 toolResult 这种消息"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。对话不总是线性的(重试/分支/回退),线性数组一删就没了,保留不了两条并存的分支。延伸:代价是多占存储空间,但磁盘便宜、数据无价。",
+   "noMsg": "想想第 6-7 步那个'先试方案 A 走到底,再回头试方案 B,还想留着 A 对比'的场景,线性数组能同时留住两条吗?"
+  },
+  {
+   "stem": "在 Session Tree 里执行'回退到 e2',底层实际发生了什么?",
+   "options": [
+    "删除 e3、e4、e5 三个节点腾出空间",
+    "把 e3-e5 标记为已删除但保留占位",
+    "复制 e2 的内容到一个新分支",
+    "只把 leafId 改成 \"e2\",e3-e5 一个都不删"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。branch() 核心就一行 leafId=\"e2\",O(1),旧分支完整留在树和 .jsonl 文件里。延伸:这正是 append-only 的铁律——回退是移指针,不是删数据。",
+   "noMsg": "回看第 6 步的 branch() 代码,函数体真正改状态的只有一行,而且整段里'删'这个动作从未出现。"
+  }
+ ],
+ "_chapter": "第10章",
+ "_chapterCN": "会话管理——对话的存储、恢复与分叉",
+ "prevFile": "0029-structured-summary-and-rebuild.html",
+ "prevNum": "0029",
+ "nextFile": "0031-entry-anatomy-and-three-core-operations.html",
+ "nextNum": "0031",
+ "crumbLabel": "第 10 章 · 会话管理",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第10章-会话管理-对话的存储恢复与分叉.md",
+ "filename": "0030-session-tree-two-dimensions-and-append-only.html"
+}

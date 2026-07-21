@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0052 · 系统设计(下):缓存、分片、一致性哈希与作答框架</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0052 课 · 系统设计 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>系统设计(下):缓存、分片、一致性哈希与作答框架</h1>
+
+<p class="lede">上一课打了地基(数字直觉 + CAP)。这节课发武器:<strong>缓存</strong>、<strong>分片与复制</strong>、<strong>一致性哈希</strong>、<strong>消息队列</strong>——这几件几乎是每道系统设计题都要用到的通用手段。最后把它们收进一套<strong>作答框架</strong>:一道 45 分钟的系统设计题到底该怎么组织,才能既有条理又能展示深度。这是整个精读课的收官课。</p>
+
+<div class="recall">
+<p>先回忆:<a href="0051-system-design-fundamentals.html">上一课</a>我们说「内存≪SSD≪磁盘≪网络」的延迟台阶,以及 CAP 的取舍;又在很早的<a href="0012-hash-table-intro.html">哈希表</a>里学过用哈希函数把键映射到桶。这节课的一致性哈希,正是把「哈希映射」和「分布式取舍」两个旧知识拼到一起。先自己想一句:如果你把数据按 <code>hash(key) % N</code> 分到 N 台机器上,某天要加第 N+1 台,会发生什么灾难?</p>
+</div>
+
+<h2>一、缓存:最便宜的提速,和它的三个坑</h2>
+
+<p>缓存就是把慢速数据源(数据库、磁盘)的热点结果,暂存到快速层(内存)。呼应上一课的延迟表:内存比数据库快几个数量级,命中缓存就是白赚的速度。最常用的模式是<strong>缓存旁路(Cache-Aside)</strong>:应用先查缓存,未命中再查库并回填缓存。</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">请求到来:先查缓存</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">命中(hit)</div>
+      <div class="step terminal">直接返回,极快</div>
+    </div>
+    <div class="branch">
+      <div class="label">未命中(miss)</div>
+      <div class="step">查数据库 → 回填缓存 → 返回</div>
+    </div>
+  </div>
+</div>
+<figcaption>缓存旁路:命中率越高,越多请求走上面这条快路,数据库压力越小。</figcaption>
+</figure>
+
+<p>但缓存有三个经典的坑,面试官爱一次性追问:</p>
+
+<table>
+<thead><tr><th>问题</th><th>是什么</th><th>应对</th></tr></thead>
+<tbody>
+<tr><td>缓存穿透</td><td>大量查<strong>根本不存在</strong>的键,每次都绕过缓存打到库</td><td>缓存空值;或用布隆过滤器先挡</td></tr>
+<tr><td>缓存雪崩</td><td>大量键<strong>同一时刻过期</strong>,请求瞬间全压到库</td><td>过期时间加随机抖动,错开失效</td></tr>
+<tr><td>缓存击穿</td><td>某个<strong>热点键过期</strong>瞬间,海量请求同时穿透去重建</td><td>加互斥锁,只让一个请求去重建</td></tr>
+</tbody>
+</table>
+
+<p>三个坑的共性:缓存没挡住,压力直达数据库。理解了「缓存是数据库的护盾」,应对办法自然就推得出来——要么让不存在的键也被挡下(穿透),要么别让护盾同时消失(雪崩/击穿)。</p>
+
+<h2>二、分片与复制:一台装不下、扛不住怎么办</h2>
+
+<p>数据大到一台机器装不下,就<strong>分片(sharding)</strong>:按某个键把数据水平切到多台。读写压力大,就<strong>复制(replication)</strong>:做主从多副本,主库写、从库分摊读。二者常一起用。</p>
+
+<div class="trio">
+  <div class="cell">
+    <div class="role">Sharding</div>
+    <div class="head">分片</div>
+    <div class="sub">按键水平切分,扩容量</div>
+  </div>
+  <div class="cell">
+    <div class="role">Replication</div>
+    <div class="head">主从复制</div>
+    <div class="sub">多副本,扩读 + 容灾</div>
+  </div>
+  <div class="cell">
+    <div class="role">Message Queue</div>
+    <div class="head">消息队列</div>
+    <div class="sub">异步削峰 + 解耦</div>
+  </div>
+</div>
+
+<p>分片的天真做法是 <code>hash(key) % N</code>。它平时工作良好,但一旦机器数 N 变化(加机、宕机),几乎<strong>所有键的归属都会改变</strong>——因为取模的结果全变了。这意味着一次扩容要迁移几乎全部数据、缓存全部失效,系统直接雪崩。这正是上面 recall 里埋的灾难。</p>
+
+<h2>三、一致性哈希:让增删节点只动一小块</h2>
+
+<p><strong>一致性哈希</strong>的巧思:不把键映射到「机器编号」,而是把<strong>机器和键都映射到同一个环</strong>(0 到 2³² 首尾相接)。每个键顺时针找到的第一个节点,就是它的归属。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 340 300" role="img" aria-label="一致性哈希环:节点与键映射到同一个环">
+  <circle cx="170" cy="150" r="110" class="dgm-node" fill="none" stroke-width="2"/>
+  <!-- 节点 -->
+  <circle cx="170" cy="40" r="16" class="dgm-accent-node"/>
+  <text x="170" y="45" text-anchor="middle" class="dgm-accent-text" font-size="12" font-weight="700">N1</text>
+  <circle cx="280" cy="150" r="16" class="dgm-accent-node"/>
+  <text x="280" y="155" text-anchor="middle" class="dgm-accent-text" font-size="12" font-weight="700">N2</text>
+  <circle cx="170" cy="260" r="16" class="dgm-accent-node"/>
+  <text x="170" y="265" text-anchor="middle" class="dgm-accent-text" font-size="12" font-weight="700">N3</text>
+  <circle cx="60" cy="150" r="16" class="dgm-accent-node"/>
+  <text x="60" y="155" text-anchor="middle" class="dgm-accent-text" font-size="12" font-weight="700">N4</text>
+  <!-- 键 -->
+  <circle cx="238" cy="72" r="9" class="dgm-good-node"/>
+  <text x="238" y="76" text-anchor="middle" class="dgm-good-text" font-size="10">k</text>
+  <path d="M238,81 A100,100 0 0 1 265,138" class="dgm-edge" marker-end="url(#a52)"/>
+  <text x="170" y="150" text-anchor="middle" class="dgm-muted" font-size="11">键 k 顺时针</text>
+  <text x="170" y="166" text-anchor="middle" class="dgm-muted" font-size="11">找到的第一个</text>
+  <text x="170" y="182" text-anchor="middle" class="dgm-muted" font-size="11">节点 = N2</text>
+  <defs>
+    <marker id="a52" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" class="dgm-accent"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+<figcaption>加/删一个节点,只有它与前一个节点之间那段弧上的键需要迁移,其余键纹丝不动。</figcaption>
+</figure>
+
+<p>妙在<strong>增删节点只影响环上相邻的一小段</strong>:新增 N5 落在 N1 和 N2 之间,只有那段弧上的键从 N2 挪到 N5,别的键完全不动。相比取模法「动一台迁全部」,一致性哈希把迁移量从 O(全部) 降到大约 O(数据量 / 节点数)。(工程上还会给每个物理节点分配多个<strong>虚拟节点</strong>,让键分布更均匀。)这就是分布式缓存、分布式存储普遍采用它的原因。</p>
+
+<h2>四、SQL vs NoSQL:又一个权衡题</h2>
+
+<table>
+<thead><tr><th>维度</th><th>SQL(关系型)</th><th>NoSQL</th></tr></thead>
+<tbody>
+<tr><td>结构</td><td>固定表结构 (schema)</td><td>灵活 / 无固定结构</td></tr>
+<tr><td>事务</td><td>强事务 (ACID)</td><td>多为最终一致 (BASE)</td></tr>
+<tr><td>扩展</td><td>垂直为主,分片较难</td><td>为水平扩展而生</td></tr>
+<tr><td>擅长</td><td>复杂查询、强关联、强一致</td><td>海量数据、高吞吐、结构多变</td></tr>
+</tbody>
+</table>
+
+<p>又一次,没有「哪个更好」,只有「合不合适」:要复杂关联和强一致(如金融)选 SQL;要海量写入和灵活结构(如日志、feed)选 NoSQL。这与上一课 CAP 的取舍一脉相承。</p>
+
+<h2>五、作答框架:45 分钟怎么组织</h2>
+
+<p>把上面所有武器收进一条流水线。<strong>系统设计题的第一名大忌是一上来就画架构图</strong>——你连要解决什么都没问清,画的一定是错的。正确的顺序是:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node good"><span class="n-title">① 澄清需求</span><span class="n-sub">先问,别急着画</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">② 估容量</span><span class="n-sub">QPS/存储/带宽</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">③ 定 API + 数据模型</span><span class="n-sub">接口与表结构</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">④ 画主干</span><span class="n-sub">高层架构</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">⑤ 深挖瓶颈</span><span class="n-sub">主动指出并解决</span></div>
+</div>
+<figcaption>这条框架对应大纲给的流程:理解问题与范围 → 考虑限制(容量) → 抽象设计(分层/负载均衡/关键算法) → 找瓶颈给方案。</figcaption>
+</figure>
+
+<p>第 ⑤ 步是拉开差距的地方:主动说「这里数据库会成瓶颈,我加读缓存 + 主从复制;写入峰值高,我前面加消息队列削峰」——把这节课的武器一件件挂上去,并说清每件的取舍。以「设计一个短链服务」为例:澄清(要不要自定义短码、多少读写)→ 估容量(读远多于写,重缓存)→ API(<code>POST /shorten</code>、<code>GET /{code}</code>)→ 数据模型(短码↔原始 URL)→ 主干(负载均衡 + 应用 + 缓存 + 分片存储)→ 深挖(发号器怎么避免冲突、热点短码怎么缓存)。</p>
+
+<h2>六、关键定义</h2>
+
+<dl class="keydef">
+<dt>一致性哈希(Consistent Hashing)</dt>
+<dd>把节点和键映射到同一个哈希环,增删节点时只有相邻区间的键需要迁移。<em>避免</em>与普通「取模哈希分片」混同——后者一变节点数几乎全部键都要迁。</dd>
+<dt>分片 vs 复制(Sharding vs Replication)</dt>
+<dd>分片按键把数据水平切到多机(扩容量);复制做多副本(扩读、容灾)。<em>避免</em>把「分片」等同于「加缓存」,二者解决的问题不同。</dd>
+<dt>缓存三问(穿透 / 雪崩 / 击穿)</dt>
+<dd>穿透=查不存在的键绕过缓存;雪崩=大量键同时过期;击穿=单个热点键过期瞬间被击穿。<em>避免</em>把三者混为一谈——应对手段各不相同。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong> 这是系统设计的「实战」半区:</p>
+<ul>
+<li><strong>45 分钟怎么组织?</strong>——照「澄清 → 估容量 → API/数据模型 → 画主干 → 深挖瓶颈」五步走,开场务必先问需求。</li>
+<li><strong>能不能主动找瓶颈?</strong>——不等面试官问,自己指出「数据库读压力大 → 加缓存」「写峰值高 → 加消息队列」「单表装不下 → 分片 + 一致性哈希」,并讲清取舍。</li>
+<li><strong>经典题套路</strong>:短链、feed 流、限流器、键值存储——都能套这套框架。缓存、分片、一致性哈希、消息队列是反复出现的积木。</li>
+<li><strong>一致性哈希 vs 取模</strong>:能说清「取模一改节点数就全量迁移,一致性哈希只迁相邻段」就是加分项。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>一上来就画架构、不问需求,是系统设计的头号大忌。</strong> 需求没澄清就动手,等于答一道你没读完的题。先花几分钟问清:功能范围、读写比例、规模量级、一致性要求。</p>
+<p><strong>别把一致性哈希和取模分片混为一谈。</strong> 取模 <code>hash(key) % N</code> 在 N 变化时几乎全部键重映射;一致性哈希只影响环上相邻的一小段。这个区别是高频追问。</p>
+<p><strong>缓存三个坑的应对不能张冠李戴。</strong> 穿透靠「缓存空值 / 布隆过滤器」,雪崩靠「过期时间加随机」,击穿靠「互斥锁重建」——答错对应关系会露怯。</p>
+</div>
+
+<div class="implement">
+<p>动手核对,用一道真题把框架跑通:</p>
+<p>挑「设计一个短链服务」或「设计一个限流器」,不看答案,自己按五步在纸上写一遍:先列你会向面试官澄清的 3~5 个问题,再估容量,定 API 和数据模型,画出高层架构主干,最后至少指出 2 个瓶颈并给出用到本课武器(缓存/分片/一致性哈希/队列)的解决方案。写完对照 System Design Primer 里的同类案例查漏。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong> 系统设计的高分不来自记住多少组件,而来自<strong>先问需求、再按框架推进、主动找瓶颈并讲清每一步的取舍</strong>。缓存、分片、一致性哈希、消息队列只是积木;真正被考察的,是你在约束下做权衡的思维方式。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一个用 <code>hash(key) % N</code> 分片的系统,从 4 台机器扩到 5 台。大约多少比例的键需要迁移?换成一致性哈希呢?</summary>
+<div class="answer">
+<p>取模法:N 从 4 变 5,取模结果几乎全变,<strong>约 80% 甚至更多的键都要迁移</strong>,缓存大面积失效——这就是取模分片不能随意扩容的原因。一致性哈希:新节点只从环上相邻节点接管一小段,理想情况下只迁移约 <strong>1/5(新节点应承担的那一份)</strong>的键,其余不动。这个对比是面试高频追问点。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:凌晨大量商品缓存被设置成「12:00 整点统一过期」,结果一到点数据库 QPS 瞬间飙升差点打挂。这属于哪个缓存问题,怎么解?</summary>
+<div class="answer">
+<p>这是<strong>缓存雪崩</strong>——大量键在同一时刻集体失效,请求瞬间全压到数据库。解法是给过期时间<strong>加一个随机抖动</strong>(如 12:00 ± 随机几分钟),把失效时间打散错开。对比:如果是「某个爆款商品的热点键过期瞬间被海量请求击穿」那是缓存击穿(加互斥锁重建);「大量查询不存在的商品 ID」才是穿透(缓存空值 / 布隆过滤器)。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:面试官刚说完「设计一个新闻 feed 系统」,最不该做的第一件事是下面哪个?</summary>
+<div class="answer">
+<p>最不该做的是<strong>立刻开始画详细架构图 / 选数据库</strong>。需求还没澄清就动手,方向大概率错。正确的第一步是<strong>澄清需求</strong>:是拉模式还是推模式?日活多大?读写比例?要不要实时?把范围问清后再估容量、定 API、画主干、挖瓶颈。「先问后画」是这套框架的灵魂。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题对应仓库大纲「系统设计、可扩展性和数据处理」小节。以下均为该处收录的一手来源:</p>
+<ul>
+<li><a href="https://github.com/donnemartin/system-design-primer">The System Design Primer</a> —— 缓存、分片、一致性哈希、作答流程都能在此找到系统化展开,大纲亦把它列为练习复习入口。</li>
+<li><a href="http://www.tom-e-white.com/2007/11/consistent-hashing.html">一致性哈希(Consistent Hashing,Tom White)</a> —— 本课环模型的经典讲解。</li>
+<li><a href="http://horicky.blogspot.com/2009/11/nosql-patterns.html">NoSQL 模式</a> 与 <a href="http://www.lecloud.net/post/9246290032/scalability-for-dummies-part-3-cache">可扩展性入门 · 缓存篇</a>;分片可看 <a href="http://highscalability.com/blog/2009/8/6/an-unorthodox-approach-to-database-design-the-coming-of-the.html">分片(Sharding)</a>。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>这是本精读课的收官课。想检验掌握程度,回<a href="../index.html">门户</a>看全景,挑一道系统设计题让你的 AI 老师扮演面试官,现场用这套框架跑一遍——它会在你「还没问需求就想画图」时喊停。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0051-system-design-fundamentals.html"><span class="dir">← 上一课</span>系统设计(上):数字直觉与 CAP</a>
+  <span class="none"></span>
+</nav>
+</footer>
+</main>
+</body>
+</html>

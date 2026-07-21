@@ -1,0 +1,82 @@
+{
+ "num": "0008",
+ "slug": "stopreason-the-only-signal",
+ "title": "stopReason:驱动循环的唯一信号灯",
+ "narrowTopic": "只讲一件事:stopReason 的五种取值(三种来自模型 API、两种是框架流式层注入)与各自含义,以及真正驱动循环的其实不是 stopReason 本身,而是'输出里有没有 toolCall 块且未全部 terminate'。",
+ "analogySeed": "把 stopReason 想成十字路口的信号灯,但这盏灯有个秘密:它显示的颜色一半来自真实路况(模型 API 的 stop/toolUse/length),另一半是交警在灯坏时手动打出的应急手势(框架注入的 error/aborted)。而司机(Loop)真正看的其实不是灯色,而是'前面路上还有没有要执行的工具'。",
+ "keyPoints": [
+  "关键认知:模型不会说'我要停了',它只是 token 预测器;stopReason 虽挂在返回值上,但值来自两个不同地方。",
+  "模型 API 真正返回三种:toolUse(输出了工具调用 JSON)、stop(生成自然终止无工具)、length(达到 maxTokens 被截断)。",
+  "框架流式层注入两种:error(调用异常如网络断/API 报错)、aborted(用户 AbortSignal 主动中止);这两种模型 API 本身不会返回。",
+  "真正驱动循环的不是 stopReason===toolUse,而是 toolCalls 数组长度>0 且未全部 terminate:即使 length 被截断只要有 toolCall 块仍会执行工具;即使 toolUse 但工具全 terminate 也会停。",
+  "一条人类定义的工程约定:模型一次输出中没有工具调用,就认为本轮不需要更多操作、循环可以停——不是模型说完成,而是我们说'你没要工具就当你完成了'。",
+  "四条退出路径:正常退出(stop/length+无 followUp+无 pending)、硬停止(error/aborted,不检查 followUp)、外部钩子停(shouldStopAfterTurn 返回 true)、工具终止(整批工具结果全部 terminate,是 every 不是 some)。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "§三里'模型 API 真正返回的三种'表格(toolUse/stop/length 及含义)与'框架流式层注入的两种'表格(error/aborted 及谁注入),两张表连同 catch 块证据 output.stopReason = signal?.aborted ? 'aborted' : 'error'",
+   "cite": "教程 §三 / stopReason 五种取值两张表 + packages/ai/src 代码证据"
+  },
+  {
+   "desc": "§三'一条规则驱动整个循环'里的简化判断伪代码块(filter type==='toolCall'、hasMoreToolCalls、executeToolCalls、!executedToolBatch.terminate),含其后'注意实际驱动循环的不是 stopReason'的说明",
+   "cite": "教程 §三 / agent-loop.ts:202-216 简化逻辑"
+  },
+  {
+   "desc": "§三末尾'循环的所有退出路径'对照表(正常退出/硬停止/外部钩子停/工具终止,各自触发条件与原因)",
+   "cite": "教程 §三 / 循环退出路径表"
+  }
+ ],
+ "designRationale": [
+  "为什么要区分 stopReason 的两个来源:模型 API 只能报告它自己知道的三种终止,而网络异常和用户中止发生在框架层、模型根本感知不到,所以流式层的 catch 块必须替它'兜底'注入 error/aborted,否则 Loop 无法得知调用失败。",
+  "为什么用'有没有 toolCall'而不是 stopReason 本身驱动循环:stopReason 是描述性的元信息,可能与实际内容脱节(length 截断时仍可能带 toolCall);以 content 里真实的 toolCall 块为准更鲁棒,不会因元信息偏差误判。",
+  "为什么不让代码更聪明地判断'任务完成没':这正是 Agent 与 Workflow 的分界——Agent 模式下你无法预知步数,唯一能稳定依赖的信号就是'输出里有没有工具调用',用最简单的判断换取通用性,是局限也是优雅。",
+  "为什么工具终止用 every 而非 some:只要有一个工具还在正常工作就不该中断,必须整批全部 terminate 才停——这是保守策略,避免单个工具的意见误杀整个循环。"
+ ],
+ "quiz": [
+  {
+   "stem": "以下哪一组 stopReason 是框架的流式层'注入'的,而非模型 API 本身返回的?",
+   "options": [
+    "toolUse 和 stop",
+    "error 和 aborted",
+    "stop 和 length",
+    "length 和 toolUse"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。error/aborted 由流式层 catch 块注入(output.stopReason = signal?.aborted ? 'aborted' : 'error')。延伸:它们触发'硬停止',连 followUp 都不检查,因为调用本身已失败。",
+   "noMsg": "回看§三两张表的分栏:模型 API 只知道它自己的三种终止;网络断、用户中止发生在框架层,模型感知不到——哪两种属于后者?"
+  },
+  {
+   "stem": "模型返回 stopReason==='length'(被截断),但 content 里仍然有一个 toolCall 块。Loop 会怎么做?",
+   "options": [
+    "因为不是 toolUse,立即停止,不执行任何工具",
+    "仍会执行那个工具,因为真正驱动循环的是 toolCalls 数组长度>0 且未 terminate",
+    "报错退出,因为 length 和 toolCall 不能共存",
+    "只把截断的文本展示给用户,忽略 toolCall"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。驱动循环的是 content 里有没有 toolCall 块(且未全部 terminate),不是 stopReason 的字面值。延伸:反过来即使 stopReason==='toolUse',若工具结果全部 terminate,循环也会停。",
+   "noMsg": "回看§三'注意:实际驱动循环的不是 stopReason===toolUse'那段。stopReason 和实际 content 可能脱节,Loop 以哪个为准?"
+  },
+  {
+   "stem": "一批工具执行完,其中 2 个返回 terminate:true、1 个返回 terminate:false。Loop 会继续还是停止?为什么?",
+   "options": [
+    "停止,因为已有工具喊停(some 逻辑)",
+    "停止,因为大多数工具都要求终止",
+    "继续,因为工具终止用的是 every——必须全部 terminate 才停,只要有一个没喊停就继续",
+    "继续,但会跳过那 2 个 terminate 的工具结果"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。terminate 用 every 不用 some,是保守策略:只要有一个工具还在正常工作就不中断。延伸:这和'四条退出路径'里的工具终止一致——'所有工具都同意停止'才算数。",
+   "noMsg": "回看§四执行工具那节的 terminate 机制:Loop 是'任何一个喊停就停'还是'全部喊停才停'?注意 every 与 some 的区别。"
+  }
+ ],
+ "_chapter": "3",
+ "_chapterCN": "Agent Loop —— 让模型转动起来的引擎",
+ "prevFile": "0007-why-loop-trace-and-turn.html",
+ "prevNum": "0007",
+ "nextFile": "0009-kernel-onion-and-streaming-replace.html",
+ "nextNum": "0009",
+ "crumbLabel": "第 3 章 · Agent Loop",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第3章-Agent-Loop-让模型转动起来的引擎.md",
+ "filename": "0008-stopreason-the-only-signal.html"
+}

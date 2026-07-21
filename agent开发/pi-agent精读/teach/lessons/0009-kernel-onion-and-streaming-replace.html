@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0009 · 内核+叠加的洋葱架构与流式原地替换</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 3 章 · Agent Loop ›
+  <a href="./0008-stopreason-the-only-signal.html">上一课</a> ›
+  <strong>Lesson 0009</strong>
+</div>
+
+<p class="kicker">Lesson 0009 · 第 3 章 · Agent Loop</p>
+<h1>内核 + 叠加的洋葱架构<br>—— 与流式「原地替换」</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课讲清了 <code>stopReason</code> 是驱动循环的唯一信号——但那只是循环里的
+  <em>一个判断点</em>。这一课把镜头拉远,看整个 <code>runLoop()</code> 的骨架:哪部分是<strong>所有 Agent 都要的内核</strong>,
+  哪部分是 coding-agent <strong>按需叠加</strong>的产品外壳。再钻进内核最重的一步——调 LLM——看流式响应里
+  「先占位、逐 token 原地替换」这个精巧设计。
+</div>
+
+<div class="recall">
+  🔁 <b>回忆上一课:</b> <code>stopReason</code> 是模型返回后驱动循环走向的唯一信号——
+  <code>"toolUse"</code> 继续转,其他值(<code>"stop"</code>/<code>"length"</code>/<code>"error"</code>/<code>"aborted"</code>)让循环停下或善后。
+  这一课要问的是:这个"继续转"的循环,到底长什么样?它的骨架里,哪些是必须有的,哪些是可以拆掉的?
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出「十几行最简 Loop → 叠加 steering → 再叠加 followUp」的
+  <span class="sys-pill">洋葱三层图</span>,并说清 <code>context.messages[last] = partialMessage</code>
+  这行代码为什么不是 bug,而是<strong>刻意设计</strong>的流式渲染机制。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:洋葱与正在画的画</b><br>
+  <b>洋葱:</b>剥到最里层,是十几行的最简 Loop(调模型 → 执行工具 → 再调模型);外面一层层裹上
+  coding-agent 的产品特性(steering、followUp)。剥掉任何一层,里层仍能独立运转——
+  这是判断「内核有没有被污染」的试金石。<br>
+  <b>正在画的画:</b>调模型这一步的流式设计,像一幅正在画的画——先在墙上钉一张<em>空画布</em>(空壳消息),
+  画师一笔一笔往上添(<code>text_delta</code>/<code>toolcall_delta</code>),观众实时看着它长成完整作品(<code>done</code>)。
+  没人会等画完了才把画布挂上墙。
+</div>
+
+<h2>1 · 最简 Loop:所有 Agent 的最小公约数</h2>
+<p>
+  剥掉所有产品特性,一个能用的 Agent Loop 只需要十几行:一个 <code>while</code> 循环,
+  调模型、判断 <code>stopReason</code>、执行工具、把结果喂回去,循环往复。
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 最简 Agent Loop(伪代码)</span>
+<span class="ln">2</span><span class="key">async</span> <span class="key">function</span> <span class="fn">simpleLoop</span>(messages, model, tools) {
+<span class="ln">3</span>    <span class="key">while</span> (<span class="key">true</span>) {
+<span class="cm"><span class="ln">4</span>        // ① 调模型</span>
+<span class="ln">5</span>        <span class="key">const</span> response = <span class="key">await</span> <span class="fn">callModel</span>(model, messages, tools);
+<span class="ln">6</span>        messages.<span class="fn">push</span>(response);
+<span class="ln">7</span>
+<span class="cm"><span class="ln">8</span>        // ② 没有工具调用 → 结束</span>
+<span class="ln">9</span>        <span class="key">if</span> (response.stopReason !== <span class="str">"toolUse"</span>) {
+<span class="ln">10</span>            <span class="key">return</span> messages;
+<span class="ln">11</span>        }
+<span class="ln">12</span>
+<span class="cm"><span class="ln">13</span>        // ③ 有工具调用 → 执行,把结果喂回去</span>
+<span class="ln">14</span>        <span class="key">for</span> (<span class="key">const</span> toolCall <span class="key">of</span> response.toolCalls) {
+<span class="ln">15</span>            <span class="key">const</span> result = <span class="key">await</span> <span class="fn">executeTool</span>(toolCall);
+<span class="ln">16</span>            messages.<span class="fn">push</span>(result);
+<span class="ln">17</span>        }
+<span class="ln">18</span>    }
+<span class="ln">19</span>}
+</pre>
+<cite>🔎 出处:教程 §四 / 最简 Agent Loop 伪代码。</cite>
+<div class="why">
+  <b>为什么这十几行就是「内核」?</b> 一个 <code>while</code> 循环,调模型、执行工具、再调模型,
+  直到模型不再要求工具——这就是上一课讲的那套 <code>stopReason</code> 逻辑的最小实现。
+  <strong>任何 Agent 都需要这个内核</strong>,无论它是一问一答的简单助手,还是交互式编程 Agent。
+</div>
+
+<h2>2 · coding-agent 叠加了两层外壳</h2>
+<p>
+  Pi 的 coding-agent 是<strong>交互式编程助手</strong>,用户在终端里跟它对话,它可能要读好几个文件、改代码、跑测试。
+  这种产品场景比「最简 Loop」多出真实需求,于是在内核外面叠加了两层:
+</p>
+<p>
+  <strong>叠加 1 · steering:</strong>用户在 Agent 工作期间又输入了新指令——这些消息不能等当前任务跑完,
+  得在下一圈开头紧急插队。体现方式是<strong>内层循环条件</strong>从只看 <code>hasMoreToolCalls</code>,
+  多了一个 <code>|| pendingMessages.length &gt; 0</code>。
+</p>
+<p>
+  <strong>叠加 2 · 外层 followUp 循环:</strong>Agent 自然停了之后,系统可能还想追加任务
+  (比如「顺便跑个测试」)。<code>while(true)</code> 把整个内层循环包起来,内层停了外层可以重启它,
+  让追加任务在<strong>同一个 Trace 内</strong>继续跑。
+</p>
+<div class="tradeoff">
+  🔑 <b>关键认知:</b> steering / followUp / 钩子都是 coding-agent 的<strong>功能选择</strong>,
+  不是 Agent 的通用法则。如果你做的是「一问一答带工具」的简单 Agent,这张表全是多余的——
+  你只需要最简 Loop。这就是「从洋葱内核按需往外叠」的落地方式。
+</div>
+
+<h2>3 · 完整 runLoop 骨架:内核 + 两层叠加拼起来</h2>
+<p>
+  把内核和两层叠加拼起来,才是完整的 <code>runLoop()</code> 骨架。下面代码里每一步都标注了
+  它属于「内核」还是「叠加」:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// runLoop() 骨架(内核 + 两层叠加)</span>
+<span class="ln">2</span><span class="key">async</span> <span class="key">function</span> <span class="fn">runLoop</span>(currentContext, newMessages, config, signal, emit, streamFn) {
+<span class="ln">3</span>
+<span class="cm"><span class="ln">4</span>    // ① 首次 steering 检查(在进入内层循环之前!)</span>
+<span class="ln">5</span>    <span class="key">let</span> pendingMessages = (<span class="key">await</span> config.getSteeringMessages?.()) || [];
+<span class="ln">6</span>
+<span class="cm"><span class="ln">7</span>    // ========== 叠加2:外层循环(followUp 续命)==========</span>
+<span class="ln">8</span>    <span class="key">while</span> (<span class="key">true</span>) {
+<span class="ln">9</span>        <span class="key">let</span> hasMoreToolCalls = <span class="key">true</span>;
+<span class="ln">10</span>        <span class="key">let</span> firstTurn = <span class="key">true</span>;  <span class="cm">// 首轮跳过 turn_start(入口已发)</span>
+<span class="ln">11</span>
+<span class="cm"><span class="ln">12</span>        // ========== 内核 + 叠加1:内层循环 ==========</span>
+<span class="ln">13</span>        <span class="key">while</span> (hasMoreToolCalls || pendingMessages.length &gt; 0) {
+<span class="cm"><span class="ln">14</span>            //                                    ↑ 叠加1:steering 消息也驱动循环</span>
+<span class="ln">15</span>
+<span class="ln">16</span>            <span class="key">if</span> (!firstTurn) {
+<span class="ln">17</span>                <span class="fn">emit</span>({ type: <span class="str">"turn_start"</span> });
+<span class="ln">18</span>            }
+<span class="ln">19</span>            firstTurn = <span class="key">false</span>;
+<span class="ln">20</span>
+<span class="cm"><span class="ln">21</span>            // 步骤 A:注入 pendingMessages(steering 消息) ← 叠加1</span>
+<span class="ln">22</span>            <span class="cm">// 步骤 B:调 LLM → streamAssistantResponse()   ← 内核</span>
+<span class="ln">23</span>            <span class="cm">// 步骤 C:检查 stopReason                       ← 内核</span>
+<span class="ln">24</span>            <span class="cm">// 步骤 D:执行工具                               ← 内核</span>
+<span class="ln">25</span>            <span class="cm">// 步骤 E:emit turn_end                          ← 内核</span>
+<span class="ln">26</span>            <span class="cm">// 步骤 F:prepareNextTurn → shouldStopAfterTurn  ← 叠加(钩子)</span>
+<span class="ln">27</span>            <span class="cm">//         → 再次检查 steering                     ← 叠加1</span>
+<span class="ln">28</span>        }
+<span class="ln">29</span>
+<span class="cm"><span class="ln">30</span>        // ========== 内层循环结束 ==========</span>
+<span class="ln">31</span>        <span class="cm">// 叠加2:检查 followUp 队列</span>
+<span class="ln">32</span>        <span class="key">const</span> followUpMessages = (<span class="key">await</span> config.getFollowUpMessages?.()) || [];
+<span class="ln">33</span>        <span class="key">if</span> (followUpMessages.length &gt; 0) {
+<span class="ln">34</span>            pendingMessages = followUpMessages;
+<span class="ln">35</span>            <span class="key">continue</span>;  <span class="cm">// 回到外层循环顶部,内层循环重开</span>
+<span class="ln">36</span>        }
+<span class="ln">37</span>
+<span class="ln">38</span>        <span class="key">break</span>;  <span class="cm">// 两个队列都空,真正退出</span>
+<span class="ln">39</span>    }
+<span class="ln">40</span>}
+</pre>
+<cite>🔎 出处:教程 §4.2 / runLoop 内核+两层叠加骨架。</cite>
+<p>
+  留意 <b>第 5 行</b>:首次 steering 检查在进入循环<em>之前</em>就做了——因为用户在等待 LLM 首次响应时
+  可能又输入了内容,循环还没开始就得先取一遍,否则这批消息会漏掉。而
+  <b>第 13 行</b>的循环条件正是「内核 <code>hasMoreToolCalls</code> + 叠加1 <code>pendingMessages.length&gt;0</code>」
+  拼在一起的地方——两个条件任一为真都继续转。
+</p>
+
+<div class="diagram">从里到外的三层洋葱
+
+        ┌─────────────────────────────────┐
+        │  叠加2:外层 while(true) followUp │
+        │  ┌───────────────────────────┐  │
+        │  │ 叠加1:内层循环条件         │  │
+        │  │ 多了 ||pendingMessages...  │  │
+        │  │  ┌─────────────────────┐  │  │
+        │  │  │ 内核:simpleLoop      │  │  │
+        │  │  │ 调模型→判断→执行工具  │  │  │
+        │  │  └─────────────────────┘  │  │
+        │  └───────────────────────────┘  │
+        └─────────────────────────────────┘
+
+剥掉外两层,内核十几行仍能独立运转——这是「内核未被污染」的试金石。</div>
+
+<h2>4 · 内核最重的一步:streamAssistantResponse() 调 LLM</h2>
+<p>
+  调 LLM 是整个 Loop 最重的一步,分四阶段:<b>A</b> 上下文预处理(可选 <code>transformContext</code>)、
+  <b>B</b> <code>convertToLlm</code> 转换、<b>C</b> 构建全新 <code>llmContext</code> 并调用、<b>D</b> 流式处理响应。
+  这一节聚焦阶段 D——流式响应里最值得记住的设计。
+</p>
+<p>
+  <code>streamFunction</code> 返回的是一个异步迭代器。<code>for await</code> 逐个消费事件,
+  按事件类型做不同处理:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 阶段 D:流式处理响应</span>
+<span class="ln">2</span><span class="key">for</span> <span class="key">await</span> (<span class="key">const</span> event <span class="key">of</span> response) {
+<span class="ln">3</span>    <span class="key">switch</span> (event.type) {
+<span class="ln">4</span>        <span class="key">case</span> <span class="str">"start"</span>:
+<span class="cm"><span class="ln">5</span>            // 拿到一个"空壳"消息,直接 push 到 context</span>
+<span class="ln">6</span>            partialMessage = event.partial;
+<span class="ln">7</span>            context.messages.<span class="fn">push</span>(partialMessage);
+<span class="ln">8</span>            <span class="fn">emit</span>({ type: <span class="str">"message_start"</span>, ... });
+<span class="ln">9</span>            <span class="key">break</span>;
+<span class="ln">10</span>
+<span class="ln">11</span>        <span class="key">case</span> <span class="str">"text_delta"</span>:       <span class="cm">// 文本增量</span>
+<span class="ln">12</span>        <span class="key">case</span> <span class="str">"toolcall_delta"</span>:   <span class="cm">// 工具调用增量</span>
+<span class="ln">13</span>        <span class="key">case</span> <span class="str">"thinking_delta"</span>:   <span class="cm">// 思考增量</span>
+<span class="ln">14</span>            partialMessage = event.partial;            <span class="cm">// 更新后的部分消息</span>
+<span class="hl"><span class="ln">15</span>            context.messages[last] = partialMessage;    <span class="cm">// ★ 原地替换!</span></span>
+<span class="ln">16</span>            <span class="fn">emit</span>({ type: <span class="str">"message_update"</span>, ... });      <span class="cm">// UI 收到增量更新</span>
+<span class="ln">17</span>            <span class="key">break</span>;
+<span class="ln">18</span>
+<span class="ln">19</span>        <span class="key">case</span> <span class="str">"done"</span>:
+<span class="ln">20</span>        <span class="key">case</span> <span class="str">"error"</span>:
+<span class="ln">21</span>            finalMessage = <span class="key">await</span> response.<span class="fn">result</span>();
+<span class="hl"><span class="ln">22</span>            context.messages[last] = finalMessage;       <span class="cm">// ★ 用最终完整消息替换</span></span>
+<span class="ln">23</span>            <span class="fn">emit</span>({ type: <span class="str">"message_end"</span>, ... });
+<span class="ln">24</span>            <span class="key">return</span> finalMessage;
+<span class="ln">25</span>    }
+<span class="ln">26</span>}
+</pre>
+<cite>🔎 出处:教程 §4.4 / agent-loop.ts:313-357 流式原地替换。</cite>
+
+<p>数据在流式响应期间,<code>context.messages[last]</code> 的演变:</p>
+<pre><span class="cm"><span class="ln">1</span>start      → { role: <span class="str">"assistant"</span>, content: [] }                    <span class="cm">// 空壳 push</span></span>
+<span class="ln">2</span>text_delta → { content: [{ type:<span class="str">"text"</span>, text:<span class="str">"好的..."</span> }] }       <span class="cm">// 文字在长</span>
+<span class="ln">3</span>toolcall   → { content: [{ text:<span class="str">"好的..."</span> },                        <span class="cm">// 工具调用出现</span>
+<span class="ln">4</span>                         { type:<span class="str">"toolCall"</span>, name:<span class="str">"read"</span>, arguments:{...} }] }
+<span class="ln">5</span>done       → { content: [...], stopReason:<span class="str">"toolUse"</span>, usage:{...} } <span class="cm">// 最终完整消息替换</span>
+</pre>
+
+<div class="why">
+  <b>为什么要先 push 空壳再原地替换?</b> 目的是<strong>让 UI 实时展示</strong>。如果等全部响应完成才 push 到 context,
+  用户在 LLM 思考的几秒里会盯着空白屏幕。通过「先放空壳、逐 token 替换」,UI 通过 <code>message_update</code> 事件
+  拿到最新部分消息,能做到逐字渲染——这也解释了为什么「原地替换」的关键是<strong>覆盖最后一条</strong>
+  (<code>context.messages[last]=...</code>),而不是往数组末尾 <code>push</code> 新条目:
+  数量不变、内容在长大,才能让 UI 稳定地对着「同一条消息」持续刷新内容,而不是每来一个 delta 就多出一条消息。
+</div>
+
+<h2>5 · 顺带一提:convertToLlm 这个翻译官</h2>
+<p>
+  阶段 B 的 <code>convertToLlm(messages)</code> 站在 Agent 内核与 LLM 之间的<strong>边界</strong>上。
+  Agent 内部维护的消息含自己的「内部语言」(如 <code>CompactionSummary</code>/<code>BashExecution</code>/<code>BranchSummary</code>),
+  LLM 只认 <code>user</code>/<code>assistant</code>/<code>toolResult</code> 三种标准消息,默认实现就是一个 <code>.filter()</code>:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 默认 convertToLlm:只保留三种标准消息</span>
+<span class="ln">2</span><span class="key">function</span> <span class="fn">defaultConvertToLlm</span>(messages) {
+<span class="ln">3</span>    <span class="key">return</span> messages.<span class="fn">filter</span>(
+<span class="ln">4</span>        (message) => message.role === <span class="str">"user"</span>
+<span class="ln">5</span>                  || message.role === <span class="str">"assistant"</span>
+<span class="ln">6</span>                  || message.role === <span class="str">"toolResult"</span>,
+<span class="ln">7</span>    );
+<span class="ln">8</span>}
+</pre>
+<div class="tradeoff">
+  🔑 <b>为什么每圈重建全新的 <code>llmContext</code> wrapper?</b> 虽然 <code>tools</code> 和
+  <code>systemPrompt</code> 是引用赋值、字节稳定,但 <code>prepareNextTurn</code> 可能换模型/改 systemPrompt、
+  扩展系统可能动态注册工具——重建 wrapper 成本可忽略(一个 JS 对象),却能防止共享引用导致的状态污染。
+</div>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="3">
+    <p class="stem">① 关于「内核 + 叠加」的架构思路,下面哪个说法符合本章观点?</p>
+    <button class="opt">steering 和 followUp 是所有 Agent 的通用法则,缺一不可</button>
+    <button class="opt">洋葱架构意味着各层紧耦合,不能单独抽出内核</button>
+    <button class="opt">内核越复杂越好,应该把所有产品特性都塞进最里层</button>
+    <button class="opt">内核(最简 Loop)是所有 Agent 的通用法则,steering/followUp/钩子是 coding-agent 的按需产品选择,剥掉外层内核仍能跑</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② 流式处理响应时,收到 text_delta 事件后代码执行 context.messages[last]=partialMessage。这一步的准确含义是?</p>
+    <button class="opt">用新内容覆盖最后一条消息,数组长度不变、最后一条内容在长大</button>
+    <button class="opt">往 context.messages 数组里 push 一条新消息,数组变长</button>
+    <button class="opt">删除最后一条消息再插入新的</button>
+    <button class="opt">把 delta 单独存到另一个数组,最后再合并</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ coding-agent 在内核外叠加的「叠加1 steering」具体如何体现在内层循环的条件上?</p>
+    <button class="opt">把内层循环改成 while(true) 无条件循环</button>
+    <button class="opt">在外层再包一个 while 循环</button>
+    <button class="opt">内层循环条件从 while(hasMoreToolCalls) 变为 while(hasMoreToolCalls || pendingMessages.length&gt;0)</button>
+    <button class="opt">在内核里增加一个 stopReason==='steering' 分支</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果 steering 消息在工具执行中途到达,会不会打断正在跑的工具?</em>」
+  「<em>为什么 followUp 要包在外层而不是塞进内层循环条件里?</em>」
+  「<em>prepareNextTurn 钩子具体在骨架的哪一步被调用、它能改哪些东西?</em>」——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第3章-Agent-Loop-让模型转动起来的引擎.md">第 3 章 · Agent Loop —— 让模型转动起来的引擎</a>——
+  原文 §4.1~4.4 还讲了入口 <code>runAgentLoop()</code> 收到的六个参数、prompt cache 的三处 <code>cache_control</code>
+  标记与 rolling cache 机制,值得通读一遍建立全局观。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0010):</strong> 把「叠加1 steering」和「叠加2 followUp」这两层外壳单独摊开细讲,
+  加上 <code>prepareNextTurn</code> / <code>shouldStopAfterTurn</code> 钩子怎么在 Turn 之间切模型、判断是否该停——
+  这是 coding-agent 洋葱最外面那圈的完整拼图。
+</p>
+
+<footer>
+  Lesson 0009 · 第 3 章 · Agent Loop ·
+  下一课:<a href="./0010-steering-vs-followup-and-hooks.html">0010 steering vs followUp 与钩子 →</a> ·
+  上一课:<a href="./0008-stopreason-the-only-signal.html">0008 stopReason 唯一信号</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。内核是通用法则、叠加是产品选择,剥掉任何一层里层仍能运转是「内核未被污染」的试金石。延伸:做简单「一问一答带工具」的 Agent 时,steering/followUp 那张表全是多余的。',
+               '✓ 对。「原地替换」是覆盖最后一条(context.messages[last]=...),消息数量不变、内容长大。延伸:这样 UI 通过 message_update 拿到最新部分消息就能逐字渲染,不用盯着空白屏幕。',
+               '✓ 对。steering 让紧急消息也能驱动循环,所以内层条件多了 ||pendingMessages.length>0。延伸:注意区分——外层 while(true) 是叠加2 followUp,内层多出的 pending 条件才是叠加1 steering。'];
+  var msgNo = ['回看§4.2 与§五第3点洋葱图:哪部分是所有 Agent 都需要的、哪部分是 coding-agent 加的?「剥掉外层内核还能跑吗」是关键判据。',
+               '回看§4.4 阶段D:「原地替换」到底是 push 新条目还是覆盖最后一条?注意 start 时已经先 push 了一个空壳。',
+               '回看§4.2:steering(叠加1)改的是内层循环条件,followUp(叠加2)是外面再包一层。这道题问的是内层条件——别把两层叠加搞混。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

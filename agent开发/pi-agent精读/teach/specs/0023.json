@@ -1,0 +1,85 @@
+{
+ "num": "0023",
+ "slug": "text-delta-journey",
+ "title": "追踪一个 text_delta 的完整旅程",
+ "narrowTopic": "一个\"你\"字从 LLM 返回到你终端屏幕,跨 5 层的完整旅程,以及层间只靠事件通信带来的\"开放扩展\"威力",
+ "analogySeed": "LLM 正在生成\"你好\",一个\"你\"字从产生到显示屏出现,像一件包裹经过 5 个中转站(原文就用\"中转1~中转4\"称呼):LLM 的 SSE 网络流 → AI 层 → Agent Loop → Agent 同步屏障 → Session → 终点 TUI,每站只做自己那一道处理",
+ "keyPoints": [
+  "一个 text_delta(如\"你\")的 5 步旅程:触发端 LLM SSE 网络流 → 中转1 AI 层 EventStream.push(构建 AssistantMessageEvent) → 中转2 Agent Loop 事件转换 → 中转3 Agent.processEvents(同步屏障) → 中转4 AgentSession 分发/持久化 → 终点 TUI 渲染到终端",
+  "每一层只关心自己的转换:AI 层只管解析 SSE 和构建消息,Agent Loop 只管 emit 事件和处理工具,Agent 只管更新状态和 await 监听器,Session 只管分发和持久化,TUI 只管渲染",
+  "关键约束:没有任何一层直接调用另一层的内部方法,它们之间唯一的通信协议就是\"事件\"——这就是彻底解耦",
+  "一个关键数据变换:AI 层的多种 delta(text_delta、thinking_delta、toolcall_delta)被统一映射为 Agent 层的 message_update,Agent Loop 不关心 delta 的具体类型,只关心\"消息更新了\"",
+  "原始事件通过 message_update 上的 assistantMessageEvent 字段透传保留而不是丢弃——因为下游消费者可能关心具体的 delta 类型",
+  "理解机制后能做什么:实时观测 Agent 在干什么、工具调用拦截(扩展返回 block)、上下文预处理(transformContext)、流式转发到 Web 前端(订阅 message_update 用 SSE 推给浏览器)",
+  "这些场景的共同特点是:新增任何功能都不需要修改 Agent 内核,只需 subscribe——事件驱动的真正威力不是\"通知机制\"而是\"开放扩展机制\"",
+  "埋钩子:和事件密切相关但只提了一句的 transformContext,在对话越来越长、超出上下文窗口时要做更激进的事——压缩对话历史(compaction),这引向第8章(上下文工程全景)和第9章(压缩算法)"
+ ],
+ "codeRefs": [
+  {
+   "desc": "追踪一个\"你\"字的 5 步旅程 ASCII 图:触发端 LLM SSE → 中转1 AI 层 EventStream.push → 中转2 Agent Loop 事件转换 → 中转3 Agent.processEvents 同步屏障 → 中转4 AgentSession._handleAgentEvent → 终点 TUI 监听器",
+   "cite": "教程 §六 text_delta 的完整旅程"
+  },
+  {
+   "desc": "场景1\"实时观测\"的 subscribe 示例:监听 tool_execution_start 打印工具名与截断的 args、监听 tool_execution_end 打印成功/失败",
+   "cite": "教程 §五 场景1"
+  },
+  {
+   "desc": "场景4\"流式转发到 Web 前端\"的服务端 subscribe 示例:监听 message_update 用 res.write 以 SSE 推 delta、监听 agent_end 调 res.end",
+   "cite": "教程 §五 场景4"
+  }
+ ],
+ "designRationale": [
+  "为什么层间只用事件通信:没有任何一层直接调用另一层的内部方法,唯一协议是\"事件\",这让 AI 层/Agent Loop/Agent/Session/TUI 各自独立演化、互不侵入",
+  "为什么 AI 层多种 delta 统一映射为 message_update:Agent Loop 不关心 delta 的具体类型,只需知道\"消息更新了\",统一映射简化了它的逻辑",
+  "为什么原始 delta 要通过 assistantMessageEvent 透传而不是丢弃:Agent Loop 不关心,但下游消费者(如需要区分 thinking 和正文的 TUI)可能关心,所以保留原始事件",
+  "为什么说事件驱动的真正威力是\"开放扩展\"而非\"通知\":观测、拦截、预处理、Web 转发这些功能全部零改内核、只靠 subscribe,架构价值在于开放而非仅仅传递消息",
+  "钩子:transformContext 在 convertToLlm 之前执行,当对话超出上下文窗口时需要压缩历史(compaction)——这是第8、9章要打开的上下文工程全貌"
+ ],
+ "quiz": [
+  {
+   "stem": "text_delta 从 LLM 一路到达终端,跨越了 5 层,这些层之间唯一的通信协议是什么?",
+   "options": [
+    "事件——没有任何一层直接调用另一层的内部方法",
+    "一组共享的全局变量",
+    "一条直接的函数回调链",
+    "读写同一个数据库"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。每层只关心自己的转换、互不侵入,这就是彻底解耦。延伸:AI 层解析 SSE、Agent 层 emit、TUI 渲染,谁也不碰谁的内部方法。",
+   "noMsg": "回看旅程末尾那句话:\"它们之间唯一的通信协议就是____\"——答案就藏在那里。"
+  },
+  {
+   "stem": "AI 层的 text_delta、thinking_delta、toolcall_delta 到了 Agent 层都变成 message_update,那原始的类型信息怎么办?",
+   "options": [
+    "直接丢弃,Agent 层不再需要它",
+    "分别转换成不同的 Agent 层事件类型",
+    "通过 message_update 上的 assistantMessageEvent 字段透传保留,给可能关心的消费者",
+    "写入数据库以备日后查询"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。Agent Loop 只关心\"消息更新了\",但原始事件被保留而非丢弃——因为下游消费者可能要区分 delta 类型。延伸:这是\"统一映射 + 透传\"的典型取舍。",
+   "noMsg": "Agent Loop 本身关心 delta 的具体类型吗?但终端渲染器可能要区分\"思考\"和\"正文\"——那原始信息该不该留下来?"
+  },
+  {
+   "stem": "下列哪一项功能需要修改 Agent 内核才能实现?",
+   "options": [
+    "实时观测工具调用",
+    "拦截危险的工具调用",
+    "流式转发到 Web 前端",
+    "以上都不需要——只要 subscribe,零改内核"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。事件驱动的真正威力是\"开放扩展\"而非\"通知机制\",所有这些都靠订阅。延伸:下一章的 transformContext 会做更激进的事——在上下文快满时压缩对话历史(compaction)。",
+   "noMsg": "回看第五节小结那句话:这些场景有一个共同特点——新增功能都不需要做什么?"
+  }
+ ],
+ "_chapter": "第7章",
+ "_chapterCN": "事件驱动 —— Agent 的神经系统",
+ "prevFile": "0022-event-nesting-and-two-layers.html",
+ "prevNum": "0022",
+ "nextFile": "0024-context-engineering-overview.html",
+ "nextNum": "0024",
+ "crumbLabel": "第 7 章 · 事件驱动",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第7章-事件驱动-Agent的神经系统.md",
+ "filename": "0023-text-delta-journey.html"
+}

@@ -1,0 +1,84 @@
+{
+ "num": "0027",
+ "slug": "why-compact-and-when-to-trigger",
+ "title": "为什么要压：窗口红线与触发判断",
+ "narrowTopic": "只讲压缩的动机（窗口装不下、删旧会失忆）和什么时候触发（shouldCompact 红线 + chars/4 估算 + 两种触发场景）。",
+ "analogySeed": "把 Agent 的记忆想成一卷录像带：50 轮对话是 150K token 的原始录像，快塞满 200K 的磁带盒了。直接剪掉前 30 分钟（删旧消息）等于让它失忆——它忘了你最初让它做什么。Pi 的选择是把旧录像转成一页『摘要笔记』，腾出空间又留住关键情节。",
+ "keyPoints": [
+  "问题根源：对话是有状态的，每轮都把完整历史发给模型；50 轮 × 3000 token = 150K，逼近 Claude Sonnet 的 200K 窗口，满了 API 会报 'prompt is too long'。",
+  "为什么不能简单删旧：删掉前 30 轮 Agent 就『失忆』——不记得最初目标、之前的决策、改过哪些文件。压缩（Compaction）用结构化摘要替代原始消息，既腾空间又保信息。",
+  "触发红线：shouldCompact 判断 contextTokens > contextWindow - reserveTokens，即 200,000 - 16,384 = 183,616；超过就压。settings.enabled 关掉则永不压。",
+  "reserveTokens 的作用：为 LLM 的回复预留空间——不能把窗口塞满到 200K，否则模型连回复的位置都没有。",
+  "token 怎么数：estimateTokens 用 chars/4 的启发式（4 个英文字符≈1 token），不用精确 tokenizer，因为不同模型 tokenizer 不同且开销大。",
+  "chars/4 的已知缺陷：中文是反向偏差，1 个汉字实际 1-2 token 却只算 0.25 token，严重低估——纯中文对话可能『觉得没到阈值实际已近上限』。",
+  "两种触发场景：预防性压缩（超阈值但没报错，常态）与应急性压缩（API 真报了溢出错误，兜底先压再重试）。",
+  "核心时序（贯穿全章的钥匙）：压缩不在对话进行中触发，而在两轮之间——Agent 发出 agent_end 后检查 token，超了才立刻压缩。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "shouldCompact 函数：判断 contextTokens > contextWindow - settings.reserveTokens，以及 !settings.enabled 时返回 false（第二节『触发条件』的 TypeScript 代码块）",
+   "cite": "教程 §二 / compaction.ts:shouldCompact"
+  },
+  {
+   "desc": "estimateTokens 的 chars/4 启发式代码块：累加字符数后 return Math.ceil(chars / 4) 及其注释（第二节『Token 估算』）",
+   "cite": "教程 §二 / compaction.ts:256-296"
+  },
+  {
+   "desc": "『两种触发场景』对照表：预防性压缩 vs 应急性压缩（第二节末尾的三列 Markdown 表格）",
+   "cite": "教程 §二 / 两种触发场景表"
+  }
+ ],
+ "designRationale": [
+  "为什么压缩而不是删旧：删旧会造成 Agent 失忆（丢失目标/决策/文件记录），压缩用摘要保留结构化关键信息——记忆从『原始录像』降级为『摘要笔记』而非消失。",
+  "为什么用不精确的 chars/4 估算：宁可高估不可低估——高估最多多压一次（无害），低估会让 API 报错（有害）。这是用精度换安全的保守策略，且实现极简。",
+  "为什么保留 reserveTokens=16,384：上下文窗口必须给模型的回复留出空间，塞满到 200K 模型就无法生成回复。",
+  "为什么接受中文低估的缺陷：这是已知精度问题，但 Pi 的目标场景以英文编码为主，chars/4 够准，权衡下选择了简单实现而非精确 tokenizer。"
+ ],
+ "quiz": [
+  {
+   "stem": "为什么 Pi 不用『直接删掉前 30 轮对话』这种最直觉的方案来腾出上下文空间？",
+   "options": [
+    "因为删除消息在 API 层面是不允许的操作",
+    "因为删旧比压缩消耗更多 token",
+    "因为删旧会让 Agent『失忆』——忘掉最初目标、之前的决策和改过的文件",
+    "因为最近的消息比旧消息占用更多空间"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。删旧是有损且盲目的，压缩则把旧消息转成保留目标/决策/文件跟踪的结构化摘要。延伸想一想：压缩其实也是有损的，但它有损地保留了『结构』，这正是它优于删旧的地方。",
+   "noMsg": "回到第一节『问题』那段——想想 Agent 是有状态的，每轮都依赖完整历史，删掉前 30 轮之后它还记得你最初让它做什么吗？"
+  },
+  {
+   "stem": "estimateTokens 用 chars/4 这种粗糙估算，而不是精确 tokenizer。为什么这个『不精确』在工程上是可接受甚至更优的？",
+   "options": [
+    "因为宁可高估不可低估——高估最多多压一次（无害），低估会让 API 报错（有害）",
+    "因为 chars/4 对中文的估算特别准确",
+    "因为精确 tokenizer 在 TypeScript 里无法实现",
+    "因为估算结果只用于日志，不影响实际压缩"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对，这是『用精度换安全』的保守策略。延伸：正因为偏保守，中文场景下 chars/4 反而会低估（1 汉字算 0.25 token），这时保守方向恰好反了，成了已知缺陷。",
+   "noMsg": "想想估算偏高和偏低分别会导致什么后果：一个是多压缩一次，一个是 API 报错。哪个 Pi 更不能接受？"
+  },
+  {
+   "stem": "shouldCompact 的阈值是 contextWindow - reserveTokens = 200,000 - 16,384 = 183,616。这个 reserveTokens 预留的 16K 空间是给谁用的？",
+   "options": [
+    "给下一次压缩产生的摘要文本",
+    "给 Session Tree 的元数据存储",
+    "给保留区的最近消息",
+    "给 LLM 生成回复用的空间——不能把窗口塞满到 200K，否则模型没有回复的余地"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。上下文窗口是『输入+输出』共享的，必须给模型的回复留位置。延伸：keepRecentTokens（20K）是另一个不同的预算，它约束的是保留区大小，别和 reserveTokens 搞混。",
+   "noMsg": "注意上下文窗口不只装输入，还要装模型的输出。如果 183,616 的输入之后一点空间都不剩，模型拿什么生成回复？"
+  }
+ ],
+ "_chapter": "第9章-上下文压缩",
+ "_chapterCN": "上下文压缩：当对话太长怎么办",
+ "prevFile": "0026-tool-output-truncation.html",
+ "prevNum": "0026",
+ "nextFile": "0028-cut-point-selection.html",
+ "nextNum": "0028",
+ "crumbLabel": "第 9 章 · 上下文压缩",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第9章-上下文压缩-当对话太长怎么办.md",
+ "filename": "0027-why-compact-and-when-to-trigger.html"
+}

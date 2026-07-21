@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0031 · 最短路:Dijkstra 与它的边界</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0031 课 · 图 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>最短路:Dijkstra 与它的边界</h1>
+
+<p class="lede">BFS 能在无权图上求最短路,因为它把每条边都当作「1 步」。可现实里的边有<strong>权重</strong>——公里数、通行费、延迟。这时最少的「步数」不等于最短的「距离」。带非负权的单源最短路,标准答案是 <strong>Dijkstra 算法</strong>。这节课攻透它的贪心机制、为什么必须<strong>非负权</strong>,以及它和 BFS、Bellman-Ford、Floyd 之间的边界在哪。</p>
+
+<div class="recall">
+<p>先回忆两件事:<a href="0029-graph-traversal.html">BFS(第 0029 课)</a>用队列逐层扩展、求无权最短路;<a href="0022-heap-priority-queue.html">优先队列(第 0022 课)</a>能 O(log n) 地反复取出当前最小值。把这两样拼起来——<strong>用优先队列代替普通队列,永远优先扩展「当前距离最近」的顶点</strong>——你就几乎推导出了 Dijkstra。先想想:BFS 的普通队列为什么在带权图上会失效?</p>
+</div>
+
+<h2>一、为什么 BFS 不够用了</h2>
+
+<p>无权图里,「离起点最近」就是「边数最少」,BFS 逐层扩展天然按这个顺序访问。但一旦边有权,一条「只走 1 条边但权重 100」的路,可能比「走 3 条边、权重各 1」的路更远。BFS 只数边数、不看权重,于是它先到达的顶点不再保证是最近的。我们需要一个按<strong>累计距离</strong>(而非边数)由近到远扩展的机制——把 BFS 的队列换成<strong>按距离排序的优先队列</strong>,就是 Dijkstra。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 320 210" width="320" role="img" aria-label="带权无向图,顶点S、A、B、C,标注各边权重与从S出发的最短距离">
+  <line class="dgm-edge" x1="40" y1="100" x2="140" y2="45" stroke-width="2"/>
+  <line class="dgm-edge" x1="40" y1="100" x2="140" y2="155" stroke-width="2"/>
+  <line class="dgm-edge" x1="140" y1="45" x2="140" y2="155" stroke-width="2"/>
+  <line class="dgm-edge" x1="140" y1="45" x2="260" y2="100" stroke-width="2"/>
+  <line class="dgm-edge" x1="140" y1="155" x2="260" y2="100" stroke-width="2"/>
+  <text class="dgm-accent-text" x="82" y="66" font-size="13">2</text>
+  <text class="dgm-accent-text" x="82" y="136" font-size="13">5</text>
+  <text class="dgm-accent-text" x="149" y="104" font-size="13">1</text>
+  <text class="dgm-accent-text" x="203" y="64" font-size="13">7</text>
+  <text class="dgm-accent-text" x="203" y="140" font-size="13">3</text>
+  <circle class="dgm-accent-node" cx="40" cy="100" r="20" stroke-width="2"/>
+  <circle class="dgm-good-node" cx="140" cy="45" r="20" stroke-width="2"/>
+  <circle class="dgm-good-node" cx="140" cy="155" r="20" stroke-width="2"/>
+  <circle class="dgm-good-node" cx="260" cy="100" r="20" stroke-width="2"/>
+  <text class="dgm-text" x="40" y="106" text-anchor="middle" font-size="16">S</text>
+  <text class="dgm-text" x="140" y="51" text-anchor="middle" font-size="16">A</text>
+  <text class="dgm-text" x="140" y="161" text-anchor="middle" font-size="16">B</text>
+  <text class="dgm-text" x="260" y="106" text-anchor="middle" font-size="16">C</text>
+  <text class="dgm-good-text" x="40" y="140" text-anchor="middle" font-size="11">d=0</text>
+  <text class="dgm-good-text" x="112" y="40" text-anchor="middle" font-size="11">d=2</text>
+  <text class="dgm-good-text" x="112" y="172" text-anchor="middle" font-size="11">d=3</text>
+  <text class="dgm-good-text" x="260" y="146" text-anchor="middle" font-size="11">d=6</text>
+</svg>
+</div>
+<figcaption>红色是边权,绿色是从 S 出发的最终最短距离。到 B 走 S→A→B(2+1=3)比直连 S→B(5)更短;到 C 走 S→A→B→C(3+3=6)比 S→A→C(2+7=9)更短。数边数的 BFS 发现不了这一点。</figcaption>
+</figure>
+
+<h2>二、贪心机制:取最近、松弛、定终</h2>
+
+<p>Dijkstra 维护一个数组 <code>dist[]</code>(起点到各点的当前已知最短距离,初始起点 0、其余 ∞),外加一个优先队列。循环做三件事:</p>
+
+<ol>
+<li><strong>取最近</strong>:从优先队列弹出当前 <code>dist</code> 最小、且还没定终的顶点 <code>u</code>。此刻 <code>dist[u]</code> 就是 u 的最终最短距离,<strong>永久确定,不再更新</strong>。</li>
+<li><strong>松弛(relax)邻边</strong>:对 u 的每个邻居 <code>v</code>,若 <code>dist[u] + w(u,v) &lt; dist[v]</code>,就更新 <code>dist[v]</code> 并把它(带新距离)推进优先队列。</li>
+<li>重复,直到队列空(或目标点定终)。</li>
+</ol>
+
+<p>下面这张表是上图从 S 出发的执行过程。看每次「弹出一个顶点」后 <code>dist</code> 如何被松弛更新:</p>
+
+<table>
+<thead><tr><th>本轮弹出</th><th>S</th><th>A</th><th>B</th><th>C</th></tr></thead>
+<tbody>
+<tr><td>初始</td><td>0</td><td>∞</td><td>∞</td><td>∞</td></tr>
+<tr><td>弹出 S</td><td>0</td><td>2</td><td>5</td><td>∞</td></tr>
+<tr><td>弹出 A(dist=2)</td><td>0</td><td>2</td><td><strong>3</strong></td><td>9</td></tr>
+<tr><td>弹出 B(dist=3)</td><td>0</td><td>2</td><td>3</td><td><strong>6</strong></td></tr>
+<tr><td>弹出 C(dist=6)</td><td>0</td><td>2</td><td>3</td><td>6</td></tr>
+</tbody>
+</table>
+<p>关键看第三行:弹出 A 后松弛 A 的邻居,B 从 5 被更新成 <code>2+1=3</code>。正因为每次都<strong>先确定当前最近的点</strong>,后续的松弛才不会推翻已定终的距离——这就是贪心成立的核心。</p>
+
+<h2>三、为什么必须非负权</h2>
+
+<p>Dijkstra 的贪心赌的是一句话:<strong>「当前 dist 最小的未定终顶点,它的距离不可能再被后面的路径改小。」</strong>这句话只在<strong>所有边权非负</strong>时成立——因为再往后绕,只会加上 ≥0 的边,总距离只增不减。</p>
+
+<p>可一旦有<strong>负权边</strong>,这个前提崩了:一个已经「定终」的顶点,可能通过一条后来才发现的负权边被绕出更短的路。Dijkstra 却因为「定终不再更新」而错过它,给出错误答案。所以负权最短路必须换 <strong>Bellman-Ford</strong>(它反复松弛 V−1 轮,不做「一锤定终」的贪心,还能检测负权环)。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>Dijkstra 算法</dt>
+<dd>求带<strong>非负权</strong>图单源最短路的贪心算法:用优先队列每次取出当前距离最近的未定终顶点,松弛其邻边。<em>避免</em>「Dijkstra 能处理负权边」——不能,负权用 Bellman-Ford。</dd>
+<dt>松弛(Relaxation)</dt>
+<dd>对边 <code>(u,v)</code>,若经 u 到 v 更近(<code>dist[u]+w &lt; dist[v]</code>)就更新 <code>dist[v]</code>。所有最短路算法的公共核心操作。</dd>
+<dt>单源最短路(Single-Source Shortest Path)</dt>
+<dd>固定一个起点,求它到所有其他顶点的最短距离。BFS(无权)、Dijkstra(非负权)、Bellman-Ford(可负权)都属此类;全源(每对顶点之间)用 Floyd-Warshall。</dd>
+</dl>
+
+<h2>五、复杂度与边界对照</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">算法</th><th>时间</th><th>适用</th></tr></thead>
+<tbody>
+<tr><td class="op">BFS</td><td class="best">O(V+E)</td><td>无权图(边权全为 1)</td></tr>
+<tr><td class="op">Dijkstra(二叉堆)</td><td>O((V+E) log V)</td><td class="best">非负权、单源</td></tr>
+<tr><td class="op">Dijkstra(朴素数组)</td><td class="warn">O(V²)</td><td>稠密图反而可取</td></tr>
+<tr><td class="op">Bellman-Ford</td><td class="warn">O(V·E)</td><td>可含负权、能检测负权环</td></tr>
+<tr><td class="op">Floyd-Warshall</td><td class="warn">O(V³)</td><td>全源、可负权(无负环)</td></tr>
+</tbody>
+</table>
+<p>把这张表读成一条决策链:<strong>无权 → BFS;非负权单源 → Dijkstra;有负权 → Bellman-Ford;要所有点对之间 → Floyd。</strong>BFS 是 Dijkstra 在「边权全为 1」时的退化特例——这也解释了为什么它俩长得那么像。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>最短路题的关键是先分类,再选算法:</p>
+<ul>
+<li><strong>「网络延迟」「最小成本到达」「加权图从某点到各点」</strong>且权重非负 → <strong>Dijkstra</strong>。能顺口说出「优先队列 + 松弛,弹出即定终」就是内行。</li>
+<li><strong>无权 / 权重全相等</strong> → 别上 Dijkstra,直接 <strong>BFS</strong> 更简单更快(O(V+E))。面试官爱看你识别出这个简化。</li>
+<li><strong>被追问「有负权怎么办」</strong> → 答 Dijkstra 会失效(讲清贪心前提被破坏),改用 <strong>Bellman-Ford</strong>,它还能检测负权环。能把「为什么不能」讲清,比会背算法名更值钱。</li>
+<li>实现细节:用「懒删除」——优先队列里可能有同一顶点的多份过期记录,弹出时若发现取出的距离 &gt; 当前 <code>dist[u]</code> 就跳过。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「Dijkstra 能处理负权边」——这是最经典的错。</strong>负权会破坏它「弹出即定终、不再更新」的贪心前提:一个已定终的点可能被后发现的负权边绕出更短路,而 Dijkstra 不再回头看它。负权请用 Bellman-Ford。这条几乎每轮图论面试都会被问到。</p>
+<p><strong>「出队即最终」这一点也常被误用。</strong>顶点一旦从优先队列弹出并定终,它的 <code>dist</code> 就不再改;但优先队列里可能还躺着它更早入队的<em>过期</em>副本,弹到时必须靠「距离比当前 dist 大就跳过」来忽略,否则会重复处理甚至出错。</p>
+<p>另一个坑:别把 Dijkstra 和最小生成树(Prim)搞混。两者都用优先队列贪心,但 Dijkstra 比较的是「起点到 v 的累计距离」,Prim 比较的是「v 到已选集合的单条边权」——目标不同,松弛的量也不同。</p>
+</div>
+
+<div class="implement">
+<p>照仓库大纲实现单源最短路(大纲「我会实现」里明确列了 Dijkstra):</p>
+<p><code>dijkstra(graph, src)</code>:<code>dist[]</code> 初始化 ∞、src=0;优先队列存 <code>(dist, 顶点)</code>;循环弹出最小、懒删除过期项、松弛邻边并把更新后的 <code>(新dist, v)</code> 入队;可选 <code>prev[]</code> 记录前驱以回溯完整路径。</p>
+<p>动手核对:在上图(S/A/B/C)上跑,确认得到 <code>dist = {S:0, A:2, B:3, C:6}</code>,和本课的表逐行对上。再把某条边权改成负数,观察 Dijkstra 给出的错误结果,亲身体会「非负权」这个前提有多硬。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>非负权单源最短路用 Dijkstra(优先队列取最近 + 松弛,弹出即定终,O((V+E) log V));无权用 BFS(它是权全为 1 的特例);出现负权改用 Bellman-Ford——Dijkstra 处理不了负权。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一张有向图边权可能为负(比如「走这条路反而有补贴」)。你要求单源最短路。用 Dijkstra 行吗?为什么?</summary>
+<div class="answer">
+<p><strong>不行。</strong>Dijkstra 的正确性依赖「弹出即定终、之后不再更新」,而这只在边权非负时成立——非负保证再绕路只会更远。有负权时,一个已定终的顶点可能通过后来才被松弛到的负权边获得更短的路,Dijkstra 却不再回头看它,于是给出错误答案。此时应改用 <strong>Bellman-Ford</strong>(O(V·E),反复松弛 V−1 轮,还能检测负权环)。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:一张<strong>无权</strong>连通图,求从某点到各点的最短距离。有人打算上 Dijkstra + 优先队列。有没有更好的选择?</summary>
+<div class="answer">
+<p><strong>直接用 BFS 就够了,而且更好。</strong>无权等价于「所有边权都是 1」,BFS 逐层扩展本身就按距离由近到远访问,O(V+E),没有优先队列的 log 开销。Dijkstra 在这种情形能得到正确答案,但杀鸡用牛刀,多了 log 因子。识别出「无权 → BFS」这个简化,是面试加分点。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:用二叉堆实现的 Dijkstra,时间复杂度是?这个 log 因子从哪来?</summary>
+<div class="answer">
+<p><strong>O((V+E) log V)。</strong>每个顶点最多被定终弹出一次,每次松弛成功会往优先队列推一个更新项——总共至多 O(E) 次入队;堆的每次插入/弹出是 O(log V)。所以总时间 O((V+E) log V),log 来自二叉堆维护「当前最近顶点」的代价。补充:稠密图(E≈V²)上,朴素数组实现的 O(V²) 反而可能比 O(E log V)=O(V² log V) 更快。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题在仓库大纲「图 → 复习和其他」小节(含 MIT 单源最短路与 Dijkstra 专讲,并把 Bellman-Ford 作为负权边界)。一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=NSHizBK9JD8&t=1731s&ab_channel=MITOpenCourseWare">MIT 6.006 · Dijkstra 算法(视频)</a></li>
+<li><a href="https://www.youtube.com/watch?v=Aa2sqUhIn-E&index=15&list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb">MIT 6.006 · 单源最短路径问题(视频)</a></li>
+<li><a href="https://www.youtube.com/watch?v=f9cVS_URPc0&ab_channel=MITOpenCourseWare">MIT 6.006 · Bellman-Ford 算法(视频)</a> —— 负权时的替代方案。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「为什么负权会让 Dijkstra 出错」,或带你在 S/A/B/C 那张图上逐轮跑一遍优先队列,把每次弹出和松弛都记下来。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0030-topological-sort.html"><span class="dir">← 上一课</span>拓扑排序与环检测</a>
+  <a class="next" href="0032-recursion.html"><span class="dir">下一课 →</span>递归:把问题交给更小的自己</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

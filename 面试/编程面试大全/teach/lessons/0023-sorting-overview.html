@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0023 · 排序全景:稳定性、原地、下界</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0023 课 · 排序 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>排序全景:稳定性、原地、下界</h1>
+
+<p class="lede">排序不是一个算法,而是一族算法。面试官很少让你「随便排个序」——他真正想听的是:<strong>你为什么选这一个</strong>。这节课先不钻进任何单个排序的细节,而是搭一张<strong>族谱地图</strong>:所有排序都可以沿三个互相独立的轴来定位——<strong>时间复杂度、稳定性、原地性</strong>。掌握了这三根轴,后面四节(平方阶、归并、快排、堆排/非比较)就都是往地图上填格子。</p>
+
+<div class="recall">
+<p>回忆<a href="0005-complexity-classes.html">复杂度那节</a>:我们区分过 O(n²)、O(n log n)、O(n) 这几个增长档位,并说过「输入翻倍时,n² 变四倍、n log n 只多一点」。这节你会看到这些档位<strong>各对应哪一类排序</strong>——以及一个反直觉的事实:并非所有排序都被卡在 O(n log n) 这道墙上。</p>
+</div>
+
+<h2>一、三根正交的轴</h2>
+
+<p>拿到任何一个排序,先问三个彼此独立的问题。它们<strong>不能互相推导</strong>——这正是「正交」的意思:知道时间复杂度,推不出它稳不稳定;知道它原地,也推不出它多快。</p>
+
+<figure class="diagram">
+<div class="trio">
+  <div class="cell"><span class="role">轴 1 · 快不快</span><span class="head">时间复杂度</span><span class="sub">O(n²) / O(n log n) / O(n)</span></div>
+  <div class="cell"><span class="role">轴 2 · 乱不乱序</span><span class="head">稳定性</span><span class="sub">相等元素相对位置是否保持</span></div>
+  <div class="cell"><span class="role">轴 3 · 费不费内存</span><span class="head">原地性</span><span class="sub">额外空间 O(1) 还是 O(n)</span></div>
+</div>
+<figcaption>三根轴互相独立。归并排序快(n log n)、稳定,但<strong>不原地</strong>;快排也快、原地,但<strong>不稳定</strong>——没有一个排序三项全占。</figcaption>
+</figure>
+
+<h2>二、稳定性:相等元素会不会被打乱</h2>
+
+<p><strong>稳定排序</strong>指:两个「相等」的元素(按你比较的那个键相等),排完后它们的先后顺序和排之前一致。听起来无关紧要,但它是<strong>多关键字排序</strong>的命根子。</p>
+
+<p>设想一批订单,先按「金额」排好了,现在要再按「用户名」排一次。如果第二次排序是稳定的,那么同一个用户名下的订单仍然保持金额有序——你用两次简单排序就实现了「先按名、名内按额」的复合排序。若第二次不稳定,金额的顺序就被搅乱,前功尽弃。</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell on">3a</div>
+  <div class="cell hi">1</div>
+  <div class="cell on">3b</div>
+  <div class="cell on">2</div>
+</div>
+<div class="down" style="text-align:center;color:var(--muted)">↓ 按数值排序</div>
+<div class="cells">
+  <div class="cell hi">1</div>
+  <div class="cell on">2</div>
+  <div class="cell on">3a</div>
+  <div class="cell on">3b</div>
+</div>
+<figcaption>两个 <code>3</code> 记为 3a、3b(输入里 3a 在前)。<strong>稳定</strong>排序后必然仍是 3a 在 3b 前;不稳定排序可能给你 3b、3a。</figcaption>
+</figure>
+
+<h2>三、比较排序的下界:那道 Ω(n log n) 的墙</h2>
+
+<p>为什么冒泡、归并、快排再怎么优化,平均都逃不过 O(n log n)?因为它们都是<strong>比较排序</strong>——只靠「两个元素谁大」这一种信息来决定顺序。n 个元素有 n! 种可能的排列,每做一次比较最多把候选排列砍掉一半;要从 n! 种里锁定唯一答案,至少需要 log₂(n!) 次比较,而 log₂(n!) ≈ n log n。这就是决策树论证:<strong>任何只靠比较的排序,最坏情况都需要 Ω(n log n) 次比较</strong>。</p>
+
+<p>但这道墙有个前提——「只靠比较」。如果你能利用元素本身的结构(比如它们都是 0~1000 的小整数),就不必两两比较,可以直接按值归位,从而突破到 O(n)。这类<strong>非比较排序</strong>(计数、基数、桶)是下界的例外,我们在 <a href="0027-heap-sort-non-comparison.html">0027</a> 展开。记住这个例外,能拆穿面试里最常见的一句错话。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>稳定排序(Stable Sort)</dt>
+<dd>相等元素的相对顺序在排序后保持不变。归并稳定;快排、堆排一般<em>不</em>稳定。<em>避免</em>说「快排是稳定的」。</dd>
+<dt>原地(In-place)</dt>
+<dd>只用 O(1)(或 O(log n) 递归栈)额外空间完成排序。快排、堆排、平方阶三兄弟都原地;归并(数组版)需 O(n) 额外空间,<em>不</em>原地。</dd>
+<dt>比较排序(Comparison Sort)</dt>
+<dd>只靠元素两两比较决定顺序的排序,下界 Ω(n log n)。<em>避免</em>说「所有排序最快都是 O(n log n)」——那漏了非比较排序。</dd>
+</dl>
+
+<h2>五、一张族谱总表(全课地图)</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">排序</th><th>平均</th><th>最坏</th><th>空间</th><th>稳定?</th></tr></thead>
+<tbody>
+<tr><td class="op">冒泡 Bubble</td><td class="warn">O(n²)</td><td class="warn">O(n²)</td><td class="best">O(1)</td><td class="best">稳定</td></tr>
+<tr><td class="op">插入 Insertion</td><td class="warn">O(n²)</td><td class="warn">O(n²)</td><td class="best">O(1)</td><td class="best">稳定</td></tr>
+<tr><td class="op">选择 Selection</td><td class="warn">O(n²)</td><td class="warn">O(n²)</td><td class="best">O(1)</td><td class="warn">不稳定</td></tr>
+<tr><td class="op">归并 Merge</td><td class="best">O(n log n)</td><td class="best">O(n log n)</td><td class="warn">O(n)</td><td class="best">稳定</td></tr>
+<tr><td class="op">快排 Quick</td><td class="best">O(n log n)</td><td class="warn">O(n²)</td><td class="best">O(log n)</td><td class="warn">不稳定</td></tr>
+<tr><td class="op">堆排 Heap</td><td class="best">O(n log n)</td><td class="best">O(n log n)</td><td class="best">O(1)</td><td class="warn">不稳定</td></tr>
+<tr><td class="op">计数 Counting</td><td class="best">O(n+k)</td><td class="best">O(n+k)</td><td class="warn">O(n+k)</td><td class="best">稳定</td></tr>
+<tr><td class="op">基数 Radix</td><td class="best">O(d·(n+k))</td><td class="best">O(d·(n+k))</td><td class="warn">O(n+k)</td><td class="best">稳定</td></tr>
+</tbody>
+</table>
+<p>k 是值域大小,d 是位数。绿色是该项的优势、红色是代价。后四节会分别把这些格子背后的机制讲透——这张表现在看不懂没关系,学完回来它会全部点亮。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>排序几乎不会孤立出现,但它是「你懂不懂取舍」的试金石。高频问法:</p>
+<ul>
+<li><strong>「你会用哪个排序,为什么?」</strong>——标准答案不是报一个名字,而是先反问需求:数据量多大?要不要稳定?内存吃紧吗?已经近乎有序了吗?能问出这些,面试官就知道你理解「排序是选择题」。</li>
+<li><strong>「稳定性在什么场景重要?」</strong>——答多关键字排序(先按 A 排、再按 B 排要保住 A 的序),这是最有说服力的例子。</li>
+<li><strong>「链表适合哪种排序?」</strong>——归并。链表不支持 O(1) 随机访问,快排和堆排都依赖下标跳转会退化;归并只需顺序遍历,且合并两个有序链表可做到 O(1) 额外空间。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「快排是稳定的」——这是最常被扣分的一句。</strong>快排在分区时会把元素跨距离交换,相等元素的相对顺序会被打乱,所以<strong>默认不稳定</strong>。同理选择排序也不稳定(它把最小值和当前位交换,可能越过相等元素)。</p>
+<p><strong>「所有排序最快都是 O(n log n)」——漏了非比较排序。</strong>这句只对<strong>比较</strong>排序成立。计数/基数/桶排序不做两两比较,在值域有界时能做到 O(n)。加上「比较」这个限定词,答案才准确。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>排序是三根正交轴上的选择题——快慢、稳不稳、费不费内存。没有全能选手,面试的正确姿势是先问清约束,再从这张地图上指出最合适的那一个。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一位面试官说「比较排序的最坏时间下界是 Ω(n log n),所以任何排序都不可能比 O(n log n) 更快」。这句话哪里错了?</summary>
+<div class="answer">
+<p>错在把「比较排序」的结论扩大到了「任何排序」。Ω(n log n) 的下界只约束<strong>只靠两两比较</strong>的排序,论证来自决策树:n! 种排列需要至少 log₂(n!)≈n log n 次比较来区分。<strong>非比较排序</strong>(计数、基数、桶)利用元素值本身的结构直接归位,不受此下界约束,在值域有界时可达 O(n)。所以正确表述要加限定词:「<strong>比较</strong>排序的下界是 Ω(n log n)」。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:你需要对一个只能顺序访问、不支持下标跳转的链表排序,且要求 O(n log n)。下面哪个排序最合适,为什么?(A)快排 (B)堆排 (C)归并排序</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)归并排序</strong>。快排(A)和堆排(B)都严重依赖 O(1) 随机访问——快排要在分区时来回跳下标,堆排要靠 <code>2i+1</code>/<code>2i+2</code> 定位子节点,在链表上这些都退化成 O(n) 的遍历。归并只需<strong>顺序</strong>遍历来拆分和合并,与链表天然契合,而且合并两个有序链表可以只改指针、做到 O(1) 额外空间(数组版归并反而要 O(n) 辅助数组)。这也是为什么标准库对链表排序普遍用归并。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:归并排序和快速排序平均时间都是 O(n log n)。仅凭这一点,能推断出它们的稳定性和空间占用相同吗?</summary>
+<div class="answer">
+<p>不能。这正是「三根轴正交」的意义:时间复杂度推不出另外两根轴。归并<strong>稳定</strong>但需 <strong>O(n)</strong> 额外空间;快排<strong>不稳定</strong>但<strong>原地</strong>(仅 O(log n) 递归栈)。同为 n log n,取舍完全不同——这也是面试官爱把这两个放一起对比的原因。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题在仓库大纲的「排序」小节开头(稳定性与「哪种用链表/数组」的笔记部分)。从中抽出的一手来源:</p>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Sorting_algorithm#Stability">排序算法的稳定性(维基百科)</a> —— README 用它回答「快排是稳定的么?」,把稳定性定义讲得最干净。</li>
+<li><a href="http://www.geeksforgeeks.org/merge-sort-for-linked-list/">链表的归并排序(GeeksforGeeks)</a> —— README 用它说明「链表适合归并」这一结论。</li>
+<li><a href="https://www.youtube.com/watch?v=kPRA0W1kECg">15 种排序算法的可视化对比(视频)</a> —— README 结尾推荐,直观感受不同排序的行为差异。</li>
+</ul>
+<p>复杂度随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「决策树为什么给出 n log n 下界」,或让老师随口报一个排序名让你现场定位它在三根轴上的位置。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0022-heap-priority-queue.html"><span class="dir">← 上一课</span>堆与优先队列:完全二叉树的极值机器</a>
+  <a class="next" href="0024-quadratic-sorts.html"><span class="dir">下一课 →</span>O(n²) 三兄弟:冒泡、选择、插入</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

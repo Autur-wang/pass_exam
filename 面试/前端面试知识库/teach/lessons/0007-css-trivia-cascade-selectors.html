@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0007 · CSS 高频问答 II:级联、选择器与代码质量</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0007 课 · 3 HTML/CSS/浏览器高频问答 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>CSS 高频问答 II:级联、选择器与代码质量</h1>
+
+<p class="lede">上一课处理的是"CSS 怎么把元素摆在页面上"——盒模型、定位、布局。这一课换一类问题:当好几条规则同时想生效在同一个元素上,浏览器听谁的?浏览器又是怎么判断一个选择器到底命中了哪些元素?伪元素是什么、能拿来干什么?项目起步时要不要用 reset 或者 normalize、要不要上预处理器、要不要抄一套现成框架、给 SVG 上色算不算 CSS 的一部分——这 9 道题合在一起,回答的其实是同一类问题:级联规则本身,以及围绕它的一圈代码质量决策。</p>
+
+<div class="recall">
+<p>开课前先回忆一下:上一课讲盒模型、定位与布局时,重点是"一个盒子最终会被摆在哪、有多宽多高"——这些都是能被精确算出来的确定值。但那一课没回答另一半问题:如果两条规则同时想决定同一个盒子该显示什么颜色、什么边框,页面上到底会显示哪一条?这正是这节课要补上的空白。顺手想一想,不用打开任何工具,你能不能口算出 <code>#nav .item</code> 和 <code>.nav div.item.active</code> 这两个选择器,谁的特异性更高?</p>
+</div>
+
+<h2>一、级联怎么决定"听谁的":优先级与特异性</h2>
+
+<p>当好几条 CSS 规则同时命中同一个元素——比如一条来自你自己写的类,一条来自框架的默认样式——浏览器需要一套明确的规则来决定最终显示哪一条。这套规则就是 <strong>CSS 级联</strong>,它依次看四件事:声明有没有标记 <code>!important</code>、有没有写在 <code>style</code> 属性里的内联样式、选择器的<strong>特异性(specificity)</strong>有多高、以及在源代码里出现的先后顺序。</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">!important</span><span class="n-sub">最高优先级,压过其它一切</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">内联样式</span><span class="n-sub">写在 style 属性里</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">选择器特异性</span><span class="n-sub">ID - CLASS - TYPE 三元组</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">源顺序</span><span class="n-sub">前三者都打平时,后写的赢</span></div>
+</div>
+
+<p>特异性本身是一个三元组,按 <strong>ID - CLASS - TYPE</strong> 三个类别分别计数:</p>
+
+<table>
+<tr><th>类别</th><th>计入什么</th><th>例子</th></tr>
+<tr><td>ID</td><td>ID 选择器</td><td><code>#example</code></td></tr>
+<tr><td>CLASS</td><td>类选择器、属性选择器、伪类</td><td><code>.my-class</code>、<code>[type="radio"]</code>、<code>:hover</code></td></tr>
+<tr><td>TYPE</td><td>元素类型选择器、伪元素</td><td><code>h1</code>、<code>div</code>、<code>::before</code></td></tr>
+</table>
+
+<p>比较两个特异性时,从左到右看,先比 ID 列——哪怕 CLASS 和 TYPE 列的数字再大,只要 ID 列比对方高就赢。例如 <code>1,0,0</code>(一个 ID 选择器)的特异性大于 <code>0,10,10</code>(十个类加十个类型选择器组合出来的规则)。这也是为什么给 UI 组件库写样式时,最好把每条规则的特异性压得低一些:库的使用者不需要靠 <code>!important</code> 或写一串复杂选择器,就能覆盖你的默认样式(<a href="https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_cascade/Specificity">MDN · Specificity</a>、<a href="https://web.dev/learn/css/specificity">web.dev · Specificity</a>)。</p>
+
+<p>只有当两条规则的特异性也打平时(且都不是内联、都没有 <code>!important</code>),才轮到最后一项规则获胜——源代码里写得越靠后的规则生效。</p>
+
+<h2>二、关键定义</h2>
+
+<dl class="keydef">
+<dt>选择器特异性(specificity)</dt>
+<dd>按 <strong>ID - CLASS - TYPE</strong> 三个类别从左到右比较的权重,用来在没有 <code>!important</code>、没有内联样式的情况下,决定同时命中同一元素的多条规则里哪一条最终生效。<em>避免</em>把"选择器写得更长、层级更深"直接等同于"特异性更高"——十个类选择器加十个类型选择器,合起来也压不过一个 ID 选择器。</dd>
+<dt>关键选择器(key selector)</dt>
+<dd>浏览器解析一条选择器链时最先匹配的那一段,也就是链条最右侧的部分,决定了浏览器要在 DOM 里筛出多少候选元素、再逐个往上核对多少次。<em>避免</em>把标签选择器或通用选择器 <code>*</code> 放在关键选择器的位置——它们会先筛出一大批元素,让浏览器多做很多趟"往上找父元素"的工作。</dd>
+</dl>
+
+<h2>三、浏览器怎么找到匹配的元素:从右往左</h2>
+
+<p>一个常被忽略的细节:浏览器解析一条选择器链,并不是从左往右读。它从选择器最右侧的那一段——也就是上面说的关键选择器——开始,先在 DOM 里筛出所有匹配这一段的元素,再对每一个候选元素往上遍历它的父元素链,确认剩下的部分是否也满足。</p>
+
+<p>拿 <code>p span</code> 举例:</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">① 先找到所有 &lt;span&gt;</span><span class="n-sub">关键选择器是最右侧的 span</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">② 逐个向上遍历父元素</span><span class="n-sub">一直往上走,直到根元素</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">③ 遇到 &lt;p&gt; 就命中</span><span class="n-sub">找到就停,不用继续往上找</span></div>
+</div>
+
+<p>选择器链越短,浏览器确认一个元素到底匹不匹配所需要做的工作就越少。这条规律直接指向写高效 CSS 时最容易踩的坑:把标签选择器(比如 <code>div</code>)或者通用选择器(<code>*</code>)放在关键选择器的位置。它们会命中 DOM 里数量巨大的一批元素,浏览器要对其中每一个都重复一遍"往上找父元素"的工作。</p>
+
+<p><strong>BEM(Block Element Modifier)</strong>方法给出的对策是:所有内容都用单一的类来表达,如果需要体现层级关系,也把层级信息编进类名本身,而不是靠嵌套选择器去描述——这天然让选择器保持短、匹配快,也更容易被覆盖(<a href="https://en.bem.info/">en.bem.info</a>)。</p>
+
+<p>另外值得留意的是,不同的 CSS 属性在被应用时,触发的浏览器工作量并不一样——有的只触发重绘(repaint)或合成(composite),有的会触发更贵的<strong>回流(reflow)</strong>,也就是重新计算布局。尽量少写会改变布局的样式,具体某个属性会触发什么可以查 <a href="https://csstriggers.com/">csstriggers.com</a>。</p>
+
+<h2>四、伪元素:不改标记也能"加"内容</h2>
+
+<p><strong>伪元素</strong>是加在选择器后面的关键字,用来给被选中元素的<strong>某一部分</strong>单独设样式,而不用给这部分额外套一层真实的 DOM 标签(<a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Pseudo-elements">MDN · Pseudo-elements</a>)。它的用法大致分两类:</p>
+
+<ul>
+<li><strong>装饰已有内容</strong>:<code>::first-line</code>、<code>::first-letter</code> 分别用来单独修饰一段文字的第一行、第一个字。</li>
+<li><strong>配合 <code>content</code> 属性往标记里"插入"内容,但不真的去改 HTML</strong>:<code>::before</code>、<code>::after</code>(旧写法 <code>:before</code>、<code>:after</code>)。经典用法比如 clearfix hack——用 <code>::after</code> 加一个 <code>clear: both</code> 的零高度元素;或者工具提示(tooltip)上那个小三角箭头,直接用 <code>::before</code>/<code>::after</code> 画出来,箭头就留在样式层,不会污染真正的 DOM 结构,这是关注点分离的一个例子。</li>
+</ul>
+
+<p>要把伪元素和<strong>伪类(pseudo-class)</strong>分清楚:伪类是根据元素的<strong>状态</strong>来设样式,比如 <code>:hover</code>、<code>:focus</code>(<a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Pseudo-classes">MDN · Pseudo-classes</a>);伪元素是选中元素的<strong>某一部分</strong>。约定上用双冒号 <code>::before</code> 区分伪元素、单冒号 <code>:hover</code> 区分伪类,但因为这个区分在旧版 W3C 规范里写得不够明确,大多数浏览器对两种写法都支持。</p>
+
+<h2>五、重置 vs 标准化:两种起点该怎么选</h2>
+
+<table>
+<tr><th>做法</th><th>做的是什么</th></tr>
+<tr><td>重置(Reset)</td><td>去掉元素身上所有默认浏览器样式——margin、padding、font-size 等统一拉平,之后要为常见的排版元素重新声明样式。</td></tr>
+<tr><td>标准化(Normalize)</td><td>保留有用的默认样式,不是把一切"取消样式";同时修正浏览器之间常见的行为差异。</td></tr>
+</table>
+
+<p>源文件给出的判断标准很直接:当你的设计<strong>非常定制或非传统</strong>时,选重置——反正大部分样式都要自己重新写一遍,不需要保留浏览器的任何默认值。换句话说,如果项目走的是相对常规的排版路线,标准化"保留有用的默认样式 + 修好浏览器间的差异"这两件事,能替你省掉一部分从零开始的工作。</p>
+
+<h2>六、预处理器:图什么、又烦什么</h2>
+
+<p>预处理器(Sass、Less 等)最常被提到的<strong>优点</strong>:</p>
+<ul>
+<li>写出来的 CSS 更容易维护,嵌套选择器写起来更顺手。</li>
+<li>变量能撑起一套一致的主题,主题文件还能在不同项目之间共享——这一点不一定能靠 CSS 自定义属性(通常说的"CSS 变量")完全替代。</li>
+<li>Mixin 用来生成重复的 CSS 片段。</li>
+<li>Sass 和 Less 自带循环、列表、映射这类能力,让配置写起来更简洁。</li>
+<li>开发过程中能把代码拆成多个文件;CSS 本身也能拆文件,但那样做意味着每个文件都要单独发一次 HTTP 请求。</li>
+<li>预处理器工具本身跑在 Node 生态里,不需要额外手写 JS 去生成样式规则,跟 Node 工作流配合得顺。</li>
+</ul>
+
+<p>常被吐槽的<strong>缺点</strong>:</p>
+<ul>
+<li>需要额外的预处理工具,重新编译有时会比较慢。</li>
+<li>写的不是"当前和潜在可用的 CSS"。比如把 <a href="https://github.com/webpack-contrib/postcss-loader">postcss-loader</a> 配合 <a href="https://webpack.js.org/">webpack</a> 使用,就能提前写将来可能标准化的 CSS——比如用原生 CSS 变量代替 Sass 变量——等于提前学一套新语法,一旦标准落地就直接受益。</li>
+<li>Sass 依赖 <code>node-sass</code>,它是用 C++ 写的 LibSass 的一个绑定;Node 版本切换时,经常要重新编译这个库。</li>
+<li>Less 里变量名前缀是 <code>@</code>,容易跟原生 CSS 里的 <code>@media</code>、<code>@import</code>、<code>@font-face</code> 这些关键字搞混。</li>
+</ul>
+
+<h2>七、CSS 框架:抄来的样式,自己改起来有多疼</h2>
+
+<p>如果被问到用过什么现成的 CSS 框架、会怎么改进它们,答案不需要面面俱到,具体点出踩过的坑反而更有说服力:</p>
+
+<table>
+<tr><th>框架</th><th>吐槽点</th></tr>
+<tr><td>Bootstrap</td><td>发布周期慢——Bootstrap 4 曾经在 alpha 状态停留了将近 2 年;建议未来版本补一个使用广泛却始终缺席的微调器(spinner)按钮组件。</td></tr>
+<tr><td>Semantic UI</td><td>源码结构让主题定制很难看懂,主题系统非传统、难以定制,配置路径硬编码在供应商库里,不像 Bootstrap 那样方便覆盖变量。</td></tr>
+<tr><td>Bulma</td><td>需要写大量非语义、多余的类和标记;不向后兼容,升级版本常以细微的方式悄悄破坏应用。</td></tr>
+</table>
+
+<h2>八、SVG 样式与表现属性:级联规则的另一个战场</h2>
+
+<p>SVG 的着色主要靠两个属性:<code>fill</code> 设置图形内部的颜色,<code>stroke</code> 设置图形周围线条的颜色。取值可以用 HTML 里同一套写法——颜色名称(<code>red</code>)、RGB(<code>rgb(255,0,0)</code>)、十六进制、RGBA 都可以。</p>
+
+<pre><code>&lt;rect x="10" y="10" width="100" height="100"
+  stroke="blue" fill="purple"
+  fill-opacity="0.5" stroke-opacity="0.8" /&gt;</code></pre>
+
+<p>上面的 <code>fill="purple"</code> 是<strong>表现属性(presentation attribute)</strong>的一个例子。它和内联样式 <code>style="fill: purple"</code>——碰巧也是写在标签上的一个属性——看起来很像,但在级联里的位置不一样:表现属性可以被样式表里定义的 CSS 规则覆盖(<a href="https://css-tricks.com/presentation-attributes-vs-inline-styles/">css-tricks.com</a>),比如写一条 <code>svg { fill: blue; }</code>,就会盖掉表现属性设的紫色。这正好接回第一节的级联顺序:内联样式的优先级本来就压在普通样式表规则之上,而表现属性没有这层"内联"的保护,样式表能直接盖过它。</p>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>这 9 道题里,日常代码评审、调试里最常用到的是"特异性"和"关键选择器方向"这两条。遇到"样式明明写了却不生效"的 bug,先按级联顺序查一遍:有没有更高优先级的 <code>!important</code> 或内联样式盖住了它,再看两条规则的特异性谁的 ID/CLASS/TYPE 更高。写组件库或设计系统的 CSS 时,主动把自己的选择器写得扁平、特异性压低,把"要不要用 <code>!important</code>"这个决定权留给调用你的人,而不是自己先用掉。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"选择器写得更长更复杂"当成"特异性更高"。</strong>按 ID-CLASS-TYPE 的比较规则,复杂度和特异性根本不是一回事——一个 ID 选择器就能碾压一长串类和类型选择器的组合。另一个常见误区是把"标准化(normalize)"和"重置(reset)"当成同一件事的两种叫法:重置是把默认样式全部拉平、自己重新写一遍;标准化是保留有用的默认值再修正浏览器差异,两者是完全不同的起点,选哪个要看设计定制到什么程度,不是随手二选一。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>打开你最近维护的项目,在浏览器 DevTools 里找一个"样式好像被别的规则覆盖了"的元素,点开它的 Computed/Rules 面板,把列出来的每条规则按今天学的 <code>ID-CLASS-TYPE</code> 三元组亲手数一遍特异性,而不是靠感觉猜谁会赢。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>级联按 <code>!important → 内联样式 → 选择器特异性 → 源顺序</code> 四层依次决定"听谁的",特异性本身靠 ID-CLASS-TYPE 三元组从左到右比大小;浏览器匹配选择器则是从右到左走的,所以关键选择器越窄,CSS 既跑得快,也更容易被覆盖和维护。</p>
+</div>
+
+<h2>九、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于 CSS 选择器特异性,下面哪个说法正确? (A) 只要选择器写得越长、包含的选择器组件越多,特异性就一定更高 (B) 特异性按 ID、CLASS、TYPE 三类从左到右比较,某一类别的值再大也无法反超左边类别,比如 1 个 ID 选择器的特异性就高于 10 个类选择器加 10 个类型选择器的组合 (C) 特异性是整个 CSS 级联里优先级最高的因素,任何情况下都会覆盖 !important 声明</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。比较特异性时逐列从左往右看,ID 列只要非零就赢,不管 CLASS、TYPE 列多大——源文件给的例子正是 <code>1,0,0</code> 大于 <code>0,10,10</code>。(A) 错在把"选择器长度/组件数量"和"特异性"混为一谈,十个类加十个类型选择器的组件数量确实不少,但依然输给一个 ID;(C) 弄反了级联的优先级顺序——真正最高的是 <code>!important</code>,其次才是内联样式,特异性排在这两者之后,不会覆盖 <code>!important</code>。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于浏览器匹配选择器与写高效 CSS,下面哪个说法正确? (A) 浏览器从选择器最左侧开始向右匹配,所以把标签选择器放在最左边开销最大 (B) BEM 方法的核心思路是尽量堆叠多层嵌套选择器来表达层级关系,这样能确保特异性足够高 (C) 浏览器从选择器最右侧的关键选择器开始,向上遍历父元素确认匹配,所以关键选择器越窄(比如用类而不是标签或通配符),浏览器要做的工作就越少</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。源文件明确说浏览器是从最右侧的关键选择器开始筛选 DOM 元素,再向上遍历父元素确认剩余部分,选择器链越短匹配越快——这也是为什么要避免把标签、通配符选择器放在关键选择器位置。(A) 把匹配方向说反了,实际方向是从右到左,不是从左到右;(B) 不仅方向站不住,还把 BEM 的思路说反了——BEM 提倡用扁平的单一类表达层级(把层级信息编进类名本身),而不是靠堆叠嵌套选择器,堆叠嵌套反而会拉长选择器链、增加匹配开销,而且更长的选择器链也不必然带来更高的特异性,道理和 Q1 是一回事。</p>
+</div>
+</details>
+</div>
+
+<h2>十、主推资源</h2>
+
+<p>本节 9 道题各自都带了真实参考链接,下面挑 4 条最值得展开精读的:</p>
+<ul>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_cascade/Specificity">MDN · Specificity</a> —— 特异性计算规则的权威说明,是"特异性"这道题本身的参考出处。</li>
+<li><a href="https://web.dev/learn/css/specificity">web.dev · Specificity</a> —— 图解版特异性教程,ID-CLASS-TYPE 三元组比较看不明白时适合对照读。</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Pseudo-elements">MDN · Pseudo-elements</a> —— 伪元素完整列表和用法,是"伪元素"这道题的参考出处。</li>
+<li><a href="https://en.bem.info/">en.bem.info</a> —— BEM 方法的官方站点,"写高效 CSS 的坑"这道题里提到的选择器命名方法。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"为什么一个 ID 选择器能碾压十个类选择器",也可以让老师帮你把某个真实项目里的一条选择器,当场按 ID-CLASS-TYPE 拆开算一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0006-css-trivia-box-model-layout.html"><span class="dir">← 上一课</span>CSS 高频问答 I:盒模型、定位与布局</a>
+  <a class="next" href="0008-css-trivia-responsive-browser-compat.html"><span class="dir">下一课 →</span>CSS 高频问答 III:响应式、视觉效果与浏览器兼容</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

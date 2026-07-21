@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0049 · 机器里的数与字符:浮点、Unicode、字节序</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0049 课 · 机器表示与网络 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>机器里的数与字符:浮点、Unicode、字节序</h1>
+
+<p class="lede">这节把三个「底层表示」的坑合成一课。它们表面无关,内核只有一句话:<strong>内存里存的从来不是「数」和「字符」本身,而是它们的一种约定编码</strong>。约定和你脑子里的直觉一旦错位,就出现「<code>0.1 + 0.2 != 0.3</code>」「一个 emoji 的长度是 4 不是 1」「换台机器读出来的整数变了样」这类让人抓狂的 bug。面试官爱考它们,正是因为它们暴露你有没有真的理解「二进制表示」。</p>
+
+<div class="recall">
+<p>先回忆:在<a href="0016-bitwise-basics.html">位运算</a>一课里,我们把整数彻底拆成一串二进制位,靠移位和掩码直接操纵它们。这节是同一个视角的延伸——浮点数、字符、多字节整数,在内存里同样只是<strong>一串按约定解释的位</strong>。先自己想一句:如果内存里只有 0 和 1,那么「小数点」和「负号」到底藏在哪?</p>
+</div>
+
+<h2>一、浮点数:为什么 0.1 + 0.2 不等于 0.3</h2>
+
+<p>整数好办,一串位直接是它的二进制值。小数麻烦:计算机用 <strong>IEEE 754</strong> 标准,把一个浮点数拆成三段位——<strong>符号位</strong>(正负)、<strong>指数位</strong>(小数点浮动到哪)、<strong>尾数位</strong>(有效数字)。这就是「浮点(floating point)」名字的来历:小数点的位置是「浮动」的,由指数决定。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 680 150" role="img" aria-label="IEEE 754 单精度浮点数的位域布局">
+  <text x="340" y="24" text-anchor="middle" class="dgm-text" font-size="15" font-weight="700">IEEE 754 单精度(float32)= 32 位</text>
+  <rect x="10" y="52" width="44" height="46" rx="4" class="dgm-accent-node"/>
+  <rect x="54" y="52" width="176" height="46" rx="4" class="dgm-link-node"/>
+  <rect x="230" y="52" width="440" height="46" rx="4" class="dgm-good-node"/>
+  <text x="32" y="80" text-anchor="middle" class="dgm-accent-text" font-size="13">S</text>
+  <text x="142" y="80" text-anchor="middle" class="dgm-text" font-size="13">指数 exponent</text>
+  <text x="450" y="80" text-anchor="middle" class="dgm-text" font-size="13">尾数 mantissa / fraction</text>
+  <text x="32" y="118" text-anchor="middle" class="dgm-muted" font-size="12">1 位</text>
+  <text x="142" y="118" text-anchor="middle" class="dgm-muted" font-size="12">8 位</text>
+  <text x="450" y="118" text-anchor="middle" class="dgm-muted" font-size="12">23 位</text>
+  <text x="340" y="142" text-anchor="middle" class="dgm-muted" font-size="12">值 ≈ (-1)^S × 1.尾数 × 2^(指数-127)。双精度 double 是 1 + 11 + 52 = 64 位。</text>
+</svg>
+</div>
+<figcaption>浮点数不是「存了个小数」,而是存了「符号 + 指数 + 尾数」三段,再按公式拼回一个近似值。</figcaption>
+</figure>
+
+<p>关键在于:<strong>尾数位数是有限的</strong>。十进制里干净利落的 0.1,换成二进制是无限循环小数 <code>0.0001100110011…</code>,像十进制写不尽 1/3 一样。有限的 23/52 位只能存一个<strong>最接近的近似值</strong>。于是 0.1、0.2 各自被舍入一点点,相加后的误差恰好让结果不等于同样被舍入的 0.3。这不是 bug,是有限精度的必然。</p>
+
+<div class="gotcha">
+<p><strong>永远不要用 <code>==</code> 比较两个浮点数。</strong> <code>if (a == b)</code> 在浮点上几乎总是错的写法。正确做法是判断差的绝对值是否小于一个足够小的容差 epsilon:<code>if (abs(a - b) &lt; 1e-9)</code>。面试里写出 <code>0.1 + 0.2 == 0.3</code> 当真会被当作「没接触过浮点」的信号。</p>
+<p>另一个坑:浮点<strong>不适合表示金额</strong>。钱要么用整数存「分」,要么用十进制类型(如 <code>BigDecimal</code>),否则累加久了会漂移出一分钱的误差。</p>
+</div>
+
+<h2>二、Unicode vs UTF-8:码点和字节是两回事</h2>
+
+<p>很多人把「字符编码」当成一件事,面试里一追问就露馅。其实是两层:</p>
+
+<ul>
+<li><strong>Unicode</strong> 是一张<strong>字符集</strong>——给世界上每个字符分配一个唯一编号,叫<strong>码点(code point)</strong>,写作 <code>U+XXXX</code>。它只回答「这个字是几号」,不管怎么存。</li>
+<li><strong>UTF-8</strong> 是一种<strong>编码方式</strong>——把码点落成实际的字节。它是<strong>变长</strong>的:ASCII 字符 1 字节,常见汉字 3 字节,emoji 常要 4 字节。</li>
+</ul>
+
+<table>
+<thead><tr><th>字符</th><th>Unicode 码点</th><th>UTF-8 字节数</th></tr></thead>
+<tbody>
+<tr><td><code>A</code></td><td>U+0041</td><td>1 字节</td></tr>
+<tr><td><code>é</code></td><td>U+00E9</td><td>2 字节</td></tr>
+<tr><td><code>中</code></td><td>U+4E2D</td><td>3 字节</td></tr>
+<tr><td><code>😀</code></td><td>U+1F600</td><td>4 字节</td></tr>
+</tbody>
+</table>
+
+<p>所以「字符串长度」这个词是有歧义的:按<strong>字节</strong>数、按<strong>码点</strong>数、还是按人眼看到的<strong>字符</strong>数(grapheme,一个 emoji 可能由多个码点组合而成),三者可以都不相等。面试官问「这个字符串多长」,聪明的回答是先反问「你要哪种长度」。</p>
+
+<div class="gotcha">
+<p><strong>「一个字符一个字节」是 ASCII 时代的过时假设。</strong> 在 UTF-8 里按字节下标去切字符串,可能把一个汉字或 emoji 从中间劈开,得到乱码。截断用户昵称时最容易踩这个坑。也别以为「一个 emoji = 一个字符」:像肤色、旗帜类 emoji 由多个码点拼成,按码点数它也不是 1。</p>
+</div>
+
+<h2>三、字节序:同一个整数,两种摆法</h2>
+
+<p>一个字符占多字节时,还有个问题:这几个字节在内存里<strong>谁在前</strong>?这就是<strong>字节序(endianness)</strong>。以 4 字节整数 <code>0x12345678</code> 为例(<code>12</code> 是最高位字节 MSB):</p>
+
+<figure class="diagram">
+<table>
+<thead><tr><th>内存地址</th><th>+0</th><th>+1</th><th>+2</th><th>+3</th></tr></thead>
+<tbody>
+<tr><td><strong>大端序 Big-endian</strong>(高位在前)</td><td><code>12</code></td><td><code>34</code></td><td><code>56</code></td><td><code>78</code></td></tr>
+<tr><td><strong>小端序 Little-endian</strong>(低位在前)</td><td><code>78</code></td><td><code>56</code></td><td><code>34</code></td><td><code>12</code></td></tr>
+</tbody>
+</table>
+<figcaption>大端像人写数字:高位写在最左(最低地址)。小端反过来。x86/x64 是小端;ARM 可切换。</figcaption>
+</figure>
+
+<p>单机内自己读自己写,字节序你根本感觉不到。它一旦冒头就是在<strong>跨机器边界</strong>:网络传输、写二进制文件、读别人机器写的数据。两端字节序不一致,同一串字节就被解释成完全不同的数。因此 TCP/IP 规定了统一的<strong>网络字节序(network byte order)= 大端</strong>,程序发数据前用 <code>htons</code>/<code>htonl</code> 转成大端,收到再用 <code>ntohs</code>/<code>ntohl</code> 转回本机序——这条正好接上一课网络。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>IEEE 754 / 浮点(Floating Point)</dt>
+<dd>用「符号 + 指数 + 尾数」三段位表示实数近似值的标准。尾数位有限,故大多数小数只能存最接近的近似值。<em>避免</em>把浮点当成精确值直接用 <code>==</code> 比较。</dd>
+<dt>码点 vs 编码(Code Point vs Encoding)</dt>
+<dd>Unicode 码点是字符的抽象编号(<code>U+XXXX</code>);UTF-8 是把码点落成字节的变长编码。<em>避免</em>把「Unicode」和「UTF-8」当同义词。</dd>
+<dt>字节序(Endianness)</dt>
+<dd>多字节数据在内存里字节的排列顺序。大端高位在前,小端低位在前;网络字节序是大端。<em>避免</em>假设「所有机器都一样」。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong> 这三点很少单独出算法题,而是穿插在别处考你的严谨:</p>
+<ul>
+<li><strong>「浮点为什么不精确?怎么比较?」</strong>——答:尾数位有限,小数存的是近似值;比较用 <code>abs(a-b) &lt; epsilon</code>,金额用整数或十进制类型。</li>
+<li><strong>「这个字符串多长?」</strong>——先分清按字节 / 码点 / 字符,再说 UTF-8 是变长编码,一个 emoji 可能占多字节甚至多码点。</li>
+<li><strong>「把结构体写进文件/发到网络,换台机器读出来错了,为什么?」</strong>——字节序不一致;跨机器要统一成网络字节序(大端)或明确约定格式。</li>
+</ul>
+</div>
+
+<div class="implement">
+<p>三个 5 分钟小实验,把抽象变成亲眼所见:</p>
+<p>① 在任意语言的交互环境里敲 <code>0.1 + 0.2</code>,看它打印出 <code>0.30000000000000004</code>。② 取一个含中文和 emoji 的字符串,分别打印它的字节长度和码点长度,看两个数不相等。③ 写一个 4 字节整数到文件,用十六进制查看器(如 <code>xxd</code>)打开,确认你的机器是小端(<code>78 56 34 12</code>)。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong> 内存里没有「数」也没有「字符」,只有按约定解释的位。浮点是有限精度的近似、UTF-8 是变长字节、整数有字节序——只要跨越「你的直觉」和「机器的约定」这条缝,就要显式处理,别默认。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:下面哪种做法能正确判断两个浮点结果「相等」?</summary>
+<div class="answer">
+<p>正确做法是 <strong><code>abs(a - b) &lt; epsilon</code></strong>(取一个足够小的容差,如 <code>1e-9</code>)。直接 <code>a == b</code> 会因舍入误差判为不等;四舍五入到固定小数位再比较也只是特例、不通用。根因是尾数位有限,浮点存的是近似值,几乎不该指望两条不同计算路径得到位级完全相同的结果。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:一个字符串是 <code>"a中😀"</code>(1 个 ASCII 字母 + 1 个汉字 + 1 个 emoji)。它的 UTF-8 字节长度和 Unicode 码点长度分别是多少?</summary>
+<div class="answer">
+<p><strong>字节长度 = 1 + 3 + 4 = 8;码点长度 = 3。</strong> UTF-8 里 <code>a</code> 占 1 字节、<code>中</code> 占 3 字节、<code>😀</code> 占 4 字节,合计 8;但按码点数,它就是 3 个字符。这正说明「字符串长度」必须先问清按哪种口径——按字节切下标会把汉字或 emoji 劈开成乱码。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:把 4 字节整数 <code>0x0A0B0C0D</code> 存进一台小端序机器,内存最低地址处的那个字节是?</summary>
+<div class="answer">
+<p><strong><code>0x0D</code></strong>。小端序「低位在前」,最低有效字节 <code>0D</code> 放在最低地址,依次是 <code>0C 0B 0A</code>。若是大端序,则最低地址放最高位字节 <code>0A</code>。网络字节序采用大端,所以跨机传输前要做主机序↔网络序转换。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题对应仓库大纲的「浮点数 / Unicode / 字节序」三小节。以下均为该处收录的一手来源:</p>
+<ul>
+<li>浮点:<a href="https://www.youtube.com/watch?v=ji3SfClm8TU">浮点数的表示 - 1(视频,用 8 位简化模型讲清尾数/指数)</a>。</li>
+<li>字符编码:<a href="http://www.joelonsoftware.com/articles/Unicode.html">每一个软件开发者必须知道的 Unicode 与字符集知识(Joel Spolsky)</a>,以及 <a href="http://kunststube.net/encoding/">每个程序员绝对需要知道的编码与字符集知识</a>。</li>
+<li>字节序:<a href="https://web.archive.org/web/20180107141940/http://www.cs.umd.edu:80/class/sum2003/cmsc311/Notes/Data/endian.html">大/小端序讲义</a>,以及 <a href="https://www.youtube.com/watch?v=JrNF0KRAlyo">大端序 Vs 小端序(视频)</a>。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「为什么 0.1 存不下」,或带你在纸上把 <code>0x12345678</code> 的大端/小端摆法各写一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0048-bloom-filter-skip-list.html"><span class="dir">← 上一课</span>布隆过滤器与跳表:用概率和随机换效率</a>
+  <a class="next" href="0050-networking.html"><span class="dir">下一课 →</span>网络基础:TCP/IP、HTTP、DNS</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

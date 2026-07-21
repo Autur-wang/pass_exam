@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0012 · 翻译器内部:五步骨架与事件协议宪法</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 4 章 · 模型调用 ›
+  <a href="./0011-translation-company-unified-entry.html">上一课</a> ›
+  <strong>Lesson 0012</strong>
+</div>
+
+<p class="kicker">Lesson 0012 · 第 4 章 模型调用</p>
+<h1>翻译器内部<br>—— 五步骨架与事件协议宪法</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们啃了三层架构的<strong>第一层</strong>——「前台」怎么用「查表 + 派活」
+  两步把请求路由给对的翻译器。但前台自己不干活,真正的工作量在第二层(标准报告格式)和第三层(翻译员)。
+  这节课打开这两层:12 种统一事件长什么样、翻译器内部走的是哪 5 步、以及那份让所有翻译员都守规矩的
+  「入职宪法」——<code>StreamFunction</code>。
+</div>
+
+<div class="recall">
+  🔁 <strong>回忆一下</strong>:第 3 章讲翻译公司类比时说过,前台不需要懂外语,翻译员不需要懂公司流程——
+  他们靠中间那份<strong>标准格式的报告</strong>连接。上一课我们只看到了前台怎么「查表 + 派活」,
+  还没打开翻译员真正在做的事,也没看过那份标准报告长什么样。今天就打开这两块。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出 <span class="sys-pill">AssistantMessageEvent</span>
+  的 12 种事件是怎么从「文字 / 思考 / 工具调用」三类内容 + 「开始 / 结束」两个信号推导出来的,
+  并说清 <code>StreamFunction</code> 这个类型签名定的三条铁律,以及「协议优于继承」的设计理由。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:翻译员的标准工作流程</b>
+  一个称职的翻译员上岗,走的是固定流程:先确认自己<b>带了字典</b>(创建客户端),
+  再<b>逐句翻译</b>(把客户的话译成对方语言、发出去、再把对方的回话译回来),
+  最后必须交一份<b>格式固定的标准报告</b>(12 种统一事件)——不管这次翻的是法语还是日语,
+  报告的封面、正文结构、审签栏长相都完全一样。翻译员之间可能一句共同语言都没有,
+  但只要报告格式统一,前台就不用关心翻译员内部怎么工作。
+</div>
+
+<h2>1 · 第二层:12 种事件不用死记,抓一个模式</h2>
+<p>
+  翻译器把请求发给模型后,模型是流式「一个字一个字」吐内容的。如果每个翻译员都按自己的方式吐,
+  前台就疯了——所以第二层约定了一套<strong>统一输出格式</strong>:不管底层是哪家模型,
+  翻译器都必须输出 12 种统一事件之一。
+</p>
+<pre><span class="ln">1</span>AssistantMessageEvent(12 种)
+<span class="ln">2</span>│
+<span class="ln">3</span>├── start                              <span class="cm">← 流开始了</span>
+<span class="ln">4</span>│
+<span class="ln">5</span>├── text_start → text_delta → ... → text_end       <span class="cm">← 模型在输出文字</span>
+<span class="ln">6</span>├── thinking_start → thinking_delta → ... → thinking_end  <span class="cm">← 模型在思考</span>
+<span class="ln">7</span>├── toolcall_start → toolcall_delta → ... → toolcall_end  <span class="cm">← 模型要调工具</span>
+<span class="ln">8</span>│
+<span class="ln">9</span>├── done   (reason: stop / length / toolUse)   <span class="cm">← 正常结束</span>
+<span class="ln">10</span>└── error  (reason: error / aborted)           <span class="cm">← 出错了</span>
+</pre>
+<p>
+  不用死记全部 12 种,只需抓模式:<strong>模型回复分三类内容——文字、思考、工具调用,
+  每类都有「开始→逐字增量→结束」三步,再加上流开始 <code>start</code> 和流结束
+  <code>done</code> / <code>error</code> 两个信号。</strong>
+</p>
+<div class="why">
+  <b>为什么每类内容都要拆成 start→delta→end 三步?</b> 因为这是流式输出——翻译器先告诉你
+  「文字要开始了」,然后逐字推送 <code>delta</code>(可能有很多个),最后告诉你「结束了」。
+  这让 Agent Loop 能做到<strong>逐字渲染</strong>——你看到的 AI 回复一个字一个字蹦出来,就是这个机制在支撑。
+</div>
+<p>
+  还有一个容易被忽略但极关键的约定:<strong>每个事件都携带 <code>partial</code>(当前消息的完整快照)</strong>。
+  这正是「原地替换」的落地方式——每次收到事件,直接用 <code>partial</code> 覆盖 context 中最后一条消息,
+  不需要自己拼接增量。这把「维护状态」这件麻烦事从消费方(Agent Loop)身上卸掉了,交给了翻译器。
+</p>
+<cite>🔎 出处:教程第4章 §二 / <code>types.ts:453-465</code>。</cite>
+
+<h2>2 · 第三层:翻译器都走同一套 5 步骨架</h2>
+<p>
+  翻译器是真正干活的角色——每个翻译器对应一种 API(如 Anthropic、OpenAI),
+  负责把统一格式翻译成 Provider 的私有格式,再把响应翻译回统一事件。所有翻译器都遵循同一个流程:
+</p>
+<pre><span class="ln">1</span>翻译器(model, context, options)
+<span class="ln">2</span>│
+<span class="ln">3</span>├── 1. 创建客户端
+<span class="ln">4</span>│      用 API Key 初始化连接。就像翻译员确认自己带了字典。
+<span class="ln">5</span>│
+<span class="ln">6</span>├── 2. 构建请求参数
+<span class="ln">7</span>│      把统一格式的消息、工具定义、系统提示,翻译成 Provider 的私有格式。
+<span class="ln">8</span>│      比如 Google 要 content → parts,这一步就做这个转换。
+<span class="ln">9</span>│
+<span class="ln">10</span>├── 3. 发送请求
+<span class="ln">11</span>│      通过 SDK 或直接 HTTP 发给模型。等模型开始响应。
+<span class="ln">12</span>│
+<span class="ln">13</span>├── 4. 处理响应流
+<span class="ln">14</span>│      模型流式返回内容。翻译器把 Provider 的私有事件格式,
+<span class="ln">15</span>│      翻译成第二层要求的 12 种统一事件。
+<span class="ln">16</span>│
+<span class="ln">17</span>└── 5. 发送终止事件
+<span class="ln">18</span>       成功 → push done;失败 → push error。流必须终止。
+</pre>
+<div class="tradeoff">
+  🔑 <b>工作量藏在哪两步?</b> 第 2 步(请求翻译)和第 4 步(响应翻译)是核心工作量所在——
+  也是每个翻译器动辄上千行代码的主要原因。第 1、3、5 步大同小异,真正「翻译」这门语言的活儿
+  全压在 2 和 4 上。
+</div>
+<cite>🔎 出处:教程第4章 §二 / <code>anthropic-messages.ts</code> 5步骨架。</cite>
+
+<h2>3 · 实例:Anthropic 第 4 步怎么翻译</h2>
+<p>
+  抽象的「翻译响应」四个字,落到 Anthropic 身上具体长什么样?下面是它把私有事件名
+  映射成 Pi 统一事件名的对照表:
+</p>
+<pre><span class="ln">1</span>Anthropic 私有事件                     →  Pi 统一事件
+<span class="ln">2</span>─────────────────                    ────────────
+<span class="ln">3</span>content_block_start (type: "text")    →  text_start
+<span class="ln">4</span>content_block_delta (text_delta)      →  text_delta
+<span class="ln">5</span>content_block_start (type: "tool_use") →  toolcall_start
+<span class="ln">6</span>content_block_delta (input_json)      →  toolcall_delta
+<span class="ln">7</span>message_delta (stop_reason)           →  done(映射终止原因)
+</pre>
+<p>
+  注意最后一行的「映射终止原因」——Anthropic 的 <code>"end_turn"</code> 要翻译成 Pi 的
+  <code>"stop"</code>,<code>"tool_use"</code> 要翻译成 <code>"toolUse"</code>。
+  每个 Provider 的命名都不一样,Pi 把它们统一成了自己的术语。第 3 章讲 Agent Loop 检查
+  <code>stopReason</code> 决定是否继续循环,那些值正是经过这层翻译之后的统一术语——
+  Agent Loop 从头到尾没见过 <code>"end_turn"</code> 这个词。
+</p>
+<cite>🔎 出处:教程第4章 §二 / Anthropic 第4步翻译规则。</cite>
+
+<h2>4 · StreamFunction:翻译员的「入职宪法」</h2>
+<p>
+  三层架构要运转起来,有一个前提:<strong>所有翻译器必须遵守同一套规则。</strong>
+  Pi 用一个 TypeScript 类型定义这套规则——它叫 <code>StreamFunction</code>,是整个抽象层的「宪法」:
+</p>
+<pre><span class="ln">1</span><span class="key">export</span> <span class="key">type</span> <span class="type">StreamFunction</span>&lt;TApi <span class="key">extends</span> <span class="type">Api</span>, TOptions&gt; = (
+<span class="ln">2</span>  model: <span class="type">Model</span>&lt;TApi&gt;,       <span class="cm">// 用哪个模型</span>
+<span class="ln">3</span>  context: <span class="type">Context</span>,         <span class="cm">// 对话上下文(系统提示 + 消息 + 工具)</span>
+<span class="ln">4</span>  options?: TOptions,       <span class="cm">// 可选配置(思考级别、缓存等)</span>
+<span class="ln">5</span>) =&gt; <span class="type">AssistantMessageEventStream</span>;  <span class="cm">// ← 必须返回统一事件流</span>
+</pre>
+<p>这个签名定的三条规则:</p>
+<table class="bd">
+  <thead><tr><th>规则</th><th>具体内容</th></tr></thead>
+  <tbody>
+    <tr><td>① 输入相同</td><td>所有翻译器接受同样的三个参数(model、context、options)</td></tr>
+    <tr><td>② 输出相同</td><td>必须返回 <code>AssistantMessageEventStream</code>——不管底层是原始 SSE 还是 SDK 流,对外都是这个类型</td></tr>
+    <tr><td>③ 错误不抛异常</td><td>API 调用失败时,不 <code>throw</code>,而是 push 一个 <code>{ type: "error" }</code> 事件</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么用「协议 + 函数签名」而不是设计一个 <code>BaseProvider</code> 抽象类让翻译器继承?</b>
+  因为翻译器之间几乎没有共同代码——继承需要找共同点,但 Anthropic 用 <code>content[]</code>、
+  Google 用 <code>parts[]</code>,连「发消息」这件事的字段名都不一样,没什么可共享的实现。
+  协议只约定输入输出,不管中间实现——这是「协议 > 实现」的设计法。
+</div>
+<div class="tradeoff">
+  🔑 <b>第三条为什么这样设计?</b> 这呼应了第 3 章的「永不抛出」原则。第 3 章说的
+  <code>stopReason: "error"</code> / <code>"aborted"</code> 不是模型返回的,而是翻译器的
+  <code>catch</code> 块在异常时注入的——把异常包装成一个 <code>error</code> 事件 push 进流,
+  Agent Loop 用<strong>同一套机制</strong>处理成功和失败,<code>for await</code> 循环永远不会被异常打断。
+</div>
+<cite>🔎 出处:教程第4章 §二 / <code>types.ts:304-308</code>。</cite>
+
+<div class="diagram">翻译员的标准工作流程 —— 五步骨架 + 报告宪法
+
+  1创建客户端  2构建请求  3发送请求  4处理响应流  5发送终止事件
+     (带字典)   (译成对方话)  (寄出去)  (私有事件→12种统一事件)  (done / error)
+                    ▲                        ▲
+              工作量大头①              工作量大头②
+                    │                        │
+                    └──────────┬─────────────┘
+                               ▼
+                  StreamFunction「宪法」三条:
+              输入相同 · 输出相同 · 错误不抛异常(push error)
+</div>
+
+<h2>5 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 为什么文字 / 思考 / 工具调用每类内容都要拆成 start→delta→end 三步?</p>
+    <button class="opt">纯粹为了凑够 12 种事件的数量</button>
+    <button class="opt">因为是流式输出:先宣告开始、再逐字推送 delta、最后宣告结束,让 Agent Loop 能逐字渲染</button>
+    <button class="opt">因为 Anthropic 的 API 强制要求这样</button>
+    <button class="opt">因为这是错误处理的需要</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="3">
+    <p class="stem">② <code>StreamFunction</code> 规定的「错误不抛异常」意味着什么?</p>
+    <button class="opt">API 失败时直接 throw 异常,交给上层 catch</button>
+    <button class="opt">静默忽略所有错误,当作没发生</button>
+    <button class="opt">出错就重启整个进程</button>
+    <button class="opt">把异常包装成 error 事件 push 进流,Agent Loop 用同一套机制处理成功和失败,循环不被打断</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">③ Pi 为什么用「事件协议 + 函数签名」而不是设计一个 <code>BaseProvider</code> 抽象类让翻译器继承?</p>
+    <button class="opt">翻译器之间几乎没有共同代码(连字段名都不一样),协议只约定输入输出、不管中间实现</button>
+    <button class="opt">因为 TypeScript 里没有 class 这种东西</button>
+    <button class="opt">因为继承在运行时性能更差</button>
+    <button class="opt">因为协议写起来代码行数更少</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>为什么是 12 种事件而不是更少或更多——比如把 start/end 都省掉行不行?</em>」
+  「<em>翻译器的 catch 块和 Agent Loop 的 for-await 循环,谁先看到 error 事件、谁最后处理它?</em>」
+  「<em>思考级别(reasoning: "high")这种「统一参数」,翻译器是在第 2 步还是第 4 步里处理的?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>6 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第4章-模型调用-一行代码驾驭多个模型.md">第 4 章 · 模型调用 —— 一行代码驾驭多个模型</a>——
+  原文 §二后半段还讲了 SSE 解析、缓存控制(cache_control vs cachePoint)、上下文溢出检测等进阶内容,值得通读。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0013):</strong> 我们打开 <code>ThinkingLevel</code>
+  这套「统一思考级别」枚举——上层只说一句 <code>reasoning: "high"</code>,
+  翻译器怎么把它翻译成 Anthropic 的 <code>budget_tokens</code>、OpenAI 的 <code>reasoning_effort</code>、
+  Google 的 <code>thinkingLevel</code>?以及模型不支持某个级别时,<code>clamp</code> 回退策略怎么工作。
+</p>
+
+<footer>
+  Lesson 0012 · 第 4 章 模型调用 ·
+  下一课:<a href="./0013-thinking-levels-enum-and-map.html">0013 思考级别枚举与映射表 →</a> ·
+  上一课:<a href="./0011-translation-company-unified-entry.html">0011 翻译公司统一入口</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。三步对应流式的「开始/增量/结束」,这就是你看到 AI 回复一个字一个字蹦出来的底层机制。延伸:delta 可能有很多个,而 start/end 各一次。',
+               '✓ 对。这正是第3章 stopReason 为 error/aborted 的注入点——它们不是模型返回的,是翻译器 catch 块设置的。延伸:因此网络超时、Key 过期、用户取消都能被 Agent Loop 统一重试或降级。',
+               '✓ 对。继承需要找共同代码,但 Anthropic 和 Google 在「发消息」上连字段名都不同,没什么可共享的。延伸:这就是本章「协议 > 实现」设计法——只约定接口,不强求共享实现。'];
+  var msgNo = ['想想「模型一个字一个字吐」这件事:如果要让界面逐字显示,翻译器得先告诉你什么、中间发什么、最后发什么?',
+               '回忆第3章的「永不抛出」原则:如果翻译器真的 throw 了,Agent Loop 的 for-await 循环会怎样?错误应该以什么形态进入事件流?',
+               '想想继承的前提是什么(要有可复用的共同代码)。Anthropic 用 content[]、Google 用 parts[],它们在「发消息」这件事上有多少共同点?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

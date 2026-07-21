@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0026 · 工具输出截断策略</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 8 章 · 上下文工程 ›
+  <a href="./0025-system-prompt-assembly-and-pipeline.html">上一课</a> ›
+  <strong>Lesson 0026</strong>
+</div>
+
+<p class="kicker">Lesson 0026 · 第 8 章 上下文工程</p>
+<h1>工具输出截断策略<br>—— 剪报的艺术:双重限制、双向策略与不切坏一个字</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课讲了系统提示词怎么"组装"进上下文——那是加法。
+  这一课换个方向,讲上下文工程的<strong>减法</strong>:单次工具调用(<code>bash</code> 跑出 8000 行日志、
+  <code>read</code> 读一个 3000 行源文件)动辄几十 KB,不加控制几轮就把窗口塞满。
+  读完你会明白 Pi 用一套<strong>双重限制 + 双向策略 + 边界安全 + 兜底逃生</strong>的四件套解决这个问题,
+  而且每一处设计都有清晰的失败模式对照。
+</div>
+
+<div class="recall">
+  ⏪ <b>回忆上一课</b>:0025 讲的是系统提示词怎么把 <code>CLAUDE.md</code> 层层递归、用 XML 包装塞进上下文——
+  这解决的是"怎么让该进来的信息进来"。今天反过来问:工具**执行后**产出的信息,怎么让它不把窗口撑爆?
+  这是同一个上下文工程主题下的两侧问题:一侧管"进什么",一侧管"进多少"。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 说清 <span class="sys-pill">truncateHead</span> 与
+  <span class="sys-pill">truncateTail</span> 除了遍历方向外别无二致,并说出 Pi 为什么用
+  <strong>行数 + 字节</strong>双重限制而不是单一限制,以及截断为什么必须"逐字符"而不能直接按字节切。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:剪报</b>
+  一篇 8000 行的报纸没法整版贴进笔记本。读文件像只剪保留"开头的标题导语"(<code>truncateHead</code>)——
+  文件头部的 import、类定义信息密度最高;看报错像只剪保留"末尾的结论"(<code>truncateTail</code>)——
+  bash 的错误堆栈永远压轴出场。而且这把剪刀有原则:<strong>不能把一个汉字或 emoji 剪成半个</strong>,
+  UTF-8 边界必须完整跨过,剪坏了就是一堆乱码 <code>�</code>。
+</div>
+
+<h2>1 · 问题:单次工具调用就能撑爆窗口</h2>
+<p>
+  想象你让 Agent 跑 <code>npm test</code>,输出 8000 行日志;或者让它 <code>read</code> 一个 3000 行的源文件。
+  <strong>单次工具调用</strong>就可能产生几十 KB 的输出。如果不加控制,几轮下来上下文窗口就被工具结果塞满了。
+</p>
+<p>
+  最朴素的解法是"按字符数截断"。但这会立刻撞到三个新问题:截断位置不对(报错在末尾却截了头)、
+  切断多字节字符(emoji 变乱码)、单行就超限(grep 命中一行 100KB 的压缩 JS 怎么切)。
+  Pi 用一套算法同时解决这三个问题,实现全在 <code>truncate.ts</code>。
+</p>
+
+<h2>2 · 双重限制:行数 + 字节,先触者胜</h2>
+<p>
+  Pi 给所有工具输出默认定义了两个上限常量(源码在 <code>truncate.ts:11-13</code>):
+  <strong>DEFAULT_MAX_LINES = 2000</strong> 行,<strong>DEFAULT_MAX_BYTES = 50 * 1024</strong>(50KB)。
+  任何工具输出都按"最多 2000 行"或"最多 50KB"裁剪——<strong>哪个先触发就用哪个</strong>。
+</p>
+<table class="bd">
+  <thead><tr><th>只用哪个限制</th><th>失败模式</th></tr></thead>
+  <tbody>
+    <tr><td>只限行数</td><td>压缩 JS / minified CSS 单行极长,3 行就撑爆字节</td></tr>
+    <tr><td>只限字节</td><td>200 行的大文件按字节切,可能把某一行硬生生切一半</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么用双重限制而非单一限制?</b> 行数管"展示可读性",字节管"硬性体积"——两者各有失败模式,
+  互为兜底。这不是过度设计,是因为现实输入的形状本来就有两种极端(超长单行 vs 超多短行),
+  一把尺子量不完两种极端。
+</div>
+
+<h2>3 · 两种策略:truncateHead vs truncateTail</h2>
+<p>
+  同样的双重限制,从哪头裁是另一个问题。Pi 提供两个函数,<strong>核心差异只是遍历方向</strong>:
+</p>
+<table class="bd">
+  <thead><tr><th>函数</th><th>保留哪一段</th><th>用在哪</th><th>为什么</th></tr></thead>
+  <tbody>
+    <tr><td><code>truncateHead</code></td><td>开头</td><td>read 文件</td><td>文件头部通常是 import / 类定义 / 接口签名,<strong>最有信息密度</strong></td></tr>
+    <tr><td><code>truncateTail</code></td><td>末尾</td><td>bash 输出</td><td>bash 的错误堆栈、最终结果都在末尾,<strong>末尾最有信号</strong></td></tr>
+  </tbody>
+</table>
+<p>
+  bash 工具的描述在源码里写得很清楚(<code>bash.ts:284</code>),<strong>"last"</strong> 这个词很关键——
+  bash 工具的契约就是"保留末尾":
+</p>
+<pre><span class="cm"><span class="ln">1</span>// bash.ts:284 —— 工具描述里的截断契约</span>
+<span class="ln">2</span><span class="str">"Output is truncated to last 2000 lines or 50KB"</span>
+<span class="ln">3</span><span class="str">+ " (whichever is hit first). If truncated, full output"</span>
+<span class="ln">4</span><span class="str">+ " is saved to a temp file."</span>
+</pre>
+<cite>🔎 出处:教程 §三 / bash.ts:284。</cite>
+
+<p><code>truncateTail</code> 的核心逻辑是从末尾往回选保留行(<code>truncate.ts:247-266</code>),简化后是这样:</p>
+<pre><span class="cm"><span class="ln">1</span>// 伪代码:truncateTail 的核心思路</span>
+<span class="ln">2</span><span class="key">function</span> <span class="fn">truncateTail</span>(content, maxLines, maxBytes) {
+<span class="ln">3</span>    <span class="key">const</span> lines = content.<span class="fn">split</span>(<span class="str">"\n"</span>);
+<span class="ln">4</span>    <span class="key">const</span> kept = [];           <span class="cm">// 从末尾往回收集的行</span>
+<span class="ln">5</span>    <span class="key">let</span> bytes = 0;
+<span class="ln">6</span>
+<span class="hl"><span class="ln">7</span>    <span class="key">for</span> (<span class="key">let</span> i = lines.length - 1; i &gt;= 0; i--) {</span>
+<span class="ln">8</span>        <span class="key">const</span> lineBytes = <span class="fn">byteLength</span>(lines[i]) + 1;  <span class="cm">// +1 是换行符</span>
+<span class="ln">9</span>        <span class="key">if</span> (kept.length &gt;= maxLines) <span class="key">break</span>;          <span class="cm">// 行数到了,停</span>
+<span class="ln">10</span>        <span class="key">if</span> (bytes + lineBytes &gt; maxBytes) <span class="key">break</span>;     <span class="cm">// 字节到了,停</span>
+<span class="ln">11</span>        kept.<span class="fn">unshift</span>(lines[i]);                      <span class="cm">// 插到头部,保持原顺序</span>
+<span class="ln">12</span>        bytes += lineBytes;
+<span class="ln">13</span>    }
+<span class="ln">14</span>    <span class="key">return</span> kept.<span class="fn">join</span>(<span class="str">"\n"</span>);
+<span class="ln">15</span>}
+</pre>
+<cite>🔎 出处:教程 §三 / truncate.ts:247-266(伪代码简化)。</cite>
+<p>
+  <code>truncateHead</code> 完全一样,只是把 <code>for</code> 改成"从前往后"、<code>unshift</code> 改成 <code>push</code>。
+</p>
+<div class="tradeoff">
+  🔑 <b>为什么 read 截头、bash 截尾?</b> 信息密度分布不同——文件头部是 import / 接口最有信息,
+  bash 末尾是错误堆栈 / 最终结果最有信号。截断要保留"最有价值"的那一段,而不是机械地留前 N 行。
+  同一套算法两个方向复用,是很干净的设计:改一个参数(方向),不用重写逻辑。
+</div>
+
+<h2>4 · 边界安全:不能把一个字切成半个</h2>
+<p>
+  字节级截断最阴险的 bug 是切坏多字节字符。一个 emoji 😀 在 UTF-8 里是 4 个字节,
+  如果在第 2 个字节切一刀,剩下两个字节会变成无效字符 <code>�</code>。
+  Pi 用 <code>truncateStringToBytesFromEnd</code>(<code>truncate.ts:295</code>)解决——
+  <strong>逐字符地累加字节数</strong>,遇到"加这一个字符就超字节预算"就停;
+  遇到 4 字节 emoji 这类代理对(surrogate pair)字符,就把它当成<strong>不可分割的整体</strong>——
+  要么完整保留,要么完全不要。
+</p>
+<div class="why">
+  <b>为什么逐字符处理而非直接 slice?</b> 直接按字节切会把 emoji 切成无效 <code>�</code>,
+  污染后续编码——下游任何再次编解码、展示、比较都可能因此出错。
+  把多字节字符当成不可分割的整体,是用一点点计算成本换取"永不产出坏字符"的保证。
+</div>
+
+<h2>5 · 单行就超限:部分行兜底</h2>
+<p>
+  <code>truncateTail</code> 还有一个边角逻辑(<code>truncate.ts:255-260</code>):如果<strong>第一行(最长的那行)单独就超过 maxBytes</strong>,
+  不能什么都不返回——那样工具结果就成空了。它会取该行<strong>末尾 maxBytes 字节</strong>,
+  并设置 <code>lastLinePartial: true</code> 标志位。下游 bash 工具会渲染专门的提示(<code>bash.ts:366-368</code>):
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 单行超限时 bash 工具追加的提示(示意)</span>
+<span class="ln">2</span><span class="str">"[Showing last 49.5KB of line 1 (line is 92.3KB)."</span>
+<span class="ln">3</span><span class="str">+ " Full output: /tmp/pi-bash-xxx.log]"</span>
+</pre>
+<cite>🔎 出处:教程 §三 / bash.ts:362-374。</cite>
+<p>
+  另外 grep 工具有独立的单行限长:<code>truncateLine</code> 默认 <code>GREP_MAX_LINE_LENGTH = 500</code>,
+  把超长行截到 500 字符并加 <code>... [truncated]</code> 后缀——grep 经常命中压缩文件,一行几万字符,
+  这一步避免一行就吃掉几千 token。
+</p>
+<div class="why">
+  <b>为什么单行超限要"部分行兜底"而非返回空?</b> 返回空等于工具结果丢失——LLM 会误以为命令没有输出。
+  取末尾 maxBytes 字节 + <code>lastLinePartial</code> 标志,至少让 LLM 看到有信号的一段,
+  并且知道完整输出在哪、可以主动去取。
+</div>
+
+<h2>6 · 截断后的提示:逃生通道</h2>
+<p>
+  截断本身是有损的,但 Pi 不会偷偷干。<code>TruncationResult</code> 结构(<code>truncate.ts:15-38</code>)记录了完整的元信息——
+  是否截断(<code>truncated</code>)、被什么限制触发(<code>truncatedBy: "lines" | "bytes" | null</code>)、
+  原始行数 / 字节数、输出行数 / 字节数、最后一行是否部分截断(<code>lastLinePartial</code>)等等。
+  bash 工具据此在输出末尾追加一行提示(<code>bash.ts:362-374</code>):
+</p>
+<pre><span class="cm"><span class="ln">1</span>// bash.ts:362-374 —— 截断后追加的逃生通道提示</span>
+<span class="ln">2</span><span class="str">"[Showing lines 6501-8500 of 8500."</span>
+<span class="ln">3</span><span class="str">+ " Full output: /tmp/pi-bash-xxx.log]"</span>
+</pre>
+<cite>🔎 出处:教程 §三 / bash.ts:362-374。</cite>
+<p>
+  这行字<strong>也会进 LLM 上下文</strong>——告诉模型"如果你想看完整输出,去 read 这个文件"。
+</p>
+<div class="tradeoff">
+  🔑 <b>为什么截断要留"逃生通道"提示?</b> 截断是有损的,默认省 token,但把主动权还给 LLM——
+  需要时它自己 read 完整文件,兼顾省钱与不丢信息。而且 Pi 不偷偷干,元信息全记在
+  <code>TruncationResult</code> 里,不是"静默丢弃"。
+</div>
+
+<div class="diagram">工具输出截断的四件套 —— 一次工具调用的减法流水线
+
+  原始输出(8000 行日志 / 3000 行源文件)
+              │
+              ▼
+   ① 双重限制:maxLines=2000 / maxBytes=50KB,先触者胜
+              │
+     ┌────────┴────────┐
+     ▼                 ▼
+truncateHead        truncateTail
+(留开头,read 用)   (留末尾,bash 用)
+     │                 │
+     └────────┬────────┘
+              ▼
+   ② 边界安全:逐字符累加字节,4 字节字符不可分割
+              │
+              ▼
+   ③ 单行超限兜底:取末尾 maxBytes + lastLinePartial 标志
+              │
+              ▼
+   ④ 逃生通道:追加 [Full output: /tmp/...] 提示进上下文
+</div>
+
+<h2>7 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① truncateHead 和 truncateTail 的核心差异是什么?</p>
+    <button class="opt">一个会压缩内容、一个不压缩</button>
+    <button class="opt">遍历方向不同(保留开头 vs 保留末尾)</button>
+    <button class="opt">一个处理文件、一个处理网络请求</button>
+    <button class="opt">两者限制的 KB 数不一样</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">② Pi 为什么同时用"行数上限"和"字节上限"两个限制?</p>
+    <button class="opt">为了兼容不同操作系统</button>
+    <button class="opt">行数管可读性、字节管硬体积,互相兜底各自的失败模式</button>
+    <button class="opt">字节限制只是给旧模型用的</button>
+    <button class="opt">是历史遗留代码,其实没用</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ 截断后 Pi 在输出末尾追加 [Full output: /tmp/...] 提示的作用是?</p>
+    <button class="opt">方便运维事后删除临时文件</button>
+    <button class="opt">给日志系统采集用的</button>
+    <button class="opt">作为"逃生通道":告诉 LLM 完整输出在哪,它可按需 read</button>
+    <button class="opt">占位符,没有实际用途</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>为什么行数上限是 2000 而不是 500 或 5000?这个数字背后是什么权衡?</em>」
+  「<em>逃生通道的临时文件 <code>/tmp/pi-bash-xxx.log</code> 会不会一直堆积?谁来清理?</em>」
+  「<em>截断只是减法的一层——历史侧的 Compaction 又是怎么做减法的,它和截断分别管什么?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>8 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第8章-上下文工程-让有限窗口装下无限对话.md">第 8 章 · 上下文工程——让有限窗口装下无限对话</a>——
+  原文 §三还配了双重限制 + 双向策略的示意图,§四之后讲的是系统提示词动态组装(0025 已讲过),值得对照通读。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0027):</strong> 截断只是减法的一层——历史侧的 Compaction 与分支摘要
+  反复依赖一个概念:<strong>Session Tree</strong>。为什么对话历史不是线性数组而是一棵树?
+  Compaction 该在什么时候触发、触发的判断依据是什么?下一课揭晓。
+</p>
+
+<footer>
+  Lesson 0026 · 第 8 章 上下文工程 ·
+  下一课:<a href="./0027-why-compact-and-when-to-trigger.html">0027 为什么要 Compact、何时触发 →</a> ·
+  上一课:<a href="./0025-system-prompt-assembly-and-pipeline.html">0025 系统提示词组装与流水线</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对,双重限制完全一样,差别只在 for 遍历方向和 push/unshift——read 用 head(开头 import 最密),bash 用 tail(末尾堆栈最有信号)。延伸:同一套算法两个方向复用,是很干净的设计。',
+               '✓ 对,只限行数会被超长单行(压缩 JS)3 行爆字节,只限字节会把大文件某行切一半——双限制先触者胜。延伸:2000 行是可读性上限,50KB 是体积硬上限。',
+               '✓ 对,这行字也会进 LLM 上下文——默认截断省 token,需要时 LLM 自己 read 完整内容,兼顾省钱和不丢信息。延伸:截断从不偷偷干,元信息全记在 TruncationResult 结构里。'];
+  var msgNo = ['回看 §三"两种策略"小节,两个函数除了从哪头开始收集,别的逻辑其实一模一样。',
+               '回看 §三"双重限制"小节列出的两个单一限制各自的失败模式,答案就藏在它们互补的地方。',
+               '回看 §三"截断后的提示"小节,想想这行字为什么特意说明"也会进 LLM 上下文"。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

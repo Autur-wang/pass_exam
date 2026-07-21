@@ -17,3 +17,18 @@ skills/book-to-skill/
 # 浏览器工具产物 / 临时截图
 .playwright-mcp/
 homepage-full.png
+
+# 敏感个人资料（简历/职业背景，不进仓库/远程）
+# 注意：个人情况与简历/ 下 15 个子目录（含 personal/）在 git 索引里都是悬空 gitlink
+# （160000 模式，无 .gitmodules），本身就不会被 `git add -A` 正常纳入——这条规则是防御性保留。
+个人情况与简历/personal/
+# 真正存放本地生成的敏感分析产物用这个目录（避免踩到上面的悬空 gitlink 路径）
+个人情况与简历/_本地专属-不进仓库/
+
+# Python 字节码
+__pycache__/
+*.pyc
+
+# 第三方克隆(带独立 .git,知识分支留本地;仅上游参考,不入库)
+面试/Agentic-RAG新手教程/
+面试/LightRAG知识图谱RAG/

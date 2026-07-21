@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0017 · 对齐与 RLHF 全流程</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第五部分 对齐与强化学习 · 第 0017 课</p>
+<h1>对齐与 RLHF 全流程</h1>
+<p class="lede">预训练 + SFT 之后,模型已经会说人话、能听懂指令,可它未必会说「<em>该</em>说的话」——回答可能有用但危险、诚实但冒犯,或者礼貌地一本正经胡编。<strong>RLHF(基于人类反馈的强化学习)</strong>做的事,就是把「人类更喜欢哪种回答」这件写不成规则的事压进一个奖励模型,再用强化学习把模型往那个方向推。这是 ChatGPT 之所以「好用」的关键工序,也是对齐岗面试的必考主线:面试官几乎一定会让你把三个阶段从头讲一遍。</p>
+
+<div class="recall">
+<p>上一课(微调的坑)讲过:微调能让模型学会某种格式、语气、领域腔调,但它本质是<strong>行为克隆</strong>——把训练集里的回答尽量照着学「像」。<strong>先别往下看,想一个问题:如果我手上有两条回答,一条「有用但啰嗦」、一条「简洁但漏了关键点」,SFT 该把哪一条当作唯一标准答案喂进去?</strong>你会发现,「哪条更好」这件事,常常没法压成一条唯一的金标准。RLHF 正是从这个裂缝里长出来的。</p>
+</div>
+
+<h2>一、为什么要对齐:SFT 教「像」,对齐教「好」</h2>
+<p>把训练分成两种目标最容易看清区别:</p>
+<ul>
+<li><strong>SFT 教「像」</strong>——给它一堆 (prompt, 人写回答),让它模仿人的说话方式。它学到的是「回答长这样」,是对<strong>形式</strong>与<strong>指令跟随</strong>的模仿。</li>
+<li><strong>对齐教「好」</strong>——让它在无数种「都说得通」的回答里,倾向于人类真正偏好的那一种。这里的「好」通常拆成三条,业界常写作 <strong>HHH</strong>:有用(helpful)、无害(harmless)、诚实(honest)。</li>
+</ul>
+<p>关键在于:「好」这个信号<strong>难以写成监督标签</strong>。你没法给每条回答标一个客观正确的答案,也难给每条回答打一个稳定的绝对分。但人类<strong>比较</strong>两条回答「哪个更好」却相对容易、相对一致。RLHF 的整套设计,都是围绕「把这种相对偏好用起来」展开的。</p>
+
+<h2>二、RLHF 三阶段:从模仿到偏好优化</h2>
+<p>经典 RLHF(以 InstructGPT 为代表)是三段流水线,每一阶段的产出是下一阶段的输入:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">预训练模型</div>
+  <div class="node">① SFT<br>指令微调</div>
+  <div class="node">② 训练奖励模型<br>RM(成对偏好)</div>
+  <div class="node">③ RL 优化策略<br>PPO + KL 惩罚</div>
+  <div class="node good">对齐后的模型</div>
+</div>
+<figcaption>SFT 给出起点;RM 把「人类偏好」压成一个可微的标量;RL 用这个标量当奖励把策略往高分推,同时用 KL 拴住参考模型。</figcaption>
+</figure>
+
+<h3>阶段 ①:SFT(监督微调)</h3>
+<p>用高质量的 (prompt, 人写回答) 教模型听懂指令、给出合理格式的回答。产出一个 <strong>SFT 模型</strong>,它是后两阶段的共同起点——既当策略的初始化,也当 RM 的骨干,还当 KL 惩罚里的参考模型 $\pi_{\text{ref}}$。</p>
+
+<h3>阶段 ②:训练奖励模型 RM</h3>
+<p>对同一个 prompt 采样多条回答,让人标注两两之间<strong>谁更好</strong>,得到成对偏好数据 $(x,\,y_w,\,y_l)$($y_w$ 是被选中的 chosen,$y_l$ 是被拒绝的 rejected)。用这些偏好训练一个打分模型 $r_\phi(x,y)$,把「人类偏好」变成一个可以求导的<strong>标量奖励</strong>。RM 的骨干通常就是 SFT 模型,把最后那层词表投影换成一个输出标量的头。</p>
+
+<h3>阶段 ③:RL 优化策略(PPO)</h3>
+<p>让策略 $\pi_\theta$(从 SFT 模型初始化)针对 prompt 现场生成回答,用 RM 给这条回答打分当奖励,再用 <strong>PPO</strong> 更新策略,让高分回答的概率上升。同时加一项 <strong>KL 惩罚</strong>,拴住策略别离参考模型 $\pi_{\text{ref}}$ 太远。这一阶段是 <strong>on-policy</strong> 的:被打分和被纠正的,是模型<em>自己此刻</em>采样出来的回答。</p>
+
+<table>
+<thead><tr><th></th><th>SFT</th><th>RLHF(阶段 ②③)</th></tr></thead>
+<tbody>
+<tr><td>信号来源</td><td>人写的标准答案</td><td>人对两条回答的相对偏好</td></tr>
+<tr><td>学到什么</td><td>模仿单条回答(「像」)</td><td>倾向人类偏好的方向(「好」)</td></tr>
+<tr><td>能否给负例</td><td>否,只能「照这条学」</td><td>能,分数高低都是反馈</td></tr>
+<tr><td>训练数据的分布</td><td>固定的人写语料</td><td>模型自己采样(on-policy)</td></tr>
+</tbody>
+</table>
+
+<h2>三、奖励模型 RM 到底怎么训</h2>
+<p>RM 吃一对回答,输出两个标量分数,训练目标是让<strong>优选回答的分数高于劣选</strong>。这套用成对比较拟合一个分数的做法,数学上就是经典的 Bradley-Terry 模型:</p>
+
+<dl class="keydef">
+<dt>奖励模型的成对偏好损失(Bradley-Terry)</dt>
+<dd>$$\mathcal{L}_{\text{RM}}(\phi)=-\,\mathbb{E}_{(x,\,y_w,\,y_l)\sim\mathcal{D}}\Big[\log\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big)\Big]$$</dd>
+<dd><em>$\sigma$ 是 sigmoid;$r_\phi(x,y_w)-r_\phi(x,y_l)$ 是优选与劣选的分差。$\sigma(\cdot)$ 把分差映射成「$y_w$ 胜过 $y_l$ 的概率」,最小化负对数似然就是把这个概率往 1 推。<strong>它只约束相对高低,不约束绝对分值。</strong></em></dd>
+</dl>
+
+<p>为什么用<strong>成对比较</strong>而不是让人直接打绝对分?让人判断「这条值 0.8 还是 0.7」既慢又难前后一致;判断「A 和 B 哪个更好」稳定得多、也更省力。源材料里 RM 数据被简写成 <code>Input,Reward</code> 的绝对分示意,那是便于理解的简化——工业界主流(如 InstructGPT)训练 RM 用的是成对偏好数据。面试里这一点常被追,别答错。</p>
+
+<h2>四、为什么用 RL,不直接 SFT?</h2>
+<p>这是本课最高频的追问。三条理由,层层递进:</p>
+<ol>
+<li><strong>偏好是相对的,没有唯一金标准。</strong>SFT 需要一条「标准答案」照着学,但很多任务里「更好」只能在两条回答之间比较,你写不出那条唯一最优——正是开头 recall 里那个「啰嗦 vs 漏关键点」的困境。</li>
+<li><strong>RL 能给负例信号。</strong>SFT 只会说「照这条学」,没法说「别像那条」;RM 给出连续分数,好和坏都能反馈,模型知道要<em>远离</em>什么。</li>
+<li><strong>需要在模型自己的分布上探索纠错(on-policy)。</strong>RL 阶段是对模型<em>当前</em>采样出来的回答打分再更新,它在自己真实会犯错的地方被纠正;SFT 只在固定的人写数据上模仿,覆盖不到模型自己真实的输出分布。</li>
+</ol>
+
+<p>阶段 ③ 要最大化的目标,一行写清:</p>
+$$\max_{\pi_\theta}\;\; \mathbb{E}_{x\sim\mathcal{D},\,y\sim\pi_\theta(\cdot\mid x)}\big[\,r_\phi(x,y)\,\big]\;-\;\beta\,\mathbb{E}_{x}\Big[\operatorname{KL}\big(\pi_\theta(\cdot\mid x)\,\|\,\pi_{\text{ref}}(\cdot\mid x)\big)\Big]$$
+<p class="formula-note">前一项:让 RM 打分越高越好。后一项(KL 惩罚,系数 $\beta$):拴住策略别离参考模型 $\pi_{\text{ref}}$ 太远,防止为了刷高分把语言能力练崩。PPO 只是求解这个目标的<strong>优化器</strong>——重要性采样比、截断 $\epsilon$、优势估计等机制留到下一课 0018 展开。</p>
+
+<h2>五、RLHF 的软肋,与它催生的 DPO</h2>
+<p>RLHF 强,但代价不小,这些不足几乎每一条都能被面试官拿来往深里问:</p>
+<ul>
+<li><strong>奖励黑客(reward hacking)。</strong>RM 只是人类偏好的<em>近似</em>,不是真理。策略会钻 RM 的漏洞去刷高分——比如变得更长、更谄媚、堆套话——但人并不真喜欢。KL 惩罚能缓解,难根治。</li>
+<li><strong>标注贵。</strong>偏好数据要人一对一对地比较,慢且烧钱(源材料原话:人类反馈的代价高昂)。</li>
+<li><strong>训练不稳、工程复杂。</strong>PPO 阶段常要在显存里同时放策略、参考模型、奖励模型,还有价值网络,再叠加在线采样;超参敏感,错误的反馈会被放大(源材料:错误反馈的影响)。</li>
+</ul>
+<p>正是这些痛点催生了 <strong>DPO</strong>(第 0020 课):它跳过显式的 RM 训练和 RL 循环,直接拿成对偏好用一个分类式损失优化策略,把三段流水线压成一步。理解了 RLHF 为什么这么绕、绕在哪,才能听懂 DPO 到底省掉了什么。</p>
+
+<div class="implement">
+<p>奖励模型的成对损失,核心就几行(把上面 Bradley-Terry 公式直接翻译过来):</p>
+<pre><code>import torch.nn.functional as F
+
+# reward_model: 读入 (prompt, response) 输出一个标量分数
+# 骨干通常是 SFT 模型,把词表输出层换成 1 维的打分头
+def rm_loss(reward_model, prompt, chosen, rejected):
+    r_w = reward_model(prompt, chosen)     # 优选回答的分数,标量
+    r_l = reward_model(prompt, rejected)   # 劣选回答的分数,标量
+    # 最大化 σ(r_w - r_l)  ⇔  最小化下面的负对数似然
+    return -F.logsigmoid(r_w - r_l).mean()  # 只看分差,不看绝对值</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「把 RLHF 三阶段讲一遍,每步在干什么、产出什么?」——SFT 给起点 → RM 把偏好压成标量 → PPO 用 RM 当奖励优化策略并用 KL 拴住参考模型。</li>
+<li>「奖励模型怎么训?数据长什么样?」——SFT 模型换标量头,吃成对偏好 $(x, y_w, y_l)$,用 Bradley-Terry 损失让 chosen 的分高于 rejected。</li>
+<li>「为什么不直接 SFT 把好回答喂进去,非要上 RL?」——偏好是相对的没有唯一答案、需要负例信号、需要在模型自己的采样分布上探索纠错。</li>
+<li>「阶段 ③ 那个 KL 惩罚干嘛的?$\beta$ 调大调小会怎样?」——拴住策略别离参考太远;$\beta$ 大 → 更保守、更接近原模型但难提升,$\beta$ 小 → 更激进、更易奖励黑客甚至崩坏(源:$\beta$ 调大调小的影响)。</li>
+<li>「RLHF 有什么问题?你会怎么替代?」——奖励黑客 / 标注贵 / 训练不稳,顺势引出 DPO。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>RM 输出的是<strong>相对</strong>分数,绝对值本身没意义——同一 RM 的分只在同一 prompt 下比较才有意义,别把不同 prompt 的 RM 分直接比大小。</li>
+<li>别把 RM 数据说成「每条回答一个人打的绝对分」;主流是<strong>成对偏好比较</strong>(chosen / rejected)。</li>
+<li>参考模型 $\pi_{\text{ref}}$ 一般是 <strong>SFT 模型的冻结副本</strong>,不是预训练裸模型;KL 是相对它算的。</li>
+<li>「RLHF 就是 PPO」不准确:PPO 只是阶段 ③ 的优化器,RLHF 是整条三阶段流水线;阶段 ③ 也可换成别的 RL 算法(如 GRPO)。</li>
+<li>别说「RL 不需要人工标注」——偏好标注恰恰是 RLHF 里最贵的人力成本。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>RLHF 的第二阶段(训练奖励模型)用的是什么形式的数据?</p>
+<details><summary>A. 单条 (prompt, 唯一标准答案) 的监督对</summary>那是 SFT(阶段 ①)的数据形式,不是 RM。</details>
+<details><summary>B. 每条回答由人打一个绝对分数(如 0.8)</summary>这是便于理解的简化示意;主流做法是成对比较,因为人打绝对分既慢又不一致。</details>
+<details><summary>C. 成对偏好数据 (prompt, chosen, rejected),标注谁比谁好 ✅</summary>正确。RM 用 Bradley-Terry 损失让 chosen 的分高于 rejected,只约束相对高低。</details>
+<details><summary>D. 大量无标注的纯文本</summary>那是预训练用的数据,与偏好无关。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>为什么 RLHF 要绕道 RL,而不直接用 SFT 把「好回答」喂进去?</p>
+<details><summary>A. RL 训练更快、更省显存</summary>相反,PPO 阶段要同时放策略/参考/奖励/价值多个模型,更慢更吃显存。</details>
+<details><summary>B. 偏好是相对的、没有唯一最优答案;RL 能对模型自己采样的回答按相对好坏打分并探索,SFT 只能模仿单一参考答案 ✅</summary>正确。这三点(相对偏好、负例信号、on-policy 探索)正是要上 RL 的核心理由。</details>
+<details><summary>C. SFT 无法处理长文本,RL 才可以</summary>处理长文本靠上下文长度与架构,与 SFT/RL 的选择无关。</details>
+<details><summary>D. RL 完全不需要人工标注</summary>恰恰相反,偏好标注是 RLHF 最贵的人力成本。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Training language models to follow instructions with human feedback</strong>(Ouyang et al., 2022)——InstructGPT,经典三阶段 RLHF 的标准参考,SFT → RM → PPO 的流程与图都出自这里。</li>
+<li><strong>Learning to summarize from human feedback</strong>(Stiennon et al., 2020)——更早地把成对偏好 RM + PPO 跑通,读它能看清 RM 训练细节。</li>
+<li><strong>Deep reinforcement learning from human preferences</strong>(Christiano et al., 2017)——偏好驱动 RL 的源头,Bradley-Terry 式成对建模的出处之一。</li>
+<li><strong>Proximal Policy Optimization</strong>(Schulman et al., 2017)——阶段 ③ 用的 PPO 优化器,细节留到下一课 0018。</li>
+<li>下一步:强化学习基础与 PPO 机制(第 0018 课);跳过显式 RM/RL 循环的 DPO(第 0020 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>RLHF = SFT 起步 → 用成对偏好训一个打分的奖励模型 → 再用 RL(PPO)把策略往高分推、用 KL 拴住参考模型;SFT 教「像」,RLHF 教「好」。</strong></p>
+<nav class="lesson-nav">
+<a href="0016-finetune-pitfalls.html">← 上一课:微调的坑</a>
+<a href="0018-rl-basics.html">下一课:强化学习基础 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

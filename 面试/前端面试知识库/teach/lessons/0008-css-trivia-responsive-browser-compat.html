@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0008 · CSS 高频问答 III:响应式、视觉效果与浏览器兼容</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0008 课 · 3 HTML/CSS/浏览器高频问答 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>CSS 高频问答 III:响应式、视觉效果与浏览器兼容</h1>
+
+<p class="lede">这节课把 quiz 题库里另外 11 道高频问答题拆开揉碎重新拼装,回答三层问题:CSS 怎么让同一份代码在不同设备上"看起来对"(响应式、移动优先、媒体查询、Flexbox/Grid、自适应设计),怎么让视觉效果又清晰又不拖性能(Retina 图形、translate() 动画、CSS 精灵),以及浏览器之间的差异和能力落差该怎么兜底(样式修复、功能降级)。</p>
+
+<div class="recall">
+<p>上一课(CSS 高频问答 II)讨论的是"这行 CSS 到底该不该生效"——级联规则、选择器写法,以及怎么让代码本身更好维护。这一课往回退一步,不问"哪条规则赢",而是问一个更前置的问题:同一份 CSS,凭什么能在手机、平板、桌面,甚至打印机和屏幕阅读器上,都呈现出"对的"样子?先想想你自己现在的答案——响应式设计、移动优先、自适应设计,这三个词你能不能一句话说清楚它们分别在回答什么问题?</p>
+</div>
+
+<h2>一、响应式 vs 移动优先:两种写法,谁包含谁</h2>
+
+<p>这两个说法经常被并排摆出来,好像是要二选一的方案,但这里要先把误会挑破:<strong>它们并不互斥</strong>。让网站"响应式"是指某些元素会依据设备特征——通常是视口宽度——通过 CSS 媒体查询调整自己的尺寸或其他表现,比如在小屏幕上把字号缩小:</p>
+
+<div class="codecompare">
+<div class="side">
+<div class="label">写法 A · min-width 与 max-width 各管一段</div>
+<pre><code>@media (min-width: 768px) {
+  .my-class {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 767px) {
+  .my-class {
+    font-size: 12px;
+  }
+}</code></pre>
+</div>
+<div class="side good">
+<div class="label">写法 B(移动优先) · 默认给移动,只用 min-width 往上叠</div>
+<pre><code>.my-class {
+  font-size: 12px;
+}
+
+@media (min-width: 768px) {
+  .my-class {
+    font-size: 24px;
+  }
+}</code></pre>
+</div>
+</div>
+
+<p>移动优先策略同样具备响应性,区别在于默认值写给谁——它主张先为移动设备写好全部默认样式,后面只在需要适配更大设备时,才用媒体查询追加规则。这么写有两个直接的好处:</p>
+<ul>
+<li>移动端性能更好,因为默认应用的那部分规则,不需要先去验证任何媒体查询;</li>
+<li>移动优先写出来的页面更容易"放大"到大屏幕(顶多显得被拉伸,但依然可用),反过来把桌面设计往下压缩到手机屏幕,却很容易出问题。</li>
+</ul>
+
+<h2>二、@media 不只服务屏幕:四种类型,加一个断点驱动的例子</h2>
+
+<p>说到媒体查询,大多数人第一反应只有 <code>screen</code>。但 <code>@media</code> 一共有四种类型(包括 <code>screen</code>):</p>
+
+<table>
+<tr><th>类型</th><th>适用场景</th></tr>
+<tr><td><code>all</code></td><td>适用于所有媒体类型的设备</td></tr>
+<tr><td><code>screen</code></td><td>电脑屏幕、平板电脑、智能手机等</td></tr>
+<tr><td><code>print</code></td><td>打印机</td></tr>
+<tr><td><code>speech</code></td><td>"朗读"页面内容的屏幕阅读器</td></tr>
+</table>
+
+<p>比如 <code>print</code> 类型,一个常见用法是打印页面时把文字统一改成黑色:</p>
+<pre><code>@media print {
+  body {
+    color: black;
+  }
+}</code></pre>
+
+<p>媒体查询真正发力的地方,是驱动"同一份 HTML,在不同视口下切换成完全不同的布局",而不只是调字号。一个具体例子:把窄屏幕下堆叠展示的"药丸"导航(pill nav),在宽度收窄到某个断点以下时,整体切换成固定在屏幕底部的标签导航(bottom tab nav)——同一份导航数据,两套完全不同的排布方式。</p>
+
+<h2>三、Flexbox、Grid 与网格系统:一维、二维,外加一段历史</h2>
+
+<p>Flexbox 主要用于一维布局,解决的是"容器内垂直居中""粘性页脚"这类 CSS 里的经典难题——Bootstrap、Bulma 这些著名框架都基于它,它仍然是创建各种布局的、经过检验的方法。Grid 用于二维布局,让你能完全控制行和列,直接在 CSS 里搭出复杂的网格设计,通常比旧技术用更少代码换来更大灵活性;现在所有主流现代浏览器对 Grid 都有扎实支持,它已经是大多数项目里布局设计的可靠选择。</p>
+
+<p>选哪种网格系统这件事,本身也经历过一段技术更替:</p>
+
+<div class="pipeline">
+<div class="node"><span class="n-title">float 网格</span><span class="n-sub">2014 年前最可靠,Bootstrap 4 之前的默认做法</span></div>
+<div class="arrow">→</div>
+<div class="node good"><span class="n-title">flex 网格</span><span class="n-sub">如今的推荐做法,约 99.64% 浏览器支持</span></div>
+<div class="arrow">→</div>
+<div class="node"><span class="n-title">CSS Grid</span><span class="n-sub">二维布局,想尝新可以研究这个</span></div>
+</div>
+
+<p>在 flex 变得流行之前(大约 2014 年),基于 <code>float</code> 的网格系统是最可靠的选择,Bootstrap 一直用 <code>float</code> 方法,直到 Bootstrap 4 才切到基于 <code>flex</code> 的方法。如今 flex 是构建网格系统推荐的方法,支持率大约 <a href="https://caniuse.com/#search=flex">99.64%</a>;喜欢冒险的话,可以研究一下 <a href="https://css-tricks.com/snippets/css/complete-guide-grid/">CSS Grid Layout</a>——一个基于二维网格的布局系统,和一维的 Flexbox 是互补关系,不是取代关系。</p>
+
+<h2>四、响应式设计 vs 自适应设计:一个球变形,还是换几个球</h2>
+
+<p>这两者都想在不同设备上优化用户体验——针对不同的视口尺寸、分辨率、使用场景、控制方式做适配,但走的是两条不同的路。</p>
+
+<p>响应式设计基于灵活性原则:用一个流畅的网站去适配所有设备,靠媒体查询、弹性网格和响应式图片,让同一套体验根据各种因素自己调整、自己变形。比喻很形象——像一个球会变大变小,去适配几个不同大小的圆环。</p>
+
+<p>自适应设计更接近"渐进增强"的现代定义:它不是一套灵活布局,而是先检测设备和其他特征,再从一组预先定义好的视口尺寸和特征里,挑一套对应的功能和布局提供给用户——网站检测到你用的设备类型,直接给出为这个设备预设好的布局。同一个比喻反过来说:不是让一个球穿过几个不同大小的圆环,而是按圆环的大小,分别准备几个不同的球。</p>
+
+<p>两条路都有各自要权衡的地方:</p>
+<ul>
+<li>响应式设计的挑战在于,本质上要用一套(尽管灵活)布局去应付所有情况——断点怎么定就是个典型难题:用标准化的断点值,还是用对自己布局有意义的断点?如果布局本身以后要改,断点是不是也要跟着改?</li>
+<li>自适应设计通常需要用户代理(UA)嗅探或 DPI 检测之类的手段,而这些手段本身都可能被证明是不可靠的。</li>
+</ul>
+
+<h2>五、视觉效果三题:Retina 图形、translate() 对绝对定位、CSS 精灵</h2>
+
+<div class="trio">
+  <div class="cell"><span class="role">效果一</span><span class="head">Retina 图形</span><span class="sub">按分辨率喂图,不是无脑上高清</span></div>
+  <div class="cell"><span class="role">效果二</span><span class="head">translate() 对绝对定位</span><span class="sub">回流还是合成,决定动画流不流畅</span></div>
+  <div class="cell"><span class="role">效果三</span><span class="head">CSS 精灵</span><span class="sub">多张图拼一张,省请求、防闪烁</span></div>
+</div>
+
+<h3>Retina 图形</h3>
+<p><em>Retina</em> 本身只是个营销术语,指像素比大于 1 的高分辨率屏幕。这类屏幕的原理,是用更密的物理像素去模拟一块低分辨率屏幕,让同样尺寸的元素显示得更清晰——如今几乎所有移动设备都被默认当成 retina 屏。</p>
+<p>浏览器默认会依据设备分辨率渲染大多数 DOM 元素,但图片是个例外。要让图片在高分屏上清晰,又不至于因为"无脑上最高分辨率"拖累性能(更大的图意味着更多要传输的字节),标准做法是用 HTML5 的响应式图片:给浏览器提供同一张图的多个分辨率版本,让它自己用 <code>srcset</code>(配合可选的 <code>sizes</code>)去选最合适的一张:</p>
+<pre><code>&lt;div responsive-background-image&gt;
+  &lt;img
+    src="/images/test-1600.jpg"
+    sizes="
+      (min-width: 768px) 50vw,
+      (min-width: 1024px) 66vw,
+      100vw"
+    srcset="
+      /images/test-400.jpg   400w,
+      /images/test-800.jpg   800w,
+      /images/test-1200.jpg 1200w
+    " /&gt;
+&lt;/div&gt;</code></pre>
+<p>不支持 <code>srcset</code> 的浏览器(比如 IE11)会直接忽略它、退回用 <code>src</code>;如果确实需要兼容 IE11,又想要这部分性能收益,可以接入 <a href="https://scottjehl.github.io/picturefill/">Picturefill</a> 这个 JS polyfill。图标能用 SVG 就尽量用 SVG,因为它不论分辨率多高都能渲染得清晰。</p>
+
+<h3>translate() 对绝对定位</h3>
+<p><code>translate()</code> 是 CSS <code>transform</code> 属性的一个可取值。用 <code>translate()</code> 移动元素时,它依然占据原来的空间,效果有点像 <code>position: relative</code>;但改变绝对定位时,元素会被从文档流里挪走,周围元素的位置都要重新计算——相当于重新布局一次。</p>
+<p>性能上的关键区别在这里:改 <code>transform</code> 或 <code>opacity</code> 不会触发浏览器的回流或重绘,只会触发合成,并且浏览器会为这个元素单独开一个 GPU 层;改绝对定位属性走的是 CPU,而且会触发回流。这就是为什么做动画时 <code>translate()</code> 往往更高效、绘制耗时更短,动画看起来更流畅。</p>
+
+<h3>CSS 精灵</h3>
+<p>CSS 精灵(sprites)把多张图片拼成一张更大的图,再配合 <code>background-image</code>、<code>background-position</code>、<code>background-size</code> 三个属性,从这张大图里截出需要的那一块,当作某个元素的图片——Gmail 曾经给所有图标都用过这一套。它带来两个实打实的好处:把原本要发的多个图片请求合并成一个(不过 HTTP/2 之后,这个优点的分量已经下降);以及可以把"只在 <code>:hover</code> 时才出现"的图片提前下载好,用户第一次悬停时就不会看到闪烁。</p>
+<p>实现分三步:用精灵图生成器把多张图打包成一张,顺带生成对应的 CSS;每张小图对应一个 CSS class,里面写好 <code>background-image</code> 和 <code>background-position</code>;要用哪张图,就把对应的 class 加到元素上。</p>
+<pre><code>.icon {
+  background-image: url('https://example.com/images/spritesheet.png');
+  width: 24px;
+  height: 24px;
+}
+
+.icon-cart {
+  background-position: 0 0;
+}
+
+.icon-arrow {
+  background-position: -24px 0;
+}</code></pre>
+<p>更完整的写法可以参考 <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Images/Implementing_image_sprites_in_CSS">MDN 的图像精灵实现指南</a>。</p>
+
+<h2>六、浏览器不统一怎么办:样式差异修复与功能受限降级</h2>
+
+<p>先说样式差异本身怎么修——定位到问题和"闹事"的浏览器之后:</p>
+<ul>
+<li>用只在特定浏览器加载的单独样式表;但这个做法需要服务器端渲染才能判断该给哪个浏览器发哪份样式表;</li>
+<li>用 Bootstrap 这类已经替你处理好这些差异的库;</li>
+<li>用 <code>autoprefixer</code> 自动给代码补上厂商前缀;</li>
+<li>用 Reset CSS 或 Normalize.css,抹平浏览器默认样式的差异;</li>
+<li>项目里如果用了 PostCSS(或类似的 CSS 转译工具),可能有插件能让你直接写现代 CSS 语法,甚至是还在提案阶段的 W3C 草案,再由它转换成目标浏览器能跑的等价旧写法。</li>
+</ul>
+
+<p>再说功能受限的浏览器——这里是两套思路加几件配套工具:</p>
+<ul>
+<li><strong>优雅降级</strong>:先给现代浏览器把功能做全,同时保证它在旧浏览器里也能用;</li>
+<li><strong>渐进增强</strong>:先保证一份基础可用的体验,浏览器支持更多能力时再往上叠加增强;</li>
+<li>用 <a href="https://caniuse.com/">caniuse.com</a> 查某个特性到底有没有被目标浏览器支持;</li>
+<li><code>autoprefixer</code> 自动插入厂商前缀;</li>
+<li>用 <a href="https://modernizr.com/">Modernizr</a> 做特性检测;</li>
+<li>用 CSS 的 <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/@supports">@supports</a> 做"功能查询",在 CSS 里直接判断某个属性或值有没有被支持。</li>
+</ul>
+
+<h2>七、关键定义</h2>
+
+<dl class="keydef">
+<dt>移动优先(Mobile-first)</dt>
+<dd>先为移动设备写好全部默认样式,只在需要适配更大设备时才用 <code>min-width</code> 媒体查询往上叠加规则的响应式实现顺序。<em>避免</em>把"移动优先"和"响应式设计"当成两个二选一的方案——移动优先是响应式的一种写法顺序,两者并不互斥。</dd>
+<dt>自适应设计(Adaptive Design)</dt>
+<dd>不用一套灵活布局适配所有设备,而是先检测设备与其他特征,再从一组预先定义好的视口尺寸里挑一套对应的布局提供给用户,像是按圆环大小换用不同的球,而不是让同一个球变形。<em>避免</em>把它和"响应式设计"混为一谈:响应式靠媒体查询和弹性网格让同一套布局自己变形,自适应靠设备检测去分发不同的预设布局。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>实际项目里,默认动作应该是:CSS 从移动端基线开始写,用 <code>min-width</code> 逐步向上叠加,断点按设计稿实际"裂开"的地方定,不套抄别人的标准断点;图片默认走 <code>srcset</code> + <code>sizes</code> 这条路,只有确实要兼顾 IE11 才额外接入 Picturefill;做位移动画,优先改 <code>transform: translate()</code> 而不是 <code>top</code>/<code>left</code> 或绝对定位坐标;遇到某个特性只有部分浏览器支持,先查一眼 caniuse.com 再决定要不要上 polyfill 或用 <code>@supports</code> 兜底。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:</strong>把"我们支持移动优先"和"我们的设计是响应式的"当成同一句话,甚至把移动优先、响应式、自适应三个词交替乱用。移动优先说的是"默认样式给谁写、往哪个方向叠加规则"这个顺序问题;响应式与自适应说的是"用一套弹性布局,还是用几套预设布局"这个架构问题。一个网站可以是移动优先地实现出来的自适应设计,也可以是桌面优先写出来的响应式设计——两组概念分别在两个维度上做选择,不是同一件事的三种说法。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>打开你手头正在维护的一个页面,做两件事——翻一下它的动画/过渡代码,看有没有本可以用 <code>transform: translate()</code> 却写成了改 <code>top</code>/<code>left</code> 或绝对定位坐标的地方;再翻一下它的 <code>&lt;img&gt;</code> 标签,看有没有关键图片只写了一个 <code>src</code>、完全没有 <code>srcset</code>。两件事各花 5 分钟,就能立刻定位出可以优化的具体位置。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>这节课的 11 道题拆开看是零散的 trivia,拼起来其实是同一件事的三层——移动优先决定默认样式写给谁,响应式/自适应决定用一套布局还是几套布局,translate()/精灵图/srcset 决定视觉效果怎么又清晰又不拖性能。三层选择互相独立,可以按需要单独决定,不必绑成一套"标准答案"。</p>
+</div>
+
+<h2>八、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于"响应式设计"和"移动优先策略"的关系,下面哪个说法最准确? (A) 移动优先策略不具备响应式能力,它和响应式是两种互斥的技术选择 (B) 移动优先是响应式设计的一种实现顺序——先为移动设备写默认样式,再用 min-width 媒体查询逐步为更大设备追加样式,两者不互斥 (C) 移动优先只对手机设备有效,如果用户使用平板或桌面浏览器打开页面,布局会完全无法使用</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。移动优先本身仍然是响应式的,区别只在于默认样式写给谁、往哪个方向叠加媒体查询规则。(A) 与此直接相反——两者并不互斥;(C) 也不成立,移动优先写出来的页面放大到平板或桌面依然可用,顶多显得被拉伸,这正是移动优先相对于反过来做(桌面往下压缩到手机)的优势所在。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:做位移动画时,为什么很多人建议优先用 translate() 而不是改绝对定位坐标? (A) 改绝对定位属性会触发浏览器重新计算周围元素位置的回流,而改 transform/translate() 只触发合成、可以用 GPU 加速,因此动画更流畅 (B) translate() 会把元素从文档流中移除,而绝对定位不会,所以 translate() 更适合做动画 (C) translate() 和绝对定位在性能上没有本质差别,选哪个纯粹是代码风格偏好</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。改 transform 或 opacity 只触发合成、走 GPU;改绝对定位属性会触发回流、走 CPU,所以前者绘制耗时更短、动画更流畅。(B) 说反了——用 translate() 的元素依然占据原来的空间(有点像 position: relative),真正会被从文档流中移除的是绝对定位;(C) 忽略了两者在回流/合成、CPU/GPU 上的实际性能差异,不是单纯的风格问题。</p>
+</div>
+</details>
+</div>
+
+<h2>九、主推资源</h2>
+
+<p>下面几条链接分别对应本节里 Grid 布局、Flex 兼容性、CSS 精灵实现、功能查询语法这几个具体知识点,建议在动手写代码时再逐条查阅:</p>
+<ul>
+<li><a href="https://css-tricks.com/snippets/css/complete-guide-grid/">CSS Grid 完整指南 · CSS-Tricks</a> —— 想尝试二维网格布局时的系统性参考。</li>
+<li><a href="https://caniuse.com/#search=flex">Flex 布局兼容性数据 · caniuse</a> —— 判断某个 flex 特性能不能放心用的第一手数据。</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Images/Implementing_image_sprites_in_CSS">在 CSS 中实现图像精灵 · MDN</a> —— CSS 精灵的官方实现细节。</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/@supports">@supports · MDN</a> —— 在 CSS 里直接做功能查询的语法说明。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"响应式"和"自适应"到底差在哪,也可以让老师带你现场把某个页面的 <code>top</code>/<code>left</code> 动画改写成 <code>translate()</code> 试试效果。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0007-css-trivia-cascade-selectors.html"><span class="dir">← 上一课</span>CSS 高频问答 II:级联、选择器与代码质量</a>
+  <a class="next" href="0009-html-trivia-structure-images-i18n.html"><span class="dir">下一课 →</span>HTML 高频问答:文档结构、图片与多语言</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

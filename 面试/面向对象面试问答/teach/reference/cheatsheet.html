@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OOP 面试速查表</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  main { max-width: 60rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: .8em 1em; background: var(--code-bg); break-inside: avoid; }
+  .card h3 { margin: 0 0 .4em; font-size: .98rem; border-bottom: 2px solid var(--accent); padding-bottom: .25em; }
+  .card ul { margin: .3em 0 0; padding-left: 1.1em; font-size: .86rem; }
+  .card li { margin: .2em 0; }
+  .card table { font-size: .8rem; margin: .3em 0 0; }
+  .card code { font-size: .82em; }
+  .tag { display: inline-block; font-family: "PingFang SC", sans-serif; font-size: .7rem; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 .4em; }
+  @media (max-width: 40rem) { .grid { grid-template-columns: 1fr; } }
+  @media print { .grid { grid-template-columns: 1fr 1fr; } body { font-size: 9.5pt; } }
+</style>
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 打印速查表 · 一页带走全课</p>
+<h1>面向对象(OOP)面试速查表</h1>
+<p class="lede">26 节的压缩精华,Python 为主。面试前十分钟扫一遍;每块对应课程一节,想深挖回去看对应微课。</p>
+
+<div class="grid">
+
+<div class="card">
+<h3>四大支柱 <span class="tag">0001–0005</span></h3>
+<ul>
+<li><strong>封装</strong>:捆绑 + 信息隐藏 + 受控访问(藏 how)。</li>
+<li><strong>继承</strong>:is-a,子类得父类属性/行为;别为复用而继承。</li>
+<li><strong>多态</strong>:共享接口统一对待;重写=运行时、重载=编译期。</li>
+<li><strong>抽象</strong>:只给必要的(what);抽象类可有实现,接口是纯契约。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>封装:Python 私有真相 <span class="tag">0002</span></h3>
+<ul>
+<li><code>_x</code> = 君子协定;<code>__x</code> = name mangling(改写为 <code>_Cls__x</code>),<strong>不是</strong>安全墙。</li>
+<li><code>obj._Cls__x</code> 照样能访问 → Python 无真 private。</li>
+<li>受控访问用 <code>@property</code>,别堆空 getter/setter。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>继承类型 <span class="tag">0003</span></h3>
+<ul>
+<li>单 / 多 / 多层 / 层次 / 混合继承。</li>
+<li>Python 用 <code>super().__init__()</code> 调父类;<code>self</code> = 别家的 <code>this</code>。</li>
+<li>坑:脆弱基类、强耦合 → 引出"组合优于继承"。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>多态:重写 vs 重载 <span class="tag">0004 / 0020</span></h3>
+<table>
+<tr><th></th><th>重写 override</th><th>重载 overload</th></tr>
+<tr><td>时机</td><td>运行时</td><td>编译期</td></tr>
+<tr><td>如何</td><td>子类换实现</td><td>同名不同签名</td></tr>
+<tr><td>Python</td><td>随处可见</td><td><strong>不支持</strong></td></tr>
+</table>
+<ul><li>Python 替代重载:默认参数 / <code>*args</code> / <code>singledispatch</code>;运算符重载靠 dunder(<code>__add__</code>)。</li></ul>
+</div>
+
+<div class="card">
+<h3>抽象类 vs 接口 <span class="tag">0005 / 0021</span></h3>
+<ul>
+<li><strong>抽象类</strong>:可含默认实现 + 抽象方法;共享实现时用。</li>
+<li><strong>接口</strong>:纯契约、无实现;多个不相关类遵守同一约定时用。</li>
+<li>Python 无 <code>interface</code>:用 <code>abc.ABC</code>(名义、要继承)/ <code>Protocol</code>(结构、不用继承)/ 鸭子类型。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>类的机制 <span class="tag">0006–0009</span></h3>
+<ul>
+<li><code>is</code> 比身份、<code>==</code> 比值(<code>__eq__</code>);判 None 用 <code>is</code>。</li>
+<li>构造:<code>__new__</code> 造、<code>__init__</code> 初始化;无构造重载 → <code>@classmethod</code> 命名构造器。</li>
+<li>清理别靠 <code>__del__</code>(时机不定)→ 用 <code>with</code> / context manager;C++ 靠 RAII。</li>
+<li><code>@staticmethod</code>(无 self/cls)/ <code>@classmethod</code>(cls)/ 实例方法(self);可变类变量会被所有实例共享。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>关系:is-a / has-a <span class="tag">0010–0011</span></h3>
+<ul>
+<li><strong>继承</strong> is-a · <strong>组合</strong> has-a(部分不可独立)· <strong>聚合</strong> has-a(部分可独立)· <strong>mixin</strong> can-do。</li>
+<li>组合 vs 聚合分水岭:<strong>部分能否脱离整体存在</strong>。</li>
+<li>UML:关联实线 / 聚合空心菱形 / 组合实心菱形 / 继承空心三角。</li>
+<li><strong>组合优于继承</strong>:除非明确 is-a。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>内聚 & 耦合 <span class="tag">0012</span></h3>
+<ul>
+<li>口号:<strong>高内聚 + 低耦合</strong>(两个正交维度)。</li>
+<li>内聚(弱→强):偶然/逻辑/时间/过程/通信/顺序/<strong>功能</strong>。</li>
+<li>耦合(强→弱):内容/公共/控制/外部/印记/<strong>消息</strong>。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>SOLID <span class="tag">0013–0015</span></h3>
+<ul>
+<li><strong>S</strong>RP:一个类一个变化的理由。</li>
+<li><strong>O</strong>CP:对扩展开放、对修改关闭(多态代替 if-type)。</li>
+<li><strong>L</strong>SP:子类能替父类而不破坏正确性(反例:正方形 is-a 矩形)。</li>
+<li><strong>I</strong>SP:别逼类依赖用不到的方法(拆胖接口)。</li>
+<li><strong>D</strong>IP:都依赖抽象;DI = 从外部注入依赖(手段,非等于 DIP)。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>设计模式(GoF 三类)<span class="tag">0016–0018</span></h3>
+<ul>
+<li><strong>创建型</strong>:单例(Python 模块即单例)/ 工厂 / 建造者。</li>
+<li><strong>结构型</strong>:适配器(改接口)/ 装饰器(加职责)/ 代理(控访问)。</li>
+<li><strong>行为型</strong>:策略(换算法,Python 传函数即可)/ 观察者(一对多通知)/ 模板方法(骨架在父类)。</li>
+<li>⚠ Python <code>@decorator</code> 语法 ≠ GoF 装饰器模式。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>多重继承 & MRO <span class="tag">0019</span></h3>
+<ul>
+<li>diamond:D(B,C),B/C 继承 A。</li>
+<li>MRO(C3 线性化)定查找顺序,看 <code>Cls.__mro__</code>。</li>
+<li><code>super()</code> = MRO 里<strong>下一个</strong>,不是"父类";全用 super 时 A 只初始化一次。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>相等、哈希、可变性 <span class="tag">0022–0023</span></h3>
+<ul>
+<li>重写 <code>__eq__</code> 必配 <code>__hash__</code>,否则对象 unhashable。</li>
+<li>契约:<code>a==b ⟹ hash(a)==hash(b)</code>;可哈希对象应不可变。</li>
+<li>传参 = 传对象引用;函数内改可变对象影响外部、重绑定不影响。</li>
+<li>⚠ 可变默认参数 <code>def f(x, acc=[])</code> → 用 <code>acc=None</code>。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>Pythonic 建类 <span class="tag">0024</span></h3>
+<ul>
+<li><code>@dataclass</code> 省样板;可变默认用 <code>field(default_factory=list)</code>;<code>frozen=True</code> → 不可变 + 可哈希。</li>
+<li><code>namedtuple</code> 轻量只读记录;<code>__slots__</code> 省内存/禁动态属性;<code>Enum</code> 具名常量。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>范式对比 <span class="tag">0025</span></h3>
+<ul>
+<li>过程式:函数作用于(常全局的)数据,无继承/多态。</li>
+<li>OOP:数据 + 行为捆进对象,封装 / 继承 / 多态。</li>
+<li>FP:不可变 + 纯函数 + 高阶函数。</li>
+<li>范式是工具,无绝对高下;Python 多范式务实混用。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>答题四步 + 白板法 <span class="tag">0026</span></h3>
+<ul>
+<li>答概念题:定义 → 为什么 → 最小代码 → 取舍/易错,再自抛追问。</li>
+<li>白板设计:澄清需求 → 找名词(类)/动词(方法) → 定关系(is-a/has-a) → 选模式 → 说取舍。</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>跨语言私有/机制对照</h3>
+<table>
+<tr><th></th><th>Python</th><th>Java</th><th>C++</th></tr>
+<tr><td>私有</td><td>约定 <code>_</code>/<code>__</code></td><td><code>private</code> 强制</td><td><code>private</code> 强制</td></tr>
+<tr><td>多继承</td><td>是(MRO)</td><td>否(接口)</td><td>是(virtual)</td></tr>
+<tr><td>方法重载</td><td>否</td><td>是</td><td>是</td></tr>
+<tr><td>动态分派</td><td>永远</td><td>默认</td><td>需 <code>virtual</code></td></tr>
+<tr><td>析构</td><td>GC + <code>with</code></td><td>GC</td><td>RAII 确定性</td></tr>
+</table>
+</div>
+
+</div>
+
+<p class="meta" style="margin-top:2rem;">全课门户见 <a href="../index.html">index.html</a> · 术语见 <a href="../GLOSSARY.md">GLOSSARY.md</a> · 有疑问随时问老师。</p>
+
+</main>
+</body>
+</html>

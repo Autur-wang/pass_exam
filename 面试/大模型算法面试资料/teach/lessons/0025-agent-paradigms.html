@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0025 · Agent 范式与工具调用</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第 7 部分 Agent 智能体 · 第 0025 课</p>
+<h1>Agent 范式与工具调用</h1>
+<p class="lede">一个只会「续写下一个 token」的语言模型,凭什么能帮你查天气、跑代码、订机票?答案是把它放进一个<strong>闭环</strong>里:让它自己决定「该做什么」,再把外部世界的真实结果喂回去,循环往复。这节课拆开 Agent 的四个部件、三种主流范式(ReAct / Plan-and-Execute / Reflexion),再落到面试最爱追的两点:范式怎么选、Function Calling 怎么保证可靠。</p>
+
+<div class="recall">
+<p>前面几课我们聊的都是「模型本身」——注意力、微调、幻觉。<strong>先别往下看,想一个问题:一个纯语言模型面对「今天北京会下雨吗」这种问题,它的知识有截止日期、又不能联网,它凭什么答对?如果答不对,缺的到底是「更强的模型」还是别的东西?</strong></p>
+</div>
+
+<h2>一、直觉:Agent = 大脑 + 规划 + 工具 + 记忆</h2>
+<p>把 LLM 想成一个非常聪明、但被关在小黑屋里的大脑:它读过海量文本(知识),推理能力很强,但它<strong>看不见现在的世界,也动不了手</strong>。它的知识停在训练截止日,它没法执行任何真实动作。</p>
+<p>Agent 做的事,就是给这个大脑装上手脚和记事本,让它形成一个和外部世界交互的<strong>闭环</strong>。四个部件缺一不可:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">🧠 大脑<br>LLM 推理</div>
+  <div class="node">🗺 规划<br>拆解 / 决定下一步</div>
+  <div class="node">🔧 工具<br>搜索 / 代码 / API</div>
+  <div class="node good">📒 记忆<br>短期 + 长期</div>
+</div>
+<figcaption>四件套构成闭环:大脑想 → 规划下一步 → 调工具动手 → 结果写进记忆 → 再想。核心是「LLM 用来<strong>选择要执行的一系列操作</strong>」,而不是一次性把答案吐出来。</figcaption>
+</figure>
+
+<ul>
+<li><strong>大脑(LLM)</strong>:负责推理与决策——「现在该干嘛」。</li>
+<li><strong>规划(Planning)</strong>:把大目标拆成可执行的小步骤,并根据反馈调整。</li>
+<li><strong>工具(Tools)</strong>:突破模型自身边界的手脚——联网搜索、执行代码、查数据库、调外部 API。</li>
+<li><strong>记忆(Memory)</strong>:短期记当前会话(滑动窗口 / 摘要缓存),长期沉淀用户画像与历史(常放向量数据库)。记忆这一块下一课细讲。</li>
+</ul>
+<p>关键在于:<strong>没有工具和记忆,LLM 只是个问答机器人;有了闭环,它才成为能「办事」的 Agent。</strong>面试里如果你只说「Agent 就是 LLM 加提示词」,基本就露怯了。</p>
+
+<h2>二、三种主流范式:它们解决的是不同的痛点</h2>
+<p>为什么会有好几种范式?因为「让 LLM 自己一步步办事」会遇到三类典型毛病,每种范式各治一种:</p>
+
+<h3>1. ReAct(Reasoning + Acting):边想边做</h3>
+<p>最经典、最基础的单 Agent 范式,模仿人类「想一步、做一步、看一眼结果、再想」。它的循环是:</p>
+$$\text{Thought} \rightarrow \text{Action} \rightarrow \text{Observation} \rightarrow \text{Thought} \rightarrow \cdots$$
+<p class="formula-note">Thought=模型的推理文字;Action=选一个工具并给出参数;Observation=工具返回的真实结果,再喂回模型。</p>
+<p><strong>为什么这样设计?</strong>因为很多任务「下一步做什么」高度依赖「上一步返回了什么」——你不查天气,就不知道要不要提醒带伞。把推理(Thought)显式写出来,还能让模型「大声思考」,决策更靠谱、也更好调试。</p>
+<ul>
+<li><strong>适合</strong>:简单工具调用、动态环境(查实时新闻并总结、多跳问答)。</li>
+<li><strong>短板</strong>:容易陷入死循环(反复调同一个工具),长任务里容易「走丢」——做着做着忘了最终目标。</li>
+</ul>
+
+<h3>2. Plan-and-Execute:先规划,后执行</h3>
+<p>ReAct 是「走一步看一步」,容易在长流程里迷路。Plan-and-Execute 把<strong>规划和执行解耦</strong>:先让一个 Planner 一次性生成完整任务清单,再由 Executor 逐条执行,必要时 Re-planner 根据结果修正计划。</p>
+$$\text{Planner(生成 Plan)} \rightarrow \text{Executor(逐步执行)} \rightarrow \text{Re-planner(按结果改计划)}$$
+<p><strong>为什么这样设计?</strong>因为有了「全局计划」这个锚,Agent 始终知道自己在整个任务里的位置,目标感强、不易走丢;部分独立步骤还能并行,效率更高。典型任务:「调研 A 行业 → 写报告 → 发邮件给老板」这种长链路。</p>
+<ul>
+<li><strong>适合</strong>:长流程、多步骤、需要稳定性的任务(一步报错不至于全盘崩)。</li>
+<li><strong>短板</strong>:极度依赖 Planner 的质量——初始计划错了、又没有重规划机制,结果会很糟。</li>
+</ul>
+
+<h3>3. Reflexion / 自我修正:先出草稿,再自我批判</h3>
+<p>前两种都在「怎么做」上下功夫,Reflexion 解决的是「做得对不对」。它不直接交终稿,而是<strong>生成 → 自我批判(或让审查 Agent 打分) → 修订</strong>,迭代到达标为止。</p>
+$$\text{Generate} \rightarrow \text{Critique} \rightarrow \text{Revise} \rightarrow \cdots$$
+<p><strong>为什么这样设计?</strong>因为让模型「回头检查自己」往往能发现一遍生成时忽略的错误,从而提升输出质量、减少幻觉。最典型的是代码生成:生成代码 → 跑单元测试 → 拿报错信息自动修——这里的「批判者」是<strong>真实的测试结果</strong>,而不是模型的自我感觉,反思才最可靠。</p>
+<ul>
+<li><strong>适合</strong>:代码生成(有测试可验证)、高质量文案打磨、需要严谨性的推理。</li>
+<li><strong>短板</strong>:多轮迭代消耗 Token 多、延迟高;若「批判」只靠模型自评而无外部信号,可能自我欺骗、越改越差。</li>
+</ul>
+
+<figure class="diagram">
+<div class="trio">
+  <div class="cell"><strong>ReAct</strong><br>想一步做一步<br><em>动态、短任务</em></div>
+  <div class="cell"><strong>Plan-Execute</strong><br>先出计划再执行<br><em>长流程、要稳</em></div>
+  <div class="cell"><strong>Reflexion</strong><br>出稿再自我修正<br><em>要高质量、可验证</em></div>
+</div>
+<figcaption>三种范式不是替代关系,常常组合:比如 Plan-and-Execute 的每个子步骤内部跑 ReAct,收尾再加一轮 Reflexion 校验。</figcaption>
+</figure>
+
+<h2>三、Function Calling / Tool Use:模型怎么「动手」</h2>
+<p>范式解决「什么时候调工具」,Function Calling 解决「怎么把调用表达清楚」。这是 Agent 落地最关键、也最容易在面试被追细节的一环。</p>
+<p>核心机制:你事先把每个工具的<strong>结构化 schema</strong>(名字、功能描述、参数及类型)告诉模型;模型不直接执行,而是输出一段结构化数据(通常是 JSON),说明「我要调 <code>get_weather</code>,参数 <code>city="北京"</code>」;由你的程序去真正执行,再把结果喂回模型。</p>
+
+<dl class="keydef">
+<dt>Function Calling(工具调用)</dt>
+<dd>模型根据用户意图,从给定工具集里<strong>选择一个(或多个)函数并生成合法参数</strong>,输出为结构化调用,而非自然语言。执行由外部程序完成,结果回填后模型继续推理。</dd>
+<dt>Tool Schema</dt>
+<dd>对工具的机器可读描述:<code>name</code>(函数名)+ <code>description</code>(什么时候该用它,是模型选工具的<strong>唯一依据</strong>)+ <code>parameters</code>(参数名、类型、是否必填,常用 JSON Schema 表达)。</dd>
+<dt>多意图识别</dt>
+<dd>一句话里可能藏多个需求(「订明天去上海的高铁,再帮我查那边天气」),模型需拆成对多个工具、或同一工具多次的调用,而不是漏掉一半。</dd>
+</dl>
+
+<p><strong>schema 设计为什么重要?</strong>模型选不选得对某个工具,几乎全靠 <code>description</code> 写得清不清楚。源材料里那个检索器工具的描述就是范例——不只说「搜索 LangSmith 信息」,还加了一句强指令「任何关于 LangSmith 的问题,你<em>必须</em>用这个工具」,把触发边界钉死。描述含糊,模型就会该调时不调、或乱调。</p>
+
+<div class="implement">
+<p>用 LangChain 把「搜索 + 检索」两个工具交给模型自己选,核心就几步(源自本课源材料,已精简):</p>
+<pre><code>from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain.tools.retriever import create_retriever_tool
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_openai_functions_agent, AgentExecutor
+from langchain import hub
+
+# 1) 准备工具,description 决定模型会不会/何时选它
+search = TavilySearchResults()                       # 联网搜索
+retriever_tool = create_retriever_tool(
+    retriever, "langsmith_search",
+    "Search for information about LangSmith. "
+    "For any questions about LangSmith, you must use this tool!")  # 触发边界写死
+tools = [search, retriever_tool]
+
+# 2) 大脑:temperature=0 让工具选择更确定、少发散
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+prompt = hub.pull("hwchase17/openai-functions-agent")
+
+# 3) 组装成会自己选工具的 Agent;verbose=True 打印每步 Thought/Action
+agent = create_openai_functions_agent(llm, tools, prompt)
+executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+executor.invoke({"input": "LangSmith 是用来做什么的?"})   # 模型自动选 langsmith_search</code></pre>
+<p>注意:<code>AgentExecutor</code> 内部跑的就是 ReAct 那套「想→调工具→看结果→再想」的循环,只是把 Action 落到了 OpenAI 的 function calling 接口上。</p>
+</div>
+
+<h2>四、工作流 vs 自主 Agent:边界在哪</h2>
+<p>面试常有个「坑」问题:是不是什么都该上 Agent?不是。关键看<strong>控制流由谁决定</strong>:</p>
+<table>
+<thead><tr><th></th><th>工作流(Workflow)</th><th>自主 Agent</th></tr></thead>
+<tbody>
+<tr><td>路径</td><td>开发者预先编排好的固定流程</td><td>模型在运行时自己决定下一步</td></tr>
+<tr><td>LLM 角色</td><td>流程中某个节点(分类 / 抽取 / 改写)</td><td>掌舵者,决定调什么、调几次、何时停</td></tr>
+<tr><td>可预测性</td><td>高,好调试、成本可控</td><td>低,灵活但可能失控 / 死循环</td></tr>
+<tr><td>适用</td><td>步骤已知、要稳定的任务</td><td>路径高度依赖中间结果、无法预先枚举</td></tr>
+</tbody>
+</table>
+<p>工程上的务实原则:<strong>能用固定工作流解决的,就别上自主 Agent</strong>。自主性越高,越难预测、越难保证可靠。很多「Agent 项目」其实大半是精心编排的工作流,只在少数节点让模型自主发挥。</p>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「ReAct 和 Plan-and-Execute 的区别?」——ReAct 边想边做、决策贴着实时反馈,适合动态短任务;Plan-Execute 先出全局计划再执行,目标感强、适合长流程,但吃 Planner 质量。别只背定义,要说清各治什么痛点。</li>
+<li>「Function Calling 是怎么实现的?」——给模型 tool schema,模型输出结构化调用(不自己执行),程序执行后回填结果,模型继续。强调「模型只负责<em>选</em>和<em>填参</em>」。</li>
+<li>「怎么保证工具调用可靠?」——见下方易错点:严格 schema 校验、失败重试与降级、约束工具数量、加护栏防死循环。</li>
+<li>「Agent 由哪几部分组成?」——大脑 + 规划 + 工具 + 记忆的闭环,缺工具/记忆就退化成问答机器人。</li>
+<li>「什么场景该用 Reflexion?」——有<strong>可验证信号</strong>的场景最佳(代码跑测试);纯靠自评风险大。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li><strong>把范式说成互斥。</strong>实际常组合套用(Plan 里嵌 ReAct,收尾加 Reflexion),说「三选一」显得没落过地。</li>
+<li><strong>以为模型自己执行了函数。</strong>模型只输出「要调什么、参数是什么」,真正执行的是你的代码——这是安全与可靠的关键分界。</li>
+<li><strong>忽视工具描述。</strong>模型选错工具,九成是 <code>description</code> 没写清触发边界,而不是模型笨。</li>
+<li><strong>不做参数校验就执行。</strong>模型可能生成不合法参数(缺字段、类型错、幻觉出不存在的工具),执行前必须按 schema 校验、失败要能重试或降级。</li>
+<li><strong>不设死循环护栏。</strong>ReAct 可能反复调同一工具,要限制最大步数 / 检测重复动作。</li>
+<li><strong>什么都上自主 Agent。</strong>能用固定工作流稳定解决的,别为了「显得高级」引入不可控的自主性。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>关于 Function Calling,下面哪种说法是对的?</p>
+<details><summary>A. 模型直接执行函数并返回运行结果</summary>错。模型只输出「调哪个函数、参数是什么」的结构化数据,真正执行由外部程序完成,结果再回填给模型。</details>
+<details><summary>B. 模型根据 tool schema 输出结构化调用,由外部程序执行后回填结果 ✅</summary>正确。模型负责「选工具 + 填参数」,执行与安全控制留在你的代码里,这也是可靠性的关键分界。</details>
+<details><summary>C. 工具的 description 无所谓,模型靠函数名就能选对</summary>错。description 是模型判断「何时该用这个工具」的主要依据,写不清就会选错或漏调。</details>
+<details><summary>D. 一句话里只能触发一个工具调用</summary>错。多意图场景下模型可拆成多个工具、或同一工具多次调用。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>要做「调研某行业 → 写报告 → 发邮件」这种长链路、且希望全程目标不跑偏,最贴合的范式是?</p>
+<details><summary>A. Plan-and-Execute:先由 Planner 生成完整计划,再逐步执行并可重规划 ✅</summary>正确。全局计划提供锚点,目标感强、稳定,长流程还可部分并行;代价是依赖 Planner 质量。</details>
+<details><summary>B. 纯 ReAct:完全走一步看一步</summary>可用但在长任务里容易「走丢」、忘掉最终目标,稳定性不如先规划。</details>
+<details><summary>C. 单纯堆更长的提示词,不做任何规划</summary>没有分解与反馈闭环,长任务几乎必然失控。</details>
+<details><summary>D. 只用 Reflexion 反复润色一段文字</summary>Reflexion 解决「质量/正确性」,不负责把大任务拆成可执行步骤,方向不对。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>ReAct: Synergizing Reasoning and Acting in Language Models</strong>(Yao et al., 2022)——Thought/Action/Observation 交替范式的原始论文。</li>
+<li><strong>Reflexion: Language Agents with Verbal Reinforcement Learning</strong>(Shinn et al., 2023)——自我反思 + 语言化反馈迭代的出处。</li>
+<li><strong>Toolformer: Language Models Can Teach Themselves to Use Tools</strong>(Schick et al., 2023)——模型学会调用外部工具的代表工作。</li>
+<li>下一步:记忆系统与多 Agent 协作怎么落地(第 0026 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>Agent = LLM 大脑 + 规划 + 工具 + 记忆的闭环;ReAct 边想边做、Plan-Execute 先谋后动、Reflexion 出稿再自省;Function Calling 是模型「选工具+填参」、程序负责执行。</strong></p>
+<nav class="lesson-nav">
+<a href="0024-hallucination.html">← 上一课:大模型幻觉</a>
+<a href="0026-agent-memory-multiagent.html">下一课:Agent 记忆与多智能体 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

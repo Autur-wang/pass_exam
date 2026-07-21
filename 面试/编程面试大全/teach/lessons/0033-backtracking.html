@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0033 · 回溯:在决策树上试错与剪枝</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0033 课 · 算法范式 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>回溯:在决策树上试错与剪枝</h1>
+
+<p class="lede">面试里只要出现「列出<strong>所有</strong>子集 / 排列 / 组合」「找出<strong>所有满足条件</strong>的解」,几乎就是在点名回溯。这节课把回溯拆成一句话——<strong>在一棵决策树上做 DFS,做了选择就递归下去,走不通就撤销选择再试别的</strong>——并把那个最容易漏、一漏就全错的动作「撤销选择」钉死。</p>
+
+<div class="recall">
+<p>先回忆:上一课<a href="0032-recursion.html">递归</a>我们说,写递归先问「base case 是什么、规模有没有变小」。再往前<a href="0019-dfs-orders.html">DFS</a>那课,深度优先是「一条路探到底,到头再回退」。回溯 = 递归 + DFS + 一个新动作。试着先猜:这个新动作是什么?(提示:和「回退」有关。)</p>
+</div>
+
+<h2>一、直觉:一棵「每一步都要做选择」的树</h2>
+
+<p>把求解过程想成走一棵<strong>决策树</strong>:树的每一层对应一个「要不要选它 / 选哪个」的决策,一条从根到叶的路径就是一个候选解。回溯就是<strong>系统地把这棵树走一遍</strong>——用 DFS 一条路探到底,收集到一个完整解就记下来,然后<strong>退回上一个岔口,撤销刚才的选择,换另一条分支</strong>。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 620 300" role="img" aria-label="求 {1,2} 全部子集的决策树,每层决定选或跳过一个元素">
+  <line class="dgm-edge" x1="310" y1="45" x2="160" y2="120"/>
+  <line class="dgm-edge" x1="310" y1="45" x2="460" y2="120"/>
+  <line class="dgm-edge" x1="160" y1="130" x2="90" y2="230"/>
+  <line class="dgm-edge" x1="160" y1="130" x2="230" y2="230"/>
+  <line class="dgm-edge" x1="460" y1="130" x2="390" y2="230"/>
+  <line class="dgm-edge" x1="460" y1="130" x2="530" y2="230"/>
+  <text class="dgm-muted" x="220" y="88" text-anchor="middle" font-size="11">选 1</text>
+  <text class="dgm-muted" x="400" y="88" text-anchor="middle" font-size="11">跳过 1</text>
+  <text class="dgm-muted" x="108" y="188" text-anchor="middle" font-size="11">选 2</text>
+  <text class="dgm-muted" x="212" y="188" text-anchor="middle" font-size="11">跳过 2</text>
+  <text class="dgm-muted" x="408" y="188" text-anchor="middle" font-size="11">选 2</text>
+  <text class="dgm-muted" x="512" y="188" text-anchor="middle" font-size="11">跳过 2</text>
+  <rect class="dgm-node" x="278" y="19" width="64" height="32" rx="6"/>
+  <text class="dgm-text" x="310" y="39" text-anchor="middle" font-size="12">{ }</text>
+  <rect class="dgm-node" x="128" y="114" width="64" height="32" rx="6"/>
+  <text class="dgm-text" x="160" y="134" text-anchor="middle" font-size="12">{1}</text>
+  <rect class="dgm-node" x="428" y="114" width="64" height="32" rx="6"/>
+  <text class="dgm-text" x="460" y="134" text-anchor="middle" font-size="12">{ }</text>
+  <rect class="dgm-good-node" x="58" y="214" width="64" height="32" rx="6"/>
+  <text class="dgm-good-text" x="90" y="234" text-anchor="middle" font-size="12">{1,2}</text>
+  <rect class="dgm-good-node" x="198" y="214" width="64" height="32" rx="6"/>
+  <text class="dgm-good-text" x="230" y="234" text-anchor="middle" font-size="12">{1}</text>
+  <rect class="dgm-good-node" x="358" y="214" width="64" height="32" rx="6"/>
+  <text class="dgm-good-text" x="390" y="234" text-anchor="middle" font-size="12">{2}</text>
+  <rect class="dgm-good-node" x="498" y="214" width="64" height="32" rx="6"/>
+  <text class="dgm-good-text" x="530" y="234" text-anchor="middle" font-size="12">{ }</text>
+</svg>
+</div>
+<figcaption>求 {1,2} 的全部子集:每层决定「选/跳过」一个元素。4 个绿色叶子正好是 2²=4 个子集。回溯就是对这棵树做 DFS,并在返回时撤销刚加进去的元素。</figcaption>
+</figure>
+
+<h2>二、通用模板:选择 → 递归 → 撤销</h2>
+
+<p>几乎所有回溯题都能套进同一个骨架,把它默写下来,现场只需要填三个空:</p>
+
+<pre><code>def backtrack(路径, 选择列表):
+    if 满足结束条件:
+        结果.append(路径的拷贝)      # 收集一个解(注意要拷贝!)
+        return
+    for 选择 in 选择列表:
+        if 该选择不合法: continue    # ← 剪枝:提前砍掉走不通的分支
+        路径.add(选择)               # ① 做选择
+        backtrack(路径, 新的选择列表) # ② 递归进入下一层
+        路径.remove(选择)            # ③ 撤销选择(回到做选择之前的状态)</code></pre>
+
+<p>③ 那行——<strong>撤销选择</strong>——就是「回溯」这个名字的来源,也是新手最爱漏的一行。它保证:当我从一条分支退回岔口时,状态被<strong>恢复得干干净净</strong>,不会把上一条路的痕迹带进下一条路。</p>
+
+<h2>三、回溯 ≠ 暴力:剪枝才是灵魂</h2>
+
+<p>有人说「回溯就是暴力枚举」,这话只对了一半。回溯确实系统地遍历决策树,但它的价值在<strong>剪枝(pruning)</strong>:一旦发现当前部分解已经不可能通向合法答案(比如组合总和已经超了目标),就<strong>立刻砍掉整棵子树、不再往下走</strong>。剪掉的往往是指数级的搜索空间。没有剪枝的回溯才退化成纯暴力。</p>
+
+<h2>四、四类经典题,一个模板打天下</h2>
+
+<div class="trio">
+  <div class="cell"><div class="role">选或不选</div><div class="head">子集</div><div class="sub">2ⁿ 个</div></div>
+  <div class="cell"><div class="role">讲顺序</div><div class="head">排列</div><div class="sub">n! 个</div></div>
+  <div class="cell"><div class="role">不讲顺序 · 选 k 个</div><div class="head">组合</div><div class="sub">C(n,k) 个</div></div>
+</div>
+<p>加上「<strong>组合总和</strong>」(选出的数之和等于目标,可重复取)和「<strong>字符串划分</strong>」,五道题的解法结构几乎一致,区别只在:结束条件是什么、选择列表怎么缩、要不要去重。认出它属于哪一类,模板就能套上去。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>回溯(Backtracking)</dt>
+<dd>在决策树上系统地尝试,并在走不通时撤销选择(剪枝),用于组合/排列/子集类问题。<em>避免</em>说「回溯就是暴力」——回溯的关键是剪枝。</dd>
+<dt>撤销选择 / 状态恢复(Undo)</dt>
+<dd>递归返回后,把「做选择」时对路径/棋盘/访问标记做的修改<strong>原样还原</strong>,使兄弟分支从干净状态出发。漏写会污染其他分支。</dd>
+<dt>剪枝(Pruning)</dt>
+<dd>提前判定当前分支不可能产生合法解,直接跳过整棵子树。是回溯优于暴力的根本原因。</dd>
+</dl>
+
+<h2>六、复杂度:天生指数级,靠剪枝压常数</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">问题</th><th>解的个数</th><th>时间(含拷贝每个解)</th></tr></thead>
+<tbody>
+<tr><td class="op">全部子集(幂集)</td><td class="warn">2ⁿ</td><td class="warn">O(n · 2ⁿ)</td></tr>
+<tr><td class="op">全排列</td><td class="warn">n!</td><td class="warn">O(n · n!)</td></tr>
+<tr><td class="op">组合 C(n,k)</td><td>C(n,k)</td><td>O(k · C(n,k))</td></tr>
+<tr><td class="op">N 皇后</td><td>—</td><td class="warn">O(n!) 上界 <small>(剪枝后实际远小于)</small></td></tr>
+</tbody>
+</table>
+<p>关键认知:回溯的时间下界就<strong>被输出规模卡死了</strong>——你要列出 2ⁿ 个子集,光是写出它们就得 2ⁿ 次。所以「回溯太慢」不是写法问题,是问题本身解就那么多。剪枝能把常数和实际运行时间压下来,但改不了这个量级。这也是它和<a href="0034-dynamic-programming-1.html">动态规划</a>的分水岭:DP 求「有多少个 / 最优那个」,回溯求「把它们全列出来」。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>回溯是「枚举型」题目的默认解法,信号词非常明显:</p>
+<ul>
+<li><strong>看到「所有 / 全部 / 列举出每一个」就想回溯</strong>:所有子集(LeetCode 78)、全排列(46)、组合总和(39)、括号生成、划分回文串、N 皇后——全是一个模子。</li>
+<li><strong>要求默写模板</strong>:面试官常让你先写出「选择→递归→撤销」的骨架,再往里填。README 给的「回溯蓝图」(见主推资源)就是这套模板的权威版,建议照着抄熟。</li>
+<li><strong>追问剪枝</strong>:「怎么让它更快?」——答:在进入分支前判断可行性(如剩余和已超目标、列/对角线已被占),把不可能的子树剪掉。</li>
+<li><strong>追问复杂度</strong>:别硬背公式,答「时间下界等于解的个数,因为要把每个解都构造出来」,再补一句「剪枝压实际耗时」。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一(最致命):撤销选择漏写。</strong>做了 <code>路径.add(x)</code> 递归完却忘了 <code>路径.remove(x)</code>,下一条兄弟分支就带着上一条的残留,结果全乱。写模板时把「做选择」和「撤销选择」<strong>成对</strong>写好再填中间。</p>
+<p><strong>坑二:收集解时没拷贝。</strong><code>结果.append(路径)</code> 存的是同一个列表的<strong>引用</strong>,后续 add/remove 会把已存进结果的解一起改掉,最后全变空。必须存<strong>快照</strong>:<code>结果.append(路径[:])</code> / <code>new ArrayList&lt;&gt;(路径)</code>。</p>
+<p><strong>坑三:含重复元素时去重错。</strong>输入有重复(如 <code>[1,1,2]</code> 求子集/排列)会产生重复解。标准手法是<strong>先排序,再在同一层里「跳过与前一个相同且前一个未被使用」的元素</strong>。凭感觉去重几乎必错。</p>
+</div>
+
+<div class="implement">
+<p>用同一套模板刷穿这五道,亲手体会「只改三处」:</p>
+<p><strong>子集</strong>(LeetCode 78)· <strong>全排列</strong>(46,用 <code>used[]</code> 标记已选)· <strong>组合总和</strong>(39,可重复取,靠传 <code>start</code> 下标避免重复组合)· <strong>括号生成</strong>(22,剪枝:左括号用完前不能放右括号)· <strong>N 皇后</strong>(51,剪枝:列 / 两条对角线冲突检测)。</p>
+<p>每道都特意注释出「做选择 / 递归 / 撤销选择」三行,并在收集解处确认自己写的是拷贝而不是引用。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>回溯 = DFS 遍历决策树 + <strong>成对的「做选择 / 撤销选择」</strong> + 尽早剪枝。看到「列出所有…」就套模板,写完先自查两件事:撤销那行在不在?收集解是不是拷贝?</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:回溯模板里 <code>路径.remove(选择)</code>(撤销选择)这一行如果删掉,会发生什么?</summary>
+<div class="answer">
+<p><strong>兄弟分支会被上一条分支的残留状态污染,产出错误的解。</strong>因为从一条路径退回岔口时,路径里还留着刚才那条路加进去的元素,换分支时它们没被清掉,导致后面的解越滚越长、互相串味。撤销选择的唯一职责就是把状态恢复到「做这个选择之前」,让每条分支都从同一个干净起点出发。这是回溯最高频的 bug。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪个说法<strong>不</strong>准确?</summary>
+<div class="answer">
+<p>不准确的是:<strong>「回溯就是暴力枚举,和暴力没区别。」</strong></p>
+<p>回溯的关键增值是<strong>剪枝</strong>:一旦当前部分解不可能通向合法答案,就砍掉整棵子树,省下指数级的无用搜索。没有剪枝时它才退化为暴力。其余说法都成立:回溯本质是决策树上的 DFS;列出全部子集的时间下界确实是 O(2ⁿ)(受输出规模限制);含重复元素要靠「排序 + 跳过相邻相同」去重。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:为什么求全排列是 O(n·n!) 而不是「多项式级」?能靠更聪明的写法把它降到多项式吗?</summary>
+<div class="answer">
+<p><strong>不能。</strong>n 个不同元素的排列共有 n! 个,你被要求<strong>全部列出</strong>,光是把这 n! 个排列(每个长度 n)写出来就需要 O(n·n!) 的时间——这是<strong>输出规模</strong>决定的硬下界,与算法聪明程度无关。剪枝/优化只能减少无效尝试、压低常数,改不了「结果就有这么多个」这个事实。凡是「枚举全部」的题,复杂度天花板都由解的个数封顶。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题在仓库大纲的「更多知识 → 递归」小节末尾给出的「回溯蓝图」,是一套被广泛引用的通用模板:</p>
+<ul>
+<li><a href="https://leetcode.com/problems/combination-sum/discuss/16502/A-general-approach-to-backtracking-questions-in-Java-(Subsets-Permutations-Combination-Sum-Palindrome-Partitioning)">回溯蓝图 · Java 版</a> —— 用子集 / 排列 / 组合总和 / 回文划分四题演示同一套骨架,强烈建议抄熟。</li>
+<li><a href="https://leetcode.com/problems/combination-sum/discuss/429538/General-Backtracking-questions-solutions-in-Python-for-reference-%3A">回溯蓝图 · Python 版</a> —— 同一套思路的 Python 实现,对照着看更容易记住模板。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师带你把「求 {1,2,3} 的全部子集」的决策树在纸上画一遍,每一步标注「做选择 / 撤销选择」当时路径里有什么。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0032-recursion.html"><span class="dir">← 上一课</span>递归:自我调用与 base case</a>
+  <a class="next" href="0034-dynamic-programming-1.html"><span class="dir">下一课 →</span>动态规划(上):状态与递推</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

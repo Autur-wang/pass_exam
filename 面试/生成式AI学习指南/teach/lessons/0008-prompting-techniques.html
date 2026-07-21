@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0008 · Prompting 技术全景:zero/few-shot、CoT、结构化输出</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第三部分 Prompting 与上下文工程 · 第 0008 课</p>
+<h1>Prompting 技术全景:zero/few-shot、CoT、结构化输出</h1>
+<p class="lede">这节课把面试里高频出现的五道 prompting 实操题一次讲透:<strong>「主要 prompting 技术有哪些、各自何时用?」(AI 工程师 Q18)、「怎么拿到可靠的结构化输出(如 JSON)?」(Q19)、「few-shot 的成本、何时该避免?」(Q22)、「什么时候把任务拆成多个 prompt?」(Q30)、「什么是 meta-prompting?」(Q31)</strong>。一条主线贯穿始终:<em>选最简单能过质量线的手段,再用 eval 验证</em>。</p>
+
+<div class="recall">
+<p>上一课我们把「检索」这一环做扎实了——向量检索能把最相关的 chunk 捞回来。但捞回好上下文只是一半;模型拿到这些内容后<strong>输出得对不对、格式合不合规</strong>,取决于你怎么写指令。<strong>先别往下看:如果一个能力很强的模型仍然给出格式错乱的结果,你会先加更多示例、换更大模型、还是上一个 schema 约束?</strong></p>
+</div>
+
+<h2>一、Prompting 是一条「从简到繁」的手段光谱</h2>
+<p>先破除一个误解:prompting 不是找到某句「魔法咒语」。它是一组从简单到复杂的手段,你从最省的那端起步,只有当质量不达标时才逐级加码。三种最基本的手段,面试能报出名字并说清「何时用」就够了:</p>
+
+<div class="trio">
+  <div class="cell"><div class="head">Zero-shot</div><div class="role">只给指令,不给例子</div><div class="sub">默认起点 · 最省 token</div></div>
+  <div class="cell"><div class="head">Few-shot</div><div class="role">给几个输入→输出示例</div><div class="sub">定格式 · 传达说不清的模式</div></div>
+  <div class="cell"><div class="head">CoT</div><div class="role">让模型分步推理</div><div class="sub">多步问题有帮助</div></div>
+</div>
+
+<p>三者不是互斥的挡位,而是可叠加的工具,但每叠一层都在花钱:</p>
+<ul>
+<li><strong>Zero-shot</strong>——只给清晰的指令。能力强的模型对绝大多数常见任务,zero-shot 就够了。这是你的默认选择。</li>
+<li><strong>Few-shot</strong>——给几个「输入 → 期望输出」的示例。它擅长两件事:<em>把输出格式钉死</em>,以及<em>传达那种「用文字说不清、但看例子就懂」的模式</em>(比如某种特定的标注风格、语气)。</li>
+<li><strong>CoT(Chain-of-Thought)</strong>——让模型「把推理过程写出来」再给结论。对多步算术、逻辑推理这类问题有帮助。<strong>但要小心:内置推理的 reasoning models 内部已经做了这件事,你在外面再强加一套 step-by-step 指令,往往多余、甚至干扰。</strong></li>
+<li>此外还有一类<strong>结构化技巧</strong>(给 schema、角色框定、任务分解),用来提升输出的可靠性——下面第二、四节专门讲。</li>
+</ul>
+
+<dl class="keydef">
+<dt>选型第一原则:够用就好,eval 兜底</dt>
+<dd>从最简单的 zero-shot 起步;只有当 <strong>eval(评测集)</strong> 显示质量不达标时,才逐级加 few-shot / CoT / 结构化约束。每加一层都在花 token、延迟和维护成本。判断「够不够」的标准不是你的直觉,而是<strong>一组标注好的测试样例上的通过率</strong>。</dd>
+</dl>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">先用 zero-shot 试,eval 过线了吗?</div>
+  <div class="down">↓ 没过 → 看是哪种问题</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">格式 / 模式说不清</div>
+      <div class="step">加 2~3 个覆盖边界的 few-shot 示例</div>
+    </div>
+    <div class="branch">
+      <div class="label">多步推理出错</div>
+      <div class="step">非推理模型加 CoT;推理模型别加</div>
+    </div>
+    <div class="branch">
+      <div class="label">字段要机器读</div>
+      <div class="step">schema 约束 + 代码校验</div>
+    </div>
+  </div>
+  <div class="down">↓ 仍不过</div>
+  <div class="step terminal">拆成多个 prompt / 换更强模型,再用 eval 复测</div>
+</div>
+<figcaption>选技术不是拍脑袋:先最省,按「问题类型」升级,每一步都回 eval 验证。</figcaption>
+</figure>
+
+<h2>二、可靠的结构化输出:别信模型「说」它遵守了</h2>
+<p>把 LLM 接进系统,几乎一定要它吐出机器可解析的格式(通常是 JSON),下游代码才能消费。难点在于:自然语言生成天生「爱自由发挥」,你说「返回 JSON」,它可能多写一句寒暄、少一个引号,parse 就崩。</p>
+
+<dl class="keydef">
+<dt>结构化输出(Structured Output)</dt>
+<dd>让模型产出<strong>字段和类型都受约束</strong>的机器可解析格式。可靠的做法不是「祈祷模型听话」,而是从解码层和代码层双重上保险。</dd>
+</dl>
+
+<p>拿到可靠 JSON 的组合拳,按优先级:</p>
+<ol>
+<li><strong>优先用 provider 的 structured-output / 工具调用能力,配 JSON schema 约束解码</strong>——让模型在生成时就只能产出符合 schema 的 token,从源头堵住跑偏。</li>
+<li><strong>在代码里按同一份 schema 再校验一遍</strong>——不要因为「约束解码了」就相信输出一定合法;把校验当作必经关卡。</li>
+<li><strong>没有约束解码能力时</strong>:在 prompt 里给出明确的 schema + <em>一个</em>示例 + 用低温(temperature 调低)减少发散 + 写防御式解析(容错地取字段)。</li>
+<li><strong>必须处理失败路径</strong>:校验不通过时,把错误信息<em>喂回去让模型重试</em>,或回退到一个默认值。失败是正常分支,不是意外。</li>
+<li><strong>别用脆弱的正则从散文里抠字段</strong>——模型的措辞一变,正则就废。这是面试里典型的「反面做法」。</li>
+</ol>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">明确 schema<br>字段+类型</div>
+  <div class="arrow">→</div>
+  <div class="node">约束解码<br>structured output / tool call</div>
+  <div class="arrow">→</div>
+  <div class="node">低温 + 1 示例</div>
+  <div class="arrow">→</div>
+  <div class="node">代码按 schema 校验</div>
+  <div class="arrow">→</div>
+  <div class="node good">通过 → 交下游</div>
+  <div class="arrow">→</div>
+  <div class="node bad">失败 → 喂回重试 / 回退</div>
+</div>
+<figcaption>结构化输出的可靠性来自「约束解码 + 代码校验 + 显式失败路径」的组合,而非单靠一句 prompt。</figcaption>
+</figure>
+
+<h2>三、Few-shot 的成本:例子不是越多越好</h2>
+<p>few-shot 看着「免费好用」,但它有一笔容易被忽略的账:<strong>每一个示例,都是每一次调用都要付的输入 token</strong>。示例不会被模型「记住」,它就摆在每次请求的上下文里,持续抬高成本、延迟,还挤占宝贵的上下文预算。</p>
+<ul>
+<li><strong>能 zero-shot 就别加</strong>——先确认强模型是不是本来就会做。</li>
+<li><strong>示例要覆盖 tricky / 边界情况</strong>,而不是堆一堆简单例子。模型对简单情形本来就会,你要用示例教它的是那些容易错的角落。</li>
+<li><strong>2 个好示例常常胜过 8 个平庸的</strong>——同质示例只是在稀释信号、烧 token。</li>
+<li><strong>prompt caching 会改变这笔账</strong>:如果 few-shot 块是稳定前缀、在大量重复调用中不变,它可以被缓存,重复调用时更便宜——这会让「多放几个稳定示例」的权衡重新变得划算。</li>
+</ul>
+
+<h2>四、拆成多个 prompt,与 meta-prompting</h2>
+<h3>什么时候把任务拆开?(Q30)</h3>
+<p>当你让<strong>一个 prompt 同时干好几件事</strong>——比如「从文档里抽取信息 → 基于抽取做推理 → 再格式化成报告」——质量往往会下降:模型的注意力被摊薄,一步出错污染全链。这时把它拆成一条<strong>小流水线或 agent</strong>,每步一个聚焦的 prompt。</p>
+<p>该拆的信号:</p>
+<ul>
+<li>单个 prompt 在做多件性质不同的事(抽取 / 推理 / 格式化);</li>
+<li>不同子步需要<strong>不同的模型、温度、或校验方式</strong>(比如抽取要低温精确、创作要高温发散)。</li>
+</ul>
+<p>拆开的好处:各步<strong>上下文聚焦</strong>、可以<strong>分别测试与缓存</strong>、故障能<strong>定位到具体一步</strong>。代价也很实在:更多的调用、更高的延迟、以及编排(orchestration)的复杂度。</p>
+<p><strong>默认策略:先用单个 prompt,当 eval 显示某一步是瓶颈时,才把那一步拆出来。</strong>不要一上来就过度工程化地拆成十步。</p>
+
+<h3>Meta-prompting:用 LLM 改进 prompt(Q31)</h3>
+<dl class="keydef">
+<dt>Meta-prompting</dt>
+<dd>用 LLM 来帮你<strong>撰写、批评、优化</strong> prompt 本身(以及评分用的 rubric)。它能加速迭代、暴露你没想到的盲点,天然契合 <strong>eval 驱动开发</strong> 的循环。</dd>
+</dl>
+<p>关键的边界意识:<strong>模型给出的 prompt 是「假设」,不是「答案」。</strong>它可能听起来很有道理,却在你的真实数据上表现更差。因此 meta-prompting 产出的每一版 prompt,都要拿回<strong>标注集</strong>上跑 eval 验证,用数据决定是否采用——而不是因为「模型自己说这样更好」就上线。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「zero-shot 不行,你第一步做什么?」——先分诊:是格式问题(→ few-shot / schema)还是推理问题(→ CoT / 换推理模型),别无脑堆示例。</li>
+<li>「怎么保证 JSON 能被解析?」——陷阱在你会不会说「保证」;正确姿势是 schema 约束 + 代码校验 + 失败重试/回退,把「解析失败」当正常分支处理。</li>
+<li>「few-shot 放几个例子合适?」——不是越多越好;覆盖边界的 2~3 个常胜过一堆同质示例,还要算每次调用的 token 账。</li>
+<li>「什么时候拆 prompt?」——eval 定位到某步是瓶颈、或子步需要不同模型/温度时才拆;默认先单 prompt。</li>
+<li>「meta-prompting 生成的 prompt 能直接上线吗?」——不能,它是假设,必须过 eval。</li>
+<li>「CoT 一定提升效果吗?」——不一定;推理模型内部已做,强加反而可能干扰,非推理模型的多步任务才明显受益。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(凡是绝对化的说法,面试都在等你翻车):</strong></p>
+<ul>
+<li>「few-shot 例子越多越准」——<strong>错</strong>。更多示例 = 更贵更慢,平庸示例还稀释信号;2 个好例常胜 8 个。</li>
+<li>「CoT 永远提升推理」——<strong>错</strong>。对内置推理的模型,外加 step-by-step 多余甚至有害。</li>
+<li>「结构化输出用正则从回复里抠字段就行」——<strong>脆弱</strong>。模型多一句话、少一个引号就崩;要用 schema 约束 + 校验。</li>
+<li>「schema 约束能 100% 保证合法 JSON」——<strong>软化</strong>。约束解码大幅提高可靠性,但仍要在代码里校验并处理失败路径,别当成绝对保证。</li>
+<li>「拆成多个 prompt 总是更好」——<strong>错</strong>。拆分带来更多调用、延迟和编排成本;默认单 prompt,有 eval 证据再拆。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>关于 few-shot 示例的成本与取舍,下列哪句最准确?</p>
+<details><summary>A. 示例只在首次调用消耗 token,之后被模型记住即免费复用</summary>错。模型不会「记住」示例,它摆在每次请求的上下文里,每次调用都要付这笔输入 token。</details>
+<details><summary>B. 每个示例都是每次调用的输入 token,应优先放少量覆盖边界的好例 ✅</summary>正确。few-shot 的成本是每次调用都付的,所以要少而精,把示例用在教模型那些容易错的边界情形上。</details>
+<details><summary>C. 示例越多模型越准,应尽量塞满整个上下文窗口以求稳妥</summary>错。同质示例只是稀释信号、烧 token 和延迟,2 个好例常胜过 8 个平庸的。</details>
+<details><summary>D. few-shot 只增加延迟,并不会增加每次调用的费用成本</summary>错。示例是输入 token,既增延迟也增成本,还挤占上下文预算。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>要从 LLM 拿到可靠的 JSON 输出,最稳妥的做法是?</p>
+<details><summary>A. 用正则表达式从模型的自然语言回复里把字段抠出来</summary>脆弱。模型措辞一变正则就废,这是典型的反面做法。</details>
+<details><summary>B. 在 prompt 里写「请务必返回合法 JSON」,然后直接对回复 parse</summary>不够。仅靠一句指令无法约束解码,也没有校验和失败处理,极易崩。</details>
+<details><summary>C. 用 provider 的 schema 约束解码 + 代码按 schema 校验 + 处理失败重试/回退 ✅</summary>正确。可靠性来自「解码层约束 + 代码层校验 + 显式失败路径」的组合,而非单靠 prompt 措辞。</details>
+<details><summary>D. 把温度调高,让模型更有创造力地组织出漂亮的 JSON 结构</summary>反了。要拿稳定格式应<em>调低</em>温度减少发散,高温只会更不可控。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与延伸方向:</p>
+<ul>
+<li><strong>Chain-of-Thought Prompting Elicits Reasoning in Large Language Models</strong>(Wei et al., 2022)——CoT 的原始论文,说明「写出推理步骤」如何帮助多步问题。</li>
+<li><strong>Language Models are Few-Shot Learners</strong>(Brown et al., 2020,GPT-3 论文)——把 in-context few-shot learning 带入主流的源头。</li>
+<li><strong>Provider 官方文档</strong>:OpenAI 的 Structured Outputs、Anthropic 的 tool use 与 prompt engineering 指南——结构化输出、工具调用与 schema 约束的一手权威做法。</li>
+<li>延伸:下一课「上下文工程」会接着讲如何把检索内容、示例、指令组织进有限的上下文窗口(含 Lost in the Middle, Liu et al.)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>从 zero-shot 起步、eval 兜底;结构化输出靠 schema 约束 + 代码校验 + 失败路径,不靠正则;few-shot 少而精,CoT 别对推理模型强加;先单 prompt,瓶颈实锤了再拆。</strong></p>
+<nav class="lesson-nav">
+<a href="0007-vector-search-engineering.html">← 上一课:向量检索工程</a>
+<a class="next" href="0009-context-engineering.html">下一课:上下文工程 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

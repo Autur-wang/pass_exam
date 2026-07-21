@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0026 · 快速排序:分区与最坏退化</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0026 课 · 排序 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>快速排序:分区与最坏退化</h1>
+
+<p class="lede">快速排序是实践中最常被采用的通用排序——不是因为它渐进最快(和归并、堆排一样都是 O(n log n)),而是因为它<strong>平均常数小、原地、缓存友好</strong>。但它有一个致命软肋:选错 pivot 时会退化到 O(n²)。面试官几乎必问那句:<strong>「快排最坏情况什么时候发生、你怎么避免?」</strong>这节课把分区机制、最坏退化的成因与规避手段,以及它的近亲快速选择讲清。</p>
+
+<div class="recall">
+<p>回忆<a href="0025-merge-sort.html">上一课归并</a>:它用 O(n) 额外空间换来了稳定和「三种情况都 O(n log n)」的可预测性。快排走的是<strong>相反的取舍</strong>——原地(几乎不费额外空间)、平均更快,但代价是<strong>不稳定</strong>、且最坏会退化。带着这个对比读,你会更清楚两者各自的适用场景。</p>
+</div>
+
+<h2>一、分区:一次把数组劈成「小 | pivot | 大」</h2>
+
+<p>快排的核心动作叫<strong>分区(partition)</strong>:选一个元素当 <strong>pivot(基准)</strong>,然后重排数组,使得——<strong>所有比 pivot 小的排到它左边,所有比它大的排到右边</strong>。一趟分区结束后,pivot 落到了它最终的正确位置,再对左右两段分别递归快排即可。</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell on">3</div>
+  <div class="cell on">7</div>
+  <div class="cell on">2</div>
+  <div class="cell on">8</div>
+  <div class="cell hi">5</div>
+</div>
+<div class="down" style="text-align:center;color:var(--muted)">↓ 选末尾 5 为 pivot,分区:小的挪左、大的留右</div>
+<div class="cells">
+  <div class="cell on">3</div>
+  <div class="cell on">2</div>
+  <div class="cell hi">5</div>
+  <div class="cell on">8</div>
+  <div class="cell on">7</div>
+</div>
+<figcaption>红格是 pivot=5。一趟分区后,<code>5</code> 落到最终位置(下标 2),左边全 &lt;5、右边全 &gt;5。接着对左段 <code>[3,2]</code> 和右段 <code>[8,7]</code> 各自递归。</figcaption>
+</figure>
+
+<p>分区在原数组上用交换完成,不需要辅助数组——这就是快排<strong>原地</strong>(仅 O(log n) 递归栈)的来源,也是它比归并省内存的根本。递归的结构和归并很像(都是分治),但重点不同:<strong>归并的重活在「合并」,快排的重活在「分区」;快排分完区就不用再合并了。</strong></p>
+
+<h2>二、为什么平均 O(n log n):看 pivot 分得均不均</h2>
+
+<p>如果每次 pivot 都恰好把数组分成<strong>大致相等的两半</strong>,那么递归树高约 log n 层,每层分区总共处理 n 个元素——n × log n。平均而言,随机数据上的 pivot 大概率落在中间地带,所以<strong>平均是 O(n log n)</strong>,而且分区只做比较和交换、内存访问局部性好,实测常数比归并、堆排都小。这就是它「快」的名字由来。</p>
+
+<h2>三、最坏 O(n²):当分区极度不均</h2>
+
+<p>但如果每次 pivot 都是当前段的<strong>最大或最小值</strong>,分区就把 n 个元素切成「0 个 + (n-1) 个」——一边空、一边几乎全留。这样递归深度变成 n 层,每层还要扫近 n 个元素,总代价退化成 <strong>O(n²)</strong>。</p>
+
+<p>什么输入会触发?<strong>固定选第一个(或最后一个)元素当 pivot,遇上「已经有序(或完全逆序)」的数组</strong>——每次选到的都是极值,次次最坏。讽刺的是,对已排好序的数组,最朴素的快排反而最慢。</p>
+
+<figure class="diagram">
+<div class="trio">
+  <div class="cell"><span class="role">理想 pivot</span><span class="head">对半分</span><span class="sub">树高 log n → O(n log n)</span></div>
+  <div class="cell"><span class="role">随机 pivot</span><span class="head">大致均衡</span><span class="sub">平均 O(n log n)</span></div>
+  <div class="cell"><span class="role">最坏 pivot</span><span class="head">切成 0 + (n-1)</span><span class="sub">树高 n → O(n²)</span></div>
+</div>
+<figcaption>快排的命运完全系于 pivot 的选择。分得越均越接近 log n 层;分得越偏越接近 n 层。</figcaption>
+</figure>
+
+<h2>四、怎么规避最坏:随机化与三数取中</h2>
+
+<p>既然最坏来自「pivot 恰好是极值」,对策就是<strong>不让攻击者(或有序输入)能预测 pivot</strong>:</p>
+<ul>
+<li><strong>随机化 pivot</strong>:每次从当前段里随机挑一个当 pivot。这样任何固定输入触发最坏的概率都极低,期望仍是 O(n log n)。</li>
+<li><strong>三数取中(median-of-three)</strong>:取首、中、尾三个元素的中位数当 pivot,能有效避开「已排序数组」这个常见陷阱。</li>
+<li><strong>三路分区(3-way / 荷兰国旗)</strong>:当数组含<strong>大量重复键</strong>时,把元素分成「&lt; pivot | = pivot | &gt; pivot」三段,等于 pivot 的一段直接就位不再递归,避免在重复元素上做无用功。</li>
+</ul>
+<p>注意:这些手段把最坏情况变成<strong>概率极小</strong>,但理论上仍存在 O(n²) 的可能——所以「快排最坏 O(n²)」这句话永远成立,不能因为随机化就说它「总是 O(n log n)」。要绝对的最坏保证,该用归并或堆排。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>快速排序(Quicksort)</dt>
+<dd>分治排序:选 pivot、分区、对左右段递归。平均 O(n log n)、原地、常数小;最坏 O(n²)、<em>不</em>稳定。</dd>
+<dt>分区(Partition)</dt>
+<dd>围绕 pivot 重排数组,使左边全 &lt; pivot、右边全 &gt; pivot,pivot 落到最终位置。快排的核心操作。</dd>
+<dt>快速选择(Quickselect)</dt>
+<dd>快排的近亲:只递归<strong>包含目标名次的那一侧</strong>,用于求第 K 大/小,平均 O(n)、最坏 O(n²)。</dd>
+</dl>
+
+<h2>六、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">项目</th><th>平均</th><th>最坏</th></tr></thead>
+<tbody>
+<tr><td class="op">时间</td><td class="best">O(n log n)</td><td class="warn">O(n²) <small>(pivot 每次取极值)</small></td></tr>
+<tr><td class="op">额外空间(递归栈)</td><td class="best">O(log n)</td><td class="warn">O(n) <small>(退化时栈深 n)</small></td></tr>
+<tr><td class="op">稳定性</td><td class="warn" colspan="2">不稳定(分区的跨距离交换会打乱相等元素)</td></tr>
+<tr><td class="op">原地?</td><td class="best" colspan="2">是(分区在原数组上交换完成)</td></tr>
+</tbody>
+</table>
+<p>空间那一行值得留意:平均 O(log n) 是递归栈深度;最坏退化时栈深达 n,不仅慢还可能<strong>爆栈</strong>。工程上常对<strong>较小的一侧递归、较大的一侧改用循环(尾递归优化)</strong>,把栈深压到 O(log n),规避栈溢出。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>快排是排序里的头号考点,几乎每轮算法面都可能碰到:</p>
+<ul>
+<li><strong>「快排最坏什么时候发生、怎么避免?」——必答题。</strong>答:pivot 每次取到极值时退化 O(n²)(典型触发是固定选首/尾 pivot 遇上已排序数组);用随机化 pivot 或三数取中规避。能主动补一句「随机化只是把概率降到极低,理论最坏仍是 O(n²)」,就是加分。</li>
+<li><strong>快速选择(quickselect)求第 K 大/小</strong>——高频。只对含目标名次的那一侧递归,平均把 O(n log n) 排序降到 <strong>O(n)</strong>;要严格最坏 O(n) 需用「中位数的中位数」选 pivot(BFPRT),面试提到即可。</li>
+<li><strong>手写分区</strong>——Lomuto 和 Hoare 两种分区方案要能写对边界(尤其含重复元素、指针越界)。</li>
+<li><strong>「快排 vs 归并怎么选?」</strong>——快排:内存紧、要原地、平均更快;归并:要稳定、要最坏保证、排链表。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「快排总是 O(n log n)」——错,这是最典型的扣分说法。</strong>快排<strong>平均</strong> O(n log n),<strong>最坏</strong> O(n²)。即便用了随机化 pivot,理论最坏仍存在(只是概率极小)。要绝对的最坏保证,用归并或堆排。</p>
+<p><strong>「快排是稳定的」——错。</strong>分区时会把元素<strong>跨距离交换</strong>,相等元素的相对顺序会被打乱,所以默认<strong>不稳定</strong>。这一点和归并正好相反,常被放在一起考。</p>
+<p><strong>忽视递归栈深。</strong>最坏退化时递归深度达 n,可能栈溢出。对小侧递归、大侧转循环的尾递归优化能把栈深控制在 O(log n)。</p>
+</div>
+
+<div class="implement">
+<p>实现一个健壮的快排,把这些都练到:</p>
+<p><code>partition(arr, lo, hi)</code>(先写 Lomuto 版,再挑战 Hoare 版)· <code>quicksort(arr, lo, hi)</code> 递归 · 用<strong>随机 pivot</strong> 或<strong>三数取中</strong>替换固定选尾,对比在「已排序输入」上的比较次数变化。</p>
+<p>进阶:实现<strong>三路分区</strong>处理大量重复键(把 <code>[2,2,2,2,2]</code> 排序,看等于 pivot 的一段直接跳过);实现 <code>quickselect(arr, k)</code> 求第 K 小,验证平均只递归一侧、比全排序快。</p>
+<p>实验:用固定选尾 pivot 排一个<strong>已升序</strong>的数组,统计比较次数——你会亲眼看到它退化成 O(n²)。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>快排用「原地 + 平均更快 + 缓存友好」赢得了库里的位置,代价是不稳定和最坏 O(n²)。命门全在 pivot——随机化/三数取中把最坏压成极小概率,但它永远不是「总是 O(n log n)」。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:用「固定选最后一个元素为 pivot」的朴素快排,去排一个<strong>已经升序排好</strong>的数组,时间复杂度是多少?为什么?</summary>
+<div class="answer">
+<p><strong>O(n²)</strong>。已升序时,末尾元素永远是当前段的<strong>最大值</strong>,每次分区都把它放到最右、左边留下 n-1 个,右边 0 个——分区极度不均。于是递归深度达 n 层,每层还要扫近 n 个元素,总代价退化到 O(n²)。这正是「最坏情况」的经典触发场景,讽刺的是对最有序的输入朴素快排反而最慢。规避办法:随机化 pivot 或三数取中,让 pivot 不再固定是极值。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:要在一个未排序数组里找「第 K 小的元素」,下面哪种做法平均最快?(A)全排序后取第 K 个,O(n log n) (B)用大小为 K 的堆,O(n log K) (C)快速选择 quickselect,平均 O(n)</summary>
+<div class="answer">
+<p>平均最快的是 <strong>(C)快速选择</strong>,平均 <strong>O(n)</strong>。它借用快排的分区,但每趟只需递归<strong>包含第 K 名的那一侧</strong>,另一侧整段丢弃——期望工作量是 n + n/2 + n/4 + … = O(n)。(A)全排序 O(n log n) 做了多余的工作;(B)堆做法 O(n log K) 在 K 较大时也不如 quickselect。注意 quickselect 最坏也是 O(n²)(pivot 次次取极值),要严格最坏 O(n) 需用「中位数的中位数」选 pivot。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:一个数组里绝大多数元素都相等(如 <code>[4,4,4,1,4,4,9,4]</code>)。为什么普通两路分区快排在这种输入上效率低,三路分区怎么解决?</summary>
+<div class="answer">
+<p>普通两路分区只把元素分成「&lt; pivot」和「≥ pivot」两堆,大量<strong>等于 pivot</strong> 的元素会被反复卷进递归、一次次参与分区,做了大量无用功(极端情况接近 O(n²))。<strong>三路分区</strong>(荷兰国旗划分)把数组分成「&lt; pivot | = pivot | &gt; pivot」三段,<strong>等于 pivot 的中段一次就位、不再递归</strong>,只对两侧递归。这样重复键越多反而越快,含大量重复键时能接近 O(n)。这也是 Sedgewick 课程「重复键」一讲的核心。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题对应仓库「排序」小节的 Sedgewick 快排系列(含重复键、系统排序)。抽出的一手来源:</p>
+<ul>
+<li><a href="https://www.coursera.org/lecture/algorithms-part1/quicksort-vjvnC">Sedgewick · 快速排序 Quicksort(Coursera 视频)</a> —— README 收录的第 1 讲,分区与递归讲得最清楚。</li>
+<li><a href="https://www.coursera.org/lecture/algorithms-part1/duplicate-keys-XvjPd">Sedgewick · 重复键 Duplicate Keys(视频)</a> —— 三路分区处理大量重复元素的由来。</li>
+<li><a href="https://www.coursera.org/lecture/algorithms-part1/system-sorts-QBNZ7">Sedgewick · 系统排序 System Sorts(视频)</a> —— 讲工业级排序库为何以快排为基座。</li>
+<li><a href="https://youtu.be/Hoixgm4-P4M">Quick sort in 4 minutes(视频)</a> —— 四分钟看清分区动画。</li>
+</ul>
+<p>实现参考:<a href="https://github.com/jwasham/practice-python/blob/master/quick_sort/quick_sort.py">快速排序(Python)</a>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师陪你手写一遍 Lomuto 分区并跑通边界,或让老师出一个「最坏输入」让你现场说出退化原因与规避手段。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0025-merge-sort.html"><span class="dir">← 上一课</span>归并排序:分治与稳定的代价</a>
+  <a class="next" href="0027-heap-sort-non-comparison.html"><span class="dir">下一课 →</span>堆排序与非比较排序</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

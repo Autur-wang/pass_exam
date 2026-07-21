@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0006 · 摊还分析:偶尔昂贵,平均便宜</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0006 课 · 复杂度基石 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>摊还分析:偶尔昂贵,平均便宜</h1>
+
+<p class="lede">有一类操作平时都很便宜，只是<strong>偶尔</strong>会突然做一次昂贵的活。如果按「最坏那一次」给它定复杂度，会严重高估它的真实成本。摊还分析就是修正这个偏差的工具——它问：把偶发的昂贵操作<strong>均摊</strong>到一长串便宜操作上，平均每次到底多贵？这节用动态数组扩容做主例讲透它，它正是下一课数组的直接前置。</p>
+
+<div class="recall">
+<p>先回忆：<a href="0005-complexity-classes.html">上一课</a>你学会看输入规模反推复杂度。但那默认「每次操作代价固定」。这节要松动这个假设——先自己想一句：如果某个操作 99 次都是 O(1)、第 100 次却是 O(n)，你该说它是 O(1) 还是 O(n)？</p>
+</div>
+
+<h2>一、问题:最坏情况会「冤枉」一个操作</h2>
+
+<p>想象你往一个动态数组末尾不停 <code>push</code>。大多数时候底层还有空位，直接写进去就行，是 O(1)。但每当容量用满，它得<strong>申请一块两倍大的新内存、把已有元素全搬过去</strong>——这一次是 O(n)。</p>
+
+<p>如果只看「最坏单次」，你会说 push 是 O(n)。可这样定价太亏了：那次 O(n) 的搬家极少发生，绝大多数 push 依旧是 O(1)。<strong>用偶发峰值给整体定价，会把一个其实很便宜的操作说成很贵。</strong>摊还分析要算的是「一长串 push 平均下来每次多贵」，这才公道。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 560 240" role="img" aria-label="连续 push 时每次操作的代价,只有扩容点出现尖峰,摊还均值是一条低平的线">
+  <line x1="35" y1="200" x2="525" y2="200" class="dgm-edge" stroke-width="1.5"/>
+  <line x1="35" y1="200" x2="35" y2="30" class="dgm-edge" stroke-width="1.5"/>
+  <rect x="40" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="70" y="166" width="22" height="34" class="dgm-accent-node"/>
+  <rect x="100" y="149" width="22" height="51" class="dgm-accent-node"/>
+  <rect x="130" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="160" y="115" width="22" height="85" class="dgm-accent-node"/>
+  <rect x="190" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="220" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="250" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="280" y="47" width="22" height="153" class="dgm-accent-node"/>
+  <rect x="310" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="340" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="370" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="400" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="430" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="460" y="183" width="22" height="17" class="dgm-node"/>
+  <rect x="490" y="183" width="22" height="17" class="dgm-node"/>
+  <line x1="35" y1="166" x2="512" y2="166" stroke-width="2" stroke-dasharray="6 3" style="stroke:var(--good)"/>
+  <text x="380" y="160" font-size="12" class="dgm-good-text">摊还均值 ≈ 2(常数)</text>
+  <text x="291" y="42" font-size="11" class="dgm-accent-text" text-anchor="middle">扩容:搬 8 个</text>
+  <text x="280" y="228" font-size="12" class="dgm-muted" text-anchor="middle">连续 push 的第 1、2、3 … 次 →</text>
+</svg>
+</div>
+<figcaption>红色尖峰就是触发扩容的那几次 push（第 2、3、5、9 次…），代价随已有元素数增长；灰色矮柱是普通 push（O(1)）。尖峰虽高却<strong>越来越稀</strong>，把它们摊平到中间那一长串矮柱上，绿色虚线——摊还均值——始终是一个低平的常数。</figcaption>
+</figure>
+
+<h2>二、主例推导:翻倍扩容为什么摊还 O(1)</h2>
+
+<p>关键在<strong>按倍数扩容</strong>（×2），而不是按固定量（+1）。我们直接算「从空开始连续 push n 个元素」的<strong>总代价</strong>，再除以 n。</p>
+
+<p>总代价分两块：① n 次写入本身，每次 1 个单位，共 <strong>n</strong>；② 各次扩容的搬运代价。扩容发生在容量 1、2、4、8… 被填满时，每次搬运的元素数正好是当时的容量：</p>
+
+<table>
+<thead><tr><th>触发扩容时的容量</th><th>本次搬运元素数</th><th>累计搬运</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>1</td><td>1</td></tr>
+<tr><td>2</td><td>2</td><td>3</td></tr>
+<tr><td>4</td><td>4</td><td>7</td></tr>
+<tr><td>8</td><td>8</td><td>15</td></tr>
+<tr><td>…</td><td>…</td><td>…</td></tr>
+<tr><td>n/2</td><td>n/2</td><td>&lt; n</td></tr>
+</tbody>
+</table>
+
+<p>搬运总和是一个几何级数：<code>1 + 2 + 4 + … + n/2</code>。等比数列求和，它 <strong>&lt; n</strong>（等价地，从大到小写就是 <code>n + n/2 + n/4 + … &lt; 2n</code>）。所以:</p>
+
+<p style="text-align:center"><code>总代价 = n(写入) + (&lt;n)(搬运) &lt; 2n = O(n)</code></p>
+
+<p>n 次 push 总共花 O(n)，平均每次就是 <strong>O(n)/n = O(1)</strong>。换个更好记的说法——<strong>每个元素平均只被搬运常数次</strong>（翻倍策略下，一个元素被搬的次数不超过 2）。这就是「push 摊还 O(1)」的完整由来。</p>
+
+<p>要是改成每次 +1 扩容呢？那每一次 push 都触发一次搬家，搬运总和变成 <code>1 + 2 + 3 + … + n = O(n²)</code>，平均每次 O(n)。同一个操作，扩容策略从「翻倍」换成「+1」，摊还复杂度就从 O(1) 崩到 O(n)——这正是翻倍如此关键的原因。</p>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>摊还分析(Amortized Analysis)</dt>
+<dd>把偶发的昂贵操作的代价均摊到一长串操作上，得出<strong>单次操作的平均代价</strong>。动态数组 push 的摊还复杂度是 O(1)。<em>避免</em>把摊还 O(1) 说成「每次都 O(1)」。</dd>
+<dt>摊还 O(1) vs 最坏 O(n)</dt>
+<dd>同一个操作可以同时是「摊还 O(1)」和「最坏单次 O(n)」——前者说长期平均，后者说某一次的峰值。完整表述要两句都给。</dd>
+<dt>摊还 ≠ 平均情况(amortized ≠ average-case)</dt>
+<dd>摊还是对<strong>任意一串操作序列</strong>的确定性保证，不依赖任何输入概率分布；平均情况则假设输入服从某个分布再求期望。两者是不同的分析框架。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>「动态数组的 push 为什么是摊还 O(1)?」是最高频的复杂度追问之一，几乎是数组/哈希表/栈题的标配。想答漂亮:</p>
+<ul>
+<li><strong>先给完整定价</strong>：「摊还 O(1)，最坏单次 O(n)。」一句话把两面都说清，立刻区别于只会背「O(1)」的人。</li>
+<li><strong>再给一句直觉证明</strong>：「因为按倍数扩容，每个元素平均只被搬运常数次，所以 n 次 push 总代价是 O(n)，摊到每次是 O(1)。」——能说出这句，面试官就知道你是懂的，不是背的。</li>
+<li><strong>点破翻倍的必要性</strong>：如果被追问「为什么非要翻倍」，答「+1 扩容会让总代价退化成 O(n²)」，一句到位。</li>
+<li>同一套推理还会迁移到：哈希表的动态扩容（rehash）、栈基于动态数组的实现——都是摊还 O(1)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:把「摊还 O(1)」说成「每次都 O(1)」。</strong>这是漏掉「摊还」两字的典型错误。触发扩容的那一次实实在在是 O(n)，只是<strong>平均下来</strong>才是 O(1)。在对<strong>单次延迟</strong>敏感的场景（实时系统、低延迟服务），那次 O(n) 的抖动恰恰是要命的——这时说「O(1)」就暴露了理解不到位。</p>
+<p><strong>坑二:把摊还和平均情况混同。</strong>平均情况（如快排平均 O(n log n)）依赖「输入随机」的假设，遇到刻意构造的坏输入就失效；摊还是对<strong>任何</strong>操作序列都成立的确定性均摊，不赌输入分布。一个防不住恶意输入，一个防得住——别把它们当同义词。</p>
+</div>
+
+<div class="implement">
+<p>动手核对：拿纸笔（或写段小代码打印）从空数组、容量 1 开始，模拟连续 push 16 个元素。每次 push 记下「本次是否触发扩容、搬了几个元素、本次总代价」，最后把 16 次代价加起来除以 16——看它是不是逼近一个常数（≈2）。再把扩容策略从「翻倍」改成「+1」重跑一遍，亲眼看总代价从 O(n) 变成 O(n²)。这个小实验做完，摊还 O(1) 就再也不会记错了。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条：</strong>摊还 O(1) = 「长期平均每次 O(1)，最坏单次可能 O(n)」。它靠翻倍扩容让每个元素只被搬运常数次；它是对操作序列的确定性均摊，不是依赖输入分布的平均情况。</p>
+</div>
+
+<h2>四、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一个同事说「动态数组的 push 是 O(1)」。作为面试官,你想追问一句让答案更严谨,该追问什么?</summary>
+<div class="answer">
+<p>该追问：<strong>「是每次都 O(1)，还是摊还 O(1)?触发扩容那次呢?」</strong>严谨的答案是「摊还 O(1)，最坏单次 O(n)」——扩容时要搬走全部已有元素，那一次实实在在是 O(n)，只是均摊到一长串便宜 push 上平均才是常数。<br>只说「O(1)」不算错，但漏掉了「摊还」这个限定，也没提最坏峰值——在乎单次延迟的场景里这个疏漏会致命。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪种说法准确区分了「摊还 O(1)」和「平均 O(1)」?</summary>
+<div class="answer">
+<p>准确的是：<strong>摊还是对任意操作序列都成立的确定性保证，不依赖输入分布;平均情况则要先假设输入服从某个概率分布再求期望。</strong><br>换句话说，摊还 O(1) 不怕你构造「最坏输入」——不管你怎么排 push 的顺序，n 次总代价都是 O(n)。而平均情况（比如哈希表在「均匀分布」假设下的 O(1)）一旦遇到刻意制造冲突的输入就可能退化。把两者说成一回事，是这节最需要避开的混淆。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:如果把动态数组的扩容策略从「容量 ×2」改成「容量 +1」,连续 push n 个元素的总代价会变成多少?</summary>
+<div class="answer">
+<p>变成 <strong>O(n²)</strong>，摊还退化到每次 O(n)。因为 +1 策略下，容量永远比当前元素数只多 1，<strong>几乎每次 push 都触发一次搬家</strong>，搬运总和是 <code>1+2+3+…+n = n(n+1)/2 = O(n²)</code>。<br>对比翻倍策略的搬运总和 <code>1+2+4+…+n/2 &lt; n</code>（几何级数）——这一对照正说明：让摊还成立的不是「会扩容」，而是「<strong>按倍数</strong>扩容」，使昂贵操作越来越稀、稀到足以被中间的便宜操作稀释掉。</p>
+</div>
+</details>
+</div>
+
+<h2>五、主推资源</h2>
+
+<p>本主题在仓库大纲的「算法复杂度 / Big-O / 渐进分析法」小节。这几条一手来源最对口:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=B3SpQZaAZP4&index=10&list=PL1BaGV1cIH4UhkL8a9bJGG356covJ76qN">摊还分析(视频)</a> —— 直接讲摊还的定义与聚合分析法。</li>
+<li><a href="https://www.topcoder.com/thrive/articles/Computational%20Complexity%20part%20one">TopCoder 计算复杂性:第 1 部分</a> —— 复杂度分析的系统梳理。</li>
+<li><a href="https://www.topcoder.com/thrive/articles/Computational%20Complexity%20part%20two">TopCoder 计算复杂性:第 2 部分</a> —— 含递归关系与主定理,是摊还之外分析递归代价的常用工具。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的，回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「均摊」，或带你把翻倍与 +1 两种扩容的总代价在纸上各跑一遍。下一课起我们正式进入数据结构，第一站就是刚刚一直拿来举例的<strong>动态数组</strong>。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0005-complexity-classes.html"><span class="dir">← 上一课</span>常见复杂度类:从 O(1) 到 O(2ⁿ)</a>
+  <a class="next" href="0007-array-dynamic-array.html"><span class="dir">下一课 →</span>数组与动态数组:连续内存的代价与红利</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0031 · 节点解剖与三个核心操作</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 10 章 · 会话管理 ›
+  <a href="./0030-session-tree-two-dimensions-and-append-only.html">上一课</a> ›
+  <strong>Lesson 0031</strong>
+</div>
+
+<p class="kicker">Lesson 0031 · 第 10 章 会话管理</p>
+<h1>节点解剖与三个核心操作</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们看清了 Session Tree 这棵树<strong>为什么</strong>存在——
+  append-only、回退不删数据。这节课把镜头拉近,看树上<strong>一个节点</strong>到底长什么样,
+  以及树是靠哪三个操作长出来的。
+</div>
+
+<div class="recall">
+  ⏮ <strong>先回忆上一课</strong>:回退到 e2 时,<code>branch()</code> 的函数体只改了一行——
+  <code>this.leafId = "e2"</code>,e3、e4、e5 一个都不删,完整保留在树和 .jsonl 里。
+  那这一行代码到底是怎么"追加"出 e3 这样的节点的?节点内部又存了什么,才能让别的节点找到它、
+  又不需要它自己知道谁是自己的孩子?这就是这节课要拆开看的东西。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出一个 <span class="sys-pill">MessageEntry</span> 的
+  完整字段结构,说清楚 Pi 的 9 种 Entry 按对 LLM 的影响分哪三组,并解释追加(append)、回退(branch)、
+  分支(branch+append)这三个操作之间的<strong>组合关系</strong>——分支根本不是独立操作。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:家谱只记父不记子</b>
+  想象一本家谱。每个人的那一页只写"我爹是谁",从不写"我有哪些孩子"。
+  这样每添一个新丁,你只需要写新人的那一页——写上"某某之子"——永远不用翻回去改父辈的记录。
+  父辈的那一页,从落笔那一刻起就再也不会被改动。这就是 Session Tree 里节点<strong>"认父不认子"</strong>
+  的设计:parentId 单向指向过去,谁是自己的孩子,节点自己并不知道。
+</div>
+
+<h2>1 · 一个节点长什么样:MessageEntry 解剖</h2>
+<p>
+  上一课第 3 步,Agent 调 <code>read</code> 工具生成的那个 AssistantMessage 节点,
+  在 .jsonl 文件里实际是这样一行 JSON:
+</p>
+<pre><span class="ln">1</span>{
+<span class="ln">2</span>  <span class="str">"type"</span>: <span class="str">"message"</span>,
+<span class="ln">3</span>  <span class="str">"id"</span>: <span class="str">"e3"</span>,
+<span class="ln">4</span>  <span class="str">"parentId"</span>: <span class="str">"e2"</span>,
+<span class="ln">5</span>  <span class="str">"timestamp"</span>: <span class="str">"2026-07-03T10:23:45.000Z"</span>,
+<span class="ln">6</span>  <span class="str">"message"</span>: {
+<span class="ln">7</span>    <span class="str">"role"</span>: <span class="str">"assistant"</span>,
+<span class="ln">8</span>    <span class="str">"content"</span>: [
+<span class="ln">9</span>      { <span class="str">"type"</span>: <span class="str">"text"</span>, <span class="str">"text"</span>: <span class="str">"让我读一下 auth.ts"</span> },
+<span class="ln">10</span>      { <span class="str">"type"</span>: <span class="str">"toolCall"</span>, <span class="str">"id"</span>: <span class="str">"call_001"</span>, <span class="str">"name"</span>: <span class="str">"read"</span>,
+<span class="ln">11</span>        <span class="str">"arguments"</span>: { <span class="str">"path"</span>: <span class="str">"src/auth.ts"</span> } }
+<span class="ln">12</span>    ],
+<span class="ln">13</span>    <span class="str">"model"</span>: <span class="str">"claude-sonnet-4-6"</span>,
+<span class="ln">14</span>    <span class="str">"stopReason"</span>: <span class="str">"toolUse"</span>,
+<span class="ln">15</span>    <span class="str">"usage"</span>: { <span class="str">"input"</span>: 1250, <span class="str">"output"</span>: 80 }
+<span class="ln">16</span>  }
+<span class="ln">17</span>}
+</pre>
+<p>
+  <strong>注意第 8–12 行</strong>:文本 <code>"让我读一下 auth.ts"</code> 和工具调用
+  <code>read(path: "src/auth.ts")</code> 并列在<strong>同一个</strong> <code>content</code> 数组里——
+  这是<strong>同一个节点</strong>,不是两个。Pi 不会为"一段话"和"一次工具调用"各生成一个 Entry。
+</p>
+<table class="bd">
+  <thead><tr><th>字段</th><th>干什么</th><th>设计动机</th></tr></thead>
+  <tbody>
+    <tr><td><code>type: "message"</code></td><td>区分节点类型</td><td>树上不止消息,还有 model_change、compaction 等多种类型</td></tr>
+    <tr><td><code>id: "e3"</code></td><td>节点唯一标识</td><td>别的节点通过 parentId 指向它</td></tr>
+    <tr><td><code>parentId: "e2"</code></td><td>指向父节点</td><td><strong>认父不认子</strong>——节点不知道自己有哪些子节点</td></tr>
+    <tr><td><code>timestamp</code></td><td>创建时间</td><td>排序、调试用</td></tr>
+    <tr><td><code>message</code></td><td>真正的消息载荷</td><td>role + content + model 等字段(第 6 章讲过)</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么"认父不认子"是 append-only 的必要条件?</b>
+  若父节点维护 children 列表,从 e2 长出新节点 e6 时,e2 的 children 就得从
+  <code>[e3]</code> 改成 <code>[e3, e6]</code>——<strong>这需要修改 e2</strong>,与"节点不可变"
+  直接矛盾。只有单向的 parentId,才能让追加操作永远不用碰任何一个旧节点。
+</div>
+<cite>🔎 出处:教程 第10章 §三(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第10章-会话管理-对话的存储恢复与分叉.md</code>)。代码为教程示意,基于 pi <code>v0.80.2</code>。</cite>
+
+<h2>2 · 9 种 Entry,按对 LLM 的影响分三组</h2>
+<p>
+  上一课的例子里出现了 <code>model_change</code>、<code>user</code>、<code>assistant</code>、
+  <code>toolResult</code> 四种节点。其实 Pi 一共定义了 <strong>9 种</strong> Entry 类型。
+  看起来多,但按"<strong>对 LLM 调用的影响</strong>"分三组就清晰了。
+</p>
+<table class="bd">
+  <thead><tr><th>组别</th><th>类型</th><th>产生什么 / 改变什么</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="4">① 进 LLM 上下文(4 种)</td><td><code>MessageEntry</code></td><td>UserMessage / AssistantMessage / ToolResultMessage</td></tr>
+    <tr><td><code>CustomMessageEntry</code></td><td>CustomMessage(第 6 章讲的自定义消息)</td></tr>
+    <tr><td><code>CompactionEntry</code></td><td>CompactionSummaryMessage(第 9 章讲的压缩结果)</td></tr>
+    <tr><td><code>BranchSummaryEntry</code></td><td>BranchSummaryMessage(被抛弃分支的摘要,本节 §4 讲)</td></tr>
+    <tr><td rowspan="2">② 影响后续 LLM 调用(2 种)</td><td><code>ModelChangeEntry</code></td><td>后续用哪个模型</td></tr>
+    <tr><td><code>ThinkingLevelChangeEntry</code></td><td>后续的思考级别</td></tr>
+    <tr><td rowspan="3">③ 纯元数据,不影响 LLM(3 种)</td><td><code>LabelEntry</code></td><td>给节点贴书签</td></tr>
+    <tr><td><code>SessionInfoEntry</code></td><td>会话元信息(名称、创建者等)</td></tr>
+    <tr><td><code>CustomEntry</code></td><td>扩展自己存的元数据</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么要分这么细?</b> 下一课要讲的 <code>buildSessionContext()</code> 需要按类型<strong>分派</strong>处理——
+  是消息就进 messages 数组、是状态变更就改状态变量、是元数据就跳过。如果只有一种类型,
+  处理逻辑就得塞满 if-else,可读性和扩展性都差。
+</div>
+<cite>🔎 出处:教程 第10章 §三 / <code>types.ts</code> SessionEntry 联合类型。</cite>
+
+<h2>3 · 操作 1 与 2:追加(append)与回退(branch)</h2>
+<p><strong>追加</strong>只有三步,而且是 O(1)、不改任何旧节点:</p>
+<pre><span class="ln">1</span><span class="fn">appendEntry</span>({ type: <span class="str">"message"</span>, id: <span class="str">"e3"</span>, parentId: <span class="str">"e2"</span>, message: ... });
+<span class="ln">2</span><span class="cm">// 内部:</span>
+<span class="hl"><span class="ln">3</span><span class="cm">//   byId.set("e3", newEntry);</span></span>
+<span class="hl"><span class="ln">4</span><span class="cm">//   this.leafId = "e3";</span></span>
+</pre>
+<p>
+  <strong>没有修改 e2</strong>——只是创建 e3 时让它的 parentId 指向 e2。e2 完全不知道自己多了个孩子,
+  但通过全局 <code>byId</code> 表反查就能找到所有指向它的子节点——<strong>结构上单向,但通过全局表可以反向查询</strong>。
+</p>
+<p><strong>回退</strong>只移动 leafId(外加一个存在性检查):</p>
+<pre><span class="ln">1</span><span class="fn">branch</span>(branchFromId: <span class="str">"e2"</span>): <span class="type">void</span> {
+<span class="ln">2</span>    <span class="key">if</span> (!<span class="key">this</span>.byId.<span class="fn">has</span>(branchFromId)) {
+<span class="ln">3</span>        <span class="key">throw</span> <span class="key">new</span> <span class="type">Error</span>(<span class="str">`Entry ${branchFromId} not found`</span>);
+<span class="ln">4</span>    }
+<span class="hl"><span class="ln">5</span>    <span class="key">this</span>.leafId = <span class="str">"e2"</span>;   <span class="cm">// 核心就是这一行</span></span>
+<span class="ln">6</span>}
+</pre>
+<p>
+  没有删除 e3、e4、e5——它们还在 byId 里,还在 .jsonl 文件里。回退只是说
+  "以后追加新节点时,parentId 指向 e2,而不是当前最后那个节点"。
+</p>
+<div class="tradeoff">
+  🔑 <b>追加 vs 回退,共同点是什么?</b> 两个操作都只碰 <code>byId</code> 表和
+  <code>leafId</code> 这一个指针,<strong>从不触碰任何已存在的旧节点</strong>。这正是
+  append-only 铁律在代码层面的体现——不是靠约定,而是操作本身根本没有"改旧节点"这一步。
+</div>
+<cite>🔎 出处:教程 第10章 §四 / <code>session-manager.ts</code> 的 <code>appendEntry</code>、<code>branch</code>。</cite>
+
+<h2>4 · 操作 3:分支——不是独立操作,是组合效果</h2>
+<p>
+  回退到 e2 后再追加 e6,e6 的 parentId 自动就是 e2——这就是分支。
+  <strong>分支不是独立的操作,是"回退 + 追加"的组合效果</strong>,没有任何额外机制。
+</p>
+<div class="why">
+  <b>为什么分支不设计成独立操作?</b> 因为一旦有了"回退移指针"和"追加认父"这两个基础操作,
+  分支就是它们的自然结果——多设计一个"分支"函数只会是重复劳动,还多一条要维护的路径。
+</div>
+
+<h2>5 · 分支摘要:BranchSummaryEntry(可选项)</h2>
+<p>
+  你从 e5 回退到 e2,旧分支(e3-e5)就成了"被抛弃的分支"。数据完整保留在树上,
+  但<strong>当前路径的 LLM 看不到它们</strong>(下一课讲的 buildSessionContext 只走当前路径)。
+</p>
+<p>
+  有时候你希望新分支的 Agent <strong>大致知道</strong>之前试过什么——不用看完整对话,
+  知道个大概就行。这时用 <code>branchWithSummary()</code>:
+</p>
+<pre><span class="ln">1</span><span class="fn">branchWithSummary</span>(fromId: <span class="str">"e5"</span>): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt; {
+<span class="ln">2</span>    <span class="cm">// 1. 把 e3-e5 这段被抛弃的分支喂给 LLM 生成一份结构化摘要</span>
+<span class="hl"><span class="ln">3</span>    <span class="cm">// 2. 创建一个新的 BranchSummaryEntry,其 parentId 指向 e2(与 e3-e5 同父)</span></span>
+<span class="ln">4</span>    <span class="cm">// 3. 摘要内容是结构化的(Goal / Progress / Decisions 等,跟压缩摘要格式一样)</span>
+<span class="ln">5</span>}
+</pre>
+<p>
+  挂上去后,e_BranchSummary 的 parentId 是 e2,与 e3(旧分支起点)、e6(新分支起点)<strong>同父</strong>——
+  三者是并列的兄弟节点。
+</p>
+<div class="tradeoff">
+  🔑 <b>BranchSummaryEntry 是可选的,不是默认的。</b>
+  如果旧分支完全不重要,直接 <code>branch()</code> 就够了。只有"想保留历史精华但不想保留完整对话"
+  时才需要它。而且它生成的 <strong>BranchSummaryMessage</strong> 和压缩产生的
+  <strong>CompactionSummaryMessage</strong> 是<em>不同</em>的消息类型——前者是被抛弃分支的"遗言",
+  后者是当前路径本身的压缩结果,两者语义完全不同。
+</div>
+<cite>🔎 出处:教程 第10章 §四 / <code>session-manager.ts</code> 的 <code>branchWithSummary</code>;摘要生成复用第 9 章的结构化 prompt。</cite>
+
+<div class="diagram">回退 + 追加 = 分支,再挂一份可选摘要
+
+  e2 (user)
+   ├── e3 (assistant: read auth.ts)
+   │    └── e4 (toolResult)
+   │         └── e5 (assistant: "问题在 23 行")   ← 被抛弃的旧分支,数据仍在
+   │
+   ├── e_BranchSummary (可选:"之前试过 read auth.ts,发现 salt 编码问题但未解决根因")
+   │
+   └── e6 (user: "先看 hash 函数")                ← branch(e2) 后 append 的新分支
+
+  三者 parentId 都是 e2 —— 同父的兄弟节点
+</div>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 为什么 Session Tree 的节点只存 parentId(认父),而不让父节点维护 children 列表(不认子)?</p>
+    <button class="opt">children 列表太占存储空间</button>
+    <button class="opt">因为 append-only 要求节点不可变,若父维护 children,追加子节点就得改父,违反不可变</button>
+    <button class="opt">因为实际业务里几乎用不到查子节点</button>
+    <button class="opt">因为按 parentId 查询比按 children 查询快得多</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② Pi 把 9 种 Entry 按"对 LLM 调用的影响"分成三组,最主要是为了服务谁?</p>
+    <button class="opt">为了 buildSessionContext 能按类型分派处理,避免逻辑塞满 if-else</button>
+    <button class="opt">为了节省 .jsonl 文件的磁盘空间</button>
+    <button class="opt">为了让 UI 展示时不同类型颜色好看</button>
+    <button class="opt">为了对不同类型的 Entry 分别加密</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ 关于 branch() 与 branchWithSummary(),下面哪个说法是对的?</p>
+    <button class="opt">分支是一个独立于回退、单独实现的原子操作</button>
+    <button class="opt">branchWithSummary() 是必须调用的,否则新分支的 Agent 会因为缺上下文而崩溃</button>
+    <button class="opt">分支 = 回退 + 追加的组合效果;branchWithSummary() 是可选的,只在想保留旧分支精华时才用</button>
+    <button class="opt">BranchSummaryEntry 生成的消息和压缩产生的 CompactionSummaryMessage 是同一种消息类型</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果我想反查某个节点的所有子节点,除了遍历 byId 表还有更快的办法吗?</em>」
+  「<em>BranchSummaryEntry 的摘要生成会不会也算一次 LLM 调用、要不要计入 token 消耗?</em>」
+  「<em>树上这 9 种 Entry,到了 buildSessionContext 里究竟是怎么被一步步压扁成线性 messages 数组的?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一节(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第10章-会话管理-对话的存储恢复与分叉.md">第 10 章 · 会话管理 §三、§四</a>——
+  原文紧接着第五节会讲 <code>buildSessionContext</code> 如何把树压扁成线性数组,建议一并通读建立衔接。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0032):</strong> 树长好了,但 LLM 不认识树——它的 API 只接受一个线性
+  messages 数组。<code>buildSessionContext()</code> 怎么把树"压扁"?路径怎么从 leaf 走回 root?
+  9 种类型又是怎么被分派处理的?以及 .jsonl 持久化的延迟写入与全文件重写细节——这些是下一课要拆的。
+</p>
+
+<footer>
+  Lesson 0031 · 第 10 章 会话管理 ·
+  下一课:<a href="./0032-build-session-context-and-jsonl-persistence.html">0032 从树到上下文与 JSONL 持久化 →</a> ·
+  上一课:<a href="./0030-session-tree-two-dimensions-and-append-only.html">0030 会话为什么是一棵树</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。"认父不认子"是 append-only 的必要条件;要反查子节点靠全局 byId 表即可。延伸:这违反"树通常父知子"的直觉,却完全自洽。',
+               '✓ 对。分类直接决定 buildSessionContext 的派发:是消息就进 messages、是状态变更就改变量、是元数据就跳过。延伸:若只有单一类型,处理逻辑会退化成一大堆 if-else。',
+               '✓ 对。回退到 e2 后再追加 e6、parentId 自动是 e2 就成了分支;要不要给旧分支留"遗言"摘要是可选的。延伸:BranchSummaryMessage ≠ CompactionSummaryMessage,两者是不同消息类型。'];
+  var msgNo = ['回到第7步:从 e2 长出 e6,如果是"认子",e2 的 children 要从 [e3] 改成 [e3,e6]——这个动作和"节点不可变"冲突在哪?',
+               '回看 §三 末尾"为什么要把类型分这么细"那段,它明确指向下一节某个函数的分派逻辑。',
+               '逐项排查:分支是不是独立操作?摘要是不是强制?两种 summary 消息是不是同一种?§四 对这三点都有明确对照。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

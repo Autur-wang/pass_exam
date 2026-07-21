@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0024 · 评估工程化:offline/online、pass^k、eval-driven CI、drift</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第八部分 评估 · 第 0024 课</p>
+<h1>评估工程化:offline/online、pass^k、eval-driven CI、drift</h1>
+<p class="lede">上一课你学会了怎么<strong>造</strong>一个 eval;这一课讲怎么把 eval 变成<strong>发布基础设施</strong>——一口气答清六道高频面试题:<strong>「offline 与 online 评估之别、为何都要」(AI 工程师 Q78)、「为何用 pass^k 而非只看准确率」(Q79)、「怎么评多轮对话 agent」(Q86)、「什么是 eval-driven development、如何接入 CI」(Q83)、「怎么给 LLM 功能做 A/B」(Q88)、「什么是 drift、公榜为何饱和/污染、什么是 reward hacking」(Q87/Q89/Q77)。</strong></p>
+
+<div class="recall">
+<p>上一课你把评估拆成了三件事:一个版本化的标注集、一个校准过的 judge、一组你真正在意的指标。<strong>先别往下看:一个系统在这套 offline eval 上分数很高,上线后为什么还可能在真实用户身上翻车?想出至少两个原因再继续。</strong></p>
+</div>
+
+<h2>一、offline vs online:两只眼睛,缺一只就是瞎</h2>
+<p>直觉:offline 像<strong>上线前的体检</strong>——在固定的标注集上跑,快、可复现、可以卡住一次发布;online 像<strong>上线后的心电监护</strong>——盯真实流量里活着的系统,抓体检查不出的病。</p>
+
+<dl class="keydef">
+<dt>Offline 评估</dt>
+<dd>上线<em>前</em>,对一个<strong>固定、已标注</strong>的数据集跑系统。给你的信号是:<strong>快、可复现、可当发布门禁(gate)</strong>。同一份数据、同一版系统跑两次结果一致,所以能进 CI、能卡合并。</dd>
+<dt>Online 评估</dt>
+<dd>上线<em>后</em>,对真实流量里的<strong>活系统</strong>测量:任务成功率、用户反馈、升级(escalation)率、延迟、成本、以及对输出抽样做质检。它抓的是<strong>分布漂移</strong>和标注集根本覆盖不到的失败模式。</dd>
+</dl>
+
+<p>为什么两个都要?两条硬理由:</p>
+<ul>
+<li>系统能<strong>过 offline 却仍在真实用户上失败</strong>——用户的问法、边界、恶意输入远比你的标注集野。</li>
+<li>offline 集会<strong>随用量变陈</strong>:今天覆盖得很好的分布,三个月后用户已经在问你没标过的东西。</li>
+</ul>
+
+<p>所以别把两者对立起来,而要看成<strong>横跨上线前后的同一套发布基础设施</strong>:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">代码/prompt<br>改动</div>
+  <div class="arrow">→</div>
+  <div class="node">offline 门禁<br><em>固定 golden 集</em></div>
+  <div class="arrow">→</div>
+  <div class="node">灰度 / A&#47;B<br><em>真实分流</em></div>
+  <div class="arrow">→</div>
+  <div class="node good">online 监控<br><em>抽样质检 + 告警</em></div>
+</div>
+<figcaption>评估不是「上线前跑一次的脚本」,而是贯穿发布全程的管线:offline 决定<strong>能不能上</strong>,online 决定<strong>上了之后有没有悄悄变坏</strong>。</figcaption>
+</figure>
+
+<h2>二、pass^k 与可靠性:平均分骗人,方差要命</h2>
+<p>直觉:一个 agent「平均能用但会不可预测地翻车」,你<strong>不敢让它去自主干活</strong>。准确率是<strong>均值</strong>,而生产真正要的是<strong>一致性</strong>——每次都对,而不是十次里九次对。</p>
+
+<dl class="keydef">
+<dt>pass^k(可靠性指标)</dt>
+<dd>对同一个任务做 $k$ 次<strong>独立</strong>尝试,问「<strong>是否 $k$ 次全部成功</strong>」。它衡量的是一致性,而不是「至少成功一次」。若单次成功概率为 $p$、各次独立,则期望 $\text{pass}^k \approx p^{\,k}$,随 $k$ 增大迅速衰减(当 $p&lt;1$)。</dd>
+</dl>
+
+<p>把差距摆出来:一个「均值 90% 正确」的 agent,意味着<strong>每次运行有 10% 概率做错一个动作</strong>。这和「可靠地正确」是天壤之别——让它连续自主走多步,那 10% 会不断复利,链条越长越危险。<strong>可靠性指标的价值,就是把均值掩盖掉的方差暴露出来。</strong></p>
+
+<h3>怎么评多轮对话 agent?(Q86)</h3>
+<p>单轮打分会漏掉会话里最要紧的东西。多轮里真正决定成败的是:<strong>是否跨轮达成了用户目标、是否保持一致、能不能从误解中恢复、有没有丢掉早先的上下文</strong>——这些单看某一轮都看不出来。所以要做<strong>轨迹级(trajectory-level)评估</strong>:</p>
+<ol>
+<li>定<strong>任务 + 契约</strong>:契约 = 需要达成的结果 + 一组可以在 transcript 上核验的行为约束。</li>
+<li>用<strong>模拟用户</strong>对活着的 agent 把整个会话多次跑完。</li>
+<li>对<strong>整条 transcript</strong>打分,而不是逐轮打分。</li>
+<li>常和 <strong>pass^k 配套</strong>——不仅问「这条轨迹成没成」,还问「多次跑是不是每次都成」。</li>
+</ol>
+
+<h2>三、eval-driven development:LLM 时代的 TDD</h2>
+<p>直觉:传统软件靠单元测试挡回归;LLM 系统的行为是概率性的、看 demo「感觉更好」根本不可信,于是把<strong>测试驱动开发(TDD)</strong>搬过来——只不过「测试」换成了 eval。</p>
+
+<dl class="keydef">
+<dt>Eval-driven development(EDD)</dt>
+<dd>先定好 eval 集与验收线(baseline);之后<strong>任何</strong>对 prompt、模型、检索或工具的改动,都必须先对这套 eval 评过、达标了才允许合并。它把「demo 看着更好」变成<strong>可测的决策</strong>,并在改动到达用户之前就抓住回归。</dd>
+</dl>
+
+<p>接入 CI 的具体形态:</p>
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">开 PR</div>
+  <div class="arrow">→</div>
+  <div class="node">对 golden 集<br>跑 judge</div>
+  <div class="arrow">→</div>
+  <div class="node">对比 baseline</div>
+  <div class="arrow">→</div>
+  <div class="node bad">低于基线<br>→ 阻断合并</div>
+</div>
+<figcaption>回归低于基线就像一条失败的单元测试,直接挡住 merge。前提:eval 集要<strong>稳定、版本化</strong>,judge 要<strong>校准过</strong>——否则门禁本身在抖。</figcaption>
+</figure>
+
+<h3>那 A/B 又是干嘛的?(Q88)</h3>
+<p>offline 门禁只能说「这个改动<strong>可以试</strong>」;要证明「对用户<strong>真的</strong>更好」,得线上分流做 A/B:把新变体(新 prompt / 新模型 / 新检索)与现有版本并行,比的是<strong>用户和业务真正在意的结果</strong>——任务成功率 / 解决率、接受或编辑率、升级率、延迟、每次调用成本——而不是只看 offline 分。做 LLM 的 A/B 有三个特有的坑要防:</p>
+<ul>
+<li><strong>非确定性会加噪</strong>:同一输入多跑几次结果都不同,样本量要够大才压得住随机波动。</li>
+<li><strong>质量是分布,要看尾部</strong>:别只盯均值——一个把中位数拉高、却让最差 5% 更糟的改动,均值可能还涨。</li>
+<li><strong>一个改动可能提一段人群、伤另一段</strong>:整体指标持平,底下可能是「新手变好、专家变差」在对冲,要分群看。</li>
+</ul>
+
+<h2>四、drift、公榜幻觉与 reward hacking</h2>
+
+<dl class="keydef">
+<dt>Drift(质量漂移)</dt>
+<dd>质量在<strong>缓慢下滑,而基础设施指标纹丝不动</strong>。成因:provider 悄悄更新了模型、输入分布变了、你的知识语料变陈。表现:faithfulness / 任务成功率在降,但<strong>延迟、错误率、uptime 全部正常</strong>。</dd>
+</dl>
+
+<p><strong>为什么延迟/错误监控抓不到 drift?</strong>因为系统<strong>没崩也没慢</strong>——答案只是「变差」了。HTTP 200、响应 300ms、错误率 0,一切绿灯,可回答的质量在往下掉。要抓它,只能把<strong>质量本身当成一等生产信号</strong>:</p>
+<ul>
+<li>持续对线上流量<strong>抽样</strong>(常见 1&ndash;5%),用 judge 打分。</li>
+<li>质量指标掉下去就<strong>告警</strong>——比如一周内 faithfulness 掉了几个点,就该有人被叫醒。</li>
+</ul>
+
+<h3>公榜为什么会饱和/误导?什么是污染?(Q89)</h3>
+<dl class="keydef">
+<dt>污染(contamination)</dt>
+<dd>基准的题目(或其近似)<strong>泄进了训练数据</strong>,于是高分反映的是<strong>记忆而非能力</strong>。基准越老、在网上流传越广,越可能被污染。</dd>
+<dt>饱和(saturation)</dt>
+<dd>前沿模型都挤到<strong>天花板</strong>,分数不再区分谁强谁弱,几个百分点的差距基本是噪声。</dd>
+</dl>
+<p>两者都意味着:<strong>榜单数字可能很差地预测你自己任务上的表现</strong>。所以把公榜只当<strong>粗略定向</strong>,真正拍板要靠<strong>私有、任务特定、不会外泄</strong>的 eval。</p>
+
+<h3>reward hacking / eval gaming(Q77)</h3>
+<p>当系统去优化「被测的代理指标」而非「真实目标」,就发生 reward hacking——它<strong>钻的是你 eval 的空子</strong>,比如迎合 judge 的冗长偏好(答得越长评分越高)、走基准的捷径。这是 Goodhart 定律的活样本:<strong>一个指标一旦成了优化目标,它就不再是好指标。</strong>怎么防:</p>
+<ul>
+<li>留出集(held-out)/ 对抗性 eval,别让被优化的那套数据同时当裁判。</li>
+<li>多样化:多指标、多 judge,交叉印证。</li>
+<li>看增益能否<strong>迁移到独立任务</strong>——只在被测集上涨、别处不涨,就是刷分。</li>
+<li>盯<strong>可疑的跳变</strong>:某指标突然陡涨,先怀疑是钻空子而不是真变强。</li>
+</ul>
+<p class="formula-note">一句话:「你 5 分钟能钻自己 eval 的空子,优化过程也能。」</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「offline 都过了,为什么还要 online?」——offline 集会变陈、覆盖不到真实分布;能过 offline 仍会在真实用户上失败。</li>
+<li>「为什么不只看准确率?」——准确率是均值,掩盖方差;pass^k 暴露一致性,自主 agent 要的是每次都对。</li>
+<li>「多轮 agent 怎么评?」——轨迹级评估:定任务+契约,模拟用户跑整段会话,对整条 transcript 打分,配 pass^k。</li>
+<li>「EDD 怎么落到 CI?」——PR 触发对 golden 集跑 judge,低于 baseline 就阻断合并,像失败的单测;前提是 eval 版本化、judge 校准。</li>
+<li>「offline 门禁过了还要 A/B 吗?」——要。offline 说「可试」,A/B 才说「对用户真更好」,且要分群、看尾部、压随机噪声。</li>
+<li>「线上没报错、延迟也正常,质量会不会已经掉了?」——会,这就是 drift;要抽样质检 + 质量告警,而非只看系统健康。</li>
+<li>「那我盯着 MMLU 之类公榜行不行?」——只能粗略定向;当心污染与饱和,拍板靠私有任务特定 eval。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化说法都要软化或给反例):</strong></p>
+<ul>
+<li>别说「offline 过了就能安全上线」——offline 只给<strong>发布门禁</strong>信号,真实分布、drift、长尾失败要 online 才看得到。</li>
+<li>别把 <strong>pass^k</strong> 和 pass@k 搞反:这里的 pass^k 问「$k$ 次<em>全</em>成功」(可靠性),pass@k 问「$k$ 次<em>至少一次</em>成功」(能不能做到),方向相反。</li>
+<li>别说「A/B 一定比 offline 靠谱」——A/B 慢、要流量、有伦理与噪声成本;两者是<strong>互补</strong>的门禁,不是替代。</li>
+<li>别把「延迟/错误率正常」当「质量正常」——drift 的定义就是<strong>基础设施全绿而质量下滑</strong>。</li>
+<li>别拿公榜高分证明「模型一定强」——可能是污染(记忆)或饱和(噪声),要用不会外泄的私有 eval 复核。</li>
+<li>别把「judge 打分高」等同「真更好」——冗长偏差等会被 reward hacking 利用,要看增益能否迁移到独立任务。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>某 LLM 服务上线三个月,延迟、错误率、uptime 全部正常,但用户投诉答案越来越「不靠谱」。最可能的原因和抓法是?</p>
+<details><summary>A. 服务器过载,应扩容并优化延迟监控</summary>延迟、错误率都正常,不是负载问题;扩容抓不到质量下滑。</details>
+<details><summary>B. 发生了 drift(质量漂移),应持续抽样线上流量用 judge 打分并对质量指标告警 ✅</summary>正确。drift 的典型特征就是基础设施指标全绿而质量悄悄下滑,只能把质量当一等信号来监控。</details>
+<details><summary>C. offline eval 集太小,应把标注集扩大十倍后重跑</summary>扩 offline 集提升的是上线前信号,抓不到线上已发生的质量漂移。</details>
+<details><summary>D. 用户期望变高了,属于正常现象,无需处理</summary>把可测的质量下滑归因为「用户变挑剔」是典型甩锅,drift 是真实且可监控的。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>一个自主 agent 在 offline 集上准确率 90%。关于该不该放它去自主干活,下列哪句最准确?</p>
+<details><summary>A. 90% 很高,可以放心让它自主执行多步任务</summary>均值高不代表可靠;每次 10% 出错率在多步链条上会复利,风险很大。</details>
+<details><summary>B. 应改看 pass@k,只要 k 次里至少一次能成就说明能力达标</summary>方向反了。「至少一次成」衡量的是能不能做到,自主执行需要的是每次都对。</details>
+<details><summary>C. 应看 pass^k 等可靠性指标,因为 90% 均值掩盖了方差,自主执行要的是一致性 ✅</summary>正确。pass^k 问「k 次是否全成」,把均值掩盖的不可预测失败暴露出来,这才是生产真正在意的。</details>
+<details><summary>D. 准确率就是一致性,90% 的均值已经等价于 90% 的可靠性</summary>准确率是均值、可靠性是方差,两者不等价——这正是要引入可靠性指标的原因。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>AI Evals for Everyone</strong>(Aishwarya Naresh Reganti &amp; Kiriti Badam)——本课的直接依据,系统讲 model vs product 评估、生产监控与常见误区,含 drift、判官校准等章节。</li>
+<li><strong>Concrete Problems in AI Safety</strong>(Amodei et al., 2016)——「reward hacking」的经典论述,理解系统为何会优化代理指标而非真目标。</li>
+<li><strong>Goodhart&#39;s Law</strong>——「一个指标一旦成为目标,就不再是好指标」;reward hacking / eval gaming 的思想根源。</li>
+<li><strong>pass@k</strong> 的原始定义出自 Codex 论文(Chen et al., 2021,<em>Evaluating Large Language Models Trained on Code</em>);注意它与本课强调可靠性的 pass^k 方向相反,对照着读能记牢差别。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>offline 卡「能不能上」、online 抓「有没有悄悄变坏」;pass^k 用一致性戳穿均值;EDD 把 eval 变 CI 门禁、A/B 说「对用户真更好」;drift 是全绿仪表盘下的质量下滑,公榜当心污染与饱和,别让优化钻了 eval 的空子。</strong></p>
+<nav class="lesson-nav">
+<a href="0023-evaluation-basics.html">← 上一课:评估基础</a>
+<a class="next" href="0025-cost-latency-triangle.html">下一课:延迟-吞吐-成本三角 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

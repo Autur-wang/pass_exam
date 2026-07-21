@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0010 · GPT / BERT / T5 与「为什么都是 decoder-only」</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第三部分 预训练模型家族 · 第 0010 课</p>
+<h1>GPT / BERT / T5 与「为什么都是 decoder-only」</h1>
+<p class="lede">同样是 Transformer,BERT、GPT、T5 却长成三副面孔——一个只留 encoder,一个只留 decoder,一个两个都要。它们的分家,归根到底就一件事:<strong>训练时每个位置能看到哪些词</strong>。这节课先把三种预训练范式讲清楚,再回答面试里几乎必问的两道题:「prefix LM 和 causal LM 有什么区别」以及「为什么现在的大模型几乎都收敛到了 decoder-only」。</p>
+
+<div class="recall">
+<p>前面几课我们拆的都是「一个 Transformer block 内部」的机制——注意力(0002-0003)、MoE(0009)。现在退一步看整体:同样的积木,搭出来的模型为什么差别这么大?<strong>先别往下看,试着回答:如果我只告诉你「模型 A 训练时每个词能看到左右两边,模型 B 只能看到左边」,你能不能据此推断谁更适合『理解』、谁更适合『生成』?</strong></p>
+</div>
+
+<h2>一、三种预训练范式:一张图看懂分家</h2>
+<p>三家用的都是 Transformer,区别在于<strong>保留了哪部分结构</strong>、以及<strong>用什么自监督任务去预训练</strong>。</p>
+
+<div class="trio">
+  <div class="cell"><strong>BERT</strong><br>只留 Encoder<br><em>双向 · MLM</em><br>擅长「理解」</div>
+  <div class="cell"><strong>GPT</strong><br>只留 Decoder<br><em>单向 · causal LM</em><br>擅长「生成」</div>
+  <div class="cell"><strong>T5</strong><br>Encoder + Decoder<br><em>text-to-text</em><br>统一 seq2seq</div>
+</div>
+
+<h3>GPT:生成式,单向,自回归</h3>
+<p><strong>GPT</strong> 全称 Generative Pre-trained Transformer。它取 Transformer 的 <strong>decoder</strong> 堆叠而成,用<strong>因果语言模型(causal LM)</strong>目标预训练:给定前面所有词,预测下一个词。</p>
+$$\mathcal{L}_{\text{LM}}=-\sum_{t=1}^{n}\log P(x_t\mid x_{&lt;t})$$
+<p class="formula-note">每个位置 $t$ 只依赖它左边的 $x_{&lt;t}$,天然是「从左到右逐词生成」的自回归过程。</p>
+
+<h3>BERT:双向,掩码语言模型</h3>
+<p><strong>BERT</strong>(Bidirectional Encoder Representations from Transformers,Google 2018)取 Transformer 的 <strong>encoder</strong>。它的预训练任务是<strong>掩码语言模型(MLM)</strong>:随机遮住句子里一小部分 token(BERT 论文中约 15%),让模型结合<strong>左右两侧</strong>的上下文把它们还原。</p>
+$$\mathcal{L}_{\text{MLM}}=-\sum_{i\in M}\log P\!\left(x_i\mid x_{\setminus M}\right)$$
+<p class="formula-note">$M$ 是被 mask 的位置集合,$x_{\setminus M}$ 是没被遮住的其余全部 token——注意条件里同时含有被预测词的<strong>左边和右边</strong>。</p>
+<p>输入侧,BERT 把每个 token 的表示拆成三部分相加:<code>Token + Segment + Position</code>。<code>[CLS]</code> 放句首用来汇总整句表示,<code>[SEP]</code> 分隔句对,Segment Embedding 用 0/1 区分句 A 与句 B——正是这套设计让它在句子分类、句对匹配、抽取式问答这类<strong>理解型</strong>任务上如鱼得水。</p>
+
+<h3>T5:把一切任务都写成「文本进、文本出」</h3>
+<p><strong>T5</strong>(Text-to-Text Transfer Transformer)保留了完整的 <strong>encoder-decoder</strong>,但它最大的贡献是范式而非结构:<strong>把所有 NLP 任务统一成「文本到文本」</strong>。翻译、分类、摘要、问答,输入前都加一个任务前缀,输出一律是文本。</p>
+<pre>
+翻译:  输入 "translate English to German: That is good."  → 输出 "Das ist gut."
+分类:  输入 "sentiment: I love this movie."               → 输出 "positive"
+</pre>
+<p>相比之下,标准 Transformer 换任务往往要换一个<strong>任务特定的输出头</strong>(分类头、序列标注头……);T5 靠「都生成文本」把接口统一掉了。它的预训练用 <strong>span corruption</strong>:遮掉输入里的连续片段,让 decoder 把这些片段依次生成出来。教材里对比的几处工程差异也值得一记:T5 用<strong>相对位置编码</strong>而非绝对位置编码,用 <strong>pre-LayerNorm</strong> 而非 post-LayerNorm。</p>
+
+<h2>二、核心分水岭:注意力可见性</h2>
+<p>三家的性格,一张「注意力掩码」图就能说清。行是「谁在看」,列是「被看的词」,✓ 表示这个位置在计算注意力时<strong>允许</strong>看到那一列。</p>
+
+<pre>
+Causal LM(GPT)· 下三角        Bidirectional(BERT)· 全可见
+        x1 x2 x3 x4                    x1 x2 x3 x4
+   x1 [ ✓  ·  ·  · ]              x1 [ ✓  ✓  ✓  ✓ ]
+   x2 [ ✓  ✓  ·  · ]              x2 [ ✓  ✓  ✓  ✓ ]
+   x3 [ ✓  ✓  ✓  · ]              x3 [ ✓  ✓  ✓  ✓ ]
+   x4 [ ✓  ✓  ✓  ✓ ]              x4 [ ✓  ✓  ✓  ✓ ]
+
+Prefix LM · 前缀双向 + 生成因果(前缀 = x1 x2,续写 = x3 x4)
+        x1 x2 | x3 x4
+   x1 [ ✓  ✓ | ·  · ]     ← 前缀内部互相能看(双向)
+   x2 [ ✓  ✓ | ·  · ]
+   x3 [ ✓  ✓ | ✓  · ]     ← 生成段只能看前缀 + 自己左侧(因果)
+   x4 [ ✓  ✓ | ✓  ✓ ]
+</pre>
+
+<h3>prefix LM 与 causal LM 到底差在哪</h3>
+<p>两者都做「给定上文、生成下文」,差别<strong>只在前缀那段能不能双向看</strong>:</p>
+<ul>
+<li><strong>Causal LM</strong>(GPT 系):自回归,<em>每一个</em>位置(包括输入 prompt 的每个 token)都只能看它左边,严格单向。整个序列铁板一块地用下三角掩码。</li>
+<li><strong>Prefix LM</strong>:把序列切成「前缀 / 续写」两段——前缀段内部<strong>双向</strong>可见(像 BERT 那样充分编码条件),续写段仍然<strong>因果</strong>逐词生成。相当于「用双向 encode 你的输入,再自回归 decode 输出」,但共用同一套参数、一个模型跑完。</li>
+</ul>
+<p>这也说明为什么 T5 的 encoder-decoder 可以看成 prefix LM 的一种「拆成两个模块」的实现:encoder 双向读输入,decoder 因果生成输出,中间用 cross-attention 打通。</p>
+
+<h2>三、各自擅长什么</h2>
+<table>
+<thead><tr><th>维度</th><th>BERT(encoder-only)</th><th>GPT(decoder-only)</th><th>T5(encoder-decoder)</th></tr></thead>
+<tbody>
+<tr><td>预训练目标</td><td>MLM(还原被 mask 的词)</td><td>causal LM(预测下一个词)</td><td>span corruption(还原被遮片段)</td></tr>
+<tr><td>注意力</td><td>双向</td><td>单向(因果)</td><td>编码器双向 + 解码器因果</td></tr>
+<tr><td>天生擅长</td><td>理解:分类 / 匹配 / 抽取</td><td>生成:续写 / 对话 / few-shot</td><td>统一 seq2seq:翻译 / 摘要 / 问答</td></tr>
+<tr><td>能否直接生成</td><td>不方便(见下)</td><td>天然可以</td><td>可以(decoder 端)</td></tr>
+</tbody>
+</table>
+
+<h2>四、为什么主流都收敛到 decoder-only</h2>
+<p>这是本课的重头戏,也是面试高频「开放题」。别只背一条,要能从<strong>训练、泛化、部署、理论</strong>四个角度说清权衡。</p>
+
+<h3>① 生成天然是自回归的,decoder-only 结构最「对味」</h3>
+<p>语言生成本身就是「已经写了这些,下一个字是什么」的过程。causal LM 目标与之<strong>完全同构</strong>——预训练怎么学,推理就怎么用,中间没有范式落差。多轮对话也只是不断把历史拼到前缀里继续自回归,工程上顺理成章(源材料里排第一条的「方便处理多轮对话」正是此意)。</p>
+
+<h3>② 训练信号更密,规模化更划算</h3>
+<p>causal LM 对序列里<strong>几乎每一个</strong>位置都要预测下一个词,一条长度 $n$ 的样本能提供接近 $n$ 个监督信号;而 BERT 的 MLM 只对被 mask 的一小部分(约 15%)算损失。同样的语料,decoder-only 榨出的监督更密,这在「用海量数据把模型堆大」的路线上是实打实的效率优势。</p>
+
+<h3>③ 不微调也能干活:zero-shot / few-shot 泛化更好</h3>
+<p>decoder-only + causal LM 预训练出来的模型,不做任务微调、仅靠 prompt 就能做很多任务(zero-shot / in-context learning)。有系统性的架构对比研究发现:<strong>纯预训练之后,causal decoder-only 的 zero-shot 泛化在几种主流组合里表现最强</strong>;而 encoder-decoder 配合大规模多任务微调后,adapted 场景才反超(Wang et al., 2022)。大模型走的正是「先做通用底座、少微调甚至不微调」的路线,自然偏向前者。这也呼应源材料的两条:「无微调时更易 zero-shot」「encoder-decoder 微调后可能更好,但参数量巨大、算力更贵」。</p>
+
+<h3>④ 推理部署友好:单向掩码天生适配 KV Cache</h3>
+<p>因果掩码意味着已经生成的 token 表示<strong>不会因为后面新增的 token 而改变</strong>,于是每个位置的 K、V 可以算一次就缓存下来(KV Cache),增量解码时每步只算新 token,复杂度大幅下降(见第 0006 课)。双向模型每加一个词都要重算全序列,做不到这种增量复用。</p>
+
+<h3>⑤(理论向)因果掩码带来满秩的注意力矩阵</h3>
+<p>还有一个偏理论的论证(源材料第 9 条 d):双向注意力的分数矩阵经 softmax 后<strong>可能是低秩</strong>的,信息表达受限;而 causal 掩码把它压成<strong>下三角</strong>矩阵,对角线元素恒正,这类三角矩阵满秩,被认为表达能力更强。这个说法在业界有讨论也有争议,面试时可以作为「加分点」提及,但别当成铁证——把前四条工程与泛化理由讲扎实才是主线。</p>
+
+<dl class="keydef">
+<dt>Causal LM(因果语言模型)</dt>
+<dd>自回归模型,只依据左侧上文预测下一个词:$P(x)=\prod_{t}P(x_t\mid x_{&lt;t})$。GPT 系即此类。</dd>
+<dt>Masked LM(MLM,掩码语言模型)</dt>
+<dd>遮住部分 token,用<strong>双向</strong>上下文还原它们。BERT 的预训练目标,擅长理解而非逐词生成。</dd>
+<dt>Prefix LM(前缀语言模型)</dt>
+<dd>前缀段双向可见、续写段因果生成的混合可见性模型;可视为「用一个模型同时扮演 encoder 与 decoder」。</dd>
+<dt>Text-to-Text</dt>
+<dd>T5 的统一范式:任意任务都表示成「输入文本 → 输出文本」,靠任务前缀区分,免去任务特定输出头。</dd>
+</dl>
+
+<div class="implement">
+<p>三种可见性,本质就是给注意力分数矩阵套不同的 mask。自己构造一遍就彻底记住了:</p>
+<pre><code>import torch
+
+n = 4  # 序列长度
+# causal / decoder-only:下三角为 1
+causal = torch.tril(torch.ones(n, n))
+
+# bidirectional / BERT:全 1(padding 另算)
+bidir = torch.ones(n, n)
+
+# prefix LM:前缀长度 p 的列全可见,其余走因果
+p = 2
+prefix = torch.tril(torch.ones(n, n))
+prefix[:, :p] = 1                       # 前缀那几列,所有行都能看
+
+# 用法:softmax 之前把 mask==0 处填 -inf
+def apply_mask(scores, mask):
+    return scores.masked_fill(mask == 0, float('-inf'))</code></pre>
+<p>看出来了吗:把 <code>prefix</code> 里的 <code>p</code> 调成 0 就退化为纯 causal,调成 <code>n</code> 就退化为全双向——三种范式其实是同一根轴上的三个点。</p>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「GPT、BERT、T5 结构和预训练目标分别是什么?」——decoder+causal LM / encoder+MLM / encoder-decoder+span corruption,一句话对应到「生成 / 理解 / 统一 seq2seq」。</li>
+<li>「prefix LM 和 causal LM 区别?」——差别只在前缀能否双向看;causal 全序列单向,prefix 前缀双向、续写因果。</li>
+<li>「为什么现在大模型都是 decoder-only?」——从生成同构、训练信号密、zero-shot 泛化、KV Cache 友好四点答;理论上的满秩论证可作补充。</li>
+<li>「BERT 能不能用来做文本生成?为什么不常用?」——见下方 gotcha,考的是你懂不懂双向目标与自回归生成的冲突。</li>
+<li>「T5 相比标准 Transformer 强在哪?」——统一 text-to-text 接口、去掉任务特定头,外加相对位置编码 / pre-LN 等工程改动。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li><strong>BERT 为何不适合生成:</strong>它训练目标是「用双向上下文还原被 mask 的词」,预测某位置时能看到右侧——这与「只看左侧、逐词自回归」的生成机制天然冲突。硬拿它生成要靠不自然的迭代式填空,又慢又不连贯,所以生成任务几乎不用它。别答成「BERT 参数太少 / 没有位置编码」,那都不对(它有 Token+Segment+Position 三种嵌入)。</li>
+<li>「decoder-only 一定比 encoder-decoder 强」是<strong>过度绝对</strong>的说法:源材料明确指出 encoder-decoder 在充分微调后可能更优,只是参数量与算力代价更大。主流选 decoder-only 是<strong>综合权衡</strong>,不是单点碾压。</li>
+<li>别把 prefix LM 说成「双向模型」——它只有前缀双向,续写段仍是因果的。</li>
+<li>MLM 的「双向」指的是<strong>训练时</strong>能看两侧,不等于「能反向生成文本」;两者是不同层面的事。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>「BERT 为什么不适合直接做文本生成?」下面哪个解释最准确?</p>
+<details><summary>A. BERT 参数量太小,不足以生成长文本</summary>参数规模不是关键,BERT 也有大号版本;问题出在训练目标。</details>
+<details><summary>B. BERT 缺少位置编码,无法建模词序</summary>错。BERT 有 Token + Segment + Position 三种嵌入,位置信息不缺。</details>
+<details><summary>C. BERT 用双向注意力 + MLM 目标训练,预测每个位置时都能看到右侧,没有「只看左侧、逐词自回归」的生成机制 ✅</summary>正确。双向理解目标与自回归生成天然冲突,这才是它不适合生成的根因。</details>
+<details><summary>D. BERT 的词表比 GPT 小,覆盖不了生成所需的词</summary>与词表大小无关,是范式冲突。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于「为什么主流大模型多为 decoder-only」,下面哪种说法最贴合本课的论证?</p>
+<details><summary>A. decoder-only 参数一定比 encoder-decoder 多,所以更强</summary>参数量并非取胜点,恰恰相反,encoder-decoder 往往更「重」。</details>
+<details><summary>B. encoder-decoder 无法预训练,只能监督训练</summary>错。T5 就是大规模预训练(span corruption)+ 微调的代表。</details>
+<details><summary>C. decoder-only 是唯一能做机器翻译的架构</summary>过度绝对。翻译 encoder-decoder 做得很好,decoder-only 也能做,谈不上「唯一」。</details>
+<details><summary>D. causal LM 训练信号密、无微调时 zero-shot 泛化好、单向掩码天然适配 KV Cache 增量解码,规模化与部署都更划算 ✅</summary>正确。这正是本课从训练 / 泛化 / 部署三条主线给出的综合权衡。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>GPT</strong>:Radford et al., <em>Improving Language Understanding by Generative Pre-Training</em>(2018);few-shot 能力见 Brown et al., <em>Language Models are Few-Shot Learners</em>(GPT-3, 2020)。</li>
+<li><strong>BERT</strong>:Devlin et al., <em>BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding</em>(2018/2019)——MLM 与双向编码的原始论文。</li>
+<li><strong>T5</strong>:Raffel et al., <em>Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer</em>(2020)——text-to-text 范式与 span corruption。</li>
+<li><strong>架构 × 目标 × 零样本泛化</strong>:Wang et al., <em>What Language Model Architecture and Pretraining Objective Work Best for Zero-Shot Generalization?</em>(2022)——本课第③点结论出处;prefix LM 的混合去噪可参考 Tay et al., <em>UL2</em>(2022)。</li>
+<li>下一步:第 0011 课看开源模型的具体架构选型;KV Cache 细节回看第 0006 课。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>BERT 双向擅理解、GPT 单向擅生成、T5 统一 text-to-text;主流收敛到 decoder-only,是因为它生成同构、训练信号密、zero-shot 泛化好、KV Cache 友好。</strong></p>
+<nav class="lesson-nav">
+<a href="0009-moe-load-balancing.html">← 上一课:MoE 负载均衡</a>
+<a href="0011-open-model-architectures.html">下一课:开源模型架构选型 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

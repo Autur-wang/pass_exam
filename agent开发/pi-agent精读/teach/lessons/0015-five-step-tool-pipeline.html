@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0015 · 五步管道:工具调用不是「调个函数就完了」</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 5 章 · 工具系统 ›
+  <a href="./0014-three-layer-tool-types.html">上一课</a> ›
+  <strong>Lesson 0015</strong>
+</div>
+
+<p class="kicker">Lesson 0015 · 第 5 章 工具系统</p>
+<h1>五步管道<br>—— 工具调用不是「调个函数就完了」</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课(0014)搞清了 Tool / AgentTool / ToolDefinition 三层类型定义——
+  「一个工具长什么样」的问题解决了。这一课看它的<strong>实际执行过程</strong>——「一次工具调用具体怎么跑」。
+  读完你会明白:从模型吐出 ToolCall 到最终产出 ToolResultMessage 之间,中间站着五道关卡,
+  每一道都有独立职责和退出机制。
+</div>
+
+<div class="recall">
+  ⬅️ <b>回忆 0014</b>:AgentTool 的 <code>execute</code> 签名是
+  <code>(toolCallId, params, signal, onUpdate) =&gt; Promise&lt;AgentToolResult&gt;</code>——
+  但光有这个函数签名,不代表「调用工具」就是直接调它。中间还差着好几步没讲。这节课把这几步补全。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出从 ToolCall 到 ToolResultMessage 的
+  <span class="sys-pill">五步管道</span>,说清每一步挡住了什么、为什么<code>prepareArguments</code>
+  和 <code>validateToolArguments</code> 不能合并,以及 <code>acceptingUpdates</code> 标志位
+  防住的到底是什么问题。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:机场安检流水线</b>
+  想象你要登机:先<b>整理行李</b>(prepareArguments,把乱塞的东西归置整齐)→
+  过<b>安检机</b>(validateToolArguments,类型不对直接卡住)→
+  <b>安检员</b>可以拦下你(beforeToolCall,权限判断)→
+  你<b>真正登机</b>(tool.execute,干活的那一步)→
+  落地后的<b>行李复检</b>(afterToolCall,后处理)。
+  任何一关不过,你都上不了飞机——但机场不会因此「炸掉」,只是给你一张「未通过」的凭条。
+</div>
+
+<h2>1 · 为什么不能直接调函数?</h2>
+<p>
+  最直觉的写法是:找到 <code>read</code> 工具 → 读文件 → 把内容塞进 <code>ToolResultMessage</code> → 完事。
+  一行函数调用,朴素又直接。但模型的输出并不总是规规矩矩的:
+</p>
+<table class="bd">
+  <thead><tr><th>问题</th><th>具体表现</th></tr></thead>
+  <tbody>
+    <tr><td>参数格式不对</td><td>Edit 工具期望 <code>edits</code> 是数组,但某些模型把它序列化成字符串 <code>"[{...}]"</code> 传过来</td></tr>
+    <tr><td>参数类型错误</td><td>Read 工具的 <code>path</code> 应是 string,模型却传了个 number <code>12345</code></td></tr>
+    <tr><td>危险操作</td><td>模型要求执行 <code>rm -rf /</code>,Agent 真的照做吗?</td></tr>
+  </tbody>
+</table>
+<p>这些问题说明「直接调函数」不够——执行前必须加几道关卡。</p>
+
+<h2>2 · 五步管道全景图</h2>
+<div class="diagram">LLM 输出 ToolCall
+    │
+    ▼
+┌──────────────────────────────────────────────────┐
+│ 第 1 步:prepareArguments(参数预处理)              │
+│   处理 LLM 的参数怪癖                              │
+│   如:把字符串化的数组解析回真正的数组               │
+├──────────────────────────────────────────────────┤
+│ 第 2 步:validateToolArguments(Schema 验证)        │
+│   用 TypeBox Schema 做运行时类型检查               │
+│   如:path 是 string,不是 number                  │
+├──────────────────────────────────────────────────┤
+│ 第 3 步:beforeToolCall(前置钩子)                  │
+│   产品层的权限拦截,可以阻止执行                     │
+│   返回 { block: true, reason: "危险命令" }         │
+├──────────────────────────────────────────────────┤
+│ 第 4 步:tool.execute(实际执行)                    │
+│   调用工具的 execute 函数                          │
+│   支持 onUpdate 流式进度回调                       │
+├──────────────────────────────────────────────────┤
+│ 第 5 步:afterToolCall(后置钩子)                   │
+│   产品层的结果后处理,可以修改返回值                 │
+│   可以替换 content、details、isError               │
+└──────────────────────────────────────────────────┘
+    │
+    ▼
+ToolResultMessage</div>
+<p>
+  前 3 步是「准备工作」——任何一步失败都不会执行工具;第 4 步是「真正干活」;第 5 步是「收尾」。
+  逐步展开每一步。
+</p>
+<cite>🔎 出处:教程第 5 章 §二 · 五步管道方框图(<code>agent-loop.ts:562-714</code>)。</cite>
+
+<h2>3 · 第 1 步 prepareArguments:兼容性垫片</h2>
+<p>
+  不同模型的 API 在序列化工具参数时有微妙差异,<code>prepareArguments</code> 就是为这些差异准备的兼容层。
+  比如 Edit 工具期望 <code>edits</code> 是数组:
+</p>
+<pre><span class="ln">1</span><span class="cm">// 模型实际传来的(某些模型把 JSON 数组序列化成了字符串)</span>
+<span class="ln">2</span>{ edits: <span class="str">"[{\"oldText\":\"hello\",\"newText\":\"world\"}]"</span> }
+<span class="ln">3</span>
+<span class="ln">4</span><span class="cm">// 经过 prepareArguments 处理后</span>
+<span class="ln">5</span>{ edits: [{ oldText: <span class="str">"hello"</span>, newText: <span class="str">"world"</span> }] }</pre>
+<p>如果工具没定义 <code>prepareArguments</code>,参数直接透传——有就用,没有就跳过。</p>
+<div class="why">
+  <b>为什么不在 Schema 验证里一起处理?</b> 因为两者关注的事情不同。<code>prepareArguments</code> 是
+  「我知道某个模型会犯什么错」的兼容层——只处理特定模型的已知问题;<code>validateToolArguments</code>
+  是「不管谁调我都得验」的安全层——保证参数类型正确。一个管兼容、一个管正确,混一起代码会难维护。
+</div>
+<cite>🔎 出处:教程第 5 章 §二·第 1 步。</cite>
+
+<h2>4 · 第 2 步 validateToolArguments:Schema 验证</h2>
+<p>经过预处理后,参数还要过一道 TypeBox 的运行时类型检查:</p>
+<pre><span class="ln">1</span><span class="cm">// Before</span>
+<span class="ln">2</span>{ path: 12345 }
+<span class="ln">3</span>
+<span class="ln">4</span><span class="cm">// After:验证失败 → 报错 → 不执行工具</span></pre>
+<p>
+  验证错误会被 <code>prepareToolCall</code> 的 try-catch 捕获,生成一个错误 <code>ToolResultMessage</code>。
+  <strong>工具永远不会收到类型错误的参数。</strong>
+</p>
+
+<h2>5 · 第 3 步 beforeToolCall:前置钩子(可阻止执行)</h2>
+<p>
+  参数验证通过后,在执行之前,产品层还有一次拦截机会——检查命令是否危险:
+</p>
+<table class="bd">
+  <thead><tr><th>返回值</th><th>效果</th></tr></thead>
+  <tbody>
+    <tr><td><code>undefined</code></td><td>放行,继续执行工具</td></tr>
+    <tr><td><code>{ block: true, reason: "危险命令" }</code></td><td>阻止执行,生成错误 ToolResultMessage</td></tr>
+  </tbody>
+</table>
+<div class="tradeoff">
+  🔑 <b>关键权衡:</b> 即使工具被阻止,结果仍然是一条正常的 <code>ToolResultMessage</code>,
+  只是 <code>isError: true</code>。模型会看到这条错误消息,知道命令被拒绝了,
+  然后决定下一步怎么做(换一个命令,或者跟用户解释为什么不能执行)。
+  <strong>整个过程不会抛异常,不会打断循环。</strong>
+</div>
+<cite>🔎 出处:教程第 5 章 §二·第 3 步。</cite>
+
+<h2>6 · 第 4 步 tool.execute:实际执行</h2>
+<p>前 3 步都通过后,工具的 <code>execute</code> 函数被真正调用。回头看它的签名:</p>
+<pre><span class="ln">1</span>execute: (toolCallId, params, signal, onUpdate) =&gt; Promise&lt;AgentToolResult&gt;</pre>
+<p>
+  四个参数——<code>toolCallId</code> 是这次调用的 ID,<code>params</code> 是验证过的参数,
+  <code>signal</code> 是用于取消的 AbortSignal(用户按 Ctrl+C 时触发)。第四个 <code>onUpdate</code> 呢?
+</p>
+<p>
+  <strong>它解决的是「长任务的进度感知」问题。</strong> 假设 Bash 工具要跑一个 30 秒的命令——
+  如果只有「开始执行」和「执行完成」两个时刻能向外界报告,用户在这 30 秒里只能盯着加载动画。
+  <code>onUpdate</code> 让工具能<strong>边执行边向外推消息</strong>:Bash 工具每 100ms 推送一次
+  当前的终端输出,Grep 工具每找到一批匹配就推送一次,Read 工具读取大文件时可以分段报告进度。
+  这些推送被包装成 <code>tool_execution_update</code> 事件,最终流向 UI。
+</p>
+<div class="why">
+  <b>为什么要有 onUpdate,而不是只报「开始 / 结束」?</b> 没有它,工具执行就是黑盒;
+  有了它,工具执行「可观察」,长任务能实时向用户汇报进度。
+</div>
+<p>
+  但有个边角问题:<code>execute</code> 是异步函数,它 <code>return</code> 之后,
+  内部可能还有没结束的异步操作——比如 Bash 工具的子进程在主命令返回后还在异步打印最后几行日志。
+  如果这些延迟回调还往 <code>onUpdate</code> 推数据,就会污染一个<strong>已经结束</strong>的工具调用,
+  让 UI 上下文错乱。Pi 用一个 <code>acceptingUpdates</code> 标志位解决:
+</p>
+<pre><span class="ln">1</span><span class="cm">// packages/agent/src/agent-loop.ts:628-669</span>
+<span class="ln">2</span><span class="key">async</span> <span class="key">function</span> <span class="fn">executePreparedToolCall</span>(prepared, signal, emit) {
+<span class="ln">3</span>    <span class="key">const</span> updateEvents: Promise&lt;void&gt;[] = [];
+<span class="ln">4</span>    <span class="key">let</span> acceptingUpdates = <span class="key">true</span>;          <span class="cm">// 工具 Promise settle 后关闭</span>
+<span class="ln">5</span>
+<span class="ln">6</span>    <span class="key">try</span> {
+<span class="ln">7</span>        <span class="key">const</span> result = <span class="key">await</span> prepared.tool.<span class="fn">execute</span>(
+<span class="ln">8</span>            prepared.toolCall.id,
+<span class="ln">9</span>            prepared.args,
+<span class="ln">10</span>            signal,
+<span class="ln">11</span>            (partialResult) =&gt; {
+<span class="ln">12</span>                <span class="key">if</span> (!acceptingUpdates) <span class="key">return</span>;     <span class="cm">// settle 后的孤儿回调直接忽略</span>
+<span class="ln">13</span>                updateEvents.<span class="fn">push</span>(<span class="cm">/* ... 发 tool_execution_update ... */</span>);
+<span class="ln">14</span>            },
+<span class="ln">15</span>        );
+<span class="ln">16</span>        acceptingUpdates = <span class="key">false</span>;
+<span class="ln">17</span>        <span class="key">await</span> Promise.<span class="fn">all</span>(updateEvents);
+<span class="ln">18</span>        <span class="key">return</span> { result, isError: <span class="key">false</span> };
+<span class="ln">19</span>
+<span class="ln">20</span>    } <span class="key">catch</span> (error) {
+<span class="ln">21</span>        acceptingUpdates = <span class="key">false</span>;
+<span class="ln">22</span>        <span class="cm">// 关键:先等所有进度事件发完,再把异常编码成消息</span>
+<span class="ln">23</span>        <span class="key">await</span> Promise.<span class="fn">all</span>(updateEvents);
+<span class="ln">24</span>        <span class="key">return</span> {
+<span class="ln">25</span>            result: <span class="fn">createErrorToolResult</span>(
+<span class="ln">26</span>                error <span class="key">instanceof</span> Error ? error.message : <span class="fn">String</span>(error)
+<span class="ln">27</span>            ),
+<span class="ln">28</span>            isError: <span class="key">true</span>,
+<span class="ln">29</span>        };
+<span class="ln">30</span>    } <span class="key">finally</span> {
+<span class="ln">31</span>        acceptingUpdates = <span class="key">false</span>;          <span class="cm">// 兜底:无论如何都关闭闸门</span>
+<span class="ln">32</span>    }
+<span class="ln">33</span>}</pre>
+<div class="why">
+  <b>为什么需要 acceptingUpdates 标志位?</b> execute return 后内部可能还有未结束的异步操作
+  (如 Bash 子进程还在打印),延迟回调会污染一个已结束的调用,让 UI 上下文错乱,
+  所以 settle 后必须静默丢弃——这是工程上的防御性细节,不复杂,但必须要有。
+</div>
+<cite>🔎 出处:教程第 5 章 §四·关键代码(<code>agent-loop.ts:628-669</code>)。</cite>
+
+<h2>7 · 第 5 步 afterToolCall:后置钩子(可修改结果)</h2>
+<p>工具执行完毕后,产品层还有一次修改结果的机会:</p>
+<table class="bd">
+  <thead><tr><th>场景</th><th>做什么</th><th>怎么做</th></tr></thead>
+  <tbody>
+    <tr><td>脱敏</td><td>把工具返回的敏感信息替换掉</td><td>返回 <code>{ content: [{type:"text", text:"[已脱敏]"}] }</code></td></tr>
+    <tr><td>审计</td><td>记录工具调用的详细信息</td><td>读取 result,写日志,返回 <code>undefined</code>(不改结果)</td></tr>
+    <tr><td>修错</td><td>把工具的错误结果修正为正常结果</td><td>返回 <code>{ isError: false, content: [...] }</code></td></tr>
+    <tr><td>早停</td><td>让 Agent 在当前批次后停止</td><td>返回 <code>{ terminate: true }</code></td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么 afterToolCall 用字段级覆盖而非整体替换?</b> 合并语义是「提供了就替换,没提供就保留原值」——
+  让后处理只改自己关心的字段(如只改 content 做脱敏),其余原值保留,降低钩子的心智负担。
+</div>
+
+<h2>8 · 管道终点:ToolResultMessage</h2>
+<p>五步走完,不管中间出了什么状况,最终产物都是一条 <code>ToolResultMessage</code>:</p>
+<pre><span class="ln">1</span>{
+<span class="ln">2</span>    role: <span class="str">"toolResult"</span>,
+<span class="ln">3</span>    toolCallId: <span class="str">"call_abc123"</span>,      <span class="cm">// 关联到原始 ToolCall</span>
+<span class="ln">4</span>    toolName: <span class="str">"read"</span>,
+<span class="ln">5</span>    content: [{ type: <span class="str">"text"</span>, text: <span class="str">"1│ import { Agent }..."</span> }],
+<span class="ln">6</span>    details: { language: <span class="str">"typescript"</span> },  <span class="cm">// 给 UI 的元数据</span>
+<span class="ln">7</span>    isError: <span class="key">false</span>,                  <span class="cm">// 是否为错误结果</span>
+<span class="ln">8</span>    timestamp: 1700000000000,
+<span class="ln">9</span>}</pre>
+<p>
+  这条消息会被追加到对话历史中,在下一轮循环里作为上下文发给模型。模型看到「文件内容是这样的」,
+  然后决定下一步——可能要编辑,可能要再读别的文件,可能直接回答用户。
+</p>
+<cite>🔎 出处:教程第 5 章 §二·管道终点。</cite>
+
+<h2>9 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① prepareArguments 和 validateToolArguments 为什么不合并成一步?</p>
+    <button class="opt">因为 TypeBox 不支持在验证时修改参数</button>
+    <button class="opt">因为一个负责「兼容特定模型的已知怪癖」,一个负责「不管谁调都保证类型正确」,关注点不同</button>
+    <button class="opt">因为合并后会导致执行速度变慢</button>
+    <button class="opt">因为 prepareArguments 必须在权限拦截之后才能运行</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② 工具的 execute 已经 return 了,但它内部的异步子进程还在往 onUpdate 推数据,Pi 靠什么防止这些「孤儿回调」污染 UI?</p>
+    <button class="opt">acceptingUpdates 标志位:execute settle 后关闸,之后所有 onUpdate 调用一律静默丢弃</button>
+    <button class="opt">afterToolCall 钩子会自动清理残留数据</button>
+    <button class="opt">TypeBox 会拒绝这些迟到的推送</button>
+    <button class="opt">beforeToolCall 提前阻止了这种情况发生</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ beforeToolCall 判定某条 bash 命令危险并阻止了它,接下来发生什么?</p>
+    <button class="opt">抛出一个异常,由外层框架统一处理并终止循环</button>
+    <button class="opt">工具照常执行,只是结果被标记为可疑</button>
+    <button class="opt">生成一条 isError:true 的正常 ToolResultMessage,模型看到后自己决定下一步,循环不中断</button>
+    <button class="opt">直接跳到 afterToolCall 让它决定是否放行</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>onUpdate 推出的 tool_execution_update 事件最终流向哪里,谁在消费它?</em>」
+  「<em>如果 beforeToolCall 本身抛异常呢,是不是也要走 try-catch 兜底?</em>」
+  「<em>五个步骤里,哪几步是可以并行跑的,哪几步必须顺序跑?</em>」——最后这个问题,
+  正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>10 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md">第 5 章 · 工具系统——Agent 的手脚是怎么被管住的</a>——
+  原文 §三 讲了并行 vs 串行调度、§四 讲了「永不抛出」的错误设计哲学,值得通读一遍建立全局观。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0016):</strong> 模型经常一次调用多个工具——这一批工具调用是
+  <code>Promise.all</code> 无脑并行跑,还是有讲究?我们拆开 Pi 的<strong>并行 vs 串行调度策略</strong>,
+  看它「一票否决」的设计和「准备阶段顺序、执行阶段并行、结果消息有序」的三阶段安排。
+</p>
+
+<footer>
+  Lesson 0015 · 第 5 章 工具系统 ·
+  下一课:<a href="./0016-parallel-vs-sequential-scheduling.html">0016 并行 vs 串行调度 →</a> ·
+  上一课:<a href="./0014-three-layer-tool-types.html">0014 三层工具类型 ←</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。prepareArguments 是兼容层(只处理特定模型的已知问题),validateToolArguments 是安全层(对所有调用保证正确性)。一个管兼容、一个管正确,混一起难维护。延伸:这也是为什么 prepareArguments 是可选的、没有就透传。',
+               '✓ 对。execute 一旦返回或抛异常,立即把 acceptingUpdates 关掉,孤儿回调直接忽略,避免污染一个已经结束的工具调用。延伸:0017 会看到 catch 块里同样先 await 所有 updateEvents 再编码错误,保证事件不乱序。',
+               '✓ 对。被阻止的产物仍是一条正常的 ToolResultMessage(isError:true),模型会看到拒绝原因,然后换命令或向用户解释——全程不抛异常、不打断循环。延伸:这正是 0017「错误即消息」哲学的一个前奏。'];
+  var msgNo = ['回看第 1、2 步的对比——一个词是「兼容性」,另一个词是「正确性」,想想各自面向谁。',
+               '回看第 4 步末尾那个「边角问题」,Pi 用一个标志位解决延迟回调,找出那个标志位的名字。',
+               '回看第 3 步的「注意」段——被阻止时产出的到底是异常还是一条消息?它的 isError 是什么值?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

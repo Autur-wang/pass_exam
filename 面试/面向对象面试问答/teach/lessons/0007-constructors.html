@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>构造器 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第二部分 · 类的机制 · 第 0007 节</p>
+<h1>构造器:初始化、__init__ 与 __new__</h1>
+<p class="lede">"构造器是什么"是送分题,但面试官紧接着一定会追:"Python 里 <code>__init__</code> 到底构造了什么?<code>__new__</code> 又是干嘛的?怎么做构造器重载?"这一节把这一簇讲透。</p>
+
+<div class="recall">
+<p>先想一个问题:你写 <code>t = Temperature(25)</code> 的时候,括号里的 <code>25</code> 到底喂给了谁?对象是先被"造出来",还是先被"初始化"——这两件事,是同一步吗?先在心里给个答案,再往下看。</p>
+</div>
+
+<h2>一、直觉:构造器是对象的"开箱质检"</h2>
+
+<p>想象你网购了一台需要组装的家具。快递送到的是一个<strong>箱子</strong>——空间已经分配好了,但里面还是散件,不能直接用。你得按说明书把螺丝拧上、把板子对齐,它才变成一张能用的桌子。</p>
+
+<p><strong>构造器(Constructor)就是这份"开箱说明书"</strong>:它在对象刚被创建出来的那一刻自动执行,负责把散件装成"一致、可用的初始状态"。没有它,你的对象就是一个字段全空、随时会崩的半成品。构造器的核心价值只有一句话:<strong>保证任何一个新对象,一诞生就是合法可用的。</strong></p>
+
+<div class="keydef">
+<dl>
+<dt>构造器 (Constructor)</dt>
+<dd>一种<strong>特殊方法</strong>,在创建对象时<strong>自动调用</strong>,用来把新对象初始化成一致、可用的初始状态。</dd>
+<dt>三个经典特征(源题口径,主要描述 Java/C++/C#)</dt>
+<dd>① <strong>与类名关联</strong>(便于识别,如 Java 里方法名 = 类名);② <strong>没有返回类型</strong>(连 <code>void</code> 都没有);③ <strong>创建对象时自动被调用</strong>,不用你手动 call。</dd>
+<dt>四种类型</dt>
+<dd>① <strong>默认构造器</strong>:无参;若你一个构造器都没写,语言自动提供一个空的。<br>② <strong>参数化构造器</strong>:带参,用传入的值给字段赋初值(最常用)。<br>③ <strong>拷贝构造器</strong>:用同类型的另一个对象来初始化当前对象(C++ 里常用于深拷贝)。<br>④ <strong>静态构造器</strong>:初始化<strong>类级</strong>成员、做类级动作,不参与单个对象的创建;很多语言(含 Python)没有这个专门语法。</dd>
+</dl>
+</div>
+
+<p>注意上面第②条"没有返回类型"是 Java/C++/C# 的口径。<strong>到了 Python,情况要精确一点</strong>——见下一节。</p>
+
+<h2>二、Python 的两步:__new__ 造壳,__init__ 填馅</h2>
+
+<p>回到开头那个问题。在 Python 里,<code>Temperature(25)</code> 背后其实是<strong>两步</strong>,由两个不同的方法接力完成:</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">Temperature(25)</span><span class="n-sub">你写的调用</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">__new__(cls, 25)</span><span class="n-sub">真正"造"出实例(空壳)</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">__init__(self, 25)</span><span class="n-sub">往壳里"填"状态</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">t</span><span class="n-sub">可用的对象</span></div>
+</div>
+
+<ul>
+<li><code>__new__</code> 才是<strong>真正的构造器</strong>:它负责分配并返回一个新实例(那个"空箱子")。</li>
+<li><code>__init__</code> 是<strong>初始化器(initializer)</strong>:它拿到 <code>__new__</code> 已经造好的对象(<code>self</code>),往里填字段。所以 <code>25</code> 最终是喂给 <code>__init__</code> 的。</li>
+</ul>
+
+<p>这就解开了"没有返回类型"在 Python 里的真相:<code>__init__</code> <strong>必须返回 <code>None</code></strong>——如果你在 <code>__init__</code> 里写 <code>return 42</code>,Python 会抛 <code>TypeError</code>。而真正"返回新对象"的活儿,是 <code>__new__</code> 干的。</p>
+
+<p><strong>99% 的日常代码只需要写 <code>__init__</code></strong>,因为默认的 <code>__new__</code>(继承自 <code>object</code>)已经把壳造好了。那什么时候才需要动 <code>__new__</code>?主要是这几种场景:</p>
+
+<ul>
+<li>继承<strong>不可变类型</strong>(<code>int</code>/<code>str</code>/<code>tuple</code>):值必须在"造壳"那一刻就定死,等到 <code>__init__</code> 时对象已经不可改了。</li>
+<li>实现<strong>单例</strong>或对象池:想控制"到底造不造新实例"。</li>
+<li>写<strong>元类(metaclass)</strong>等高级机制。</li>
+</ul>
+
+<pre><code># 继承不可变类型 str,必须重写 __new__ 才能改值
+class UpperStr(str):
+    def __new__(cls, value):
+        # str 不可变:值要在"造壳"时就定好,__init__ 阶段改不动
+        return super().__new__(cls, value.upper())
+
+s = UpperStr("hello")
+print(s)          # HELLO
+print(type(s))    # &lt;class '__main__.UpperStr'&gt;
+</code></pre>
+
+<h2>三、没有构造器重载,怎么办?</h2>
+
+<p>Java/C++ 里你可以写好几个同名、不同参数签名的构造器,这叫<strong>构造器重载(overloading)</strong>。Python <strong>不支持</strong>这种基于签名的重载:一个类里如果写了两个 <code>__init__</code>,<strong>后一个会静默覆盖前一个</strong>——不报错,但第一个直接失效。</p>
+
+<p>Python 用两个更简洁的手段替代重载:</p>
+
+<pre><code>class Temperature:
+    """一个温度类:参数化 __init__ + 备用(命名)构造器。"""
+
+    def __init__(self, celsius: float = 0.0):   # 默认参数:一个 __init__ 顶多个重载
+        # __init__ 是"初始化器":对象此刻已由 __new__ 造好,
+        # 这里只负责把它填成"一致、可用"的初始状态。
+        if celsius &lt; -273.15:                    # 低于绝对零度 → 非法
+            raise ValueError("温度不能低于绝对零度")
+        self.celsius = celsius
+
+    @classmethod
+    def from_fahrenheit(cls, f: float) -&gt; "Temperature":
+        # 命名构造器(工厂方法):弥补"没有构造器重载"
+        return cls((f - 32) * 5 / 9)            # 内部再回到 __init__,复用校验
+
+    @classmethod
+    def from_kelvin(cls, k: float) -&gt; "Temperature":
+        return cls(k - 273.15)
+
+
+t1 = Temperature(25)                    # 走 __init__
+t2 = Temperature.from_fahrenheit(98.6)  # 走命名构造器 → 内部回到 __init__
+t3 = Temperature.from_kelvin(300)
+</code></pre>
+
+<ul>
+<li><strong>默认参数</strong>:一个 <code>__init__</code> 配上默认值,就能覆盖"传/不传""传几个"等多种调用姿势。</li>
+<li><strong><code>@classmethod</code> 命名构造器</strong>(工厂方法):像 <code>from_fahrenheit</code> 这样起个能读懂的名字,收进 <code>cls(...)</code> 去调真正的 <code>__init__</code>。标准库里的 <code>dict.fromkeys()</code>、<code>datetime.fromtimestamp()</code> 都是这个套路。它比"一个 <code>__init__</code> 塞十个参数用 <code>if</code> 分流"清晰得多。</li>
+</ul>
+
+<p>还有一件必须记住的事——<strong>子类的构造</strong>:子类若定义了自己的 <code>__init__</code>,父类的 <code>__init__</code> 不会自动跑,你要用 <code>super().__init__(...)</code> 显式调用(<code>super()</code> 走的是 MRO 上的下一个,通常就是父类)。忘了调,父类那部分字段就没初始化,埋下坑。</p>
+
+<div class="interview">
+<p><strong>高频追问链(构造器几乎必被深挖):</strong></p>
+<ul>
+<li>"构造器有返回值吗?" → Java/C++ 构造器<strong>没有返回类型</strong>(连 <code>void</code> 都没有);Python 的 <code>__init__</code> <strong>必须返回 <code>None</code></strong>,返回别的会 <code>TypeError</code>;真正"返回新对象"的是 <code>__new__</code>。</li>
+<li>"<code>__init__</code> 和 <code>__new__</code> 有什么区别?什么时候要重写 <code>__new__</code>?" → <code>__new__</code> 造实例(返回对象)、<code>__init__</code> 填状态(返回 <code>None</code>);只有不可变类型子类、单例/对象池、元类这类场景才需要重写 <code>__new__</code>。</li>
+<li>"Python 怎么做构造器重载?" → 没有基于签名的重载,用<strong>默认参数</strong> + <strong><code>@classmethod</code> 命名构造器</strong>替代;同一个类写两个 <code>__init__</code> 后者会覆盖前者。</li>
+<li>"子类里怎么调父类构造器?不调会怎样?" → <code>super().__init__(...)</code>;不调则父类的初始化被跳过,父类字段可能缺失。</li>
+<li>"如果一个类什么构造器都不写呢?" → 语言提供默认(无参)构造器;Python 里就是继承 <code>object.__init__</code>,对象仍能创建,只是没有任何自定义初始化。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:想"重载"而写了两个 <code>__init__</code>。</strong>Python 不按签名分派,后定义的方法直接覆盖前一个,<strong>不报错、静默失效</strong>——这类 bug 最难查。想要多种构造方式,请用 <code>@classmethod</code> 工厂方法,别堆 <code>__init__</code>。</p>
+<p><strong>坑二:可变默认参数(经典中的经典)。</strong>写 <code>def __init__(self, items=[])</code> 会翻车:默认值 <code>[]</code> <strong>只在函数定义时创建一次</strong>,之后所有"没传 items"的实例<strong>共享同一个列表</strong>。</p>
+<pre><code># ❌ 陷阱:可变默认参数被所有实例共享
+class Basket:
+    def __init__(self, items=[]):
+        self.items = items
+
+a = Basket(); a.items.append("apple")
+b = Basket()
+print(b.items)   # ['apple'] —— b 从没加过东西,却有 apple!
+
+# ✅ 正解:默认用 None,进函数体再新建
+class Basket:
+    def __init__(self, items=None):
+        self.items = items if items is not None else []
+</code></pre>
+<p>这个坑本身是"可变默认参数"问题,会在 <strong>0023 节</strong>专门深讲;此处先记住构造器里的铁律:<strong>默认值别用可变对象,用 <code>None</code> 兜底。</strong></p>
+</div>
+
+<div class="crosslang">
+<p>"你这门语言的构造器怎么玩?"是跨语言必问。记住这张对照:</p>
+<table>
+<tr><th>语言</th><th>构造器重载</th><th>拷贝构造</th><th>命名构造器</th></tr>
+<tr><td><strong>Python</strong></td><td>不支持(用默认参数 + <code>@classmethod</code>)</td><td>无专用语法,用 <code>copy</code> 模块 / <code>__copy__</code></td><td>惯用 <code>@classmethod</code>(<code>from_xxx</code>)</td></tr>
+<tr><td><strong>Java</strong></td><td>支持(多个不同签名)</td><td>无内建,手写拷贝构造器 / <code>clone()</code></td><td>惯用静态工厂方法</td></tr>
+<tr><td><strong>C++</strong></td><td>支持(多个不同签名)</td><td>有专门的<strong>拷贝构造器</strong> <code>Foo(const Foo&amp;)</code>,与<strong>析构器</strong> <code>~Foo()</code> 成对出现</td><td>常用静态工厂函数</td></tr>
+<tr><td><strong>C#</strong></td><td>支持(多个不同签名)</td><td>无内建,手写</td><td>静态工厂方法</td></tr>
+</table>
+<p>一句话:<strong>Java/C++/C# 靠"多个签名的构造器"应对多种初始化;Python 靠"一个 <code>__init__</code> + 默认参数 + 命名工厂"</strong>。C++ 尤其特殊——它把"拷贝怎么造""对象怎么销毁"都做成了语言一等公民(拷贝构造器 + 析构器),这也是 0008 节析构与资源管理要展开的话题。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写一个 <code>Color</code> 类:</p>
+<ul>
+<li><code>__init__(self, r, g, b)</code>:三个通道都必须在 0 到 255 之间,否则 <code>raise ValueError</code>。</li>
+<li>加一个命名构造器 <code>@classmethod from_hex(cls, s)</code>:接受 <code>"#ff8800"</code> 这样的字符串,解析成三个通道后<strong>回调 <code>cls(...)</code></strong>(而不是重复写一遍校验)。</li>
+<li>写完自测:能不能再写第二个 <code>__init__</code> 让它"支持字符串输入"?试一下,观察会发生什么——这正是"没有构造器重载"的现场体感。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:上面 <code>Basket</code> 的 <code>❌</code> 版本里,连续 <code>a = Basket(); a.items.append("apple"); b = Basket()</code> 后,<code>b.items</code> 是什么?为什么?</summary>
+<div class="answer">
+<p><strong>答案:<code>['apple']</code>。</strong></p>
+<p><code>items=[]</code> 这个默认列表<strong>只在函数定义(<code>def</code> 执行)时创建一次</strong>,而不是每次调用都新建。于是所有"没传 items"的实例——<code>a</code> 和 <code>b</code>——都指向<strong>同一个列表对象</strong>。<code>a</code> 往里 <code>append</code>,<code>b</code> 自然也看得到。修法是默认写 <code>items=None</code>,进函数体再 <code>[] </code> 兜底。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:下面哪句关于 <code>__new__</code> / <code>__init__</code> 的说法<strong>最准确</strong>?A. <code>__init__</code> 负责创建并返回新对象;B. <code>__new__</code> 造出实例,<code>__init__</code> 初始化它,日常大多只需写后者;C. 二者完全等价,写哪个都行;D. Python 每个类都必须同时重写这两个。</summary>
+<div class="answer">
+<p><strong>答案:B。</strong></p>
+<p>A 错:<code>__init__</code> 只初始化、必须返回 <code>None</code>,真正返回新对象的是 <code>__new__</code>。C 错:职责不同,一个"造壳"一个"填馅"。D 错:默认的 <code>__new__</code> 继承自 <code>object</code> 已够用,只有不可变类型子类、单例、元类等场景才需要重写 <code>__new__</code>;绝大多数类只写 <code>__init__</code>。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>构造器 = 对象诞生时自动跑的"开箱质检",保证新对象一出生就合法可用。在 Python 里这是两步——<code>__new__</code> 造壳(真构造器,返回实例)、<code>__init__</code> 填馅(初始化器,返回 <code>None</code>);日常只写 <code>__init__</code>。Python 没有构造器重载,用默认参数 + <code>@classmethod</code> 命名工厂替代;默认参数千万别用可变对象,用 <code>None</code> 兜底。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《OOP Interview Questions》Q13(What is a constructor and how is it used?)——构造器的定义、三个特征(与类名关联 / 无返回类型 / 自动调用)、四种类型(默认 / 参数化 / 拷贝 / 静态),均取自源题原文。</li>
+<li><strong>canon(补充锚定,非源题内容):</strong>关于 <code>__new__</code>/<code>__init__</code> 的两步机制与"<code>__init__</code> 必须返回 <code>None</code>"取自 <a href="https://docs.python.org/3/reference/datamodel.html#object.__new__">Python 官方 Data Model —— <code>object.__new__</code> / <code>object.__init__</code></a>;命名构造器与 <code>@classmethod</code> 见 <a href="https://docs.python.org/3/library/functions.html#classmethod">Python 官方 <code>classmethod</code> 文档</a>;"可变默认参数"陷阱见 <a href="https://docs.python.org/3/tutorial/controlflow.html#default-argument-values">Python 官方教程 · Default Argument Values</a>;构造器重载对照 <a href="https://docs.oracle.com/javase/tutorial/java/javaOO/constructors.html">Oracle Java Tutorial · Constructors</a>。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍 <code>__new__</code> 和 <code>__init__</code> 的分工、或者把你写的 <code>Color</code> 类贴来我帮你评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>构造器管"对象怎么诞生";下一节聊它的镜像——对象怎么<strong>善终</strong>:析构、<code>__del__</code> 为什么不可靠,以及 Python 里正确的资源清理方式。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0006-object-lifecycle-identity.html"><span class="dir">← 上一课</span>0006 · 对象的生命周期与标识</a>
+<a class="next" href="0008-destructors-resource-management.html"><span class="dir">下一课 →</span>0008 · 析构与资源管理</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

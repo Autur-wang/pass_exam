@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0008 · 链表:指针的舞蹈,与数组的取舍</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0008 课 · 线性结构 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>链表:指针的舞蹈,与数组的取舍</h1>
+
+<p class="lede">数组把「连续」当信仰,链表则反着来:它让每个元素散落在内存各处,靠一根根<strong>指针</strong>把它们串成一条线。这一个决定,把数组的性格几乎全部翻转——头部增删从 O(n) 变成 O(1),随机访问从 O(1) 变成 O(n)。这节课把这笔「取舍」算清楚,并回答面试官最爱问的:<strong>「什么时候该用链表,什么时候用数组?」</strong></p>
+
+<div class="recall">
+<p>先回忆:上一课<a href="0007-array-dynamic-array.html">数组与动态数组</a>里,我们看到数组头部插入 <code>prepend</code> 是 <strong>O(n)</strong>——因为后面所有元素都得整体后移一格。先自己想一想:如果不要求元素在内存里连续,这个「后移」还需要吗?</p>
+</div>
+
+<h2>一、直觉:一串用绳子系起来的珠子</h2>
+
+<p>把链表想成一串珠子,每颗珠子(<strong>节点 node</strong>)装两样东西:<strong>数据</strong> + 一根<strong>指针</strong>(指向下一颗珠子的地址)。珠子本身可以扔在内存的任何角落,彼此并不相邻;只要每颗都记得「下一颗在哪」,整串就不会散。另有一个 <code>head</code> 指针记着第一颗珠子的位置——它是进入整条链的唯一入口。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 520 130" width="520" role="img" aria-label="单链表示意:head 指针指向第一个节点,每个节点的 next 指向下一个,末节点指向空">
+  <defs>
+    <marker id="arr8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="dgm-accent"/>
+    </marker>
+  </defs>
+  <!-- head -->
+  <text x="14" y="42" class="dgm-accent-text" font-size="13" font-weight="700">head</text>
+  <path d="M26,48 L26,72 L70,72" class="dgm-edge" stroke-width="2" marker-end="url(#arr8)"/>
+  <!-- node 1 -->
+  <rect x="70" y="50" width="55" height="44" class="dgm-node"/>
+  <rect x="125" y="50" width="35" height="44" class="dgm-node"/>
+  <text x="97" y="78" text-anchor="middle" class="dgm-text" font-size="16">7</text>
+  <circle cx="142" cy="72" r="3" class="dgm-accent"/>
+  <line x1="142" y1="72" x2="210" y2="72" class="dgm-edge" stroke-width="2" marker-end="url(#arr8)"/>
+  <!-- node 2 -->
+  <rect x="210" y="50" width="55" height="44" class="dgm-node"/>
+  <rect x="265" y="50" width="35" height="44" class="dgm-node"/>
+  <text x="237" y="78" text-anchor="middle" class="dgm-text" font-size="16">3</text>
+  <circle cx="282" cy="72" r="3" class="dgm-accent"/>
+  <line x1="282" y1="72" x2="350" y2="72" class="dgm-edge" stroke-width="2" marker-end="url(#arr8)"/>
+  <!-- node 3 -->
+  <rect x="350" y="50" width="55" height="44" class="dgm-node"/>
+  <rect x="405" y="50" width="35" height="44" class="dgm-node"/>
+  <text x="377" y="78" text-anchor="middle" class="dgm-text" font-size="16">9</text>
+  <circle cx="422" cy="72" r="3" class="dgm-accent"/>
+  <line x1="422" y1="72" x2="480" y2="72" class="dgm-edge" stroke-width="2" marker-end="url(#arr8)"/>
+  <text x="497" y="77" text-anchor="middle" class="dgm-muted" font-size="16">∅</text>
+  <text x="497" y="102" text-anchor="middle" class="dgm-muted" font-size="10">NULL</text>
+</svg>
+</div>
+<figcaption>每个节点 = <code>[数据 | next 指针]</code>。<code>head</code> 指向第一个节点,末节点的 next 指向 <code>NULL</code>。节点在内存里<strong>不连续</strong>——这是链表一切性格的根源。</figcaption>
+</figure>
+
+<p>头部插入为什么变 O(1)?因为只要:新节点的 next 指向原来的头,再把 <code>head</code> 改指向新节点——两三个指针赋值,和链表多长毫无关系。代价立刻显现在另一头:想拿第 <code>i</code> 个元素,没有「基址 + i × 大小」这种一步跳的公式了,只能<strong>从 head 一个个 next 数过去</strong>,这是 O(n)。</p>
+
+<h2>二、代价的另一面:缓存不友好</h2>
+
+<p>大 O 表看不见的一笔账:节点散落在内存各处,顺序遍历时 CPU 每跳一个节点几乎都是一次<strong>缓存未命中(cache miss)</strong>。数组连续存放,遍历时一次加载就把邻居一起拉进缓存,命中率高。所以现实里遍历一遍链表<strong>常常比同样长度的数组慢好几倍</strong>——即便两者都记 O(n)。仓库大纲专门收录了一条《为什么你需要避免使用链表》,讲的正是这件事:除非你确实需要 O(1) 的头部增删或稳定的节点地址,否则数组往往是更实际的默认选择。</p>
+
+<div class="gotcha">
+<p><strong>「链表随机访问也是 O(1)」——这是最典型的错答。</strong>链表没有连续内存,拿不到「基址 + 偏移」的捷径,<code>value_at(i)</code> 必须从 head 顺着 next 走 i 步,是 <strong>O(n)</strong>。反过来,数组头插 O(n)、链表头插 O(1)——把这两组恰好相反的复杂度记牢,面试就不会答反。</p>
+<p>还有一个进阶坑:仓库提到「<strong>指向指针的指针</strong>」。当你把 head 传进一个会修改它的函数(比如头部插入),传值传的是 head 的<em>副本</em>,函数内改的是副本、外面的 head 没变;要真正改动 head,得传<strong>指针的地址</strong>(二级指针)或返回新 head。</p>
+</div>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>链表(Linked List)</dt>
+<dd>由节点通过指针串起的线性结构,节点在内存中<strong>不连续</strong>。头部插入删除 O(1),随机访问 O(n)。<em>避免</em>:「链表访问也是 O(1)」。</dd>
+<dt>节点(Node)</dt>
+<dd>链表的基本单元,含数据域与至少一个指针域(<code>next</code>)。单链表每节点一个指针,下一课的双向链表多一个 <code>prev</code>。</dd>
+<dt>头指针 / 尾指针(head / tail)</dt>
+<dd>head 是进入链表的唯一入口;可选的 tail 记住末节点,使 <code>push_back</code> 从 O(n) 降到 O(1)。<em>避免</em>:默认链表一定有尾指针。</dd>
+</dl>
+
+<h2>四、复杂度:与数组恰好对照的一张表</h2>
+
+<p>下表是<strong>带 head 指针的单链表</strong>(无尾指针)。链表操作大多是确定性的,平均与最坏一致。</p>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>平均 / 摊还</th><th>最坏</th></tr></thead>
+<tbody>
+<tr><td class="op">随机访问 <code>value_at(i)</code></td><td class="warn">O(n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">头部插入 / 删除 <code>push_front</code> / <code>pop_front</code></td><td class="best">O(1)</td><td class="best">O(1)</td></tr>
+<tr><td class="op">尾部插入 <code>push_back</code> <small>(无尾指针)</small></td><td class="warn">O(n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">按值查找 <code>find</code></td><td class="warn">O(n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">已知前驱节点处插入 / 删除</td><td class="best">O(1)</td><td class="best">O(1)</td></tr>
+</tbody>
+</table>
+<p>空间复杂度 <strong>O(n)</strong>,但常数比数组大:每个元素额外背一根指针(64 位机上 8 字节)。如果加一个尾指针,<code>push_back</code> 也能降到 O(1)——仓库大纲要求你两种实现都写一遍,亲手感受尾指针带来的差别。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>链表是「指针操作」这类题的主战场,几乎必考:</p>
+<ul>
+<li><strong>反转链表(reverse)</strong>:面试第一梯队高频题。核心是三个指针 <code>prev / curr / next</code> 边走边掉头,一趟 O(n)、原地 O(1) 空间。能徒手写对,是链表过关的门槛。</li>
+<li><strong>快慢指针</strong>:一个走一步、一个走两步。求中点、判断是否有环(Floyd 判环)、找环入口、找倒数第 k 个节点——都是它的变体。仓库列的 <code>value_n_from_end(n)</code> 就是快慢指针的经典应用。</li>
+<li><strong>选型追问</strong>:「这里你会用数组还是链表?」——答题要落到具体操作:频繁头部增删、需要稳定的节点地址(如把节点挂进别的结构)→ 链表;需要随机访问、在乎遍历速度与缓存 → 数组。</li>
+</ul>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>数组和链表是一对镜像。数组用「连续」换来 O(1) 随机访问,代价是 O(n) 的头部增删;链表用「指针」换来 O(1) 的头部增删,代价是 O(n) 的随机访问和缓存不友好。没有谁更好,只有「你的操作更偏哪一头」。</p>
+</div>
+
+<div class="implement">
+<p>照仓库大纲徒手实现单链表(<strong>分别写「有尾指针」和「无尾指针」两版</strong>,对比 <code>push_back</code>):</p>
+<p><code>size()</code> · <code>empty()</code> · <code>value_at(i)</code> · <code>push_front(v)</code> · <code>pop_front()</code> · <code>push_back(v)</code> · <code>pop_back()</code> · <code>front()</code> · <code>back()</code> · <code>insert(i, v)</code> · <code>erase(i)</code> · <code>value_n_from_end(n)</code>(快慢指针)· <code>reverse()</code>(三指针原地)· <code>remove_value(v)</code>。</p>
+<p>重点练 <code>reverse()</code>:在纸上画三个指针,一步步挪,直到闭着眼也能写对。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:给定一个指向单链表中间某个节点的指针(不给 head),要「访问」它是 O(1),但要「删除」它却没那么直接。为什么删除会卡住?</summary>
+<div class="answer">
+<p>因为删除一个节点,本质上要让它的<strong>前驱</strong>的 next 跳过它。单链表只能往后走,拿不到前驱指针,所以正常删除需要 O(n) 从 head 找前驱。经典技巧:把<strong>后继节点的值复制到当前节点</strong>,再删掉后继,伪装成删了自己——但这招在删末节点时失效。下一课<a href="0009-doubly-linked-list.html">双向链表</a>因为有 <code>prev</code>,已知节点就能真正 O(1) 删除,正是它多那根指针换来的红利。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪种场景,链表明显优于动态数组?</summary>
+<div class="answer">
+<p><strong>需要频繁在序列头部(或已知位置)插入/删除,且几乎不做随机访问</strong>。此时链表全程 O(1),而数组头插每次 O(n)。反例——若你需要频繁按下标读取、或顺序遍历要快,数组的 O(1) 随机访问与缓存友好会完胜。仓库那条《为什么要避免链表》提醒:很多人默认链表「插删快所以更优」,却忽略了缓存代价,现实中数组往往才是更快的默认选项。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲的「数据结构 → 链表(Linked Lists)」小节。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=2T-A_GFuoTo&t=650s">链表 · CS50 哈佛大学(视频)</a> —— 从内存与指针建立最初直觉。</li>
+<li><a href="https://www.coursera.org/lecture/data-structures/singly-linked-lists-kHhgK">单链表(Coursera 视频)</a> —— 系统讲单链表的结构与操作。</li>
+<li><a href="https://www.coursera.org/lecture/data-structures-optimizing-performance/core-linked-lists-vs-arrays-rjBs9">核心:链表 vs 数组(Coursera 视频)</a> —— 把这笔取舍讲透。</li>
+<li><a href="https://www.youtube.com/watch?v=YQs6IC-vgmo">为什么你需要避免使用链表(视频)</a> —— 缓存不友好这一课。</li>
+<li><a href="https://www.eskimo.com/~scs/cclass/int/sx8.html">指向指针的指针(文章)</a> —— 理解为何修改 head 要用二级指针。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「快慢指针为什么能判环」,或带你在纸上把 <code>reverse()</code> 的三个指针一步步挪一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0007-array-dynamic-array.html"><span class="dir">← 上一课</span>数组与动态数组:连续内存的代价与红利</a>
+  <a class="next" href="0009-doubly-linked-list.html"><span class="dir">下一课 →</span>双向链表:多一根指针换来什么</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

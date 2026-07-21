@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0003 · JavaScript 编码面试怎么考</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0003 课 · 2 JavaScript 与编码面试基础 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>JavaScript 编码面试怎么考</h1>
+
+<p class="lede">"JavaScript 编码题"和"算法编码题"经常被混在一起复习,但它们考的其实是两种不同的能力。这节课只回答两个问题:JavaScript 编码题和算法编码题的边界到底划在哪里,以及 JavaScript 编码题内部还能再往下切成哪几类题型。</p>
+
+<div class="recall">
+<p>开课前先回忆一下上一课:前端面试的"编码"这道关卡,被拆成了哪几个子类型?如果你还记得"算法编码 / JavaScript 编码 / 用户界面编码"这三个名字,那你已经知道这节课要往哪个方向钻——这节课只啃"JavaScript 编码"这一块,先讲清楚它和邻居"算法编码"差在哪,再看它内部怎么再分。</p>
+</div>
+
+<h2>一、JS 编码题和"刷算法题",根本不是一回事</h2>
+
+<p>写 JavaScript 编码题和刷算法编码题,表面上都是"写代码",但考察的东西不是一回事。算法编码题几乎可以脱离具体语言——换成 Python、Java 照样能问;JavaScript 编码题恰恰相反,它通常特定于前端领域,用 JavaScript(或 <a href="https://www.typescriptlang.org/">TypeScript</a>)来完成才最有意义,而且往往还需要用到浏览器/JavaScript 专属的 API,或者 HTML/CSS/JavaScript 方面的知识。</p>
+
+<p>这类题里最容易让人犯嘀咕的一种,是让你重新实现一个语言标准里<strong>本来就有</strong>的方法——听起来像造轮子。但源头很实际:浏览器实现不一致曾经是前端的头号麻烦,老版本浏览器里常常缺某个 API,开发者只能自己动手 polyfill,在下发的代码里把这个能力补齐。能把这些原生函数亲手实现出来,本身就是"前端基础扎实"的信号。</p>
+
+<p>拿看起来最无害的 <code>Array.prototype.map</code> 举例,你要不要知道:它给回调函数传了 4 个参数(不只是 value,还有 index、array,以及 this);它会保留稀疏数组里的"空洞"—— <code>[1, 2, , 4].map(v => v * v)</code> 得到的仍是带空洞的 <code>[1, 4, , 16]</code>;它处理的元素范围在第一次调用回调之前就已经锁定,调用开始后再添加进数组的元素不会被访问到。这些细节都写在 <a href="https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.prototype.map">Array.prototype.map 的 ECMAScript 规范</a>里。面试不要求你处理所有这些边界情况,但如果主动提到了,这是一个加分项——实现越贴近规范,看起来就越资深。</p>
+
+<p>另一大类是流行库里已经写好、但(至少目前)不属于标准语言的工具函数/类:lodash/underscore 的 <code>debounce</code>、<code>throttle</code>、<code>flatten</code>、<code>curry</code>、<code>cloneDeep</code>;一些 jQuery 方法;<code>classnames</code>;测试框架(<a href="https://jestjs.io/">Jest</a>/<a href="https://mochajs.org/">Mocha</a>/<a href="https://vitest.dev/">Vitest</a>)里的 <code>test</code>/<code>expect</code>;<code>EventEmitter</code>;<a href="https://immutable-js.com/">Immutable.js</a>;<a href="https://backbonejs.org/">Backbone.js</a>。这些库要支撑各种边缘业务场景,源码往往比想象中复杂;面试里不需要覆盖它们全部的边界情况,但能主动指出"这里其实还有个坑",同样能拿印象分。</p>
+
+<table>
+<tr><th>来源</th><th>你要重新实现什么</th><th>例子</th></tr>
+<tr><td>语言/浏览器内置</td><td>标准里本来就有的类/方法(polyfill)</td><td><code>Array.prototype.map</code>/<code>reduce</code>/<code>filter</code>、<code>Promise.all</code>/<code>any</code>、<code>getElementsByTagName</code></td></tr>
+<tr><td>流行第三方库</td><td>库里已经写好、但(目前)不在标准语言里的工具函数/类</td><td><code>debounce</code>、<code>throttle</code>、<code>curry</code>、<code>cloneDeep</code>、<code>classnames</code>、<code>EventEmitter</code></td></tr>
+</table>
+
+<h2>二、和算法题的边界:语言基础 / 工具函数 / 异步 / 类型系统</h2>
+
+<p>源文件给"JavaScript 编码面试"列了一张重要概念表,一共五行:数据结构、算法、JavaScript 语言、DOM、运行时 API。前两行——数据结构和算法——恰好是算法编码题的看家本领,但源文件说得很直接:JavaScript 编码面试"重点通常不在于复杂的数据结构和算法",你可以并且很可能直接跳到具有最佳数据结构和算法选择的最佳解决方案。也就是说,数据结构和算法在这里更像是顺手要用的工具,不是考察的靶心。这节课先聚焦"JavaScript 语言"和"运行时 API"这两行——DOM 那一行内容单独成体系,留给下一课("前端编码面试全景")专门展开——可以再拆成四条更具体的线:</p>
+
+<table>
+<tr><th>维度</th><th>常考什么</th></tr>
+<tr><td>语言基础</td><td>作用域、闭包、回调、<code>this</code> 的工作方式、原型与类、箭头函数与普通函数的区别、<code>apply</code>/<code>call</code>、处理可变参数</td></tr>
+<tr><td>工具函数</td><td>上一节说的"流行库里的实用函数"这整类题,考的是能不能独立还原一个已有的抽象</td></tr>
+<tr><td>异步</td><td><code>Promise</code> 及其衍生方法(<code>Promise.all</code>/<code>any</code>)、运行时计时器 API(<code>setTimeout</code>/<code>setInterval</code>)</td></tr>
+<tr><td>类型系统</td><td>数据类型检查、类型强制转换</td></tr>
+</table>
+
+<p>"工具函数"这一条,其实就是上一节说的"库里的工具函数"整类题,不来自这张概念表;语言基础、类型系统这两条能在源文件"JavaScript 语言"这一行里直接找到出处;异步则横跨两行——<code>Promise</code> 来自"JavaScript 语言"行,<code>setTimeout</code>/<code>setInterval</code> 来自"运行时 API"行。拿到一道新题,先判断它落在这四条线的哪一条,比先纠结"这题算法上要不要优化"更接近命中考点。</p>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>Polyfill 式内置 API 题</dt>
+<dd>面试官要求你重新实现一个 JavaScript(或 DOM)标准里已经存在的方法,比如 <code>Array.prototype.map</code>、<code>Promise.all</code>,考察你对这个 API 行为契约的理解有多细。<em>避免</em>把"这个方法本来就有,考它没意义"当成理由去糊弄——面试官恰恰是通过实现精度(要不要传 4 个参数、要不要跳过稀疏数组空洞)判断你的前端基础深不深。</dd>
+<dt>JS 工具函数题</dt>
+<dd>面试官要求你独立实现一个流行库(lodash、Jest 等)里已经存在、但不属于标准语言的实用函数,比如 <code>debounce</code>、<code>curry</code>、<code>EventEmitter</code>。<em>避免</em>把它当成"重复造轮子"——它考的是你能不能在没有库的情况下,独立还原一个前端日常要用到的抽象。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>拿到一道陌生的 JavaScript 编码题,先别急着套算法题的思路。问自己:它是在让你还原某个内置 API 或库函数的行为(工具函数/语言基础),还是纯粹在考 <code>Promise</code> 相关的时序或类型判断(异步/类型系统)?判断清楚落在哪一条线,复习方向立刻不一样——前者该去精读 <code>debounce</code>、<code>throttle</code>、<code>curry</code>、<code>Array.prototype.filter</code>、<code>Promise.all</code> 这几道源文件点名的高频题的参考实现,把"这个函数该支持哪些边界行为"背下来;后者该去巩固作用域、闭包、<code>this</code>、类型强制转换这些语言机制本身,刷更多算法题对它帮助有限。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>常见误区:把 JavaScript 编码题当成"换了个语言壳的算法题"。</strong>于是照搬刷算法题那一套思路——死磕最优时间复杂度,纠结要不要用某种冷门数据结构。但源文件把话说得很明白:这里的重点通常不在复杂数据结构和算法,你可以直接跳到最佳方案上;真正拉分的是有没有想到边界情况、API 契约实现得够不够精确(比如 <code>map</code> 要不要保留稀疏数组的空洞),这些才是"语言基础/工具函数/异步/类型系统"四条线各自在考的东西。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>从源文件点名的高频题里挑一道—— <code>debounce</code>、<code>throttle</code>,或者 <code>Array.prototype.filter</code>——限时 15 分钟,不看任何参考实现,先手写出完整函数签名,再逼自己想出至少两个边界情况(比如 <code>debounce</code> 连续触发时要不要清掉上一个定时器)。写完再去对答案,比一开始就看解法记得住得多。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>JavaScript 编码题的核心不是"用 JS 语法解决一道通用算法题",而是能不能在没有原生实现、没有库的情况下,把一个前端日常会用到的内置方法或工具函数的行为契约精确地重新还原出来——落点在语言基础、工具函数、异步、类型系统这四条线上,而不是数据结构和算法的复杂度优化。</p>
+</div>
+
+<h2>四、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于"JavaScript 编码题"和"算法编码题"的核心区别,下面哪个说法最准确? (A) 二者本质相同,只是 JavaScript 编码题必须用 JavaScript 语法书写 (B) JavaScript 编码题通常特定于前端领域,考的是能不能实现某个内置 API 或工具函数的行为契约,而不是聚焦罕见数据结构和高难度复杂度优化 (C) JavaScript 编码题只会考 DOM 操作,不会涉及 Promise 或数据类型相关内容</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。JavaScript 编码题特定于前端领域,考察的重心是"能不能还原一个内置方法/工具函数的行为契约",而不是复杂数据结构和算法优化。(A) 忽略了两者的区别不只是语法差异,考察重点本身就不同;(C) 与源文件不符——"重要概念"表里除了 DOM,还明确列出了 <code>Promise</code>、数据类型检查与强制转换等多个维度。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:<code>debounce</code>、<code>throttle</code>、<code>curry</code>、<code>cloneDeep</code> 这类题,最应该归到"语言基础 / 工具函数 / 异步 / 类型系统"里的哪一类? (A) 工具函数类:考察能不能独立实现流行库(如 lodash)里已经存在的实用函数 (B) 类型系统类:主要考数据类型检查与强制转换 (C) 异步类:因为这些函数常用于处理事件,本质上是 Promise 相关题</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。源文件把 <code>debounce</code>/<code>throttle</code>/<code>curry</code>/<code>cloneDeep</code> 明确归为"来自流行库的实用函数/类"。(B) 弄错了——这几个函数和数据类型检查、类型强制转换没有关系;(C) 也不成立——它们确实常用于处理事件触发,但源文件把"异步"对应的是 <code>Promise.all</code>/<code>any</code> 这类 <code>Promise</code> 相关方法,不是 <code>debounce</code>/<code>throttle</code> 本身。</p>
+</div>
+</details>
+</div>
+
+<h2>五、主推资源</h2>
+
+<p>本节内容全部来自源文件正文和其中引用的规范/库官网,建议按需查阅:</p>
+<ul>
+<li><a href="https://github.com/greatfrontend/top-javascript-interview-questions">GreatFrontEnd · top-javascript-interview-questions</a> —— 源文件推荐的 GitHub 仓库,190 多个带解决方案的 JavaScript 编码面试题,可以离线克隆练习。</li>
+<li><a href="https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.prototype.map">Array.prototype.map · ECMAScript 规范</a> —— 本课举例的 <code>map</code> 参数与稀疏数组细节的权威出处,想查其他内置方法的精确行为也可以照这个思路去翻规范。</li>
+<li><a href="https://jestjs.io/">Jest</a> —— 源文件提到的测试框架之一,<code>test</code>/<code>expect</code> 这类工具函数题可以参考它的实现思路。</li>
+<li><a href="https://immutable-js.com/">Immutable.js</a> —— 源文件点名的流行库之一,想体会"库函数比想象中复杂"可以直接看它的源码。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"JavaScript 编码题和算法编码题到底差在哪",也可以让老师挑一道 <code>debounce</code> 或 <code>Array.prototype.map</code>,带你一步步过一遍面试官会追问的边界情况。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0002-what-front-end-interviews-actually-test.html"><span class="dir">← 上一课</span>前端面试到底考什么:五道关卡与考察重点</a>
+  <a class="next" href="0004-front-end-coding-interview-landscape.html"><span class="dir">下一课 →</span>前端编码面试全景:DOM/算法/工具函数怎么区分</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,82 @@
+{
+ "num": "0014",
+ "slug": "three-layer-tool-types",
+ "title": "工具的三层类型：名片、执行、展示",
+ "narrowTopic": "为什么 Pi 把「一个工具」拆成 Tool / AgentTool / ToolDefinition 三层，以及 wrapToolDefinition 如何桥接后两层。",
+ "analogySeed": "一张名片 → 一个能干活的员工 → 一个还会做汇报演示的员工：同一个「工具」在三个部门被逐层加料，每一层只加自己部门用得上的能力。",
+ "keyPoints": [
+  "承接第 3 章:Agent Loop 曾把「执行工具」当黑盒跳过,这一章打开黑盒,而打开前必须先搞清工具是怎么定义的。",
+  "第一层 Tool(pi-ai 层):只有 name / description / parameters 三个字段,是一张「名片」——能把自己描述给模型,但不能执行。name 和 description 会进 API 请求,parameters 告诉模型能传哪些参数。",
+  "第二层 AgentTool(pi-agent-core 层):在 Tool 基础上加 4 个字段——label(给人看的标签)、prepareArguments(兼容垫片)、execute(真正干活)、executionMode(能否并行)。从「名片」升级为「能被执行」。",
+  "label 与 description/name 的分工:模型看到 name(read),UI 看到 label(读取文件),description 也是给 LLM 的。三者受众不同。",
+  "第三层 ToolDefinition(pi-coding-agent 产品层):execute 比 AgentTool 多第 5 个参数 ctx(ExtensionContext),还加 promptSnippet、renderCall、renderResult 等 UI/扩展字段。管「能被展示和扩展」。",
+  "桥接:Agent Loop 只认 AgentTool,产品层给的是 ToolDefinition,wrapToolDefinition 这个十几行的包装器用闭包捕获 ctxFactory,在调用时动态注入第 5 个参数——Agent Loop 永远不知道 ExtensionContext 的存在。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "Tool 接口定义(name/description/parameters 三个字段,注释含「工具名如 read/bash」)",
+   "cite": "教程 §一 / packages/ai/src/types.ts:433-437"
+  },
+  {
+   "desc": "AgentTool 接口定义(extends Tool,新增 label/prepareArguments/execute/executionMode 四字段的完整 TypeScript 块)",
+   "cite": "教程 §一 / packages/agent/src/types.ts:371-394"
+  },
+  {
+   "desc": "wrapToolDefinition 包装器函数(最后一行用闭包注入 ctxFactory?.() 作为第 5 个参数的 execute 重写)",
+   "cite": "教程 §一 / packages/coding-agent/src/core/tools/tool-definition-wrapper.ts:5-18"
+  }
+ ],
+ "designRationale": [
+  "为什么非要三层而不是一个接口加可选字段:每层依赖范围不同。若给 pi-ai 的 Tool 塞 renderCall(返回终端 UI 组件),pi-ai 这个纯模型适配层就得依赖终端 UI 渲染库,越界了。",
+  "三层递进的本质是「每层只加自己层级需要的能力,不越界」:Tool 管「能描述自己」,AgentTool 管「能被执行」,ToolDefinition 管「能被展示和扩展」。",
+  "为什么用包装器而不是让 Agent Loop 直接吃 ToolDefinition:让 Agent Loop 与产品层的 ExtensionContext 彻底解耦,内核对会话上下文一无所知,靠闭包在边界处悄悄注入。",
+  "label 与 name 分离:给模型的标识(name)和给人的标识(label)受众不同,强行合并会让 UI 文案污染模型看到的工具名。"
+ ],
+ "quiz": [
+  {
+   "stem": "为什么不能把 renderCall 这样的 UI 字段直接加到最底层的 Tool 接口里?",
+   "options": [
+    "因为 Tool 接口的字段数量有上限,加不下了",
+    "因为那会让纯模型适配层 pi-ai 被迫依赖终端 UI 渲染库,突破了它的依赖范围",
+    "因为 renderCall 必须是异步函数,而 Tool 只支持同步字段",
+    "因为模型 API 请求里不允许出现多于三个字段"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。三层的分界线其实是「依赖边界」——pi-ai 只该知道怎么把工具格式化成 API 请求,不该知道终端 UI 长什么样。延伸想:这也是为什么 execute 直到 AgentTool 才出现,因为「执行」需要依赖运行时能力。",
+   "noMsg": "回看教程「为什么非要分三层」那段,关注每一层各自的「依赖范围」这个词。"
+  },
+  {
+   "stem": "wrapToolDefinition 这个包装器解决的核心问题是什么?",
+   "options": [
+    "把 ToolDefinition 的 5 参数 execute 适配成 AgentTool 的 4 参数 execute,用闭包注入 ExtensionContext",
+    "把 Tool 升级成 AgentTool,补上 execute 字段",
+    "验证工具参数的类型是否合法",
+    "决定一批工具是并行还是串行执行"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。AgentTool.execute 是 4 参数,ToolDefinition.execute 是 5 参数(多了 ctx),包装器通过闭包捕获 ctxFactory 在调用时补上第 5 个参数。妙处在于 Agent Loop 完全感知不到 ExtensionContext 的存在。",
+   "noMsg": "数一下两层 execute 的参数个数各是几个,包装器补的是哪一个参数。"
+  },
+  {
+   "stem": "模型在 API 请求里看到的工具标识,和 UI 上给人显示的标识,分别是哪个字段?",
+   "options": [
+    "两者都是 description",
+    "模型看 label,UI 看 name",
+    "模型看 name,UI 看 label",
+    "两者都是 name,label 只是备注"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。模型看到 name(如 read),UI 看到 label(如 读取文件),description 也是给 LLM 的描述。受众分离正是 AgentTool 要单独引入 label 的原因。",
+   "noMsg": "回看 label 那条要点——注意「模型看到的是…,UI 看到的是…」这句的主语对应关系。"
+  }
+ ],
+ "_chapter": "第5章 工具系统",
+ "_chapterCN": "工具系统——Agent 的手脚是怎么被管住的",
+ "prevFile": "0013-thinking-levels-enum-and-map.html",
+ "prevNum": "0013",
+ "nextFile": "0015-five-step-tool-pipeline.html",
+ "nextNum": "0015",
+ "crumbLabel": "第 5 章 · 工具系统",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md",
+ "filename": "0014-three-layer-tool-types.html"
+}

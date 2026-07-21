@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0002 · 自注意力与 QKV:注意力到底在算什么</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第一部分 Transformer 精讲 · 第 0002 课</p>
+<h1>自注意力与 QKV:注意力到底在算什么</h1>
+<p class="lede">整个大模型的地基就一行公式:<span class="nowrap">$\operatorname{softmax}(QK^\top/\sqrt{d_k})\,V$</span>。这节课把它拆到你能空手写出来、并答得出面试官最爱追的三个「为什么」:QKV 从哪来、为什么用三套不同权重、为什么要除以 $\sqrt{d_k}$。</p>
+
+<div class="recall">
+<p>上节课(Transformer 整体结构)留了个扣子:RNN 处理序列要一步一步递推,离得远的词之间要走很多步才能「互相看到」,又慢又容易遗忘。<strong>先别往下看,试着回忆:如果想让序列里任意两个位置「一步」建立联系,你会怎么设计?</strong></p>
+</div>
+
+<h2>一、直觉:注意力就是「带权检索」</h2>
+<p>忘掉矩阵。注意力做的事,本质是<strong>一次加权求和</strong>:每个位置的新表示,是序列里所有位置的信息按「相关度」加权混合出来的。相关度越高,权重越大。</p>
+<p>用查字典的比喻最好懂——三个角色 <strong>Q / K / V</strong> 各司其职:</p>
+
+<div class="trio">
+  <div class="cell"><strong>Q(Query)</strong><br>我要找什么<br><em>你带着的问题</em></div>
+  <div class="cell"><strong>K(Key)</strong><br>每条信息的「标签」<br><em>书脊上的索引</em></div>
+  <div class="cell"><strong>V(Value)</strong><br>每条信息的「内容」<br><em>书里真正的正文</em></div>
+</div>
+<p>流程就是:拿 <strong>Q</strong> 去和每个 <strong>K</strong> 比相似度(点积)→ 相似度经 softmax 变成一组和为 1 的权重 → 用这组权重去加权求和所有的 <strong>V</strong>。相似的键,它的值就被更多地读进来。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">输入 $X$</div>
+  <div class="node">三套线性投影<br>$W_Q,W_K,W_V$</div>
+  <div class="node">$Q,\;K,\;V$</div>
+  <div class="node">打分<br>$QK^\top/\sqrt{d_k}$</div>
+  <div class="node">$\operatorname{softmax}$<br>→ 权重</div>
+  <div class="node good">加权求和<br>$\times V$ → 输出</div>
+</div>
+<figcaption>同一个输入 $X$ 被投影成三份角色,再走「打分 → 归一化 → 加权取值」。</figcaption>
+</figure>
+
+<h2>二、关键定义与公式</h2>
+<dl class="keydef">
+<dt>缩放点积注意力(Scaled Dot-Product Attention)</dt>
+<dd>$$\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V$$</dd>
+<dd><em>$Q\in\mathbb{R}^{n\times d_k}$、$K\in\mathbb{R}^{n\times d_k}$、$V\in\mathbb{R}^{n\times d_v}$;$n$ 是序列长度,$d_k$ 是每个头的维度。$QK^\top$ 得到 $n\times n$ 的注意力分数矩阵,行代表「谁在看」,列代表「看谁」。</em></dd>
+</dl>
+<p>三份角色都来自同一个输入,只是乘了三个<strong>可学习</strong>的权重矩阵:$Q=XW_Q,\;K=XW_K,\;V=XW_V$。「自注意力」的「自」就在这里——Q、K、V 全部源于同一段序列自己。</p>
+
+<h2>三、面试最爱的两个「为什么」</h2>
+
+<h3>为什么 Q 和 K 要用<em>不同</em>的权重矩阵?</h3>
+<p>如果 $W_Q=W_K$,那么注意力分数 $QK^\top$ 就近似对称,而且一个词和自己的点积几乎总是最大——每个位置只会拼命关注自己,退化成没用的「自恋注意力」。用两套不同的投影,才能表达<strong>非对称</strong>的关系:「主语」该重点看「谓语」,但「谓语」未必同样看「主语」。语言里的依赖本就是有方向的。</p>
+
+<h3>为什么要除以 $\sqrt{d_k}$?</h3>
+<p>假设 $q,k$ 各维独立、均值 0、方差 1,那么点积 $q\cdot k=\sum_{i=1}^{d_k} q_i k_i$ 的方差会随维度线性放大:</p>
+$$\operatorname{Var}(q\cdot k)=d_k \quad\Rightarrow\quad \text{标准差} \approx \sqrt{d_k}$$
+<p class="formula-note">维度越大,点积绝对值越容易冲到很大。</p>
+<p>点积一大,softmax 的输入就被推到饱和区——输出几乎变成 one-hot,梯度趋近于 0,训练几乎学不动。除以 $\sqrt{d_k}$ 把方差拉回 1 附近,softmax 停在梯度健康的区间。<strong>注意:除的是每个头的维度 $d_k$,不是 $d_{\text{model}}$。</strong></p>
+
+<div class="implement">
+<p>把公式翻译成代码,自己敲一遍(注意 mask 加在 softmax <em>之前</em>):</p>
+<pre><code>import torch, torch.nn.functional as F
+
+def attention(Q, K, V, mask=None):
+    d_k = Q.size(-1)
+    scores = Q @ K.transpose(-2, -1) / d_k ** 0.5   # [n, n]
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, float('-inf'))
+    weights = F.softmax(scores, dim=-1)             # 每行和为 1
+    return weights @ V                              # 加权求和</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「Q、K、V 分别是什么、从哪来?」——同一输入乘三套可学习权重;别答成「三个不同的输入」。</li>
+<li>「自注意力的时间/空间复杂度?」——$O(n^2 d)$,瓶颈在 $n\times n$ 的分数矩阵,这也是长上下文贵的根因(引出第 0008 课 FlashAttention)。</li>
+<li>「为什么除以 $\sqrt{d_k}$?不除会怎样?」——见上,考的是你懂不懂 softmax 饱和与梯度。</li>
+<li>「能不能用别的相似度代替点积?」——可以(加性注意力),但点积能用高度优化的矩阵乘,工程上更快。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>缩放因子是 $\sqrt{d_k}$(单头维度),<strong>不是</strong> $\sqrt{d_{\text{model}}}$。多头场景下 $d_k=d_{\text{model}}/h$。</li>
+<li>因果 mask 要在 softmax <em>之前</em>把被遮位置设为 $-\infty$,让它 softmax 后权重为 0;在之后置 0 会破坏归一化。</li>
+<li>说「Q 和 K 可以共享权重」是错的——会导致注意力对称退化(见上)。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>缩放点积注意力里除以 $\sqrt{d_k}$,最主要是为了解决什么?</p>
+<details><summary>A. 把注意力权重归一化到 0~1 之间</summary>归一化是 softmax 干的事,不需要额外缩放。</details>
+<details><summary>B. 点积随维度增大而变大,推 softmax 进饱和区导致梯度消失 ✅</summary>正确。缩放把点积方差拉回 1 附近,让 softmax 停在梯度健康区间。</details>
+<details><summary>C. 加速矩阵乘法的计算</summary>缩放是逐元素除,不改变矩阵乘的计算量。</details>
+<details><summary>D. 防止模型过拟合</summary>与正则化无关。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>如果强行让 $W_Q=W_K$(Q、K 共享同一套权重),最可能出现什么?</p>
+<details><summary>A. 模型收敛更快、效果更好</summary>恰恰相反,表达能力被削弱。</details>
+<details><summary>B. 注意力分数矩阵趋于对称,每个位置过度关注自己,难以表达有方向的依赖 ✅</summary>正确。语言依赖是非对称的,共享权重会退化。</details>
+<details><summary>C. 完全不影响,只是省参数</summary>会显著影响表达能力,不是「无损省参」。</details>
+<details><summary>D. KV Cache 会失效</summary>与 KV Cache 无关(那是推理阶段的缓存,见第 0006 课)。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Attention Is All You Need</strong>(Vaswani et al., 2017)——缩放点积注意力与 Transformer 的原始论文,§3.2 就是本课公式。</li>
+<li>想弄清「$\sqrt{d_k}$ 从哪来」,顺着论文脚注读方差推导;本课的 $\operatorname{Var}(q\cdot k)=d_k$ 即出自此。</li>
+<li>下一步:多头把这套机制并行成 $h$ 份(第 0003 课),推理时怎么缓存 K、V(第 0006 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>注意力 = 用 Q·K 的相似度做权重,对 V 加权求和;除以 $\sqrt{d_k}$ 是为了让 softmax 不饱和。</strong></p>
+<nav class="lesson-nav">
+<a href="0001-transformer-overview.html">← 上一课:Transformer 整体结构</a>
+<a href="0003-multi-head-attention.html">下一课:多头注意力 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

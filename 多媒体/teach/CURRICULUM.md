@@ -1,7 +1,7 @@
 # 课程计划 · 多媒体系统导论（专题精编版）
 
 > 目标见 [MISSION.md](./MISSION.md)。教学法见 [NOTES.md](./NOTES.md)。
-> 21 节专题微课，**一节一窄主题**，输出到 `lessons/NNNN-dash-case.html`。
+> 22 节专题微课，**一节一窄主题**，输出到 `lessons/NNNN-dash-case.html`。
 > 图例：⭐真题直接命中 · 🔴重点 · 🟡中频 · ⚪选择/了解。进度：☐ 待建 / ☑ 已建。
 
 ## 生成状态

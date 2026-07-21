@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0022 · 堆与优先队列:数组里的完全二叉树</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0022 课 · 树 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>堆与优先队列:数组里的完全二叉树</h1>
+
+<p class="lede">前几课的 BST 追求「整体有序」,代价是可能退化、还得费劲平衡。但很多场景我们<strong>只关心极值</strong>——当前最大(或最小)的那一个。为此付出「全局有序」的代价太奢侈。<strong>堆(Heap)</strong>就是这个需求的精确答案:它只保证堆顶是极值,靠一棵<strong>完全二叉树</strong>做到取极值 O(1)、增删 O(log n),而且<strong>整棵树塞在一个数组里、连指针都不用</strong>。它就是「优先队列」最常见的底层实现。</p>
+
+<div class="recall">
+<p>先回忆两件事:上一课族里提过<strong>完全二叉树</strong>(第 0018 课——除最后一层外全填满、最后一层靠左连续);还有第 0007 课的<strong>数组</strong>(连续内存、O(1) 随机访问)。这节的魔法就是把这两者叠起来:先想想——如果一棵二叉树「没有空洞、逐层靠左填满」,是不是就能按层从左到右编号、直接摊平进数组,而不丢失父子关系?</p>
+</div>
+
+<h2>一、堆是什么:完全二叉树 + 堆序</h2>
+
+<p>堆是一棵满足两条性质的树:①<strong>形状</strong>是完全二叉树(逐层填满、最后一层靠左);②<strong>堆序</strong>——<strong>大顶堆</strong>里每个节点都 ≥ 它的两个孩子(小顶堆则 ≤)。注意堆序<strong>只管父子、不管左右兄弟</strong>,所以堆<strong>不是</strong>排好序的,它只保证一件事:<strong>根(堆顶)是全局极值</strong>。</p>
+
+<h2>二、为什么能塞进数组:下标即指针</h2>
+
+<p>正因为是完全二叉树(没有空洞),按层从左到右给节点编号 0,1,2,…,就能直接摊进数组,父子关系用下标算出来,无需任何指针:</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell on"><span class="idx">0</span>50</div>
+  <div class="cell on"><span class="idx">1</span>30</div>
+  <div class="cell on"><span class="idx">2</span>40</div>
+  <div class="cell on"><span class="idx">3</span>10</div>
+  <div class="cell on"><span class="idx">4</span>20</div>
+  <div class="cell on"><span class="idx">5</span>35</div>
+</div>
+<figcaption>同一个大顶堆的数组表示。下标关系:节点 <code>i</code> 的左孩子 = <code>2i+1</code>、右孩子 = <code>2i+2</code>、父 = <code>(i−1)/2</code> 取整。</figcaption>
+</figure>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 400 235" role="img" aria-label="一个大顶堆的完全二叉树表示,每个节点标注数组下标">
+  <line class="dgm-edge" x1="200" y1="34" x2="110" y2="102"/>
+  <line class="dgm-edge" x1="200" y1="34" x2="300" y2="102"/>
+  <line class="dgm-edge" x1="110" y1="108" x2="60" y2="176"/>
+  <line class="dgm-edge" x1="110" y1="108" x2="160" y2="176"/>
+  <line class="dgm-edge" x1="300" y1="108" x2="255" y2="176"/>
+  <circle class="dgm-accent-node" cx="200" cy="32" r="20"/><text class="dgm-text" x="200" y="38" text-anchor="middle" font-size="15">50</text>
+  <circle class="dgm-node" cx="110" cy="105" r="20"/><text class="dgm-text" x="110" y="111" text-anchor="middle" font-size="15">30</text>
+  <circle class="dgm-node" cx="300" cy="105" r="20"/><text class="dgm-text" x="300" y="111" text-anchor="middle" font-size="15">40</text>
+  <circle class="dgm-node" cx="60" cy="178" r="20"/><text class="dgm-text" x="60" y="184" text-anchor="middle" font-size="15">10</text>
+  <circle class="dgm-node" cx="160" cy="178" r="20"/><text class="dgm-text" x="160" y="184" text-anchor="middle" font-size="15">20</text>
+  <circle class="dgm-node" cx="255" cy="178" r="20"/><text class="dgm-text" x="255" y="184" text-anchor="middle" font-size="15">35</text>
+  <text class="dgm-muted" x="222" y="30" font-size="11">[0]</text>
+  <text class="dgm-muted" x="132" y="103" font-size="11">[1]</text>
+  <text class="dgm-muted" x="322" y="103" font-size="11">[2]</text>
+  <text class="dgm-muted" x="34" y="176" font-size="11">[3]</text>
+  <text class="dgm-muted" x="182" y="176" font-size="11">[4]</text>
+  <text class="dgm-muted" x="277" y="176" font-size="11">[5]</text>
+</svg>
+</div>
+<figcaption>堆顶 <code>50</code>(红)是全局最大。每个节点都 ≥ 它的孩子(50≥30,40;30≥10,20;40≥35),但兄弟之间没有顺序(30 和 40 谁大都行)——所以堆<strong>不是</strong>全序排好的。</figcaption>
+</figure>
+
+<h2>三、两个核心动作:上浮与下沉</h2>
+
+<p>堆的一切修改,都靠两个「把违反堆序的节点挪回正确层级」的操作:</p>
+<p><strong>插入 = 追加 + sift_up(上浮)</strong>:新元素先放到数组末尾(树的最后一个位置,仍是完全二叉树),然后不断和<strong>父</strong>比较,比父大就交换、往上冒,直到不再比父大或到根。走过的路不超过树高,O(log n)。</p>
+<p><strong>弹出极值 = 取根 + 末尾补位 + sift_down(下沉)</strong>:堆顶就是答案(O(1) 读到);删它时,把数组最后一个元素搬到根,再让它不断和<strong>较大的那个孩子</strong>比较、比孩子小就交换下沉,直到就位。同样 O(log n)。</p>
+
+<h2>四、建堆是 O(n),不是 O(n log n)</h2>
+
+<p>把一个乱序数组<strong>原地</strong>变成堆,叫 <strong>heapify</strong>。做法是<strong>自底向上</strong>:从最后一个非叶节点起、倒着对每个节点做一次 sift_down。直觉上「n 个节点 × 每个 log n = O(n log n)」,但这是<strong>高估</strong>——因为绝大多数节点在底层、下沉距离极短:一半是叶子(0 步),只有极少数靠近根的节点才走满 log n。把各层代价求和 Σ(节点数 × 该层最大下沉步数)是收敛级数,总和是 <strong>O(n)</strong>。这是面试高频的「反直觉复杂度」。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>堆 / 优先队列(Heap / Priority Queue)</dt>
+<dd>用<strong>完全二叉树</strong>(通常存在数组里)实现、满足堆序的结构;取极值 O(1),插入/弹出 O(log n)。优先队列是抽象接口,堆是它最常见的实现。<em>避免</em>把「堆(数据结构)」和内存的「堆(heap 区)」混用而不说明。</dd>
+<dt>堆序 vs 全序(heap order vs total order)</dt>
+<dd>堆序只约束「父与子」,不约束兄弟,所以堆只保证堆顶是极值,<em>避免</em>误以为「堆是排好序的」。</dd>
+<dt>sift_up / sift_down(上浮 / 下沉)</dt>
+<dd>把一个暂时违反堆序的节点沿树高向上或向下移动到正确层级,是插入与弹出的引擎,单次 O(log n)。</dd>
+</dl>
+
+<h2>六、复杂度:一张必须背下来的表</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>平均 / 摊还</th><th>最坏</th></tr></thead>
+<tbody>
+<tr><td class="op">取极值 <code>get_max</code>(读堆顶)</td><td class="best">O(1)</td><td class="best">O(1)</td></tr>
+<tr><td class="op">插入 <code>insert</code>(sift_up)</td><td>O(log n)</td><td>O(log n)</td></tr>
+<tr><td class="op">弹出极值 <code>extract_max</code>(sift_down)</td><td>O(log n)</td><td>O(log n)</td></tr>
+<tr><td class="op">建堆 <code>heapify</code>(自底向上)</td><td class="best">O(n)</td><td class="best">O(n)</td></tr>
+<tr><td class="op">堆排序 <code>heap_sort</code></td><td>O(n log n)</td><td>O(n log n)</td></tr>
+</tbody>
+</table>
+<p>空间 O(n)(就那一个数组,原地操作)。注意堆<strong>不支持</strong> O(log n) 的「按值查找任意元素」——它只对极值高效,想查中间某个值仍是 O(n)。堆排序:先 heapify O(n),再反复弹出极值 n 次(每次 O(log n)),合计 O(n log n),且<strong>原地、但不稳定</strong>。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>看到这些信号,几乎就是在喊「上优先队列(堆)」:</p>
+<ul>
+<li><strong>Top-K / 第 K 大(小)</strong>:维护一个大小为 K 的堆,O(n log K),比全排序 O(n log n) 更省。</li>
+<li><strong>流式中位数(数据流不断来)</strong>:一个大顶堆管左半、一个小顶堆管右半,两堆顶取中位数,每次插入 O(log n)。</li>
+<li><strong>合并 K 个有序链表/数组</strong>:把每条的当前头塞进小顶堆,每次弹最小、再补该来源的下一个,O(N log K)。</li>
+<li>被追问建堆复杂度,答<strong>「自底向上 heapify 是 O(n),不是 O(n log n)」</strong>并能讲出「大多数节点在底层、下沉浅」的理由,是明显的加分项。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「堆是排好序的」——错。</strong>堆只保证堆顶是极值,兄弟节点、乃至不同分支之间毫无顺序可言。想拿到「从大到小的全序」,得一个一个弹出(那就是堆排序了)。</p>
+<p><strong>「建堆是 O(n log n)」——也错。</strong>逐个 insert 建堆才是 O(n log n);<strong>自底向上 heapify 是 O(n)</strong>。这是面试最爱设的坑,张口就说 O(n log n) 会直接暴露没推过那个求和。另外别忘了:堆排序虽然 O(n log n) 且原地,但它<strong>不稳定</strong>,相等元素的相对次序可能被打乱。</p>
+</div>
+
+<div class="implement">
+<p>照仓库「实现一个大顶堆」清单,全部基于<strong>一个数组 + 下标运算</strong>(千万别真的建树节点):</p>
+<p><code>insert(x)</code> · <code>sift_up(i)</code> · <code>get_max()</code>(读堆顶不删)· <code>extract_max()</code> · <code>sift_down(i)</code> · <code>heapify(arr)</code>(自底向上建堆)· <code>heap_sort(arr)</code>(建堆后反复弹极值,原地)。</p>
+<p>小实验:在 heapify 里数一下 sift_down 触发的<strong>总交换次数</strong>,对不同规模 n 打印出来,你会看到它大致线性增长(≈O(n)),而不是 n log n——亲手验证那个反直觉结论。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>堆 = 塞进数组的完全二叉树,只保证堆顶是极值(取极值 O(1)、增删 O(log n))。看到「Top-K / 第 K 大 / 流式中位数 / 合并 K 路」就想优先队列。记牢:<strong>自底向上建堆是 O(n)</strong>。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:为什么自底向上 heapify 建堆是 O(n),而不是 O(n log n)?</summary>
+<div class="answer">
+<p>「n 个节点各下沉 log n」是<strong>高估</strong>:heapify 从最后一个非叶节点倒着做 sift_down,而节点的下沉距离等于「它到最深叶的高度」,不是整棵树高。底层节点占绝大多数、高度极小——<strong>一半是叶子(0 步)</strong>,只有靠近根的极少数才走满 log n。把各层代价 Σ(该层节点数 × 该层高度)= Σ h·n/2^{h+1} 求和,这个级数收敛到 O(n)。相反,「逐个 insert 建堆」每次都可能上浮 log n,那才是 O(n log n)。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:要在一个不断到来的数据流里实时维护「第 K 大」的元素,最合适的结构是?</summary>
+<div class="answer">
+<p><strong>一个大小为 K 的小顶堆。</strong>堆里始终只留当前最大的 K 个,堆顶是这 K 个里最小的——那正好就是「第 K 大」。新元素来时:若比堆顶大就弹掉堆顶、把它放进去(O(log K)),否则丢弃。排序数组每来一个要 O(n) 维护有序、哈希表管不了顺序、单调栈解决的是另一类「下一个更大元素」问题——都不对。这题也说明堆的杀手锏:<strong>只为极值买单,不为全局有序买单</strong>。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题在仓库大纲「树 → 堆 / 优先级队列 / 二叉堆」小节。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Heap_(data_structure)">堆(Heap)· 维基百科</a> —— 定义与数组表示的权威参考。</li>
+<li><a href="https://www.coursera.org/learn/data-structures/lecture/gl5Ni/complete-binary-trees">完全二叉树(Coursera 视频)</a> —— 为什么能塞进数组,从这里理解。</li>
+<li><a href="https://www.youtube.com/watch?v=MiyLo8adrWw">线性时间构建堆(大顶堆)(视频)</a> —— 专讲 O(n) 建堆的证明。</li>
+<li><a href="https://www.youtube.com/watch?v=B7hVxCmfPtM&index=4&list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb">MIT · 堆和堆排序(视频)</a> —— 系统串起 sift/heapify/堆排序。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师给你一个乱序数组,让你在纸上一步步 heapify;或让老师用一个大顶堆 + 小顶堆的组合,带你手推「流式中位数」的每一步。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0021-bst-insert-delete-successor.html"><span class="dir">← 上一课</span>BST 的插入、删除与后继</a>
+  <a class="next" href="0023-sorting-overview.html"><span class="dir">下一课 →</span>排序总览:稳定性、原地与下界</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

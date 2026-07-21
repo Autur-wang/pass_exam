@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0021 · React 面试考什么、怎么准备</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0021 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>React 面试考什么、怎么准备</h1>
+
+<p class="lede">从这节课开始,进入 Part 6:React 面试专题。这节不讲任何具体的 React 知识点(hooks、状态设计那些留给后面几节),只回答三个更基础的问题:React 面试整体长什么样、它和你前面几节学过的"纯前端面试"相比到底多考了什么、以及该按什么顺序去准备。</p>
+
+<div class="recall">
+<p>开始之前先做一次检索:回到 0002 课,前端面试被拆成的「五道关卡」你还记得是哪几关吗?再往回想一步——你刚学完的 Part 5(前端系统设计,RADIO 框架、常见错误清单)算是这五关里的哪一关?如果这两个问题答不上来,说明该往前翻一翻,而不是急着往下学 React。带着这两个答案,再看这节课要处理的问题:React 面试是这「五道关卡」之外新开的第六关,还是渗透进了原来的关卡里?</p>
+</div>
+
+<h2>一、React 面试长什么样:五种题型</h2>
+
+<p>React 知识不是靠单一形式的题目考出来的。源材料把 React 面试问题拆成五种格式,每种考察的能力不一样:</p>
+
+<table>
+<tr><th>题型</th><th>考察什么</th><th>例子</th></tr>
+<tr><td>测验 / trivia</td><td>对 React 概念、API、最佳实践的熟悉程度,用来快速摸底</td><td>受控组件和非受控组件有什么区别?为什么渲染列表要用 <code>key</code> prop?</td></tr>
+<tr><td>UI 编程</td><td>用 React 实现组件的能力,重点是还原设计稿的准确度、状态管理、可访问性</td><td>实现标签组件、自动完成组件、带遮罩和关闭功能的模态组件</td></tr>
+<tr><td>实现 Hooks</td><td>对 hooks 用例、依赖数组、副作用处理的理解,被单独拎出来作为一类题型</td><td>实现 <code>useDebounce</code>、<code>usePrevious</code>、<code>useLocalStorage</code></td></tr>
+<tr><td>课后作业</td><td>限定时间内独立搭建一个真实应用,看代码质量和可维护性,而不是当场手写</td><td>任务管理应用、可搜索/过滤/排序的电商列表页、天气应用</td></tr>
+<tr><td>系统设计</td><td>分两类:应用设计(不特定于某个框架)和组件设计(用 React 设计可复用、可访问的组件)</td><td>新闻流的无限滚动、音乐播放器的组件层次、模态对话框组件设计</td></tr>
+</table>
+
+<p>把这五行和你在 Part 1-5 学过的题型对照一下会发现:trivia、UI 编程、系统设计这三个外壳,其实就是"纯前端面试"里学过的那三种,只是换了个考 React 的壳。真正新出现的,是"实现 Hooks"和"课后作业"这两类。</p>
+
+<h2>二、和纯前端面试比,React 面试多考什么</h2>
+
+<p>所以回到开头的问题:React 面试不是五道关卡外新开的第六关,而是两层叠加。第一层是一个新增的专属题型——"实现 Hooks",纯前端面试没有单独把它拎出来考;第二层是叠在原有 trivia/UI 编程/系统设计外壳上的一整套 React 专属知识——hooks、声明式思考、状态设计、合成事件、受控/非受控表单、设计模式、数据获取、性能优化,这些概念要具体地在原来的题型里被考出来。</p>
+
+<p>但还有一个变量决定"到底多考多少":公司类型。源材料给出的分类差异很大:</p>
+
+<table>
+<tr><th>公司类型</th><th>示例</th><th>面试流程</th></tr>
+<tr><td>大型科技公司(FAANG 及类似)</td><td>Meta、Apple、Amazon、Netflix、Google、Microsoft</td><td>高度结构化,多轮,包括系统设计、算法和前端专业知识</td></tr>
+<tr><td>中型公司</td><td>Airbnb、Pinterest、Dropbox、Stripe、Shopify、DoorDash</td><td>与大型科技公司类似,但更侧重产品工程和前端性能</td></tr>
+<tr><td>高增长初创公司</td><td>Notion、Figma、Ramp、Brex、Databricks、OpenAI</td><td>系统设计、实际前端编码和文化契合的混合,可能包括带回家的作业</td></tr>
+<tr><td>早期初创公司</td><td>种子轮到 A 轮融资的初创公司</td><td>灵活,通常只有 2-3 轮,侧重解决问题、UI/UX 直觉和快速交付</td></tr>
+<tr><td>企业</td><td>Oracle、Cisco、SAP、Salesforce、Workday</td><td>结构化,但通常不如 FAANG 那么注重算法</td></tr>
+</table>
+
+<p>值得注意的一个反直觉细节:像 Meta、Google 这样的大型科技公司,编码环节常要求全程用 Vanilla JavaScript 完成,React 本身反而几乎无关紧要。所以"多考什么"没有一个放到哪家公司都成立的答案——面试前先向招聘方确认题型占比,比自己瞎猜更有效率。</p>
+
+<h2>三、准备顺序:官方推荐的四步计划</h2>
+
+<p>先说一个前提:这份 React 面试手册假设你已经有用 React 构建界面的经验,不是从零教你 React。如果这个前提对你不成立,第一步就不是看手册,而是先去官方文档打基础。在这个前提之上,推荐的准备顺序是这样一条链:</p>
+
+<div class="flow">
+  <div class="step">1. 通读 <a href="https://react.dev/learn">react.dev 的"学习"部分</a>,浏览每页的示例——一天能完成</div>
+  <div class="down">↓</div>
+  <div class="step">2. 从头到尾读完这本 React 面试手册(也就是这门课的 Part 6)——两小时能完成</div>
+  <div class="down">↓</div>
+  <div class="step">3. 练习:GreatFrontEnd 上的 React 测验题 + 用 React 构建 UI 的编码题</div>
+  <div class="down">↓</div>
+  <div class="step decision">目标是高级职位,或预期这场面试有系统设计环节?</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch"><p class="label">是</p><div class="step terminal">回头补前端系统设计题库——正好用上 Part 5 刚学的 RADIO 框架</div></div>
+    <div class="branch"><p class="label">否</p><div class="step terminal">先按上面三步准备,视面试通知的具体要求再决定要不要加系统设计</div></div>
+  </div>
+</div>
+
+<p>这份手册自己也说明白了定位:它不是给你一份"背下来就能用"的问答清单,而是解释概念、教你模式,好让你在面试里遇到任何变体问题都能自己推理出来——这也是为什么第 2 步是"读懂",不是"背熟"。</p>
+
+<h2>四、哪些概念该重点看,哪些可以先放一放</h2>
+
+<p>源材料把 React 相关概念明确分成了两组,这份取舍可以直接拿来分配复习时间:</p>
+
+<table class="compare">
+<tr><th>优先看(面试常考)</th><th>可以先放一放</th></tr>
+<tr><td class="good">基本概念:组件、JSX、props、state、渲染(虚拟 DOM、协调)</td><td class="warn"><a href="https://react.dev/reference/react/Suspense">Suspense</a>——面试更常考 <code>useEffect</code>、TanStack Query 或 SWR 这类更基础的数据获取模式</td></tr>
+<tr><td class="good">声明式思考:用"要渲染什么"而不是"怎么渲染"描述 UI</td><td class="warn"><a href="https://react.dev/reference/rsc/server-components">服务端组件(RSC)</a>——偏 Next.js 等框架,多数公司还在过渡中</td></tr>
+<tr><td class="good">状态设计:状态放在哪、什么时候提升、怎么减少冗余状态变量</td><td class="warn"><a href="https://react.dev/reference/rsc/server-functions">服务器函数</a>——除非面试的是全栈岗,否则超出前端核心职责范围</td></tr>
+<tr><td class="good">Hooks:<code>useState</code>/<code>useEffect</code>/<code>useContext</code>,以及 <code>useMemo</code>/<code>useCallback</code> 等性能类 hook</td><td class="warn"><a href="https://react.dev/blog/2024/12/05/react-19">React 19 的具体变化</a>——除非 JD 里特别写明,否则不太会被深挖</td></tr>
+<tr><td class="good">事件处理、表单(受控/非受控)、数据获取、设计模式、性能优化策略</td><td class="warn"><a href="https://react.dev/learn/react-compiler">React Compiler</a>——还在早期阶段,尚未被广泛采用</td></tr>
+</table>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>课后作业(Take-home Assignment)</dt>
+<dd>在限定时间(通常几天)内独立搭建一个真实 React 应用的考察方式,重点看代码质量、可维护性和最佳实践,而不是当场手写。<em>避免</em>把它和"UI 编程面试"混为一谈——UI 编程面试通常现场限时完成一个组件,课后作业给的时间更长、范围更接近一个小型真实项目。</dd>
+<dt>系统设计的两分法:应用设计 vs 组件设计</dt>
+<dd>React 系统设计题分两类——应用设计不特定于某个框架,但面试官可能要求你具体说明用 React 的哪些 API 实现;组件设计是用 React(或原生 JS)为特定用途实现可复用、可扩展、可访问的组件。<em>避免</em>把两者当成同一件事——应用设计考的是架构判断力,组件设计考的是 API 设计能力。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>面试安排下来之后,先向招聘方或面试官确认题型占比——是纯 trivia 电话面?要不要现场写代码?有没有系统设计环节?再对照上面的公司类型表格,判断对方更接近哪一类。如果对方明确说编码环节要求 Vanilla JavaScript,那 React 专属知识的复习优先级就该往后调,把时间还给通用 JS/算法。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"我用 React 写过很多项目"等同于"我准备好 React 面试了"。</strong>手册开头就说清楚了它的定位——假设你已经会用 React 构建界面,考的不是你会不会用,而是你能不能在压力下讲清楚状态该怎么设计、性能优化背后的原理、hooks 依赖数组为什么会出错。日常写代码时靠手感就能过,面试现场要把手感说成道理,这是另一种能力,需要专门准备。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的事:</strong>花 10 分钟,把接下来的面试安排(或你设想的目标公司)对照上面的公司类型表格,判断自己更接近哪一类,再决定 Part 6 剩下几节里,哪几节可以先跳、哪几节要重点补。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>React 面试的题型外壳(trivia/UI 编程/系统设计)和纯前端面试是同一套,真正多出来的是叠在上面的 React 专属层——hooks、声明式思考、状态设计——外加一个专属题型"实现 Hooks";准备顺序是先读 react.dev,再读这本手册,然后动手练测验题和编码题,目标是高级职位或预期有系统设计环节时,再回头补前端系统设计题库。</p>
+</div>
+
+<h2>自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于 React 面试的题型,下面哪个说法最准确? (A) React 面试只有 trivia 问答和 UI 编码两种形式,不会有系统设计环节 (B) 所有公司的 React 面试流程完全一样,和公司规模、类型无关 (C) 除了 trivia、UI 编码、课后作业和系统设计,还单独有一类专门考"实现自定义 Hooks"的题型</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。源材料把 React 面试问题拆成五种格式,"实现 Hooks"是被单独拎出来的一类,不是并入 UI 编码里。(A) 漏掉了课后作业和系统设计两类;(B) 忽略了公司类型表格——FAANG 类公司高度结构化、多轮考核,早期初创公司往往只有 2-3 轮、侧重 UI/UX 直觉,流程明显不同。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于准备 React 面试的顺序,下面哪个说法最准确? (A) 不管目标职位是什么,都必须先啃完前端系统设计题库,再看 React 面试手册 (B) 推荐顺序是先通读 react.dev 的"学习"部分,再读这本手册,然后做测验题和编码题练习,如果目标是高级职位或预期有系统设计环节,再补前端系统设计题库 (C) 只要刷完 GreatFrontEnd 的 React 编码题就够了,不需要再读 react.dev 或这本手册</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。这是源材料给出的四步计划,系统设计题库是"目标是高级职位或预期有系统设计环节"时才追加的第四步,不是每个人的必经起点。(A) 把顺序和适用条件都搞反了;(C) 跳过了理解概念的两步,而手册明确说不建议只靠死记硬背答案。</p>
+</div>
+</details>
+</div>
+
+<h2>主推资源</h2>
+
+<ul>
+<li><a href="https://react.dev/learn">react.dev · 学习</a> —— 推荐准备计划的第一步,一天能读完官方"学习"部分及其示例。</li>
+<li><a href="https://www.techinterviewhandbook.org/">技术面试手册</a> —— 这本 React 面试手册明确说自己不覆盖数据结构、通用系统设计和算法,这些内容交给这份资料。</li>
+<li><a href="https://neetcode.io/">NeetCode</a> —— 同上,如果这场面试还牵涉算法编码,来这里专项练习。</li>
+<li><a href="https://jser.dev/series/react-source-code-walkthrough/">JSer.dev · React 源码走读系列</a> —— 如果还想再往下钻 React 内部实现原理(这门课的重点是面试准备,不会展开这部分),指南推荐从这个系列开始。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"应用设计"和"组件设计"到底差在哪,也可以让老师帮你根据目标公司类型,判断 Part 6 剩下几节该按什么优先级学。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0020-front-end-system-design-common-mistakes-cheatsheet.html"><span class="dir">← 上一课</span>常见错误与临场备忘单</a>
+  <a class="next" href="0022-react-landscape-and-history.html"><span class="dir">下一课 →</span>React 为什么长这样:发展历程</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

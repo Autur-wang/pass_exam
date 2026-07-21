@@ -1,0 +1,87 @@
+{
+ "num": "0031",
+ "slug": "entry-anatomy-and-three-core-operations",
+ "title": "节点解剖与三个核心操作",
+ "narrowTopic": "树上一个节点长什么样(MessageEntry 字段、9 种 Entry 按对 LLM 影响分三组、认父不认子),以及追加/回退/分支三个操作与可选的分支摘要",
+ "analogySeed": "家谱里每个人只记'我爹是谁',从不记'我有哪些孩子'。这样每添一个新丁,只写新人的那一页,永远不用回去改父辈的记录——父辈的页面从落笔那刻起就不再变了。这就是节点'认父不认子'。",
+ "keyPoints": [
+  "一个 MessageEntry 含 type/id/parentId/timestamp/message 字段;text 和 toolCall 放在同一个 content 数组里,是同一个节点,不是两个",
+  "parentId 是单向的:节点知道自己从哪来(认父),但父节点不知道自己有哪些孩子(不认子)",
+  "Pi 共定义 9 种 Entry,按'对 LLM 调用的影响'分三组:进上下文(4 种:Message/Custom/Compaction/BranchSummary)、影响后续状态(2 种:ModelChange/ThinkingLevelChange)、纯元数据(3 种:Label/SessionInfo/Custom)",
+  "追加(append)只有三步:建新 Entry(parentId 指向当前 leafId)+ 存进 byId 映射表 + 移 leafId;O(1) 不改任何旧节点,靠 byId 表反查子节点",
+  "回退(branch)只移 leafId(外加一个存在性检查);分支不是独立操作,而是'回退 + 追加'的自然组合效果",
+  "BranchSummaryEntry 是可选的:想让新分支的 Agent 大致知道旧分支试过什么、又不想保留完整对话时,用 branchWithSummary() 生成结构化摘要,parentId 与被抛弃分支同父"
+ ],
+ "codeRefs": [
+  {
+   "desc": "§三 第3步那条 e3 的完整 MessageEntry JSON(type:message/id/parentId:e2/timestamp/message,content 里 text 和 toolCall 并列同一数组,含 model/stopReason/usage),及其后的字段职责对照表",
+   "cite": "教程 第10章 §三"
+  },
+  {
+   "desc": "§三'9 种 Entry 类型按对 LLM 影响分三组'的三张表格:第一组进上下文 4 种、第二组影响后续状态 2 种、第三组纯元数据 3 种",
+   "cite": "教程 第10章 §三 / types.ts SessionEntry 联合类型"
+  },
+  {
+   "desc": "§四 操作1 追加的 appendEntry 代码(byId.set(\"e3\",newEntry) + this.leafId=\"e3\")与 操作2 的 branch() 回退代码(含 byId.has 存在性检查)",
+   "cite": "教程 第10章 §四 / session-manager.ts appendEntry、branch"
+  },
+  {
+   "desc": "§四 branchWithSummary(fromId) 代码块:把被抛弃分支喂给 LLM 生成结构化摘要→建 BranchSummaryEntry(parentId 指向 e2,与 e3-e5 同父)→摘要格式同压缩摘要",
+   "cite": "教程 第10章 §四 / session-manager.ts branchWithSummary"
+  }
+ ],
+ "designRationale": [
+  "为什么'认父不认子'是 append-only 的必要条件:若父节点维护 children 列表,从 e2 长出 e6 就得把 e2 的 children 从 [e3] 改成 [e3,e6]——这会修改旧节点,与不可变矛盾;单向 parentId 才能让追加不动任何旧节点",
+  "为什么把 Entry 分成 9 种细类型并按三组归类:下一节的 buildSessionContext 要按类型分派(是消息就进 messages、是状态变更就改变量、是元数据就跳过),单一类型会把逻辑退化成一堆 if-else,可读性和扩展性都差",
+  "为什么追加能做到 O(1) 且不改旧节点:只创建新 entry、存 byId、移 leafId 三步;结构上单向,但通过全局 byId 表可以反向查询任意节点的子节点",
+  "为什么分支不设计成独立操作:回退到 e2 后再追加,新节点的 parentId 自动就是 e2,分支自然产生,无需额外机制",
+  "为什么 branchWithSummary() 是可选的而非默认:若旧分支完全不重要直接 branch() 即可;只有'想保留历史精华但不想保留完整对话'时才需要那条 BranchSummaryMessage(它不同于压缩产生的 CompactionSummaryMessage)"
+ ],
+ "quiz": [
+  {
+   "stem": "为什么 Session Tree 的节点只存 parentId(认父),而不让父节点维护 children 列表(不认子)?",
+   "options": [
+    "children 列表太占存储空间",
+    "因为 append-only 要求节点不可变,若父维护 children,追加子节点就得改父,违反不可变",
+    "因为实际业务里几乎用不到查子节点",
+    "因为按 parentId 查询比按 children 查询快得多"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。'认父不认子'是 append-only 的必要条件;要反查子节点靠全局 byId 表即可。延伸:这违反'树通常父知子'的直觉,却完全自洽。",
+   "noMsg": "回到第7步:从 e2 长出 e6,如果是'认子',e2 的 children 要从 [e3] 改成 [e3,e6]——这个动作和'节点不可变'冲突在哪?"
+  },
+  {
+   "stem": "Pi 把 9 种 Entry 按'对 LLM 调用的影响'分成三组,最主要是为了服务谁?",
+   "options": [
+    "为了 buildSessionContext 能按类型分派处理,避免逻辑塞满 if-else",
+    "为了节省 .jsonl 文件的磁盘空间",
+    "为了让 UI 展示时不同类型颜色好看",
+    "为了对不同类型的 Entry 分别加密"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。分类直接决定 buildSessionContext 的派发:是消息就进 messages、是状态变更就改变量、是元数据就跳过。延伸:若只有单一类型,处理逻辑会退化成一大堆 if-else。",
+   "noMsg": "回看 §三 末尾'为什么要把类型分这么细'那段,它明确指向下一节某个函数的分派逻辑。"
+  },
+  {
+   "stem": "关于 branch() 与 branchWithSummary(),下面哪个说法是对的?",
+   "options": [
+    "分支是一个独立于回退、单独实现的原子操作",
+    "branchWithSummary() 是必须调用的,否则新分支的 Agent 会因为缺上下文而崩溃",
+    "分支 = 回退 + 追加的组合效果;branchWithSummary() 是可选的,只在想保留旧分支精华时才用",
+    "BranchSummaryEntry 生成的消息和压缩产生的 CompactionSummaryMessage 是同一种消息类型"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。回退到 e2 后再追加 e6、parentId 自动是 e2 就成了分支;要不要给旧分支留'遗言'摘要是可选的。延伸:BranchSummaryMessage ≠ CompactionSummaryMessage,两者是不同消息类型。",
+   "noMsg": "逐项排查:分支是不是独立操作?摘要是不是强制?两种 summary 消息是不是同一种?§四 对这三点都有明确对照。"
+  }
+ ],
+ "_chapter": "第10章",
+ "_chapterCN": "会话管理——对话的存储、恢复与分叉",
+ "prevFile": "0030-session-tree-two-dimensions-and-append-only.html",
+ "prevNum": "0030",
+ "nextFile": "0032-build-session-context-and-jsonl-persistence.html",
+ "nextNum": "0032",
+ "crumbLabel": "第 10 章 · 会话管理",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第10章-会话管理-对话的存储恢复与分叉.md",
+ "filename": "0031-entry-anatomy-and-three-core-operations.html"
+}

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0007 · 向量检索工程:ANN、HNSW/IVF/flat 与检索质量评估</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第二部分 Embedding 与向量检索 · 第 0007 课</p>
+<h1>向量检索工程:ANN、HNSW/IVF/flat 与检索质量评估</h1>
+<p class="lede">上一课你把文本变成了向量,这节课解决「向量太多、怎么快而准地捞出最近邻」。一口气答清五道真实面试题:<strong>「大规模嵌入下如何高效做最近邻检索?」「HNSW / IVF / flat 怎么选,重要吗?」「embedding 量化如何保质降内存?」「遇到 OOV / 稀有词怎么办?」「怎么定量评估 embedding 质量?」</strong>(源:60 题·Embedding 第 10、8、11、5、12 题;AI 工程师题库 Q49)。目标是让你在白板上答得住「为什么先别急着上 HNSW」。</p>
+
+<div class="recall">
+<p>上一课的结论:embedding 把语义变成几何——语义相近的文本,向量在空间里也相近,检索靠的是向量间距离(cosine / 内积 / 欧氏)。<strong>先别往下看:如果库里有一千万条向量,来一个查询要找 top-10 最近邻,最朴素的做法是什么?它会在什么地方崩掉?</strong></p>
+</div>
+
+<h2>一、直觉:精确暴力比对不 scale,于是有了 ANN</h2>
+<p>最朴素的做法叫<strong>暴力(brute-force / flat)</strong>:拿查询向量和库里每一条都算一次距离,排序取前 $k$。召回是完美的——它就是标准答案本身。但代价是每次查询要扫全库:</p>
+<p>一次查询的比对量约为 $O(N\cdot d)$,$N$ 是向量条数、$d$ 是维度。$N$ 到千万、亿级,乘上高并发,延迟和成本就爆了。</p>
+<p>关键取舍在这里:<strong>我们几乎从不真的需要「数学上精确」的最近邻,只需要「足够好」的近邻。</strong>放弃一点点召回,换回几个数量级的速度——这就是<strong>近似最近邻(ANN,Approximate Nearest Neighbor)</strong>的全部动机。所有 ANN 方法的共同套路只有一句话:<strong>预先建好索引,查询时只在一小块子空间里搜,而不扫全库。</strong></p>
+
+<dl class="keydef">
+<dt>ANN 的三大流派</dt>
+<dd><strong>哈希法(LSH,局部敏感哈希)</strong>:设计一种哈希,让「相近的向量大概率落进同一个桶」。查询只比对同桶的少量向量。</dd>
+<dd><strong>树划分(KD-tree / Ball-tree)</strong>:把空间递归切成区域,查询顺着树只下探相关分支。低维好用,维度一高就退化(维度灾难)。</dd>
+<dd><strong>图法(HNSW,可导航小世界图)</strong>:把向量连成一张多层近邻图,查询从高层稀疏图「跳」着逼近,再到底层精修。当下工业界最常用的一类。</dd>
+</dl>
+<p class="formula-note">三者殊途同归:都用「预建索引」把每次查询要看的候选从「全库」缩小到「一小撮」。</p>
+
+<h2>二、索引选型:flat / HNSW / IVF 到底怎么挑</h2>
+<p>这是 AI 工程师题库 Q49 的原题。先看三种主力索引各自的性格:</p>
+
+<div class="trio">
+  <div class="cell"><strong>flat(暴力)</strong><br>精确扫全库<br><em>召回满分、零调参、不 scale</em><br>小库 / 做基线</div>
+  <div class="cell"><strong>HNSW(图)</strong><br>多层近邻图<br><em>延迟低、召回高、内存大</em><br>要快又要准</div>
+  <div class="cell"><strong>IVF(倒排聚类)</strong><br>先聚类分桶再搜<br><em>省内存、可调、需训练</em><br>库大 / 省内存</div>
+</div>
+
+<p><strong>IVF(Inverted File)的一句话原理:</strong>先用聚类(如 k-means)把全库向量分成 $n_{\text{list}}$ 个桶,每个桶记住自己的中心。查询时只算查询和各中心的距离,挑最近的 $n_{\text{probe}}$ 个桶去搜,其余桶全跳过。它的「训练」就是这步聚类——所以 IVF 用前得先喂一批数据建桶。</p>
+
+<p>每种索引都带一个<strong>「召回 ↔ 速度」的旋钮</strong>,这是面试最爱问的落点:</p>
+<ul>
+<li><strong>HNSW 的 <code>ef</code></strong>(搜索时的候选队列宽度):调大 → 搜得更彻底,召回 ↑、延迟 ↑;调小则反之。</li>
+<li><strong>IVF 的 <code>nprobe</code></strong>(每次查多少个桶):调大 → 覆盖更多桶,召回 ↑、延迟 ↑;<code>nprobe</code> 一直加到等于 $n_{\text{list}}$ 就退化成暴力。</li>
+</ul>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">查询文本</div>
+  <div class="arrow">→</div>
+  <div class="node">embed<br>→ 查询向量</div>
+  <div class="arrow">→</div>
+  <div class="node">ANN 索引<br>flat / HNSW / IVF</div>
+  <div class="arrow">→</div>
+  <div class="node">粗召回<br>top-k 候选</div>
+  <div class="arrow">→</div>
+  <div class="node good">(可选)rerank<br>→ 最终结果</div>
+</div>
+<figcaption>索引只负责「粗召回」这一步:把候选从全库缩到 top-k。选索引,就是在这一步里权衡召回、延迟、内存三者。</figcaption>
+</figure>
+
+<div class="keydef">
+<dt>那到底重不重要?(Q49 的题眼)</dt>
+<dd>重要,但<strong>顺序别搞反</strong>:先跑通,再优化。库不大(几万到几十万)时,<strong>flat 往往就够了</strong>——精确、零调参,还能顺手当作评测的黄金标准。<strong>先用向量库的托管默认索引</strong>,只有当召回或延迟真的成了瓶颈,才动手换 HNSW / IVF 并调 <code>ef</code> / <code>nprobe</code>。为了「看起来专业」在小库上硬上 HNSW,通常是过早优化。</dd>
+</div>
+
+<h2>三、嵌入量化:在保质的前提下砍内存</h2>
+<p>这是 Embedding 第 8 题。向量默认用 <strong>float32</strong> 存,每维 4 字节;一亿条 768 维向量光原始数据就约 $10^8 \times 768 \times 4$ 字节 ≈ 数百 GB,内存放不下、加载还慢。</p>
+<p><strong>量化(quantization)</strong>就是用更少的位数表示每个分量:</p>
+<ul>
+<li><strong>float16</strong>:每维 2 字节,内存约为 float32 的一半。</li>
+<li><strong>int8</strong>:每维 1 字节,内存约为 float32 的四分之一(把浮点值映射到 $-128\sim127$ 的整数)。</li>
+</ul>
+<p>好处很实在:<strong>大幅省内存、加载更快、更利于移动端 / 浏览器端部署。</strong>代价是精度下降带来一点召回损失——但通常损失有限,因为检索本就只要「够近」而非「精确」。它和上一节的 ANN 是<strong>正交</strong>的两把刀:ANN 减少「看多少条」,量化减少「每条占多大」,常常叠加使用(如 IVF + 量化)。</p>
+<p class="formula-note">再强调一次「四分之一」只是 f32→int8 的字节数算术,不是某个 benchmark 的召回数字;掉多少召回,只能在你自己的数据上测。</p>
+
+<h2>四、OOV 与稀有词:模型没见过的词怎么办</h2>
+<p>这答的是 Embedding 第 11、5 题。OOV(Out-Of-Vocabulary)指模型词表里没有的词。早期 word2vec 那类「一词一向量」的模型对 OOV 束手无策,现代做法把它化解掉了:</p>
+<dl class="keydef">
+<dt>子词 tokenization(主力方案)</dt>
+<dd>把词拆成词表里已有的<strong>子词 / 字符片段</strong>(如 BPE、WordPiece),再把子词向量聚合起来表示整词。生词 "GPTology" 可拆成 "GPT""ology" 这类已知片段——所以现代 LLM 几乎不会「完全没法处理」一个词。</dd>
+<dt>其余兜底手段</dt>
+<dd><strong>零 / 随机初始化</strong>一个新向量,后续可微调让它学到含义;<strong>回退</strong>到语义或形态相似的已知词。</dd>
+</dl>
+<p><strong>稀有词(rare word)</strong>是另一类问题:词在,但出现太少、向量没学好。对策:同样可以<strong>子词化</strong>借高频子词之力;训练时用<strong>平滑 / 正则</strong>让稀有词向高频近义词靠拢;推理时靠<strong>上下文增强</strong>——反正 Transformer 的表示本就随上下文变化,一个稀有词在充分上下文里也能被推断得八九不离十。</p>
+
+<h2>五、如何定量评估 embedding 与检索质量</h2>
+<p>Embedding 第 12 题。别只靠「感觉挺准」,要有可量化的指标,分三层看:</p>
+<dl class="keydef">
+<dt>① 表示层:cosine 相似度</dt>
+<dd>$\cos(\mathbf{a},\mathbf{b})=\dfrac{\mathbf{a}\cdot\mathbf{b}}{\lVert\mathbf{a}\rVert\,\lVert\mathbf{b}\rVert}$。看「语义该相近的一对文本,向量是否真的相近」。是最基本的 sanity check,但它只测两两关系,不等于端到端检索好用。</dd>
+<dt>② 检索层:Precision@k / Recall@k</dt>
+<dd>准备带标注的查询-相关文档对,跑检索取 top-$k$:<br>$\text{Precision@}k=\dfrac{\text{top-}k\text{ 中相关的数量}}{k}$,$\text{Recall@}k=\dfrac{\text{top-}k\text{ 中相关的数量}}{\text{全部相关文档数}}$。<br>这才是你真正关心的「检索到底捞得准不准、全不全」。</dd>
+<dt>③ 公平性层:WEAT</dt>
+<dd>Word Embedding Association Test,检测 embedding 里是否编码了性别、种族等社会偏见。上线面向用户的系统时,这是一道不能省的体检。</dd>
+</dl>
+<div class="interview">
+<p><strong>贯穿全课的一条铁律(呼应 AI 工程师题库):在你自己的数据上评检索,别信 leaderboard。</strong>MTEB 之类的公开榜单是筛选起点,不是终点——榜单第一的通用 embedding,换到你的领域(法律、医疗、代码)、你的查询分布上,未必最好。同样,换索引、开量化之后,要用指标<strong>证明</strong>召回没崩,而不是凭感觉。</p>
+</div>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「库只有几万条,值得上 HNSW 吗?」——通常不值,flat 已足够且零调参;先跑通再优化,别过早优化。</li>
+<li>「HNSW 内存吃不下怎么办?」——转向 IVF,或叠加量化(如 IVF + 量化)压体积,或分片。</li>
+<li>「<code>nprobe</code> / <code>ef</code> 调大调小分别影响什么?」——都是「召回 ↔ 延迟」旋钮:调大召回升、延迟升。答不出这个旋钮基本就挂了。</li>
+<li>「量化会掉多少召回?」——取决于数据,<strong>必须在自己数据上测</strong>;别报一个背来的固定数字。</li>
+<li>「换了索引/开了量化,怎么证明召回没崩?」——拿 <strong>flat 暴力结果当 ground truth</strong>,对新索引算 recall@k。这是 flat 除了「小库直接用」之外最重要的角色。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞是扣分点):</strong></p>
+<ul>
+<li>别说「HNSW <strong>一定</strong>最好」——它内存大;小库上 flat 更简单、更准、还免调参。选型是三目标(召回/延迟/内存)权衡,没有全局最优解。</li>
+<li>别说「量化<strong>一定</strong>省内存又不掉质量」——一定省内存,但质量<strong>会</strong>掉,只是通常有限;掉多少要实测。</li>
+<li>别只盯 Recall@k 选索引——忽略延迟、内存、成本就是纸上谈兵;工程是多目标优化。</li>
+<li>别<strong>照搬 leaderboard</strong> 选 embedding 模型——通用榜第一未必适配你的领域和查询分布。</li>
+<li>别说「现代 LLM <strong>没有</strong> OOV 问题」——子词 tokenization 大幅缓解,但生僻符号、全新术语、跨语言字符仍是边界情况,只是「几乎不会完全卡住」而非「不存在」。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>你在做一个只有约 2 万条向量的原型,要求结果尽量准、又不想折腾调参。最合适的索引是?</p>
+<details><summary>A. 上 HNSW,并把 ef 调到很大以保证召回</summary>小库上属于过早优化,还引入内存开销和调参负担。</details>
+<details><summary>B. 用 flat 暴力检索 ✅</summary>正确。2 万条规模暴力完全扛得住,召回满分、零调参,还能顺手当日后换索引时的评测基准。</details>
+<details><summary>C. 上 IVF,把 nlist 设得很大</summary>IVF 要先训练聚类、要调 nprobe,小库上收益为负;nlist 过大反而每桶太空、召回抖动。</details>
+<details><summary>D. 必须用量化把向量压成 int8 再检索</summary>2 万条内存毫无压力,量化只会平白牺牲精度,解决的不是这里的问题。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>你把线上索引从 HNSW 换成「IVF + int8 量化」以省内存,想确认召回没有明显下滑。最靠谱的验证方式是?</p>
+<details><summary>A. 看新索引的平均查询延迟有没有变低</summary>延迟测的是速度,完全不能反映召回是否掉了。</details>
+<details><summary>B. 在 MTEB 榜单上查这套配置的排名</summary>榜单跑的是别人的数据和查询分布,证明不了你自己数据上的召回。</details>
+<details><summary>C. 用 flat 暴力算出一批查询的真 top-k 当 ground truth,对新索引算 recall@k ✅</summary>正确。flat 给的就是精确答案,拿它当标准算 recall@k,才是「在自己数据上量化验证召回」的正解。</details>
+<details><summary>D. 人工抽查几条结果,觉得差不多就上线</summary>「感觉差不多」正是本课反对的——评估要可量化、可复现。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>HNSW</strong>:Malkov &amp; Yashunin, <em>Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs</em>(2018)——图法 ANN 的经典论文。</li>
+<li><strong>IVF / 量化</strong>:Jégou et al., <em>Product Quantization for Nearest Neighbor Search</em>(2011);工程实现见 Facebook 的 <strong>FAISS</strong> 库(Johnson, Douze &amp; Jégou, <em>Billion-scale similarity search with GPUs</em>)。</li>
+<li><strong>子词 tokenization</strong>:Sennrich et al., <em>Neural Machine Translation of Rare Words with Subword Units</em>(BPE, 2016)——OOV / 稀有词方案的源头。</li>
+<li><strong>WEAT</strong>:Caliskan et al., <em>Semantics derived automatically from language corpora contain human-like biases</em>(Science, 2017)——embedding 偏见检测。</li>
+<li>「在自己数据上评检索、别信 leaderboard」的工程视角,可读 Chroma 关于检索评测的技术研究,以及 AI 工程师题库对应条目。</li>
+<li>下一步:检索之后如何把召回结果喂给 LLM——Prompting 技术全景(第 0008 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>暴力(flat)精确但不 scale → 用 ANN(LSH/树/图)预建索引缩小搜索空间;选型是召回↔延迟↔内存的三方权衡,先用默认、瓶颈才调 ef/nprobe;量化砍内存、子词治 OOV;一切以「在自己数据上算 recall@k」为准。</strong></p>
+<nav class="lesson-nav">
+<a href="0006-embeddings-explained.html">← 上一课:Embedding 本质</a>
+<a class="next" href="0008-prompting-techniques.html">下一课:Prompting 技术全景 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

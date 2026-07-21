@@ -1,0 +1,82 @@
+{
+ "num": "0005",
+ "slug": "type-progression-across-layers",
+ "title": "类型演进：从原子到分子到材料",
+ "narrowTopic": "只讲类型如何跨层递进扩展——pi-ai 定义原子、agent-core 组合成分子、coding-agent 组合成材料，用继承/联合扩展而非修改底层。",
+ "analogySeed": "用化学做类比：pi-ai 定义\"原子\"（Message/Model/Tool 这些最基础的类型），pi-agent-core 把原子拼成\"分子\"（AgentTool），pi-coding-agent 再把分子拼成\"材料\"（ToolDefinition）——每往上一层，只在原有基础上添零件，从不改动底层的原子。",
+ "keyPoints": [
+  "基础类型 Message/Model/Tool 都统一定义在 pi-ai 一处，它们是整个系统的\"原子概念\"，任何和 LLM 打交道的包都要引用它们。",
+  "pi-agent-core 的 types.ts 顶部大量 import type 自 pi-ai（Message、Model、Tool、ImageContent 等），在此之上扩展。",
+  "AgentMessage 是 Message 的超集：用联合类型（|）把自定义消息加进来，而不是修改 Message 定义。",
+  "AgentTool extends Tool：底层 Tool 只知道\"叫什么、参数是什么\"（LLM 需要的），AgentTool 加上 label、execute、executionMode（Agent 循环需要的）。",
+  "coding-agent 的 ToolDefinition 再叠加业务属性（promptSnippet、renderShell、execute 多带 ctx 参数、渲染器等）；它与 AgentTool 是结构兼容而非 extends 继承。",
+  "Before→After 一图看清：Tool（长什么样）→ AgentTool（怎么执行）→ ToolDefinition（怎么显示），每层只加自己该关心的字段。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "第 5 节\"第一层：pi-ai 定义原子\"里 packages/ai/src/types.ts 节选：Message 联合类型、interface Model<TApi>（id/name/api/contextWindow）、interface Tool<TSchema>（name/description/parameters）。",
+   "cite": "教程 §5 第一层 / packages/ai/src/types.ts"
+  },
+  {
+   "desc": "第 5 节\"第二层\"里 packages/agent/src/types.ts 节选：AgentMessage 用联合类型扩展，以及 interface AgentTool extends Tool 加 label/prepareArguments/execute/executionMode（types.ts:371-394）。",
+   "cite": "教程 §5 第二层 / packages/agent/src/types.ts:371-394"
+  },
+  {
+   "desc": "第 5 节结尾的\"类型扩展的 Before → After 对照\"三段式代码块：Tool（pi-ai）→ AgentTool extends Tool（agent-core，标注←新增）→ ToolDefinition（coding-agent，继承+渲染器/权限）。",
+   "cite": "教程 §5 Before→After 对照"
+  }
+ ],
+ "designRationale": [
+  "为什么原子类型必须集中在 pi-ai 一处：像化学元素一样，多处各自定义会导致不一致；一处定义、所有层引用，才能保证跨层传递的是同一个概念。",
+  "为什么用联合类型(|)和 extends 扩展、而不是改底层：底层类型保持稳定，才能被独立发布——别人可以只引你的原子类型，不必吞下整个 Agent 框架。",
+  "为什么底层 Tool 里没有 execute 字段：LLM 只需要知道工具\"长什么样\"，\"怎么执行\"是 Agent 循环的事；每层只承载自己关心的信息，职责不越界。",
+  "为什么 ToolDefinition 是结构兼容而非 extends：coding-agent 层重新声明独立 interface，用结构类型对齐 AgentTool，既能加业务字段（如 execute 多带 ctx）又不被继承链锁死。"
+ ],
+ "quiz": [
+  {
+   "stem": "为什么 Message、Model、Tool 这些基础类型都定义在 pi-ai 一处，而不是各层各自定义？",
+   "options": [
+    "因为 pi-ai 是最后才开发的包，顺手就放这儿了",
+    "它们是整个系统的\"原子概念\"，必须在一处统一定义、所有层引用同一处，才能保证跨层传的是同一个概念",
+    "因为 TypeScript 语法强制要求类型必须集中定义在最底层包",
+    "因为 pi-agent-core 和 coding-agent 在技术上无法声明 interface"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。原子概念一处定义、处处引用，避免了同名类型在不同层漂移。延伸：正因为原子在 pi-ai，coding-agent 才会\"跨层\"直接依赖 pi-ai——这在下一节会揭晓不是设计失误。",
+   "noMsg": "回看 §5\"化学类比\"和\"第一层：pi-ai 定义原子\"，想想为什么原子不能每层复制一份。"
+  },
+  {
+   "stem": "pi-agent-core 的 AgentTool 相比 pi-ai 的 Tool，多做了什么？",
+   "options": [
+    "去掉了 parameters 字段，只保留 name",
+    "两者字段完全一样，只是换了个名字",
+    "通过 extends Tool，加上 label、execute、executionMode 等\"怎么执行\"的字段",
+    "直接加上了渲染器和 UI 组件等显示相关属性"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。Tool 管\"长什么样\"，AgentTool 用 extends 叠上\"怎么执行\"（串行/并行、执行函数）。延伸：\"怎么显示\"要再上一层到 ToolDefinition 才出现。",
+   "noMsg": "对照 §5 的 Before→After 三段代码，看 AgentTool extends Tool 那段标了\"←新增\"的到底是哪几个字段，以及渲染器属于哪一层。"
+  },
+  {
+   "stem": "为什么底层 pi-ai 的 Tool 接口里没有 execute 字段？",
+   "options": [
+    "因为 LLM 只需要知道工具\"长什么样\"（名字/描述/参数），不需要知道怎么执行；每层只加自己关心的事",
+    "因为 execute 逻辑太复杂，TypeScript 无法为它写类型",
+    "因为 execute 字段实际定义在 pi-tui 显示层里",
+    "因为 Tool 是一个已废弃、不再使用的接口"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。底层类型从不为上层的需求买单——execute 是 Agent 循环才关心的，留给 AgentTool。延伸：这正是\"类型递进扩展\"能让底层独立发布的原因。",
+   "noMsg": "看 §5 结尾那句\"pi-ai 的 Tool 接口里没有 execute 字段，因为 LLM 不需要知道工具怎么执行\"，再想想每层各自该关心什么。"
+  }
+ ],
+ "_chapter": "第2章：三层架构 —— Pi-Agent 项目的骨骼",
+ "_chapterCN": "三层架构：Pi-Agent 项目的骨骼",
+ "prevFile": "0004-five-packages-project-skeleton.html",
+ "prevNum": "0004",
+ "nextFile": "0006-dependency-direction-and-layer-boundaries.html",
+ "nextNum": "0006",
+ "crumbLabel": "第 2 章 · 三层架构",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第2章-三层架构-Pi-Agent项目的骨骼.md",
+ "filename": "0005-type-progression-across-layers.html"
+}

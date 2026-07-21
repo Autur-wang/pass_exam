@@ -1,0 +1,82 @@
+{
+ "num": "0019",
+ "slug": "agent-message-two-layers",
+ "title": "第二层:AgentMessage 内富外严",
+ "narrowTopic": "只讲为什么 Agent 内部需要自定义消息(两个读者的矛盾),以及 AgentMessage 如何用联合类型 + 声明合并把扩展消息装进来。",
+ "analogySeed": "你在终端敲下 !ls -la,这条命令的信息同时有两个\"读者\"要伺候:UI 想要 command/output/exitCode 分开渲染成漂亮终端,LLM 只想要一段扁平文本。一份数据,两张嘴,谁也不能得罪——这就是整章的矛盾核心。",
+ "keyPoints": [
+  "功能性数据(Bash 执行、压缩摘要、Git 分支记录、附件元信息)有两个独立读者:UI 端要结构化字段才能漂亮渲染,LLM 端只要一段扁平文本塞进 UserMessage.content。",
+  "冲突点:若为 LLM 提前把字段拍扁存进 UserMessage,UI 就再也拿不回结构化数据;若只存自定义消息不进上下文,LLM 就会失忆。",
+  "Pi 两边都不妥协:以结构化形式存进 context.messages(满足 UI/持久化),在调用 LLM 的边界上做一次翻译(满足 LLM)——翻译是最后一刻、有损、单向的。",
+  "自定义消息不只是\"翻译中间格式\",它本身带来三个独立能力:UI 专用渲染(按 role 分派)、持久化恢复(session 存完整结构化数据)、精细可见性控制(可对 LLM 隐身)。",
+  "关键代码:AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages],即\"LLM 标准消息 + 自定义消息\"的联合;context.messages 里放的是 AgentMessage[],看 role 就能判断是标准还是自定义。",
+  "CustomAgentMessages 接口在核心包 pi-agent-core 里是空的(只留插槽);coding-agent 通过 TypeScript 声明合并 declare module 注入 bashExecution/custom/branchSummary/compactionSummary 四种。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "AgentMessage 联合类型定义那一行:export type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];",
+   "cite": "教程 §四 / packages/agent/src/types.ts:314"
+  },
+  {
+   "desc": "CustomAgentMessages 空接口(带 \"Empty by default - apps extend via declaration merging\" 注释),以及 coding-agent 用 declare module \"@earendil-works/pi-agent-core\" 注入 4 种消息的声明合并代码块",
+   "cite": "教程 §四「默认为空的扩展点」「声明合并」/ packages/coding-agent/src/core/messages.ts:70-77"
+  },
+  {
+   "desc": "BashExecutionMessage 的 TypeScript 结构:role \"bashExecution\"、command、output、exitCode、cancelled、truncated、fullOutputPath、timestamp、excludeFromContext 字段",
+   "cite": "教程 §三 BashExecutionMessage 结构"
+  }
+ ],
+ "designRationale": [
+  "为什么两边都不妥协(结构化存储 + 边界翻译),而不是二选一?因为拍扁给 LLM 则 UI/持久化失去结构,只存自定义则 LLM 失忆——只有分层才能同时满足两个读者。",
+  "为什么翻译放在最后一刻、且是有损单向的?因为损失掉的结构化字段(cancelled/truncated 等)UI 早就用过了,进 LLM 时无所谓,单向拍扁最省心。",
+  "为什么用声明合并而不用继承或泛型?继承要改基类(改不了 pi-agent-core),泛型要在每个用到 AgentMessage 的函数签名到处传参;声明合并让核心包零依赖、应用层却全栈类型安全。",
+  "为什么说自定义消息是\"能力\"而非\"麻烦\"?没有独立的 role,就没有 UI 专用渲染、没有持久化精确还原、也做不了\"对 UI 可见对 LLM 不可见\"——这三件事标准消息都办不到。"
+ ],
+ "quiz": [
+  {
+   "stem": "为什么 Pi 不为了迁就 LLM,直接把 Bash 执行的字段提前拍扁存进 UserMessage?",
+   "options": [
+    "因为 UserMessage 的 content 放不下这么多字段",
+    "因为拍扁后 LLM 反而看不懂扁平文本",
+    "因为声明合并语法不允许修改 UserMessage",
+    "因为一旦拍扁,UI 和持久化就再也拿不回结构化数据,渲染和恢复都退化"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。结构化字段是 UI 渲染和持久化恢复的命根子,拍扁即永久丢失。延伸:所以 Pi 选择\"结构化为源、翻译为流\",翻译放到最后一刻才做。",
+   "noMsg": "回到 §三 的\"冲突点在哪\"那段——注意它问的是\"提前拍扁\"会伤到谁,是 LLM 还是 UI/持久化?"
+  },
+  {
+   "stem": "CustomAgentMessages 这个接口,在核心包 pi-agent-core 里是什么状态?",
+   "options": [
+    "预置了 BashExecution、CompactionSummary 等常用消息",
+    "是空的,只留一个插槽,应用通过声明合并往里注入自己的类型",
+    "是一个抽象类,应用必须继承它",
+    "是一个泛型参数,每个函数都要显式传入"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。核心包完全不知道有 BashExecutionMessage,它只提供\"插槽\"。延伸:coding-agent 用 declare module 注入 4 种,Web UI 则注入自己的 user-with-attachments、artifact。",
+   "noMsg": "看 §四「默认为空的扩展点」那段代码的注释——它明确写了 Empty by default,核心包对自定义消息一无所知。"
+  },
+  {
+   "stem": "Pi 为什么用声明合并(Declaration Merging)来扩展 AgentMessage,而不用继承或泛型?",
+   "options": [
+    "因为声明合并运行时性能最好",
+    "因为 TypeScript 不支持对联合类型做继承",
+    "因为继承要改基类(改不了核心包)、泛型要到处传参污染签名;声明合并让核心包零依赖、应用层全栈类型安全",
+    "因为声明合并能让所有应用共享同一套自定义消息"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。核心包封闭零依赖、应用包却获得完整类型检查,这正是分层的甜点。延伸:不同应用注册各自的消息,\"每个应用只看到自己需要的类型\"。",
+   "noMsg": "看 §四「为什么不直接用继承或者泛型?」那段——它分别点出了继承和泛型各自的代价,以及声明合并同时避开了两者。"
+  }
+ ],
+ "_chapter": "第6章",
+ "_chapterCN": "消息系统——Agent的记忆如何组织与传递",
+ "prevFile": "0018-three-standard-llm-messages.html",
+ "prevNum": "0018",
+ "nextFile": "0020-convert-to-llm-and-visibility.html",
+ "nextNum": "0020",
+ "crumbLabel": "第 6 章 · 消息系统",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第6章-消息系统-Agent的记忆如何组织与传递.md",
+ "filename": "0019-agent-message-two-layers.html"
+}

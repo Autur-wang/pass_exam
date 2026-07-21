@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0022 · 推理模型:thinking budget、过度思考与自一致</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第七部分 推理模型 · 第 0022 课</p>
+<h1>推理模型:thinking budget、过度思考与自一致</h1>
+<p class="lede">这一节把「推理模型」这一整簇高频题一次讲透:<strong>推理模型和标准 LLM 有何不同、怎么改 prompt(Q90);何时用推理模型 vs 标准模型(Q91);它的生产缺点(Q92);thinking budget 是什么、怎么调(Q93);什么是过度思考 / inverse scaling(Q94);跨工具调用的 interleaved thinking(Q95);可见思维链能不能信(Q96);什么是 self-consistency(Q97)。</strong>(源:AI 工程师题库 Q90–Q97。)读完你应能在白板上说清「什么时候该让模型多想、什么时候多想反而是坑」。</p>
+
+<div class="recall">
+<p>上一课(0021 Agent 可靠性)我们反复强调:agent 之所以脆,常常败在<strong>对工具返回的意外结果反应不当</strong>——工具报错、返回空、值不对,agent 却照着原计划往下冲。<strong>先别往下看:如果让模型在「调完工具、看到结果之后」再停下来想一想再决定下一步,靠什么模型、靠什么机制能做到?</strong>本课的推理模型 + interleaved thinking 正是对这个痛点的正面回答。</p>
+</div>
+
+<h2>一、推理模型 vs 标准 LLM:先算草稿再交卷(Q90)</h2>
+<p>直觉一句话:<strong>标准 LLM 是「脱口而出」,推理模型是「先在草稿纸上算,再交卷」。</strong>标准模型读完 prompt 就开始逐 token 吐答案;推理模型在给出最终答案<em>之前</em>,先花一段 <strong>test-time compute</strong> 做一段内部的思维链——把问题拆开、试几条路、检查一下,然后才输出结论。</p>
+<p>这套「先想再答」的能力从哪来?常见做法是<strong>用可验证奖励的强化学习(RL with verifiable rewards)</strong>训练:数学题、代码题有客观对错,拿「最终答案是否正确」当奖励信号,模型就被塑造成「愿意多花几步、算对再交卷」。</p>
+
+<dl class="keydef">
+<dt>推理模型(Reasoning Model)</dt>
+<dd>在输出最终答案前,先投入一段可控的 test-time compute 做内部思维链的模型。<strong>收益:</strong>在数学、代码、多步逻辑与规划上明显强于同级标准模型。<strong>代价:</strong>延迟更高(单次调用可能要数秒)、成本更高(会烧掉大量隐藏的推理 token,而这些 token 通常照样计费)。</dd>
+</dl>
+
+<p><strong>它怎么改变你写 prompt 的方式(Q90 的后半)?</strong>标准模型时代常教你「手把手写一步步思维链、把方法钉死」;对推理模型,这套反而碍事。正确姿势:</p>
+<ul>
+<li><strong>给目标、约束、上下文,让它自己分步</strong>——你负责说清「要什么、边界在哪、有哪些已知」,分解过程交给模型。</li>
+<li><strong>别强加你自己的思维链、别过度指定方法</strong>——把「怎么想」写死,等于用你的天花板压住它本来更强的推理。</li>
+<li><strong>有 reasoning-effort / budget 旋钮就用它</strong>——用参数控制「想多深」,比在 prompt 里絮叨「请仔细思考」更可靠(见第三节)。</li>
+</ul>
+
+<h2>二、何时用哪个:先路由,别默认用最大模型(Q91、Q92)</h2>
+<p>推理模型不是「更好的模型」,而是「更贵更慢、但在难题上更强的模型」。所以选型是一道<strong>路由题</strong>,不是「谁强用谁」。</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision"><strong>这个任务是「真正难的多步任务」吗?</strong><br>(复杂规划 / tricky 数学逻辑 / 难调试 / 需慎重的 agentic 步)</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">是:难、多步、要慎重</div>
+      <div class="step"><strong>→ 推理模型</strong><br>让它花 test-time compute 把问题算对;接受更高的延迟与成本</div>
+    </div>
+    <div class="branch">
+      <div class="label">否:常规、直白</div>
+      <div class="step"><strong>→ 标准模型</strong><br>抽取 / 分类 / 摘要 / 直白 RAG / 多数工具调用:要的是便宜、快、稳</div>
+    </div>
+  </div>
+  <div class="down">↓ 好架构的默认形态</div>
+  <div class="step terminal"><strong>默认走便宜快的标准模型,只把「难例」升级到推理模型;用 eval + 成本/延迟预算来决定,别一上来就默认最大模型</strong></div>
+</div>
+<figcaption>选型是路由,不是攀比:常路走便宜模型,难例才升级。</figcaption>
+</figure>
+
+<p>把便宜模型放在常路、只把难题升级,是既省钱又不牺牲难例质量的经典架构。判据不该是「感觉」,而该是 <strong>eval 跑出来的准确率 + 你能容忍的成本和延迟预算</strong>。</p>
+
+<h3>推理模型的生产缺点(Q92)</h3>
+<p>上线之后,推理模型会给你三类真实的麻烦:</p>
+<ul>
+<li><strong>更慢、更贵</strong>:隐藏的推理 token 既拖延迟又进账单,而且你还看不全花在哪。</li>
+<li><strong>延迟不可预测</strong>:输出长度随「它想了多久」浮动,同一接口这次 2 秒、下次 12 秒,给 SLA 和超时设置都添堵。</li>
+<li><strong>可见思维链未必忠实</strong>:它展示出来的「思考过程」不一定对应真实计算,<em>不能</em>当可靠解释来用(详见第四节)。</li>
+</ul>
+<p>缓解手段就是把它当「贵重资源」管:<strong>路由</strong>(只在难例用)、<strong>预算</strong>(限制想多深)、<strong>缓存</strong>(重复问题不重算)、<strong>流式</strong>(先吐部分结果压体感延迟)。核心心法:<strong>只在确实需要的地方用推理模型。</strong></p>
+
+<h2>三、thinking budget 与过度思考(Q93、Q94)</h2>
+<p>一旦决定用推理模型,你手上最重要的那个旋钮就是 thinking budget。</p>
+
+<dl class="keydef">
+<dt>thinking budget(思考预算)</dt>
+<dd>控制模型在答题前<strong>花多少 test-time compute</strong> 的旋钮——通常表现为推理阶段的 token 额度或 reasoning-effort 档位。它把「思考」从一个固定不可调的黑箱,变成一个<strong>可调的成本 / 延迟杠杆</strong>:承诺用推理模型之后,这是你最主要的调控手段。</dd>
+</dl>
+
+<p><strong>怎么调?</strong>不是「越大越好」,而是按难度匹配、按 eval 定量:</p>
+<ul>
+<li>难数学、复杂分析、难调试 → 调高;常规任务 → 调低,甚至干脆换回标准模型。</li>
+<li>据 eval 经验找那个拐点:<strong>「再加预算,准确率也不再涨」的点</strong>——超过它继续加,就是纯烧 token 不换来收益。</li>
+</ul>
+
+<p>而这里藏着一个反直觉的坑,正是 Q94 要考的:</p>
+
+<dl class="keydef">
+<dt>过度思考 / inverse scaling(Overthinking / Inverse Scaling in Test-Time Compute)</dt>
+<dd><strong>更多推理反而让答案更差</strong>的现象,尤其在一些(往往是简单的)问题上:更长的思维链会让模型<em>放弃</em>本已正确的答案、把自己「说服」到错误方向、或让置信度校准变差。研究(<em>Inverse Scaling in Test-Time Compute</em>)记录了准确率随思考预算增长而<strong>下降</strong>的情形。</dd>
+</dl>
+
+<p>它的启示很硬核:<strong>「更多思考」不是一种免费、单调递增的能力</strong>。给所有任务钉死一个「最大预算」不但浪费,还可能主动把简单题做错。正确做法是<strong>按难度匹配预算,并用 eval 验证</strong>——让数据告诉你每类任务该想多深。</p>
+
+<h2>四、interleaved thinking、self-consistency 与思维链可信度(Q95、Q97、Q96)</h2>
+
+<h3>interleaved thinking:在工具调用之间也想(Q95)</h3>
+<p>普通推理模型「答前想一次」;<strong>interleaved thinking(交错思考)</strong>更进一步——在<em>工具调用之间</em>也停下来推理:</p>
+<div class="pipeline">
+  <div class="node">推理</div>
+  <div class="arrow">→</div>
+  <div class="node">调工具</div>
+  <div class="arrow">→</div>
+  <div class="node">看结果</div>
+  <div class="arrow">→</div>
+  <div class="node">对结果推理</div>
+  <div class="arrow">→</div>
+  <div class="node good">再定下一步</div>
+</div>
+<p>为什么对 agent 特别重要?正好接上一课的痛点:<strong>agent 的难点常常不在「制定计划」,而在「对工具返回的东西(报错、空值、意外结果)做出正确反应」。</strong>交错思考让模型在拿到结果后先想一想再动,而不是照原计划盲冲。可以把它理解为<strong>推理模型的深度思考 + ReAct 的「想—做—观察」循环</strong>两者之长的结合;代价是每一步都多烧推理 token。</p>
+
+<h3>self-consistency:采样多条路径投票(Q97)</h3>
+<dl class="keydef">
+<dt>self-consistency(自一致)</dt>
+<dd>对同一个问题<strong>采样多条独立的推理路径</strong>,然后对最终答案<strong>取多数(投票)</strong>。对「有可验证最终答案」的任务(数学、判定题)能提准——因为个别路径上的偶发错误彼此抵消,多数路径更可能收敛到正确答案。它是一种<strong>可加在任意模型上的 test-time compute 技术</strong>。</dd>
+</dl>
+<p>要点提醒:推理模型内部其实已经「内化」了一部分 self-consistency 的收益,所以在推理模型之上再叠加 self-consistency,收益往往<strong>边际递减</strong>——<strong>先量后加</strong>:先用 eval 量一量到底提了多少,再决定这份额外成本值不值。</p>
+
+<h3>可见的思维链能信吗?(Q96)</h3>
+<p><strong>不完全能。</strong>研究显示,模型陈述出来的思维链<strong>未必忠于它真实的内部计算</strong>——那段「解释」可能是事后合理化(post-hoc rationalization),读起来头头是道,却不是它真正得出答案的路径。所以:</p>
+<ul>
+<li><strong>别把可见思维链当成高危决策的审计轨迹</strong>——它更像「模型讲给你听的故事」,不是可靠日志。</li>
+<li><strong>用 eval 验结果</strong>(看它答得对不对),而不是看它「解释得像不像」。</li>
+<li>把高危决策<strong>锚定到可查证的证据</strong>(检索到的原文、工具真实返回、外部校验),而不是锚定到模型的自述。</li>
+</ul>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「推理模型比标准模型强在哪、代价是什么?」——强在数学 / 代码 / 多步;代价是延迟、成本、可变的输出长度。别只答「更聪明」。</li>
+<li>「那生产上你怎么办?」——路由(难例才升级)+ 预算 + 缓存 + 流式;用 eval 和成本/延迟预算决定,别默认最大模型。</li>
+<li>「thinking budget 怎么调到合适?」——按难度匹配 + 找「加预算不再涨准确率」的拐点;引出过度思考。</li>
+<li>「多想一定更准吗?」——不一定,inverse scaling:简单题上更长链可能更差,固定最大预算可能有害。</li>
+<li>「self-consistency 和推理模型是不是重复?」——部分重复,推理模型已内化一些收益,叠加常边际递减,先量后加。</li>
+<li>「你会信模型给的思维链吗?」——不当审计轨迹用;可见 CoT 未必忠实,高危决策锚定可查证据、用 eval 验结果。</li>
+<li>「interleaved thinking 解决什么 agent 痛点?」——对工具返回的意外结果作出反应,而非盲冲原计划。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(警惕绝对化措辞):</strong></p>
+<ul>
+<li>别说「推理模型总是更好、应该默认全用它」——它更慢更贵、延迟不可预测;常规任务用标准模型更划算,好架构是路由。</li>
+<li>别说「思考越多越准」——inverse scaling 是反例:某些(尤其简单)问题上更长链反而更差。</li>
+<li>别说「thinking budget 越大越好」——超过拐点就是纯烧 token 不换收益;要按难度匹配、按 eval 定。</li>
+<li>别说「可见思维链就是模型的真实推理过程,可当解释 / 审计用」——它可能是事后合理化,未必忠于真实计算。</li>
+<li>别说「self-consistency 对任何任务都提准」——它主要利于「有可验证最终答案」的任务;开放式生成上「多数投票」未必有意义,叠在推理模型上还常边际递减。</li>
+<li>别说「推理模型自己会决定想多久,不用管」——你能且应该用 budget / reasoning-effort 主动控成本与延迟。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>你决定对某类难任务用推理模型,现在要设 thinking budget。下列哪种做法最靠谱?</p>
+<details><summary>A. 直接拉到该模型支持的最大预算,想得越多越保险</summary>不对。这会撞上过度思考 / inverse scaling——某些题上更长链反而更差,且纯烧 token。</details>
+<details><summary>B. 在 prompt 里反复写「请务必仔细、深入地思考」来加深思考</summary>不可靠。有 budget / reasoning-effort 旋钮时,用参数控制远比在 prompt 里絮叨稳定。</details>
+<details><summary>C. 用 eval 逐档试,找到「再加预算准确率也不再提升」的拐点,按难度匹配 ✅</summary>正确。据 eval 定量,拐点之后继续加就是白花 token;不同难度匹配不同预算。</details>
+<details><summary>D. 固定一个「够用的中间值」,对所有任务一视同仁,省得调</summary>不好。任务难度差异大,一刀切既可能不足也可能过度,还错过路由到标准模型的机会。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于「可见思维链」与「过度思考」,下列哪句最准确?</p>
+<details><summary>A. 可见思维链忠实反映真实计算,可作为高危决策的审计轨迹</summary>不对。研究显示陈述的 CoT 未必忠实,可能是事后合理化,别当审计轨迹。</details>
+<details><summary>B. 更多推理必然提升准确率,inverse scaling 只是采样噪声</summary>不对。inverse scaling 是被研究记录的真实现象:某些题上准确率随预算上升而下降。</details>
+<details><summary>C. 可见思维链未必忠于真实计算,而更多推理在某些题上反而更差,两者都提醒别盲目信任「多想」 ✅</summary>正确。CoT 不当解释、budget 按难度匹配并用 eval 验,是本课两条核心纪律。</details>
+<details><summary>D. 只要用了推理模型,就不再需要 eval 和外部证据来验证结果</summary>恰恰相反。正因为 CoT 未必忠实、可能过度思考,更要用 eval 验结果、把高危决策锚定可查证据。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Inverse Scaling in Test-Time Compute</strong>——记录了增加思考预算反而使准确率下降的情形,是 Q94「过度思考」的直接来源。</li>
+<li><strong>Self-Consistency Improves Chain-of-Thought Reasoning in Language Models</strong>(Wang et al., 2022)——self-consistency「多路径采样 + 多数投票」的原始提法。</li>
+<li><strong>ReAct: Synergizing Reasoning and Acting in Language Models</strong>(Yao et al., 2022)——「想—做—观察」循环,interleaved thinking 与之一脉相承。</li>
+<li><strong>Anthropic 关于思维链忠实性的研究</strong>(如 <em>Measuring Faithfulness in Chain-of-Thought Reasoning</em>, 2023)——为什么可见 CoT 不能当可靠解释 / 审计轨迹(Q96)。</li>
+<li>下一步:如何用 eval 把上面这些「先量后加」的判断真正量化(第 0023 课·评估基础)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>推理模型 = 用 test-time compute 先想再答,难例才升级;thinking budget 按难度 + eval 拐点调,更多思考不免费(inverse scaling);interleaved thinking 让 agent 对工具结果作出反应,self-consistency 多路径投票但叠在推理模型上边际递减;可见思维链未必忠实,别当审计轨迹。</strong></p>
+<nav class="lesson-nav">
+<a href="0021-agent-reliability.html">← 上一课:Agent 可靠性</a>
+<a class="next" href="0023-evaluation-basics.html">下一课:评估基础 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

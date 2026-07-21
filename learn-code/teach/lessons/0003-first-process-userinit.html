@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0003 · 内核如何「手搓」第一个进程:init 从哪来</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --paper:#fdfcf8; --muted:#6b6b5f; --rule:#d8d4c5;
+    --accent:#7a3b2e; --accent2:#2e5a6b; --good:#2f6b3a; --bad:#a23a2e;
+    --code-bg:#272b33; --code-fg:#e6e3d8;
+  }
+  *{box-sizing:border-box}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Songti SC",serif;
+    line-height:1.62; margin:0; padding:3rem 1.5rem 5rem; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:46rem; margin:0 auto}
+  .crumbs{font-size:.78rem; letter-spacing:.06em; color:var(--muted); margin-bottom:1.4rem}
+  .crumbs a{color:var(--accent2); text-decoration:none}
+  .kicker{font-size:.78rem; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); margin:0 0 .4rem}
+  h1{font-size:1.9rem; line-height:1.2; margin:.1rem 0 .5rem; font-weight:600; letter-spacing:-.01em}
+  .mission{font-size:.9rem; color:var(--muted); border-left:3px solid var(--accent); padding:.5rem .9rem; background:#f4f1e6; border-radius:0 6px 6px 0; margin:1.2rem 0 2rem}
+  h2{font-size:1.18rem; margin:2.6rem 0 .7rem; padding-bottom:.25rem; border-bottom:1px solid var(--rule)}
+  p{margin:.8rem 0}
+  .win{background:#eef3ee; border:1px solid #c3dcc3; border-radius:8px; padding:1rem 1.2rem; margin:1.4rem 0}
+  .win strong{color:var(--good)}
+  .recall{background:#f4f1e6; border:1px dashed var(--accent); border-radius:8px; padding:.8rem 1.1rem; margin:1.4rem 0; font-size:.92rem}
+  pre{background:var(--code-bg); color:var(--code-fg); border-radius:8px; padding:1.1rem 1.2rem; overflow-x:auto; font-size:.84rem; line-height:1.6; margin:1.2rem 0;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  pre .ln{color:#6f7681; user-select:none; display:inline-block; width:1.8em; text-align:right; margin-right:1em}
+  pre .sys{color:#e0a45e; font-weight:600}
+  pre .key{color:#7fb3c9}
+  pre .cm{color:#7d8590; font-style:italic}
+  pre .hl{background:#3a3f4a; display:inline-block; width:calc(100% - 0px); border-radius:3px}
+  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.85em; background:#eeeadb; padding:.08em .35em; border-radius:3px}
+  .sys-pill{color:var(--accent); font-weight:600}
+  table.bd{width:100%; border-collapse:collapse; font-size:.9rem; margin:1rem 0}
+  table.bd th,table.bd td{text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--rule); vertical-align:top}
+  table.bd th{font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  table.bd td:first-child{font-weight:600; color:var(--accent2); white-space:nowrap}
+  cite{font-size:.82rem; color:var(--muted); font-style:normal}
+  cite a{color:var(--accent2)}
+  .diagram{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.8rem; line-height:1.5; background:#f7f4ea; border:1px solid var(--rule); border-radius:8px; padding:1.1rem 1.2rem; white-space:pre; overflow-x:auto; color:#333}
+  .quiz{background:#f7f4ea; border:1px solid var(--rule); border-radius:10px; padding:1.2rem 1.3rem; margin:1.3rem 0}
+  .q{margin:0 0 1.5rem} .q:last-child{margin-bottom:0}
+  .q p.stem{font-weight:600; margin:.2rem 0 .7rem}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:.92rem; background:#fff; border:1px solid var(--rule);
+    border-radius:6px; padding:.55rem .8rem; margin:.4rem 0; cursor:pointer; transition:all .12s}
+  .opt:hover{border-color:var(--accent2)}
+  .opt.correct{background:#e7f1e7; border-color:var(--good); color:var(--good)}
+  .opt.wrong{background:#f6e7e4; border-color:var(--bad); color:var(--bad)}
+  .fb{font-size:.86rem; margin:.5rem 0 0; min-height:1.2em}
+  .fb.ok{color:var(--good)} .fb.no{color:var(--bad)}
+  .ask{background:#272b33; color:#e6e3d8; border-radius:10px; padding:1.1rem 1.3rem; margin:2.4rem 0 0; font-size:.92rem}
+  .ask b{color:#e0a45e}
+  .next{font-size:.92rem}
+  footer{margin-top:2.6rem; padding-top:1rem; border-top:1px solid var(--rule); font-size:.82rem; color:var(--muted)}
+  @media print{ body{padding:0;background:#fff} pre{background:#f0eee4;color:#222} .opt{border:1px solid #999} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 2 章 · 操作系统组织 ›
+  <a href="./0002-fork-exec-wait.html">Lesson 0002</a> ›
+  <strong>Lesson 0003</strong>
+</div>
+
+<p class="kicker">Lesson 0003 · 第 2 章 操作系统组织</p>
+<h1>内核如何「手搓」第一个进程<br>—— init 从哪来,「鸡生蛋」的答案</h1>
+
+<div class="mission">
+  🎯 <strong>对应使命</strong>:进入<strong>第 2 章</strong>。上一课你看到 shell 用 <code>fork</code> 造出新进程;
+  可 <code>fork</code> 必须<em>先有一个进程</em>才能复制。这一课回答 0002 结尾那个悬念——
+  <em>最开始那一个进程,没有父亲,它是谁造的?</em> 答案在 <code>kernel/main.c</code> 与 <code>kernel/proc.c</code> 里。
+</div>
+
+<div class="recall">
+  🔁 <strong>先回忆(别往回翻 0002)</strong>:新进程是靠谁产生的?……对,靠已有进程 <strong>fork</strong> 自己。
+  那 shell 是谁 fork 的?是 <code>/init</code>。那 <code>/init</code> 又是谁 fork 的?……
+  再往上追,总得有<strong>第一个</strong>进程,而它<em>无父可依</em>——fork 到这里就断了链。今天补上这一环。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 讲清楚 1 号进程<span class="sys-pill">不是 fork 来的</span>,
+  而是内核在开机末尾<strong>手工</strong>造出来的——它怎么分配、怎么被塞进一段代码、醒来后第一件事又为什么是
+  <span class="sys-pill">exec("/init")</span>。
+</div>
+
+<h2>1 · 「鸡生蛋」问题:fork 造不出第一个进程</h2>
+<p>
+  上一课的 <code>fork</code> 有个隐含前提:<strong>它复制的是「当前进程」</strong>。也就是说,fork 永远需要一个
+  <em>已经存在</em>的进程当模板。可开机的那一刻,一个用户进程都还没有——没有模板可复制。
+  这就是经典的「鸡生蛋」:第一个进程不可能由 fork 产生。
+</p>
+<p>
+  Unix 的解法很朴素,甚至有点<strong>作弊</strong>:既然没法「生」,那就让内核<strong>亲手「捏」一个</strong>出来。
+  内核不走 fork 那条路,而是直接分配一个空进程壳、往里面填一段极小的代码,再把它标成「可运行」丢给调度器。
+  这个开机时手工引导出第一个进程的过程,叫 <strong>bootstrapping(自举)</strong>。
+</p>
+<cite>📖 依据:xv6 book (rev3) 第 2 章 <em>Operating system organization</em>,"the first process" 一节。</cite>
+
+<h2>2 · 看真东西:启动的最后一步是 userinit()</h2>
+<p>内核启动做的一长串初始化,都在 <code>../xv6-riscv-20230207/kernel/main.c</code> 里。只看 0 号 CPU 这条主线:</p>
+
+<pre><span class="ln">13</span><span class="key">if</span>(cpuid() == 0){
+<span class="ln">14</span>  consoleinit();
+<span class="ln">..</span>  <span class="cm">// kinit / kvminit / procinit / trapinit … 一串子系统初始化</span>
+<span class="ln">30</span>  virtio_disk_init(); <span class="cm">// 磁盘</span>
+<span class="hl"><span class="ln">31</span>  <span class="sys">userinit</span>();      <span class="cm">// ← first user process:手搓第一个进程</span></span>
+<span class="ln">32</span>  __sync_synchronize();
+<span class="ln">33</span>  started = 1;
+<span class="ln">..</span>}
+<span class="ln">44</span><span class="sys">scheduler</span>();        <span class="cm">// 内核最后进入调度循环,永不返回</span>
+</pre>
+<p>
+  读法:所有硬件/内存/中断都准备好后,第 31 行 <code>userinit()</code> 造出第一个用户进程;
+  然后第 44 行 <code>scheduler()</code> 进入调度循环。<strong>调度器一挑中那个新进程,它就开始跑</strong>——
+  内核从此不再直接「往下执行」,而是靠调度在各进程间切换。
+</p>
+<cite>🔎 本地对照:<code>../xv6-riscv-20230207/kernel/main.c</code> 第 13–44 行。</cite>
+
+<h2>3 · 手搓现场:userinit() 逐行拆</h2>
+<p>第一个进程是怎么「捏」出来的?全在 <code>kernel/proc.c</code> 的 <code>userinit()</code>(第 232–255 行):</p>
+
+<pre><span class="ln">237</span>  p = <span class="sys">allocproc</span>();            <span class="cm">// 分配一个空进程壳（不是 fork!）</span>
+<span class="ln">238</span>  initproc = p;               <span class="cm">// 记为全局的「init 进程」</span>
+<span class="ln">242</span>  <span class="sys">uvmfirst</span>(p->pagetable, initcode, <span class="key">sizeof</span>(initcode));
+<span class="ln">243</span>  p->sz = PGSIZE;             <span class="cm">// ↑ 把 initcode[] 机器码拷进它的第一个用户页</span>
+<span class="ln">246</span>  p->trapframe->epc = 0;      <span class="cm">// 用户程序从地址 0 开始执行</span>
+<span class="ln">247</span>  p->trapframe->sp = PGSIZE;  <span class="cm">// 用户栈指针</span>
+<span class="ln">249</span>  <span class="sys">safestrcpy</span>(p->name, <span style="color:#9ece6a">"initcode"</span>, <span class="key">sizeof</span>(p->name));
+<span class="ln">250</span>  p->cwd = <span class="sys">namei</span>(<span style="color:#9ece6a">"/"</span>);       <span class="cm">// 当前目录设为根 /</span>
+<span class="hl"><span class="ln">252</span>  p->state = RUNNABLE;        <span class="cm">// ← 标成「可运行」,等调度器挑中</span></span>
+</pre>
+
+<p>把这几步翻成人话,对照第 1 节「捏一个出来」的四个动作:</p>
+<table class="bd">
+  <thead><tr><th>代码</th><th>在干嘛</th><th>为什么关键</th></tr></thead>
+  <tbody>
+    <tr><td>allocproc()</td><td>要一个空白进程结构</td><td>凭空分配,<strong>没有父进程</strong>——这就是它和 fork 的根本区别</td></tr>
+    <tr><td>uvmfirst(…initcode…)</td><td>把一段现成机器码拷进它的内存</td><td>fork 是复制别人的内存;这里是<strong>内核直接喂给它</strong>一段代码</td></tr>
+    <tr><td>epc = 0</td><td>设定「从用户地址 0 开始跑」</td><td>因为 initcode 就被放在用户空间第 0 页的开头</td></tr>
+    <tr><td>state = RUNNABLE</td><td>挂上「可运行」牌子</td><td>它自己不会跑;要等 <code>scheduler()</code> 挑中才真正上 CPU</td></tr>
+  </tbody>
+</table>
+<p>
+  那 <code>initcode</code> 到底是什么?就在同一文件第 221 行,是一个写死的字节数组:
+</p>
+<pre><span class="ln">221</span>uchar initcode[] = {
+<span class="ln">222</span>  0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02,
+<span class="ln">...</span>  <span class="cm">// …一串十六进制…</span>
+<span class="ln">228</span>  0x00, 0x00, 0x00, 0x00
+<span class="ln">229</span>};
+</pre>
+<p>
+  这串十六进制不是乱码——<strong>它是一小段汇编编译出来的机器码</strong>,被硬编码进了内核。
+  注释(第 219–220 行)甚至写明了它「assembled from <code>../user/initcode.S</code>」。
+  换句话说:第一个进程的<em>全部代码</em>,就是内核源码里躺着的这几十个字节。
+</p>
+<cite>🔎 本地对照:<code>../xv6-riscv-20230207/kernel/proc.c</code> 第 219–229 行(initcode[])、第 231–255 行(userinit)。</cite>
+
+<h2>4 · 第一个进程醒来:唯一的事是 exec("/init")</h2>
+<p>那段机器码的源头 <code>../xv6-riscv-20230207/user/initcode.S</code> 只有几行,做的事一目了然:</p>
+
+<pre><span class="ln">8</span>start:
+<span class="ln">9</span>  la a0, init          <span class="cm"># a0 = "/init" 字符串地址</span>
+<span class="ln">10</span>  la a1, argv          <span class="cm"># a1 = 参数数组</span>
+<span class="ln">11</span>  li a7, <span class="sys">SYS_exec</span>       <span class="cm"># a7 = 系统调用号:exec</span>
+<span class="ln">12</span>  ecall                <span class="cm"># ← 陷入内核,发起 exec("/init", argv)</span>
+<span class="ln">21</span>init:
+<span class="ln">22</span>  .string <span style="color:#9ece6a">"/init\0"</span>
+</pre>
+<p>
+  认出来了吗?第 11–12 行 <code>li a7, SYS_exec</code> + <code>ecall</code>,正是 0001 讲过的
+  <strong>系统调用发起方式</strong>——把调用号放进 <code>a7</code>,再 <code>ecall</code> 陷入内核。
+  所以第一个进程醒来后做的第一件(也几乎是唯一)事,就是 <span class="sys-pill">exec("/init")</span>:
+  把自己整个替换成磁盘上的 <code>/init</code> 程序(还记得 0002 的 exec「成功不返回」吗?)。
+</p>
+
+<div class="diagram">   开机 → start() 切到 supervisor 模式 → main()
+                    │
+      一串子系统初始化（kinit / kvminit / procinit …）
+                    │
+            userinit()   ← 内核「手搓」第一个进程
+      ┌─────────────┴─────────────┐
+ allocproc() 分配空壳       uvmfirst() 把 initcode[]
+ （不是 fork！）             机器码拷进第 0 页
+      │                          │
+ epc=0, sp=PGSIZE          p->state = RUNNABLE
+      └─────────────┬─────────────┘
+            scheduler() 挑中它
+                    │
+      它从用户地址 0 开始跑 initcode
+                    │
+            exec("/init")   ← initcode 唯一的事
+                    │
+   /init 再 fork 出 shell ── 回到 Lesson 0002 的世界</div>
+
+<p>
+  至此「鸡生蛋」闭环了:<strong>内核手工造出唯一的第一个进程 → 它 exec 成 /init → /init 用 fork 繁衍出 shell 及一切</strong>。
+  从第二个进程起,世界就完全交给了上一课的 fork/exec/wait。
+</p>
+
+<h2>5 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的内容焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① 第一个用户进程(1 号进程)是<strong>怎么产生</strong>的?</p>
+    <button class="opt">由 shell 调用 fork 产生</button>
+    <button class="opt">上次关机时保存、开机恢复</button>
+    <button class="opt">内核手工分配空壳并填入代码</button>
+    <button class="opt">编译内核时就已经在运行</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② <code>userinit()</code> 没有调用 fork,它用什么方式给新进程装上代码?</p>
+    <button class="opt">把 <code>initcode[]</code> 机器码拷进新进程的第一个用户页</button>
+    <button class="opt">复制内核自己的内存给它</button>
+    <button class="opt">从磁盘读入 <code>/init</code> 可执行文件</button>
+    <button class="opt">让进程自己去申请内存</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">③ 第一个进程被调度器选中、开始运行 <code>initcode</code> 后,做的第一件事是?</p>
+    <button class="opt">打印「xv6 booting」日志</button>
+    <button class="opt"><code>exec("/init")</code> 把自己变成 init 程序</button>
+    <button class="opt">立刻 fork 出一个 shell</button>
+    <button class="opt">初始化自己的页表</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>为什么 <code>epc</code> 要设成 0?</em>」「<em><code>initcode[]</code> 那串十六进制我能自己还原成汇编吗?</em>」
+  「<em>为什么要绕一层 initcode 跳板,而不让内核直接 exec("/init")?</em>」
+  「<em>allocproc 到底分配了哪些东西?</em>」最后这个问题,会把我们带向<strong>第 3 章:页表与虚拟内存</strong>——
+  因为 <code>uvmfirst(p->pagetable, …)</code> 里那个 <code>pagetable</code>,正是下一章的主角。
+</div>
+
+<h2>6 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一段(强烈推荐):</strong>
+  <a href="https://pdos.csail.mit.edu/6.1810/2023/xv6/book-riscv-rev3.pdf">xv6 book (rev3)</a> 第 2 章
+  <em>Operating system organization</em> 中 "the first process" 一节——书里对 <code>userinit</code> 和 <code>initcode</code>
+  的描述,和你刚读的代码几乎逐行对应。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0004):</strong> 进入<strong>第 3 章「页表 / 虚拟内存」</strong>。
+  今天我们反复见到 <code>p->pagetable</code> 却没细看:进程的内存<em>为什么</em>要经过一张「页表」翻译?
+  地址 0 明明这么多进程都在用,怎么不打架?答案在 <code>kernel/vm.c</code> 与 <code>kernel/kalloc.c</code>。
+</p>
+
+<footer>
+  Lesson 0003 · 第 2 章 操作系统组织 ·
+  上一课:<a href="./0002-fork-exec-wait.html">0002 fork+exec+wait</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a> ·
+  真实代码:<code>kernel/main.c</code> · <code>kernel/proc.c</code> · <code>user/initcode.S</code><br>
+  本课遵循 <code>MISSION.md</code>:按章节讲解 xv6 代码,起点为零基础。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。第一个进程没有父亲、无法被 fork,只能由内核在开机末尾（userinit）手工分配并填入代码——这就是自举（bootstrapping）。',
+               '✓ 对。uvmfirst 把写死在内核里的 initcode[] 机器码直接拷进新进程的第一个用户页——是内核「喂」代码，而非复制谁的内存。',
+               '✓ 对。initcode 就四条指令：把 SYS_exec 放进 a7、ecall 陷入内核，发起 exec("/init")，从此自己变成 init 程序。'];
+  var msgNo = ['fork 必须先有一个进程当模板，而开机时一个用户进程都没有——那第一个只能靠谁？',
+               '看 userinit 第 242 行 uvmfirst 的参数：它拷贝的是哪一个现成的字节数组？',
+               '看 initcode.S 第 11–12 行：li a7, SYS_exec 后面紧跟 ecall，这是在发起哪个系统调用？'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

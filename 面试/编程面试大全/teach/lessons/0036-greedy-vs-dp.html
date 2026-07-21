@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0036 · 贪心 vs 动态规划</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0036 课 · 算法范式 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>贪心 vs 动态规划</h1>
+
+<p class="lede">贪心算法诱人——每步只拿眼前最优、不回头,又快又短。但它有个致命前提:<strong>只有在特定问题上,「步步局部最优」才真能拼出「全局最优」</strong>。这节课讲清贪心什么时候对、怎么一句话证明它对,以及面试里最经典的「贪心翻车」案例——好让你在该用贪心时敢用、不该用时能立刻举出反例。</p>
+
+<div class="recall">
+<p>先回忆:前两课<a href="0034-dynamic-programming-1.html">DP(上)</a><a href="0035-dynamic-programming-2.html">DP(下)</a>里,动态规划的做法是<strong>考虑所有子问题、缓存下来再挑最优</strong>。贪心恰恰相反——它<strong>只沿一条路走,每步定了就不再回头</strong>。先想一个问题:既然贪心不回头看别的可能,凭什么保证结果最优?</p>
+</div>
+
+<h2>一、直觉:每步都拿眼前最好的,绝不反悔</h2>
+
+<p><strong>贪心(Greedy)</strong>就是:面对一连串决策,每一步都<strong>不做全局权衡,只挑当下看起来最优的</strong>那个,选完就锁死、绝不回溯。它和 DP 是两种世界观——DP 谨慎地把所有可能都算一遍再取最优,贪心赌「局部最优的累积就是全局最优」。这个赌注只在<strong>某些</strong>问题上成立。</p>
+
+<p>典型能贪心的例子是<strong>区间调度(活动选择)</strong>:给一堆有起止时间的活动,选最多的互不重叠的活动。贪心策略惊人地简单——<strong>按结束时间排序,每次选「结束最早且不与已选冲突」的那个</strong>。直觉:最早结束的活动给后面留下最多空间。这个贪心是可以严格证明最优的。</p>
+
+<h2>二、贪心正确的两个条件</h2>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">这题能贪心吗?</div>
+  <div class="down">↓</div>
+  <div class="step">① <strong>贪心选择性质</strong>:每一步的局部最优选择,一定能导向(至少不排除)一个全局最优解。</div>
+  <div class="down">+</div>
+  <div class="step">② <strong>最优子结构</strong>:做完这一步后,剩下的子问题的最优解 + 这一步,拼成原问题的最优解。</div>
+  <div class="down">↓</div>
+  <div class="step terminal">两条都成立 → 贪心正确、且比 DP 快。少任何一条 → 老老实实用 DP。</div>
+</div>
+<figcaption>① 是贪心独有的、也是最难验证的。最优子结构 DP 也需要,但贪心额外要求「局部最优选择本身就安全」。</figcaption>
+</figure>
+
+<p><strong>怎么证明「贪心选择性质」?</strong>面试里最常用的是<strong>交换论证(exchange argument)</strong>:假设存在一个最优解没选贪心的那一步,那么总能把它里面的某个选择「换成」贪心的选择,而结果不变差——于是贪心解至少和最优解一样好。能说出这一句,就说明你不是碰运气用贪心。</p>
+
+<h2>三、经典能贪心的问题</h2>
+
+<dl class="keydef">
+<dt>区间调度 / 活动选择</dt>
+<dd>按结束时间排序、每次选最早结束且不冲突者,得到最多不重叠活动。可用交换论证证明最优。</dd>
+<dt>Huffman 编码</dt>
+<dd>反复把频率最小的两个节点合并成子树,得到带权路径最短的前缀编码。是贪心 + 优先队列的教科书案例。</dd>
+<dt>找零(仅在规范币制下)</dt>
+<dd>凑出目标金额用最少硬币。在像 {1,5,10,25} 这类「规范」币制下,「每次尽量取最大面额」的贪心正确;但换一种币制就可能失效(见下)。</dd>
+</dl>
+
+<h2>四、经典翻车:贪心不是万能的</h2>
+
+<p>找零问题最能暴露贪心的脆弱。币制 <strong>{1, 3, 4}</strong>,要凑 <strong>6</strong>:</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell hi">4</div>
+  <div class="cell hi">1</div>
+  <div class="cell hi">1</div>
+</div>
+<figcaption>贪心:先取最大面额 4,剩 2 → 只能 1+1,共 <strong>3 枚</strong>。</figcaption>
+</figure>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell on">3</div>
+  <div class="cell on">3</div>
+</div>
+<figcaption>最优(需 DP):3 + 3 = 6,只要 <strong>2 枚</strong>。贪心因为一开始贪了 4,反而更差。</figcaption>
+</figure>
+
+<p>这就是为什么「找零」在 LeetCode(322)里被当作 <strong>DP 题</strong>而非贪心题——一般币制下贪心不保证最优。把这个反例记死,面试官问「这题能贪心吗」,你能立刻验证而不是想当然。</p>
+
+<h2>五、贪心 vs DP:一张判别表</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">算法 / 问题</th><th>时间</th><th>保证最优?</th></tr></thead>
+<tbody>
+<tr><td class="op">区间调度(按结束时间贪心)</td><td>O(n log n)</td><td class="best">是(可证)</td></tr>
+<tr><td class="op">Huffman 编码(贪心)</td><td>O(n log n)</td><td class="best">是</td></tr>
+<tr><td class="op">找零 · 规范币制(贪心)</td><td>O(n)</td><td class="best">是</td></tr>
+<tr><td class="op">找零 · 任意币制(贪心)</td><td>O(n)</td><td class="warn">否 <small>({1,3,4} 凑 6 翻车)</small></td></tr>
+<tr><td class="op">0/1 背包(按性价比贪心)</td><td>O(n log n)</td><td class="warn">否 <small>(必须用 DP)</small></td></tr>
+<tr><td class="op">找零 · 任意币制(DP)</td><td>O(n·amount)</td><td class="best">是</td></tr>
+</tbody>
+</table>
+<p>核心对照:<strong>贪心通常更快</strong>(主要开销是排序,约 O(n log n)),因为它不铺开所有子问题;<strong>DP 更稳</strong>,因为它考虑了所有子问题。速度换的是「是否保证最优」的风险。</p>
+
+<h2>六、关键定义</h2>
+
+<dl class="keydef">
+<dt>贪心(Greedy)</dt>
+<dd>每步都取当前局部最优,期望得到全局最优——仅在问题具备贪心选择性质时才正确。<em>避免</em>「贪心一定比 DP 快所以更好」。</dd>
+<dt>贪心选择性质(Greedy-choice Property)</dt>
+<dd>每一步的局部最优选择都能通向一个全局最优解。这是贪心区别于 DP、也最需要证明的一条。</dd>
+<dt>交换论证(Exchange Argument)</dt>
+<dd>证明贪心最优的常用手法:把任一最优解里的选择「换成」贪心的选择而不使其变差,从而证明贪心不劣于最优。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>贪心是面试官最爱设的「陷阱题」——因为贪心解往往看起来对、跑起来快,却悄悄错:</p>
+<ul>
+<li><strong>被问「这题能贪心吗」时,先验证再下结论</strong>:检查贪心选择性质是否成立,能就上、能顺带用交换论证说一句证明思路;<strong>拿不准就用 DP</strong>——DP 更稳,不会因为找不到反例就翻车。</li>
+<li><strong>随身带一个「贪心失败」的反例</strong>:{1,3,4} 凑 6 是最顺手的一个。面试官说「用贪心找零吧」,你能当场举出它比 DP 差,立刻显出深度。</li>
+<li><strong>识别真正的贪心题</strong>:区间调度、会议室安排、跳跃游戏、加油站、Huffman——这些有明确「每步安全选择」的题才是贪心的主场。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一(最常见):以为「贪心一定比 DP 好」。</strong>贪心快,但可能得不到最优解;DP 慢一点却保证最优。「更好」取决于问题是否满足贪心选择性质,不是速度说了算。</p>
+<p><strong>坑二:把 DP 题当贪心题做。</strong>找零(任意币制)、0/1 背包都是经典的「贪心会错、必须 DP」。用「按性价比排序然后贪」做 0/1 背包,是高频错误答案。</p>
+<p><strong>坑三:用贪心却给不出正确性理由。</strong>「我觉得每次取最大就行」不是证明。面试官会追问「为什么局部最优能保证全局最优」——答不出交换论证或反证,就说明你只是撞对了。</p>
+</div>
+
+<div class="implement">
+<p>用几道题把「贪心该用 / 不该用」的边界摸清:</p>
+<p><strong>区间调度</strong>(会议室、活动选择):实现「按结束时间排序 + 扫描」,并在纸上用交换论证说服自己它最优。<strong>找零对拍</strong>:同时写贪心版和 DP 版,在币制 {1,3,4} 上跑金额 6,亲眼看两者结果不同(3 vs 2)。<strong>跳跃游戏</strong>(LeetCode 55):体会一个「贪心确实成立」的例子——维护「当前能到的最远位置」。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>贪心 = 每步局部最优、不回头,只有在「贪心选择性质 + 最优子结构」都成立时才正确。它比 DP 快但更冒险;<strong>拿不准就用 DP</strong>,并随身记住 {1,3,4} 凑 6 这个贪心翻车的反例。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:用币制 {1, 3, 4} 凑金额 6,「每次取最大面额」的贪心会给出几枚硬币?最优是几枚?这说明了什么?</summary>
+<div class="answer">
+<p><strong>贪心 3 枚(4 + 1 + 1),最优 2 枚(3 + 3)。</strong></p>
+<p>贪心一上来贪了最大的 4,把自己逼进「剩 2 只能拿两个 1」的死角;而放弃 4、改用两个 3 反而更省。这说明<strong>贪心不具普适性</strong>——在非规范币制下它不保证最优,找零因此在一般情况下是 DP 题。记住这个反例,面试里被问「能贪心吗」时就有据可依。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面关于贪心和 DP 的比较,哪个说法<strong>正确</strong>?</summary>
+<div class="answer">
+<p>正确的是:<strong>「贪心通常更快(主要是排序开销 O(n log n)),但只在满足贪心选择性质时才保证最优;DP 更慢却更稳。」</strong></p>
+<p>错误说法举例:「贪心一定比 DP 好」(快不等于对);「凡是求最优值的题都能贪心」(很多必须 DP,如 0/1 背包);「DP 和贪心的区别只是写法」(本质区别是 DP 考虑所有子问题、贪心只走一条不回头)。选算法看的是问题性质,不是谁跑得快。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:面试官问「你怎么证明你这个贪心策略是对的」,一个有说服力的回答思路是什么?</summary>
+<div class="answer">
+<p><strong>交换论证(exchange argument)。</strong>思路:假设存在一个最优解,它在某一步没有采用贪心的选择;证明总能把这个选择「替换成」贪心的选择,而解不会变差(目标值不减少 / 不增加)。反复替换后,得到一个与贪心一致、且不劣于原最优解的解——于是贪心解就是最优的。能讲出这套「替换而不变差」的逻辑,比只说「我觉得每次取最大就行」强太多;讲不出来,通常意味着该改用 DP。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题横跨仓库大纲的「动态规划」与「NP、NP-Completeness 和近似算法」两节(贪心常与近似算法一起讲)。推荐:</p>
+<ul>
+<li><a href="https://youtu.be/qcGnJ47Smlo?list=PLFDnELG9dpVxQCxuD-9BSy2E7BWY3t5Sm&t=2939">Simonson · 贪心算法 II 及 NP-Completeness 引入(视频)</a> —— 把贪心讲透,并自然过渡到「有些问题没有已知高效精确解」。</li>
+<li><a href="https://www.youtube.com/watch?v=MEz1J9wY2iM&list=PLUl4u3cNGP6317WaSNfmCvGym2ucw3oGp&index=24">复杂度 · 近似算法(视频)</a> —— 当精确解太贵时,贪心式的近似策略如何给出「够好」的解。</li>
+<li><a href="http://nbviewer.jupyter.org/url/norvig.com/ipython/TSP.ipynb">Peter Norvig · 旅行商问题的近似最优解(Jupyter 笔记本)</a> —— 用可运行代码演示贪心/近似在 TSP 上的表现,直观又硬核。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师带你对区间调度做一遍完整的交换论证,或让老师再给一个「贪心看着对、其实错」的反例考考你。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0035-dynamic-programming-2.html"><span class="dir">← 上一课</span>动态规划(下):经典模型与优化</a>
+  <a class="next" href="0037-oop-design-patterns.html"><span class="dir">下一课 →</span>面向对象与设计模式</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

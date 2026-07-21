@@ -1,0 +1,82 @@
+{
+ "num": "0016",
+ "slug": "parallel-vs-sequential-scheduling",
+ "title": "并行 vs 串行:一批工具不是「一起跑就完了」",
+ "narrowTopic": "一次回复含多个 ToolCall 时的调度策略——一票否决判断串并行,以及并行时「准备顺序、执行并行、事件有序」的三阶段设计。",
+ "analogySeed": "一队人过独木桥和过大草坪:大草坪(只读工具)可以并排一起走;但只要队里有一个人推着会占满桥面的独轮车(sequential 工具),整队就都得排成一列走独木桥——宁可多等,不可相撞。",
+ "keyPoints": [
+  "模型一次回复常含多个 ToolCall(如同时 read+grep+find 三个只读操作),直觉是用 Promise.all 并行省时间。",
+  "但并行不是无脑 Promise.all:若两个 ToolCall 都是 edit 且改同一个文件,并行会互相覆盖(ToolCall 1 的修改被 ToolCall 2 冲掉)。",
+  "Pi 的调度策略——一票否决:用 toolCalls.some 检查是否有任一工具的 executionMode 是 sequential,只要有一个 sequential 或 config.toolExecution 为 sequential,整批串行;否则整批并行。",
+  "并行不是简单 Promise.all 跑完,而是分三阶段:阶段1 准备(顺序)——emit_start→prepareArguments→validate→beforeToolCall 逐个做;阶段2 执行(并行)——只有 tool.execute() 用 Promise.all;阶段3 事件发送(有序)——emit_end 谁先完成先发,但 emit_result(ToolResultMessage)严格按调用顺序发。",
+  "v0.80.2 的 7 个内置工具(read/write/edit/bash/grep/find/ls)都没显式声明 executionMode,默认全部 parallel;运行时只在 agent-loop.ts:382 判断是否 sequential,未声明即按并行。",
+  "那 Edit 并行下怎么保证文件安全?靠工具内部的 withFileMutationQueue(file-mutation-queue.ts:32-61,edit.ts:312 调用),对同一文件的编辑串行化——这是工具自己的第二道防线,不依赖外层 executionMode。扩展工具若需串行可显式声明 executionMode:\"sequential\"。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "两个 edit 改同一文件的并行覆盖示例(ToolCall 1 与 ToolCall 2 都 path:\"app.ts\",箭头标注「同一个文件!并行执行→被覆盖」)",
+   "cite": "教程 §三 / 并行冲突示例"
+  },
+  {
+   "desc": "一票否决调度代码(hasSequentialToolCall = toolCalls.some(...executionMode===\"sequential\"),再 if 分流 executeToolCallsSequential / executeToolCallsParallel)",
+   "cite": "教程 §三 / agent-loop.ts:382"
+  },
+  {
+   "desc": "并行执行三阶段 ASCII 图(阶段1 准备顺序、阶段2 execute 并行 Promise.all、阶段3 emit_end 按完成序而 emit_result 按调用序)",
+   "cite": "教程 §三 / 三阶段设计"
+  }
+ ],
+ "designRationale": [
+  "为什么一票否决而不是「只串行冲突的工具」:因为「哪些工具会冲突」很难精确判断(edit 改不同文件也可能有依赖关系),Pi 选保守策略——宁可多等,不可出错。",
+  "为什么准备阶段必须顺序:beforeToolCall 可能有副作用(如修改全局/共享状态),并行准备会让副作用彼此干扰,所以逐个做。",
+  "为什么 ToolResultMessage 必须按调用顺序发:模型依赖调用顺序理解结果(先要求 read 再要求 grep,消息就得按这个序排),乱序会误导模型;而 emit_end 只是执行结束事件,可按完成先后发。",
+  "为什么内置工具默认 parallel 却仍安全:文件安全交给工具内部的 withFileMutationQueue 兜底(对同一文件的写入串行化),而非把整批降级串行,兼顾了性能与安全——这是「分层防御」的又一体现。"
+ ],
+ "quiz": [
+  {
+   "stem": "一个批次里有 read、grep 和一个声明了 executionMode:\"sequential\" 的自定义工具,Pi 会怎么调度这一批?",
+   "options": [
+    "read 和 grep 并行,只有那个 sequential 工具单独串行",
+    "整批串行执行——只要有一个工具是 sequential,一票否决",
+    "整批并行,sequential 声明会被忽略",
+    "先并行 read/grep,失败后再回退到串行"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。hasSequentialToolCall 用 some 检查,只要命中一个 sequential,整批走 executeToolCallsSequential。这是「宁可多等不可出错」的保守策略。延伸:因为「哪些工具真会冲突」难以精确判断,Pi 索性一刀切。",
+   "noMsg": "回看「一票否决」那段代码里用的是 some 还是 filter——some 意味着「有一个就…」。"
+  },
+  {
+   "stem": "并行三阶段中,为什么「准备阶段」(prepareArguments/validate/beforeToolCall)必须顺序执行,不能一起并行?",
+   "options": [
+    "因为 TypeBox 验证不是线程安全的",
+    "因为准备阶段耗时太长,并行反而更慢",
+    "因为 beforeToolCall 可能有副作用(如修改共享状态),顺序执行才能避免相互干扰",
+    "因为模型要求准备阶段必须逐个上报"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。准备阶段可能带副作用,必须顺序;真正并行的只有 tool.execute() 这一步。延伸:阶段3 里 emit_result 也仍按调用顺序发,因为模型依赖调用序理解结果——三阶段各有各的顺序约束。",
+   "noMsg": "回看三阶段图下方的解释,重点在准备阶段里哪个钩子「可能有副作用」。"
+  },
+  {
+   "stem": "内置的 7 个工具默认都是 parallel,那两个 edit 同时改同一个文件时,靠什么防止互相覆盖?",
+   "options": [
+    "工具内部的 withFileMutationQueue,对同一文件的编辑操作串行化",
+    "外层 executionMode 会自动把 edit 识别为 sequential",
+    "beforeToolCall 会阻止第二个 edit",
+    "Schema 验证会拒绝重复文件路径"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。这是工具自己的第二道防线——edit.ts 调用 withFileMutationQueue,对同一文件写入串行化,不依赖外层 executionMode 声明。延伸:这体现了「分层防御」——外层保守调度 + 工具内部精细兜底。",
+   "noMsg": "回看 v0.80.2 那条脚注——Edit 并行下的文件安全是「工具自己做的第二道防线」,找出那个队列的名字。"
+  }
+ ],
+ "_chapter": "第5章 工具系统",
+ "_chapterCN": "工具系统——Agent 的手脚是怎么被管住的",
+ "prevFile": "0015-five-step-tool-pipeline.html",
+ "prevNum": "0015",
+ "nextFile": "0017-errors-are-messages.html",
+ "nextNum": "0017",
+ "crumbLabel": "第 5 章 · 工具系统",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md",
+ "filename": "0016-parallel-vs-sequential-scheduling.html"
+}

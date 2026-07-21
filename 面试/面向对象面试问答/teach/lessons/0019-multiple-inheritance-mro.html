@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多重继承与 MRO · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第六部分 · Python 机制与跨语言 · 第 0019 节</p>
+<h1>多重继承与 MRO:diamond 问题</h1>
+<p class="lede">"D 同时继承 B 和 C,B、C 又都继承 A,那调 D 的方法时按什么顺序查?A 的 <code>__init__</code> 会被调几次?"——这是 Python 多继承的招牌追问。答对它的关键只有一句:<strong><code>super()</code> 调的不是父类,而是 MRO 里的下一个类。</strong></p>
+
+<div class="recall">
+<p>先回忆:上一节你用过 <code>super().__init__()</code>。现在换个场景——如果一个类有<strong>两个</strong>父类,<code>super()</code> 到底指向谁?如果两个父类又共享同一个"祖父",那个祖父的构造函数会不会被执行两遍?先给自己一个答案,再往下看。</p>
+</div>
+
+<h2>一、问题:菱形继承(diamond)</h2>
+
+<p>Python 允许一个类同时继承多个父类。这带来一个经典的歧义结构——<strong>菱形继承(diamond inheritance)</strong>:</p>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 260 200" width="260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="菱形继承结构图">
+  <rect class="dgm-hub" x="105" y="8" width="50" height="30" rx="5"/>
+  <text class="dgm-text" x="130" y="27" text-anchor="middle" font-size="14">A</text>
+  <rect class="dgm-node" x="35" y="85" width="50" height="30" rx="5"/>
+  <text class="dgm-text" x="60" y="104" text-anchor="middle" font-size="14">B</text>
+  <rect class="dgm-node" x="175" y="85" width="50" height="30" rx="5"/>
+  <text class="dgm-text" x="200" y="104" text-anchor="middle" font-size="14">C</text>
+  <rect class="dgm-accent-node" x="105" y="162" width="50" height="30" rx="5"/>
+  <text class="dgm-text" x="130" y="181" text-anchor="middle" font-size="14">D</text>
+  <path class="dgm-edge" d="M115 38 L70 85"/>
+  <path class="dgm-edge" d="M145 38 L190 85"/>
+  <path class="dgm-edge" d="M75 115 L120 162"/>
+  <path class="dgm-edge" d="M185 115 L140 162"/>
+</svg>
+</div>
+
+<p><code>D(B, C)</code>,而 <code>B(A)</code>、<code>C(A)</code>。当你在 <code>D</code> 的实例上调一个方法,而 <code>B</code> 和 <code>C</code> 都定义了它——<strong>先用谁的?</strong>更棘手的是构造:天真地"每个类都调自己父类的构造",<code>A</code> 会被 <code>B</code> 走一遍、被 <code>C</code> 又走一遍,<strong>顶端 A 被初始化两次</strong>。这就是 diamond 问题的两副面孔:<strong>查找歧义</strong>与<strong>重复初始化</strong>。</p>
+
+<h2>二、Python 的解法:MRO + C3 线性化</h2>
+
+<p>Python 不靠"运气",而是在类被创建时,用 <strong>C3 线性化算法</strong>把这张菱形网压平成<strong>一条确定、无歧义的线性查找顺序</strong>——这条顺序就叫 <strong>MRO(Method Resolution Order,方法解析顺序)</strong>。查方法、查属性,都严格沿这条线从前往后找,第一个命中的就用。</p>
+
+<p>你可以直接把它打印出来:</p>
+
+<pre><code>class A: pass
+class B(A): pass
+class C(A): pass
+class D(B, C): pass
+
+print([cls.__name__ for cls in D.__mro__])
+# ['D', 'B', 'C', 'A', 'object']
+
+D.mro()          # 等价的方法形式,返回同样的列表
+</code></pre>
+
+<p>读作:<strong>D → B → C → A → object</strong>。注意两点直觉:①子类永远排在父类前面;②<code>A</code> 只出现<strong>一次</strong>,被挪到了 <code>B</code>、<code>C</code> 之后——C3 保证"公共祖先在所有子类之后才出现",这正是它能避免重复的结构基础。</p>
+
+<div class="keydef">
+<dl>
+<dt>MRO (Method Resolution Order)</dt>
+<dd>一个类查找方法/属性时遵循的<strong>线性顺序</strong>。用 <code>Cls.__mro__</code>(元组)或 <code>Cls.mro()</code>(方法)查看。</dd>
+<dt>C3 线性化 (C3 Linearization)</dt>
+<dd>Python(2.3 起,新式类)计算 MRO 的算法。它保证三条性质:<strong>子类先于父类</strong>、<strong>父类的相对顺序被保留</strong>、以及<strong>单调性</strong>(子类的 MRO 与父类的 MRO 不矛盾)。</dd>
+<dt>协作式多重继承 (Cooperative Multiple Inheritance)</dt>
+<dd>每个类的方法都用 <code>super()</code> 把调用"传给 MRO 的下一位",并用统一签名(常配 <code>**kwargs</code>)协作,使整条链<strong>每个类恰好执行一次</strong>。</dd>
+</dl>
+</div>
+
+<h2>三、核心洞察:<code>super()</code> 不是"父类",是"MRO 里的下一个"</h2>
+
+<p>这是本节最重要、也最反直觉的一句。很多人以为 <code>super()</code> 就是"我的父类"。在<strong>单继承</strong>下这么理解恰好不出错;可一旦进入 diamond,它会露馅——因为 <code>super()</code> 的真正语义是:<strong>沿着当前实例的 MRO,跳到"当前类"的下一个类。</strong></p>
+
+<p>看这个协作式的菱形。留意 <code>B.__init__</code> 里的 <code>super()</code>——它跳到的<strong>不是 A(B 的父类),而是 C(B 在 MRO 里的"兄弟")</strong>:</p>
+
+<pre><code>class A:
+    def __init__(self, **kwargs):
+        print("A.__init__")
+        super().__init__(**kwargs)   # A 也调 super():链的终点是 object
+
+class B(A):
+    def __init__(self, **kwargs):
+        print("B.__init__")
+        super().__init__(**kwargs)   # 在 D 的实例里,这一步跳到 C 而非 A!
+
+class C(A):
+    def __init__(self, **kwargs):
+        print("C.__init__")
+        super().__init__(**kwargs)   # 这一步才跳到 A
+
+class D(B, C):
+    def __init__(self, **kwargs):
+        print("D.__init__")
+        super().__init__(**kwargs)
+
+D()
+# 输出:
+# D.__init__
+# B.__init__
+# C.__init__
+# A.__init__        ← 只出现一次!
+</code></pre>
+
+<p>为什么 <code>A</code> 只跑一次?因为调用严格沿 MRO <strong>D → B → C → A → object</strong> 逐个前进,每个类的 <code>super()</code> 只把接力棒交给"下一位"。<code>B</code> 的下一位是 <code>C</code>(不是 A),等走到 <code>C</code>,它的下一位才是 <code>A</code>。整条链是一次性的直线接力,没有任何类被走两遍。这就是"协作式"的含义:大家都遵守同一条线,谁也不越级硬调。</p>
+
+<p>对比一下"天真写法"——不用 <code>super()</code>,而是把父类名硬编码进去。这恰恰重现了 diamond 的经典 bug:</p>
+
+<pre><code>class A:
+    def __init__(self):
+        print("A.__init__")
+
+class B(A):
+    def __init__(self):
+        print("B.__init__")
+        A.__init__(self)      # 硬编码:直接点名 A
+
+class C(A):
+    def __init__(self):
+        print("C.__init__")
+        A.__init__(self)      # 硬编码:又直接点名 A
+
+class D(B, C):
+    def __init__(self):
+        print("D.__init__")
+        B.__init__(self)      # 手动分别调两个父类
+        C.__init__(self)
+
+D()
+# 输出:
+# D.__init__
+# B.__init__
+# A.__init__        ← A 第一次
+# C.__init__
+# A.__init__        ← A 第二次!顶端被初始化了两遍
+</code></pre>
+
+<p>同样的菱形,<code>A.__init__</code> 被执行了<strong>两次</strong>。如果 <code>A</code> 的构造里有"计数 +1""打开一个连接""追加一个 handler"这类带副作用的动作,这就是实打实的 bug。<strong><code>super()</code> + 协作签名,把"调几次"这件事交给 MRO 统一裁决,而不是散落在每个类里靠人手拼。</strong></p>
+
+<h2>四、mixin:多继承最正当的用途</h2>
+
+<p>多继承常被劝退,但它有一个被广泛认可的正当用法:<strong>mixin</strong>。mixin 是一个"只提供某项能力、自己不独立成对象"的小类(比如 <code>SerializableMixin</code>、<code>LoggerMixin</code>),你把它放进继承列表来"混入"一项能力。它正是靠多继承落地的,而 <strong>MRO 决定 mixin 方法相对于主类方法的优先级</strong>:</p>
+
+<pre><code>class LoggerMixin:
+    def save(self, **kwargs):
+        print(f"[log] saving {self!r}")
+        super().save(**kwargs)      # 关键:mixin 也 super(),把动作接力给 MRO 下一位
+
+class Model:
+    def save(self, **kwargs):
+        print("Model.save: 写入数据库")
+
+class User(LoggerMixin, Model):     # mixin 放前面 → 它的 save 先执行
+    pass
+
+User().save()
+# [log] saving &lt;__main__.User object ...&gt;
+# Model.save: 写入数据库
+</code></pre>
+
+<p>把 <code>LoggerMixin</code> 放在 <code>Model</code> <strong>前面</strong>,MRO 就是 <code>User → LoggerMixin → Model → object</code>,于是 <code>save</code> 先记日志再落库。调换继承列表的顺序,优先级随之改变——这就是"MRO 决定 mixin 优先级"的具体含义。</p>
+
+<div class="interview">
+<p><strong>高频追问链(多继承一旦被问,基本按这个梯度深挖):</strong></p>
+<ul>
+<li><strong>"<code>super()</code> 到底调的是谁?"</strong> → 不是父类,是<strong>当前实例 MRO 里、当前类的下一个类</strong>。在 diamond 里 <code>B</code> 的 <code>super()</code> 可能指向"兄弟" <code>C</code>。这是本节的题眼。</li>
+<li><strong>"diamond 里 A 的 <code>__init__</code> 被调几次?怎么保证一次?"</strong> → 只要整条链都用 <code>super()</code> 且签名协作(常用 <code>**kwargs</code> 透传),C3 保证 <code>A</code> 在 MRO 中只出现一次,故恰好执行一次;若有类硬编码 <code>A.__init__(self)</code> 就会重复。</li>
+<li><strong>"MRO 怎么算出来的?能讲讲 C3 吗?"</strong> → C3 线性化:合并各父类的 MRO,遵守"子类先于父类、父类相对顺序保留、单调性"三条;结果可用 <code>__mro__</code> / <code>mro()</code> 验证。不必手算,但要能说清它保证"确定且无歧义"。</li>
+<li><strong>"mixin 和多继承什么关系?"</strong> → mixin 靠多继承落地(放进继承列表),MRO 决定它的方法优先级;这是多继承被认可的主流用法。</li>
+<li><strong>(进阶)"C3 会不会算不出来?"</strong> → 会。当继承结构自相矛盾(比如两个父类对同一对基类要求了相反顺序),C3 无法给出一致顺序,<strong>直接抛 <code>TypeError</code></strong>,拒绝创建这个类。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点 ①:把 <code>super()</code> 说成"调用父类"。</strong>这是最常见的翻车。准确说法:<code>super()</code> 返回一个代理,它按<strong>当前实例的 MRO</strong> 把调用转发给当前类的<strong>下一个</strong>类——在多继承里可能是"兄弟"而非"父亲"。把这句讲对,面试官立刻知道你真懂协作式继承,而不是背了个 <code>super().__init__()</code> 模板。</p>
+<p><strong>易错点 ②:多继承里方法/属性冲突,不理解 MRO 就会 debug 到崩溃。</strong>两个父类有同名方法时,用哪个<strong>完全由 MRO 顺序决定</strong>(继承列表里靠前的、且满足 C3 的那个先命中)。遇到"我明明改了 C 的方法怎么没生效"这类灵异 bug,第一件事就是 <code>print(Cls.mro())</code> 看真实顺序。</p>
+<p><strong>易错点 ③:以为 Python 总能给出一个 MRO。</strong>不是。<strong>C3 在不一致的继承结构下会直接 <code>TypeError</code></strong>(报 "Cannot create a consistent method resolution order")。它宁可拒绝建类,也不给你一个自相矛盾的顺序——这是特性,不是缺陷:</p>
+<pre><code>class X: pass
+class Y: pass
+class A(X, Y): pass
+class B(Y, X): pass       # 注意:A 要求 X 在 Y 前,B 要求 Y 在 X 前
+class C(A, B): pass       # TypeError: Cannot create a consistent MRO ...
+</code></pre>
+</div>
+
+<div class="crosslang">
+<p>"多重继承 / diamond 你们语言怎么处理?"——三种语言,三种哲学:</p>
+<table>
+<tr><th>语言</th><th>多继承?</th><th>diamond 怎么办</th></tr>
+<tr><td><strong>Python</strong></td><td>支持(类可多继承)</td><td>MRO + C3 线性化:压成一条确定顺序;配 <code>super()</code> 协作,公共祖先只跑一次</td></tr>
+<tr><td><strong>C++</strong></td><td>支持真正的多继承</td><td>默认<strong>会</strong>复制多份基类子对象;用<strong>虚继承</strong>(<code>class B : virtual public A</code>)让共享基类只保留一份</td></tr>
+<tr><td><strong>Java</strong></td><td>类<strong>禁止</strong>多继承,只能多实现 <code>interface</code></td><td>从根上回避 diamond;但 Java 8 的 <code>default</code> 方法带来自己的冲突规则——两个接口给出同名 default 方法时,<strong>子类必须显式覆盖</strong>,否则编译报错</td></tr>
+</table>
+<p>一句话:<strong>C++ 让你自己用 <code>virtual</code> 声明"要不要共享基类";Java 干脆禁止类多继承、把问题挡在门外;Python 用 MRO 算法把它变成一条确定的线。</strong></p>
+</div>
+
+<div class="implement">
+<p>不看上文,自己动手验证 MRO:</p>
+<ul>
+<li>照第三节写出协作式的 <code>A/B/C/D</code>(每个 <code>__init__</code> 都 <code>print</code> 自己的名字 + <code>super().__init__(**kwargs)</code>),<strong>先预测</strong>再运行 <code>D()</code>,核对 <code>A.__init__</code> 是不是只出现一次。</li>
+<li>打印 <code>[c.__name__ for c in D.__mro__]</code>,确认顺序是 <code>D → B → C → A → object</code>。</li>
+<li>把 <code>B</code>、<code>C</code> 里的 <code>super().__init__(**kwargs)</code> 改成硬编码 <code>A.__init__(self)</code>,再跑一遍,观察 <code>A</code> 被调了几次——亲手复现那个 bug。</li>
+<li>加分:写一个 <code>LoggerMixin</code>,分别用 <code>class User(LoggerMixin, Model)</code> 和 <code>class User(Model, LoggerMixin)</code> 试,看日志出现在落库前还是后,理解"MRO 决定 mixin 优先级"。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:给定协作式的 <code>D(B, C)</code>、<code>B(A)</code>、<code>C(A)</code>,<code>D()</code> 里 <code>B.__init__</code> 的 <code>super().__init__()</code> 会跳到哪个类?</summary>
+<div class="answer">
+<p><strong>答案:跳到 <code>C</code>,而不是 <code>A</code>。</strong></p>
+<p><code>D</code> 实例的 MRO 是 <code>D → B → C → A → object</code>。<code>super()</code> 的语义是"当前类在<strong>当前实例 MRO</strong> 里的下一个",<code>B</code> 的下一个是 <code>C</code>。这正是"<code>super()</code> 不等于父类"的活例——尽管 <code>B</code> 的父类写的是 <code>A</code>,在 <code>D</code> 的实例里它却先接力给"兄弟" <code>C</code>。等走到 <code>C</code>,<code>C</code> 的下一个才是 <code>A</code>,于是 <code>A</code> 只被执行一次。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:一个团队里,菱形结构中 <code>A.__init__</code> 打开了一个网络连接。有人反馈"连接被打开了两次"。最可能的原因是什么?怎么修?</summary>
+<div class="answer">
+<p><strong>最可能的原因:</strong>链上有类没有用 <code>super()</code>,而是<strong>硬编码</strong>点名调了父类构造(如 <code>B</code> 和 <code>C</code> 各自写了 <code>A.__init__(self)</code>)。这样 <code>A</code> 被 <code>B</code> 走一遍、被 <code>C</code> 又走一遍,共享祖先被初始化两次。</p>
+<p><strong>修法:</strong>把整条链改成协作式——每个 <code>__init__</code> 都用 <code>super().__init__(**kwargs)</code> 接力,并让签名互相兼容(用 <code>**kwargs</code> 透传)。这样调用严格沿 MRO 走直线,C3 保证 <code>A</code> 在 MRO 中只出现一次,连接就只开一次。诊断时先 <code>print(Cls.mro())</code> 确认顺序,再检查每个类是不是都规矩地 <code>super()</code>。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>Python 用 <strong>MRO(由 C3 线性化算出的一条确定顺序)</strong>消解 diamond 歧义;<code>super()</code> 调的是<strong>MRO 里的下一个类,不是父类</strong>。只要整条链协作式地 <code>super()</code> + <code>**kwargs</code> 透传,公共祖先<strong>恰好执行一次</strong>;谁硬编码点名父类,谁就会把祖先调重复。查顺序就 <code>Cls.mro()</code>,遇诡异冲突先看它。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>canon(权威锚定,本节主体):</strong>本节不来自某本源题册,而是锚定 Python 官方文档——<a href="https://docs.python.org/3/howto/mro.html">The Python 2.3 Method Resolution Order(C3 线性化 HOWTO)</a>(MRO 与 C3 的一手说明)、<a href="https://docs.python.org/3/tutorial/classes.html#multiple-inheritance">Tutorial · Multiple Inheritance</a>、<a href="https://docs.python.org/3/library/functions.html#super"><code>super()</code> 内置函数文档</a>(明确 <code>super()</code> 遵循 MRO 而非直接父类)。</li>
+<li><strong>canon(跨语言对照):</strong>C++ 虚继承见 <a href="https://en.cppreference.com/w/cpp/language/derived_class">cppreference · Derived classes(virtual base classes)</a>;Java <code>default</code> 方法冲突规则见 <a href="https://docs.oracle.com/javase/tutorial/java/IandI/defaultmethods.html">Oracle Java Tutorial · Default Methods</a>。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"为什么 C3 能保证只跑一次",或者手把手带你算一遍某个类的 C3 MRO、拿你写的 mixin 代码来评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节转向另一个 Python 面试常客——为什么 Python "不支持传统意义的方法重载",以及它用什么替代。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0018-design-patterns-behavioral.html"><span class="dir">← 上一课</span>0018 · 行为型设计模式</a>
+<a class="next" href="0020-overloading-in-python.html"><span class="dir">下一课 →</span>0020 · Python 里的"方法重载"</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

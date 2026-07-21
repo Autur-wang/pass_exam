@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0013 · 组件外观怎么让人能自定义(含国际化)</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0013 课 · 4 UI 编程面试 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>组件外观怎么让人能自定义(含国际化)</h1>
+
+<p class="lede">这节课回答两个问题:一是当产品或客户要求"把这个组件改成我们家的品牌色"时,组件 API 有哪几条路可以接住这个要求、各自的代价是什么;二是当这个组件要给不同语言、不同书写方向的用户用时,API 设计上还要多想到什么。</p>
+
+<div class="recall">
+<p>先回忆一下上一课:不管是 jQuery 风格的 <code>$('#slider').slider(options)</code>,还是 vanilla JS 的 <code>slider(rootEl, options)</code>,还是 React 的 <code>&lt;Slider {...props} /&gt;</code>——三种初始化方式解决的都是同一件事:怎么把一堆自定义选项塞进组件里。但选项塞进去、组件跑起来之后,产品同事下一句几乎必然是"能不能把这个滑块的颜色改成我们家的品牌色"。初始化解决的是"造出来",这节课要解决的是"造出来之后,外观能不能按别人的意愿改"。</p>
+</div>
+
+<h2>一、为什么样式定制是绕不开的一环</h2>
+
+<p>像 <a href="https://getbootstrap.com/">Bootstrap</a>、<a href="https://mui.com/">Material UI</a> 这类组件库,即使给按钮、选项卡、模态框这些常用组件都配好了默认样式,开发者拿到手之后,通常还是想套上自己公司或产品的品牌色和主题——默认样式解决的是"能用",不解决"符合我们家的 VI 规范"。所以几乎所有打算被别人复用的组件,尤其是打包成第三方库的组件,都要在 API 层面回答一个问题:开发者能通过哪些方式,把默认外观换成自己想要的样子?</p>
+
+<h2>二、自定义外观的六条路,先看全貌</h2>
+
+<p>把这几条路放在一起比,差别主要落在两件事上:要不要写 JS,以及"谁的样式最终生效"这件事是不是确定的。</p>
+
+<table>
+<tr><th>方法</th><th>怎么做</th><th>优点</th><th>缺点/代价</th></tr>
+<tr><td>类注入</td><td>组件接受 <code>className</code>(或按元素分开的多个 <code>classNameXxx</code>)prop,把开发者传入的类加到 DOM 上</td><td>用法直观,jQuery UI(<code>classes</code> 字段)、React 等都支持</td><td>组件默认类和自定义类特异性相同时,谁生效取决于样式表出现顺序等因素,结果不确定</td></tr>
+<tr><td>CSS 选择器钩子</td><td>组件不接受任何 prop,把内部选择器/<code>data-*</code> 属性发布成公开约定,开发者直接写 CSS 命中它们</td><td>开发者不用改调用代码,只写 CSS 就能定制</td><td>仍有类注入一样的不确定性问题;选择器一旦公布,改名就是破坏性变更,要按 semver 升版本</td></tr>
+<tr><td>主题对象</td><td>组件接受一个 <code>theme</code> 键值对象,和默认值合并后转成内联 <code>style</code></td><td>内联样式特异性天然最高,不会和默认类撞车,没有"谁赢"的歧义</td><td>可定制选项会越滚越多;内联样式写进每个实例的 DOM,渲染成百上千次时是性能负担</td></tr>
+<tr><td>CSS 预处理器编译</td><td>组件库用 <a href="https://sass-lang.com/">Sass</a>/<a href="https://lesscss.org/">Less</a> 写样式,把变量开放给开发者在编译期<a href="https://getbootstrap.com/docs/5.3/customize/sass/">覆盖</a></td><td>产出 CSS 更精简,没有"默认样式被覆盖后留下的冗余规则"</td><td>多一道编译步骤,不是引入一份样式表就完事</td></tr>
+<tr><td>CSS 变量</td><td>组件样式里用 <code>var(--x, 默认值)</code>,开发者在 <code>:root</code> 里重新赋值</td><td>不需要写 JS,靠层叠机制和回退值天然避开特异性战争</td><td>逐个组件实例单独定制会更麻烦(但依然可行)</td></tr>
+<tr><td>Render props</td><td>组件把"渲染什么"交给一个函数 prop,只管行为逻辑,展示完全交给调用者</td><td>样式定制权彻底交还开发者,<a href="https://www.radix-ui.com/">Radix</a>、<a href="https://headlessui.com/">Headless UI</a>、<a href="https://reach.tech/menu-button">Reach UI</a> 等无头组件库大量用这条路</td><td>—(见下方说明)</td></tr>
+</table>
+
+<p>前五条,源材料都点出了明确的代价;render props 这一条,源材料只强调了它能把"行为"和"展示"拆开的好处,没有展开具体的缺点——这里不替它编一个。</p>
+
+<h2>三、类注入 vs CSS 变量:同一个冲突,两种走向</h2>
+
+<p>类注入最容易踩的坑,是"视觉结果不确定"。假设 UI 库默认样式和开发者自定义样式,恰好都给同一个元素设置了同一个 CSS 属性:</p>
+
+<div class="codecompare">
+<div class="side bad"><p class="label">✗ 类注入:谁赢看样式表加载顺序</p><pre><code>/* UI 库默认样式表 */
+.gfe-slider {
+  color: black;
+}
+
+/* 开发者自定义样式表 */
+.my-custom-slider {
+  color: red; /* 特异性和 .gfe-slider 相同 */
+}</code></pre></div>
+<div class="side good"><p class="label">✓ CSS 变量:靠 :root 覆盖,不打特异性战</p><pre><code>/* UI 库默认样式表 */
+.gfe-slider {
+  font-size: var(--gfe-slider-font-size, 12px);
+}
+
+/* 开发者自定义样式表 */
+:root {
+  --gfe-slider-font-size: 15px;
+}</code></pre></div>
+</div>
+
+<p>左边这两个选择器特异性完全相同,最终 <code>color</code> 到底是黑是红,由两份样式表谁先出现在页面里决定——如果样式表是延迟加载的,加载顺序都无法保证,结果就是不确定的。开发者为了让自己的样式"赢",容易开始堆 <code>!important</code> 或者写 <code>.my-custom-slider.my-custom-slider</code> 这类重复选择器硬拗特异性,CSS 很快变得难维护。右边的 CSS 变量走的是另一条路:<code>var()</code> 的回退值和 <code>:root</code> 里的重新赋值不涉及选择器特异性,谁生效是确定的,而且完全不需要写 JS。</p>
+
+<p>类注入这个歧义还有第三种解法:jQuery UI 的做法是,一旦开发者传入自定义类,组件就不再套用默认样式——这样"谁赢"的歧义消失了,但代价是开发者要自己把默认类原本提供的必要样式重新实现一遍。这个思路同样可以搬到 React 组件上解决同样的问题。</p>
+
+<h2>四、国际化:两件具体要做的事</h2>
+
+<p>组件是不是支持多种语言、加一种新语言容不容易,是国际化要问的两个具体问题。</p>
+
+<h3>标签别写死在一种语言里</h3>
+
+<p>一些组件内部本身带着文字标签——比如图片轮播的 prev/next 按钮。比较稳妥的做法是把这些标签字符串开放成组件的 prop/option,让调用者自己传进来,而不是把某种语言的文案直接写进组件源码。</p>
+
+<h3>从右到左的语言:方向翻转与 CSS 逻辑属性</h3>
+
+<p>阿拉伯语、希伯来语等语言是从右向左书写,UI 需要水平翻转。组件可以接收一个 <code>direction</code> prop/option,据此改变元素的渲染顺序——比如 RTL 语言下,prev 和 next 按钮要分别换到右侧和左侧。要让样式本身也能跟着"翻",该用<a href="https://developer.mozilla.org/zh-CN/docs/Web/CSS/CSS_Logical_Properties">CSS 逻辑属性</a>写,让布局适用于不同的<a href="https://developer.mozilla.org/zh-CN/docs/Web/CSS/CSS_Writing_Modes">书写模式</a>,而不是只加一个方向 prop 就当作已经适配完了。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>CSS 逻辑属性</dt>
+<dd>用 <code>margin-inline-start</code>/<code>margin-inline-end</code>、<code>padding-block</code> 这类"按书写流向"命名的属性,替代 <code>margin-left</code>/<code>margin-right</code> 这类按物理方向命名的属性,让同一套样式在从左到右和从右到左的书写模式下都不用改。<em>避免</em>以为只要给组件加一个 <code>direction</code> prop 就完成了 RTL 适配,内部样式却仍然写死 <code>margin-left</code>/<code>padding-right</code>,方向切换后还要再单独维护一套镜像样式。</dd>
+<dt>类注入的样式不确定性</dt>
+<dd>组件默认类和开发者自定义类的 CSS 特异性相同时,最终生效的样式由两份样式表在页面里出现的顺序决定,不是由谁的意图更重要决定。<em>避免</em>把 <code>className</code> prop 当成"传了就一定生效"的可靠通道,忽视顺序问题后又靠叠加 <code>!important</code>、重复选择器硬拗特异性。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>面试被要求实现一个组件(比如滑块、图片轮播)时,如果面试官追问"这个组件要给别的团队用,怎么让他们改样子",可以按"确定性优先"的顺序推荐:先说 CSS 变量——不用写 JS、没有特异性冲突;再说类注入——简单,但要主动提一句特异性隐患;如果讨论到这是一个要长期维护的库,再提一句 Sass/Less 编译期变量是库作者层面的另一个选项。如果面试官提到"这个产品要卖到中东或以色列市场",主动提 <code>direction</code> prop 和 CSS 逻辑属性,是能体现"想到国际化"这件事本身的加分点。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"支持多语言"简化成"把文案翻译一遍"。</strong>这样做容易漏掉国际化的另一半——布局方向。阿拉伯语、希伯来语要从右向左排,如果组件内部样式写的是 <code>margin-left</code>/<code>padding-right</code> 这类物理方向属性,文案翻译完上线后,prev/next 按钮的位置、图标的朝向仍然是照着从左到右语言设计的,布局本身没有跟着"翻"过来。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>找一个自己写过或维护过的组件,搜一下它的 CSS 里有没有 <code>margin-left</code>/<code>margin-right</code>/<code>padding-left</code>/<code>padding-right</code> 这类物理方向属性;挑其中一两条换成 <code>margin-inline-start</code>/<code>margin-inline-end</code> 等逻辑属性,再给 <code>&lt;html&gt;</code> 加上 <code>dir="rtl"</code> 试着看一眼,布局有没有跟着翻转。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>自定义外观没有单一最优解,六条路本质是在"样式冲突是否确定""要不要写 JS""要不要多一道编译步骤"之间做取舍;国际化也不止是翻译文案,组件 API 还要考虑方向(RTL)和 CSS 逻辑属性,才算把"能不能给别的语言用"这件事想全。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于类注入(<code>className</code> prop)的说法,下面哪个最准确? (A) 类注入保证开发者自定义样式一定生效,因为 <code>className</code> prop 的优先级天然高于组件默认类 (B) 类注入的结果不总是确定的:当默认类和自定义类的 CSS 特异性相同时,谁生效取决于样式表出现顺序等因素 (C) 类注入是 React、Vue 等现代框架独有的能力,jQuery UI 不支持通过类来定制样式</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。默认类和自定义类特异性相同时,最终生效的样式看的是样式表在页面里出现的顺序,不是"谁是开发者传入的"。(A) 错在 CSS 特异性不因为类是开发者传入的就更高,两个同特异性选择器谁生效由层叠顺序决定,不是来源;(C) 错在 jQuery UI 的组件初始化器本身就接受 <code>classes</code> 字段,让开发者把类绑定到不同的内部元素上,说明 jQuery UI 同样支持类定制。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于 CSS 变量(自定义属性)相比类注入的说法,下面哪个最准确? (A) CSS 变量方案能完全取代类注入,因为它可以精确做到"只改某一个组件实例",且没有任何额外维护成本 (B) CSS 变量方案要求开发者必须在 JavaScript 运行时里手动合并默认值和自定义值,否则样式不会生效 (C) CSS 变量不靠 CSS 特异性分胜负,而是靠 <code>var()</code> 的回退值和 <code>:root</code> 层的层叠覆盖来决定最终样式,并且不需要写 JS</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。CSS 变量的好处正是不需要 JS,冲突靠层叠机制和回退值解决,不靠特异性打架。(A) 错在源材料提到"每个组件的自定义会更加麻烦(但仍然是可能的)",逐实例定制并没有那么轻松,也没有"没有任何额外维护成本"这么绝对;(B) 说的其实是主题对象的做法——在 JS 里把 <code>defaultTheme</code> 和传入的 <code>theme</code> 合并——不是 CSS 变量的方式,CSS 变量恰恰不需要这一步。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<ul>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties">Using CSS custom properties</a> —— MDN 对 CSS 变量(自定义属性)与 <code>var()</code> 回退值机制的权威讲解(英文)。</li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/CSS/CSS_Logical_Properties">CSS 逻辑属性</a> —— MDN 中文文档,对应关键定义里的核心术语。</li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/CSS/CSS_Writing_Modes">CSS 书写模式</a> —— MDN 中文文档,理解逻辑属性为什么能适配不同书写方向的基础。</li>
+<li><a href="https://reach.tech/styling">Reach UI · Styling</a> —— 本节"CSS 选择器钩子"一条路的具体实现范例。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"为什么两个 CSS 类特异性相同时,谁生效是不确定的",也可以让老师陪你把手头一个组件的物理方向属性,逐条换成逻辑属性试一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0012-component-api-design-initialization.html"><span class="dir">← 上一课</span>组件 Props 怎么设计:初始化原则</a>
+  <a class="next" href="0014-ui-interview-checklist.html"><span class="dir">下一课 →</span>UI 面试自查清单怎么用</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

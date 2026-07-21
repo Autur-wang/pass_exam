@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0015 · SFT 数据构建与格式:微调的燃料长什么样</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第四部分 微调 PEFT · 第 0015 课</p>
+<h1>SFT 数据构建与格式:微调的燃料长什么样</h1>
+<p class="lede">前几课把「怎么改参数」讲透了(LoRA / QLoRA / Prefix)。但真正决定 SFT 效果上限的,往往不是你用哪种 PEFT,而是<strong>喂进去的数据</strong>。这节课把 SFT 数据拆到你能答清楚三件事:数据长什么格式、为什么<strong>只对回答部分算 loss</strong>、以及「要多少条才起效」。这几点几乎是每场大模型面试都会落到的送分/送命题。</p>
+
+<div class="recall">
+<p>上节课(QLoRA / Adapter / Prefix)解决的是「用尽量少的显存和参数把模型调过来」。但方法再省,喂的数据是垃圾,调出来的也是垃圾。<strong>先别往下看,试着回忆:你见过的 SFT 训练样本长什么样?模型在这一条样本上,到底该「学」哪一段文字?</strong></p>
+</div>
+
+<h2>一、SFT 到底在做什么</h2>
+<p>SFT(Supervised Fine-Tuning,有监督微调)做的事一句话讲清:<strong>给模型一堆「输入 → 期望回答」的示范,让它学会「拿到这种输入,就该这样回」。</strong>它仍然是语言模型的老本行——预测下一个 token——只是训练数据从「海量无标注网页」换成了「精心组织的问答/指令示范」。</p>
+<p>所以 SFT 数据的核心单元永远是一对:<strong>提示(prompt)+ 期望回答(response)</strong>。区别只在于你用什么外壳把这一对包起来。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">收集原始数据</div>
+  <div class="node">标注 / 清洗<br>去重</div>
+  <div class="node">格式转换<br>套 chat template</div>
+  <div class="node">划分<br>train / val</div>
+  <div class="node good">训练<br>只对 assistant 算 loss</div>
+  <div class="node">评估</div>
+</div>
+<figcaption>SFT 数据流水线(锚定源材料的「收集→标注→划分→预处理→格式转换→训练→评估」)。最关键、最容易在面试里被追问的是标绿那一步——loss 只算在回答上。</figcaption>
+</figure>
+
+<h2>二、两种主流数据格式</h2>
+
+<h3>格式 A:instruction / input / output(Alpaca 风)</h3>
+<p>把每条样本拆成三个字段,适合<strong>单轮</strong>指令任务:</p>
+<pre><code>{
+  "instruction": "把下面的句子翻译成英文。",
+  "input": "今天天气很好。",
+  "output": "The weather is nice today."
+}</code></pre>
+<p><code>instruction</code> 是任务描述,<code>input</code> 是这次的具体输入(可以为空,比如「写一首关于秋天的诗」就没有 input),<code>output</code> 是期望回答。训练时框架会按一个固定模板把 instruction+input 拼成 prompt,把 output 当作要学的回答。</p>
+
+<h3>格式 B:messages / role(对话风)</h3>
+<p>用带角色的消息列表,天然支持<strong>多轮对话</strong>和 system 提示,是当下 Chat 模型的通用做法:</p>
+<pre><code>{
+  "messages": [
+    {"role": "system",    "content": "你是一个乐于助人的中文助手。"},
+    {"role": "user",      "content": "把这句话翻译成英文:今天天气很好。"},
+    {"role": "assistant", "content": "The weather is nice today."}
+  ]
+}</code></pre>
+<p>训练前会用模型自带的 <strong>chat template</strong>(如 <code>tokenizer.apply_chat_template</code>)把这个列表渲染成一串带特殊标记的纯文本,再交给模型。<strong>关键约束:训练用的模板必须和推理时用的模板一致</strong>——否则模型学的格式和你部署时喂的格式对不上,效果会明显下滑。</p>
+<p>两种格式并非对立:instruction/input/output 常常只是 messages 的一种「单轮特例」,很多训练框架会在内部把前者转成后者再处理。多轮、需要 system 角色、要贴合线上对话形态时,优先用 messages 格式。</p>
+
+<h2>三、核心机制:只对 assistant 部分算 loss</h2>
+<p>这是本课最该背下来、也最常被追问的一点。一条样本里,prompt(system+user)和 response(assistant)会被<strong>拼成同一个序列</strong>喂进去,但计算损失时,<strong>要把 prompt 部分的 token 全部屏蔽(mask)掉,只在 assistant 回答的 token 上计算交叉熵</strong>。</p>
+<p>用公式说,自回归语言模型的损失本是对整条序列每个位置求和;SFT 把求和范围<strong>限制在 response 的 token 上</strong>:</p>
+$$\mathcal{L}(\theta)=-\!\!\sum_{t\,\in\,\text{response}}\!\!\log p_\theta\!\left(y_t \mid y_{&lt;t},\,x\right)$$
+<p class="formula-note">$x$ 是 prompt,$y_t$ 是回答里第 $t$ 个 token。求和号只跑 response 里的位置,prompt 位置不贡献梯度。</p>
+
+<p><strong>为什么要这么做?</strong>因为我们想让模型学的是「<em>给定这个指令,该怎么回答</em>」,而不是「<em>怎么把用户的指令原样生成一遍</em>」。如果不 mask,模型会花一半力气去拟合用户的提问文本——那既没意义,还会稀释它对「如何作答」的学习信号。屏蔽 prompt 后,梯度全部集中在「回答」上,学习信号更干净、更高效。</p>
+
+<p>工程上怎么实现?PyTorch 的交叉熵有个约定:标签值等于 <code>-100</code> 的位置会被自动忽略(<code>ignore_index=-100</code>)。所以做法就是——把 prompt 段对应的 label 全部置为 <code>-100</code>:</p>
+
+<table>
+<thead><tr><th>序列 token</th><th>你 是 助手</th><th>请翻译:今天天气很好</th><th>The weather is nice today</th></tr></thead>
+<tbody>
+<tr><td>属于</td><td>system(prompt)</td><td>user(prompt)</td><td>assistant(response)</td></tr>
+<tr><td>label</td><td><code>-100 -100 …</code></td><td><code>-100 -100 …</code></td><td>真实 token id(参与 loss)</td></tr>
+</tbody>
+</table>
+<p>多轮对话同理:每一轮的 user 提问都置 <code>-100</code>,只在每一轮的 assistant 回答上算 loss。TRL 的 <code>SFTTrainer</code> 配合 completion-only 的 collator、或各家训练脚本里的「mask prompt」选项,做的就是这件事。</p>
+
+<h2>四、质量 &gt; 数量:数据怎么算「好」</h2>
+<p>面试官问「你怎么构建 SFT 数据」,想听的绝不是「爬了很多」。真正决定效果的是三个维度:</p>
+
+<div class="trio">
+  <div class="cell"><strong>多样性</strong><br>覆盖足够多的任务类型、指令风格、领域<br><em>别让模型只见过一种题</em></div>
+  <div class="cell"><strong>去重</strong><br>剔除重复 / 高度相似样本<br><em>重复样本 = 变相过拟合</em></div>
+  <div class="cell"><strong>难度分布</strong><br>简单到复杂都有,梯度合理<br><em>全是简单题学不到硬能力</em></div>
+</div>
+
+<p>还要盯住:<strong>回答本身的正确性与风格一致性</strong>(错误示范会被模型忠实学走)、<strong>标签噪声</strong>(源材料反复强调:样本里噪声过大,模型会去记噪声特征而过拟合)。对中文任务,源材料给的经验还包括适当的清洗/预处理,以及在数据有限时用同义替换、语序重组等做<strong>数据增强</strong>来扩充多样性——但增强要克制,别把噪声也放大了。</p>
+
+<h2>五、到底需要多少条数据</h2>
+<p>这题没有唯一答案,标准的答法是<strong>「看目标」</strong>,并给出量级而非拍死的数字。综合源材料的经验口径:</p>
+<ul>
+<li><strong>小规模模型 / 窄任务</strong>:几千到几万条常常就够。</li>
+<li><strong>大规模模型 / 宽覆盖</strong>:数十万到数百万条是常见范围。</li>
+</ul>
+<p>另一条重要的行业观察是「<strong>少即是多</strong>」:当目标只是<strong>对齐回答风格与格式</strong>(而非灌输新知识)时,少量、极高质量的示范可能就足够——LIMA 这篇工作用约 1000 条精选样本,就得到了相当能打的指令遵循效果,并提出「对齐主要是在<em>激活</em>预训练已有能力、教它用什么格式表达」的假设。</p>
+<p>把这两条统一起来的正确直觉是:<strong>如果是教模型「怎么说话/什么格式」,少而精可能够;如果是教它「一项它原本不会的新技能或新知识」,通常需要更多、更集中的数据。</strong>无论哪种,盲目堆量都不如提高质量与多样性。注意别把话说死——「越多一定越好」是错的,超过某个点后,低质量数据的边际收益会转负。</p>
+
+<h2>六、正样本、负样本与基座选择(多来源经验的统一)</h2>
+<p>面试里常有个陷阱:「你 SFT 用了正负样本吗?」——<strong>标准 SFT 只用正样本</strong>,也就是「好的示范回答」,通过上面的 loss 让模型去模仿它们。<strong>负样本(被拒绝的回答)不属于 SFT,而属于后面的偏好对齐阶段</strong>:奖励模型(RM)吃的是「输入 → 一个实数奖励分」或「优选/被拒」成对数据,DPO 直接吃 <code>(chosen, rejected)</code> 偏好对。把这条界线说清楚,是区分「背过流程」和「真懂 pipeline」的分水岭(RM / 偏好对齐见后续部分)。</p>
+<p>还有一个高频实操题——<strong>基座该选 Base 还是 Chat?</strong>源材料的经验:任务是多轮对话/对话生成相关,选已经对齐过的 <strong>Chat</strong> 模型更省事;任务是单轮文本生成或非对话任务,从 <strong>Base</strong> 起手更干净、可控。选错基座会让「数据没问题但效果就是别扭」。</p>
+
+<dl class="keydef">
+<dt>SFT(Supervised Fine-Tuning)</dt>
+<dd>用「输入 → 期望回答」示范做有监督微调,仍是「预测下一个 token」,但 loss 只算在回答上。</dd>
+<dt>指令微调(Instruction Tuning)</dt>
+<dd>SFT 的典型形态:数据组织成 instruction/input/output 或 messages,让模型学会遵循自然语言指令。</dd>
+<dt>Loss mask / <code>ignore_index=-100</code></dt>
+<dd>把 prompt 段的 label 置为 $-100$,交叉熵自动跳过这些位置,使梯度只来自 assistant 回答的 token。</dd>
+<dt>Chat template</dt>
+<dd>把 messages 列表渲染成带特殊标记纯文本的模板;<strong>训练与推理必须用同一套</strong>。</dd>
+</dl>
+
+<div class="implement">
+<p>自己写一遍「构造带 mask 的 label」——这是理解 SFT 数据的关键动作:</p>
+<pre><code>from transformers import AutoTokenizer
+
+tok = AutoTokenizer.from_pretrained("your-base-model")
+
+# 一条对话样本(用模型自带的 chat template 渲染)
+msgs = [
+    {"role": "user", "content": "把这句话翻译成英文:今天天气很好。"},
+    {"role": "assistant", "content": "The weather is nice today."},
+]
+
+# 分两次编码:prompt 段 vs prompt+response 全段
+prompt_text = tok.apply_chat_template(
+    msgs[:1], tokenize=False, add_generation_prompt=True)   # 到 assistant 起始
+full_text   = tok.apply_chat_template(
+    msgs, tokenize=False, add_generation_prompt=False)
+
+prompt_ids = tok(prompt_text, add_special_tokens=False).input_ids
+full_ids   = tok(full_text,   add_special_tokens=False).input_ids
+
+input_ids = full_ids
+labels    = list(full_ids)
+# 关键:把 prompt 段的 label 全部置 -100,只保留 assistant 回答参与 loss
+for i in range(len(prompt_ids)):
+    labels[i] = -100
+# 训练时:loss = CrossEntropyLoss(ignore_index=-100)(logits, labels)</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「SFT 数据长什么样、有哪些格式?」——instruction/input/output(单轮)与 messages/role(多轮、带 system);后者是 Chat 模型主流。</li>
+<li>「训练时 loss 算在哪一段?为什么?」——只算 assistant 回答,prompt 段 label 置 $-100$;为的是学「怎么答」而非「重复问题」。这是必答点。</li>
+<li>「SFT 需要多少条数据?」——看目标给量级:窄任务几千~几万,宽覆盖数十万~数百万;对齐风格可「少而精」(举 LIMA 约千条)。别报死数字。</li>
+<li>「你怎么保证数据质量?」——多样性 + 去重 + 难度分布 + 回答正确性/风格一致 + 控噪声。</li>
+<li>「SFT 用负样本吗?」——不用,SFT 只用正示范;负样本/偏好对属于 RM 与 DPO 阶段。</li>
+<li>「基座选 Base 还是 Chat?」——对话任务倾向 Chat,单轮/非对话倾向 Base。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>忘了 mask prompt,把整条序列都算 loss——模型会分心去拟合用户提问,学习信号被稀释。</li>
+<li>训练用的 chat template 和推理时不一致——特殊标记对不上,线上效果莫名变差。</li>
+<li>把「正负样本」当成 SFT 的输入——负样本是 RM / DPO 的活儿,不是 SFT。</li>
+<li>迷信数据量,只堆量不去重、不控质量——重复与噪声会把模型推向过拟合,反而「越调越傻」(下一课细讲)。</li>
+<li>多轮对话只在最后一轮算 loss——通常应在<strong>每一轮</strong>的 assistant 回答上都算(除非有意只学最后一轮)。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>SFT 训练一条「user 提问 + assistant 回答」拼成的序列时,为什么要把 prompt 段的 label 置为 <code>-100</code>?</p>
+<details><summary>A. 为了节省显存,减少要存的 token</summary>置 $-100$ 不改变序列长度或显存占用,只影响哪些位置计入 loss。</details>
+<details><summary>B. 因为 prompt 段没有对应的 token</summary>不对,prompt 段同样被 tokenize 进了序列,只是不参与损失计算。</details>
+<details><summary>C. 让 loss 只落在 assistant 回答上,模型学「怎么答」而不是去重复用户的提问 ✅</summary>正确。<code>ignore_index=-100</code> 会跳过这些位置,梯度全部集中在回答 token,学习信号更干净。</details>
+<details><summary>D. 为了让 tokenizer 跑得更快</summary>与 tokenization 速度无关,mask 发生在算 loss 阶段。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于「SFT 需要多少条数据」,下面哪种回答最稳妥?</p>
+<details><summary>A. 越多越好,几百万条一定比一千条效果好</summary>「一定」太绝对;超过某点后低质量数据边际收益会转负,LIMA 的少而精就是反例。</details>
+<details><summary>B. 取决于目标:对齐风格/格式,少量高质量(如 LIMA 约千条)可能就够;教新技能/知识通常需要更多,质量与多样性比单纯堆量更关键 ✅</summary>正确。标准答法是给量级 + 看目标,而不是拍一个固定数字。</details>
+<details><summary>C. 固定就是 1 万条,和模型规模、任务都无关</summary>数据量与模型规模、任务宽窄、目标强相关,没有放之四海的固定值。</details>
+<details><summary>D. 只要过一千条,再多都没有意义</summary>过头了;教新知识/宽覆盖任务往往仍需要数十万到数百万条。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>InstructGPT</strong>(Ouyang et al., 2022)——「Training language models to follow instructions with human feedback」,SFT 是其三阶段的第一步,示范数据的组织方式可对照本课。</li>
+<li><strong>Stanford Alpaca</strong>(Taori et al., 2023)与 <strong>Self-Instruct</strong>(Wang et al., 2022)——instruction/input/output 格式与「用模型自造指令数据」的来源。</li>
+<li><strong>LIMA: Less Is More for Alignment</strong>(Zhou et al., 2023)——用约 1000 条精选样本论证「质量 &gt; 数量」与「对齐主要在激活预训练能力」的假设,本课第五节的直接依据。</li>
+<li>下一步:数据没构建好会怎样?SFT 之后「变傻」的数据偏移与过拟合问题,见第 0016 课。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>SFT 数据 = 「prompt → 好回答」的示范;只在 assistant 段算 loss(prompt 置 -100);质量、多样性、去重比堆量更重要,数据量看目标给量级。</strong></p>
+<nav class="lesson-nav">
+<a href="0014-qlora-adapter-prefix.html">← 上一课:QLoRA / Adapter / Prefix</a>
+<a href="0016-finetune-pitfalls.html">下一课:微调的坑与「变傻」 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

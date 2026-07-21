@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0017 · RAG 评估与可信:三元评估、拒答、引用、企业级</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第五部分 RAG · 第 0017 课</p>
+<h1>RAG 评估与可信:三元评估、拒答、引用、企业级</h1>
+<p class="lede">上一课把 RAG 拼出来了,这节课回答的是老板真正会问的那句:<strong>「你怎么知道它没在胡说?」</strong>——一口气答清面试里成串的可信性题:<strong>怎么评估 RAG 系统</strong>(AI 工程师 Q38)、<strong>什么是 RAG triad</strong>(Q39)、<strong>语料覆盖不到的问题怎么办</strong>(Q44)、<strong>「可答 vs 不可答」的检索分阈值怎么调</strong>(Q54),以及企业级四连问:<strong>企业规模下有何不同</strong>(Q42)、<strong>文档新鲜度</strong>(Q43)、<strong>从真实用量建 golden set</strong>(Q53)、<strong>引用怎么附加与核验</strong>(Q55)。</p>
+
+<div class="recall">
+<p>先回忆上一课(Agentic RAG 与 GraphRAG):我们让检索变得更聪明——多跳、按需检索、图上游走。但更聪明的检索不等于更可信的答案。<strong>先别往下看:如果一个 RAG 系统给你一段读起来很顺、还带了引用的答案,你要用哪几个独立的问题,才能判断它到底是「有据可查」还是「一本正经地编」?</strong></p>
+</div>
+
+<h2>一、第一原则:把检索和生成分开评</h2>
+<p>RAG 会错,但错在两个完全不同的地方,混在一起评就永远定位不了 bug。所以评估的第一刀,是把它<strong>切成两段独立打分</strong>:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">用户问题</div>
+  <div class="arrow">→</div>
+  <div class="node">检索<br>取回 top-$k$ 块</div>
+  <div class="arrow">→</div>
+  <div class="node">生成<br>据上下文作答</div>
+  <div class="arrow">→</div>
+  <div class="node good">带引用的答案</div>
+</div>
+<figcaption>两段各有各的评估口径:检索段问「找对块了吗」,生成段问「答得忠实、答到点了吗」。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>检索段:块被找回来了吗?</dt>
+<dd>核心是<strong>召回</strong>——「答案所在的那个块」到底有没有进 top-$k$。常用 Recall@k、Precision@k、hit rate。直觉上 <span class="nowrap">$\text{Recall@}k=\dfrac{\text{检回的相关块数}}{\text{全部相关块数}}$</span>,$\text{Precision@}k=\dfrac{\text{检回的相关块数}}{k}$;两者拉扯,F1 是它们的调和平均。<em>生成再强,也救不回一个根本没被检回的答案。</em></dd>
+<dt>生成段:三个信号</dt>
+<dd><strong>faithfulness(忠实度)</strong>:答案里的每条主张是否被检索上下文支持、有没有凭空捏造;<strong>answer relevance(答案相关性)</strong>:是否真的答到了用户问的那个问题(而不是答了个相关但没用的);<strong>correctness(正确性)</strong>:对标准答案,答得对不对。</dd>
+</dl>
+
+<p>怎么打这些分?两条腿走路:一份<strong>人工标注的题集</strong>(golden set)+ <strong>LLM-as-judge</strong>——让一个模型按你写死的 rubric(评分标准)去判每条答案。关键有两点:<strong>(1)题集里必须掺入「不可答」的题</strong>,专门检查系统会不会老实拒答、而不是幻觉一个答案出来;<strong>(2)线上要监控同一批信号</strong>——离线过线不代表线上不漂,faithfulness 和拒答率都要持续盯。</p>
+
+<h2>二、RAG triad:三个互补的独立检查</h2>
+<p>面试问「什么是 RAG triad」,标准答法是:它把 RAG 的可信性拆成<strong>三个互补的检查</strong>,分别卡住流水线的三个环节。妙处在于——三个分数的组合能直接告诉你<em>失败发生在哪一段</em>,而不只是「答错了」。</p>
+
+<div class="trio">
+  <div class="cell"><strong>Context Relevance</strong><br>检索回来的上下文<br>跟问题相关吗?<br><em>卡「检索」这一段</em></div>
+  <div class="cell"><strong>Faithfulness / Groundedness</strong><br>答案是否忠于<br>检回的上下文?<br><em>卡「生成」这一段</em></div>
+  <div class="cell"><strong>Answer Relevance</strong><br>答案是否真的<br>答到了问题?<br><em>卡「问答对齐」这一段</em></div>
+</div>
+
+<p>把三个分数当成一张<strong>故障定位表</strong>来读:</p>
+<ul>
+<li><strong>Context relevance 低</strong> → 检索的锅:检回来的块本身就不相干。去查 embedding、chunking、reranker、query 改写。</li>
+<li><strong>Faithfulness 低</strong>(但 context relevance 高)→ 生成的锅:上下文明明相关,模型却忽略它、或用参数化知识盖过了它。这正是「有据不用、自己编」的幻觉。</li>
+<li><strong>Answer relevance 低</strong>(但前两项都高)→ prompt / 模型的锅:找对了、也忠实,但答偏了题——通常是指令没说清、或模型没抓住问题意图。</li>
+</ul>
+<p>Ragas 这类工具能把这三个指标落地(它内部也是用 LLM-as-judge 去算)。<strong>但别把 judge 当真理</strong>:LLM judge 本身会错,必须拿一批人工标注去校准它——先证明「judge 的判断和人打的分大致一致」,它给的 triad 分数才有意义。</p>
+
+<h2>三、优雅拒答 & 调「可答 vs 不可答」阈值</h2>
+<p>这是 take-home 和现场都极爱考的一环,因为它一刀切开两种候选人:<strong>把系统「锚定」在证据上的人,和放任模型「自信编造」的人。</strong></p>
+
+<h3>语料覆盖不到时,应该拒答(Q44)</h3>
+<p>当知识库里根本没有答案,正确行为是老实说<strong>「我没有这方面的信息」</strong>,而不是掉回模型的参数化知识去幻觉一个。怎么实现,三件事叠起来:</p>
+<ul>
+<li><strong>指令层</strong>:prompt 里明确「只根据检索到的上下文作答;上下文不足以回答就说找不到,不要用你自己的知识补」。</li>
+<li><strong>阈值层</strong>:给检索分设一个门槛——top 检索分低于它,就判定「不可答」,直接走拒答分支,连生成都不进。</li>
+<li><strong>评估层</strong>:eval 集里放一批「不可答」样例,量化<strong>拒答率</strong>——系统在该拒答时拒答了多少、又误拒了多少本该能答的。</li>
+</ul>
+
+<h3>那个阈值怎么定?用数据,别猜(Q54)</h3>
+<p>「可答 vs 不可答」本质是个<strong>分类阈值</strong>,定阈值的正确姿势是拿分布说话:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">收集两类 query<br>可答 / 不可答</div>
+  <div class="arrow">→</div>
+  <div class="node">各自跑检索<br>看 top 检索分分布</div>
+  <div class="arrow">→</div>
+  <div class="node">按容忍度<br>取分界</div>
+  <div class="arrow">→</div>
+  <div class="node good">阈值<br>+ 线上监控</div>
+</div>
+<figcaption>阈值落在两类分布的分界处,具体偏哪边取决于你更怕「误拒」还是更怕「幻觉」。</figcaption>
+</figure>
+
+<p>关键判断:分界往哪偏,取决于你对<strong>「误拒(该答却拒了)vs 幻觉(不该答却编了)」的容忍度</strong>——医疗、法务场景宁可多拒,闲聊助手可以宽松点。还有三条经验:</p>
+<ul>
+<li><strong>原始向量相似度是未校准的</strong>:一个 cosine 0.7 在不同库里含义完全不同,而且换了 embedding 模型或改了语料,分数尺度就变。所以阈值要<strong>每个系统单独调,组件一变就重调</strong>——照搬别人的魔数是错的。</li>
+<li><strong>reranker 的分通常比一阶段召回分更干净</strong>,拿它做阈值往往更稳。</li>
+<li>上线后<strong>持续监控拒答率</strong>:拒答率突然飙升或跌到 0,往往是阈值漂了或语料变了,提前预警。</li>
+</ul>
+
+<h2>四、企业级 RAG:瓶颈从模型转到数据层</h2>
+<p>面试问「企业规模下 RAG 有何不同」,一句话立住(Q42):<strong>模型不再是瓶颈,数据层和检索层才是。</strong>玩具 demo 里你调 prompt,企业里你先设计数据管线。具体差在这几处:</p>
+<ul>
+<li><strong>健壮的摄入 / 新鲜度管线</strong>:文档天天变,索引不能是一次性烤好的。</li>
+<li><strong>权限感知检索(permission-aware)</strong>:用户绝不能检回自己无权看的文档——这是安全红线,过滤要发生在检索层,不能指望 prompt 去「劝」模型别说。</li>
+<li><strong>成本与延迟</strong>:百万级查询下,每多一次 rerank、每长一段上下文都是真金白银和 P99 延迟。</li>
+<li><strong>多文档类型 + 可观测</strong>:PDF、表格、代码、工单混在一起评;检索质量要能持续观测,不是拍脑袋。</li>
+</ul>
+<p>所以企业级的顺序是:<strong>元数据、增量索引、权限过滤,先于任何巧妙的 prompt。先把数据层设计对。</strong></p>
+
+<dl class="keydef">
+<dt>文档新鲜度:当成 SLA 来管(Q43)</dt>
+<dd>不是「重跑一遍全量索引」,而是一套持续机制:按<strong>文档身份 / 版本</strong>做增量 <strong>upsert / 删除</strong>(改了就更新、删了就下架),追踪<strong>时间戳</strong>,必要时把日期<strong>暴露给用户</strong>或按时效过滤(「只看近一年」),定好<strong>re-embedding 策略</strong>(换模型时如何回填),并监控<strong>漂移</strong>。把「答案有多新」当作一条有承诺的 SLA。</dd>
+<dt>从真实用量建 golden set(Q53)</dt>
+<dd>最好的评估集不是拍脑袋编的,而是从<strong>线上真实 query</strong> 里采样、聚类、标注出来的——它覆盖用户真正会问的分布(包括那些你没想到的、以及大量「不可答」的边角问)。这份 golden set 反过来喂给离线 eval 和 judge 校准,形成闭环。</dd>
+</dl>
+
+<h3>引用:附加,更要核验(Q55)</h3>
+<p>企业最看重「答案可追溯」。做对引用是<strong>三步</strong>,很多人只做了前两步就翻车:</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step">① 附加:把稳定标识(文档 / 章节 / 块 ID)一路贯穿检索、带进 prompt,指令模型<strong>逐条声明</strong>它引用了哪个块</div>
+  <div class="down">↓ 然后——别信模型自己说的</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">② 核验:引的块真被检回了吗?</div>
+      <div class="step">模型声明的引用 ID,必须出现在这一轮实际检回的块集合里,否则作废</div>
+    </div>
+    <div class="branch">
+      <div class="label">③ 核验:claim 真被引文支持吗?</div>
+      <div class="step">答案里的每条主张,是否被它所引的那段文字蕴含(entailment)——本质就是 faithfulness 检查</div>
+    </div>
+  </div>
+  <div class="down">↓ 两关都过</div>
+  <div class="step decision">④ UI 显示可点击引用,让用户一键跳到原文核对</div>
+</div>
+<figcaption>常见失败:模型引了一个「看起来像样、但这轮压根没检回 / 没真正用到」的源。未经核验的引用,比没有引用更危险。</figcaption>
+</figure>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「你怎么评估一个 RAG 系统?」——先说<strong>分检索和生成两段</strong>评,再点出检索看 Recall/hit rate、生成看 faithfulness/answer relevance/correctness,最后补 golden set + LLM-as-judge + 掺不可答题 + 线上监控。答不出「分两段」基本就凉了。</li>
+<li>「RAG triad 具体是哪三个?低了各说明什么?」——context relevance / faithfulness / answer relevance,并能用它<strong>定位</strong>是检索、生成还是 prompt 的锅。</li>
+<li>「知识库没有答案时你怎么办?」——考拒答:指令 + 阈值 + eval 含不可答例。</li>
+<li>「那个拒答阈值你怎么定?」——用可答/不可答两类 query 的检索分分布去定,不猜;强调相似度未校准、每系统单独调。</li>
+<li>「怎么防止引用是编的?」——三步:附加稳定 ID → 核验引的块真被检回 → 核验 claim 被引文蕴含。</li>
+<li>「扩到企业规模会遇到什么?」——瓶颈转到数据层:新鲜度管线、权限感知检索、成本延迟、可观测。</li>
+<li>「LLM judge 靠谱吗?」——必须先拿人工标注校准 judge,证明它和人一致,分数才可信。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(小心绝对化):</strong></p>
+<ul>
+<li>别说「有引用就是可信的」——未核验的引用恰恰是常见幻觉形态(引了个像样但没用过的源)。引用要<strong>核验</strong>才算数。</li>
+<li>别说「cosine 相似度高就一定检对了」——原始相似度未校准,尺度随 embedding 和语料变;高分不等于相关,阈值必须实测。</li>
+<li>别把「答得流畅正确」等同于 faithfulness——答案可能正确却<strong>不基于</strong>检索上下文(用了参数化知识),这在企业场景仍算不合规,因为不可追溯。</li>
+<li>别答「只要模型够强就不用拒答」——覆盖不到的问题,再强的模型也只会更自信地编;拒答是设计出来的,不是模型自带的。</li>
+<li>别把新鲜度当成「定期重建索引」这一件事——它是增量 upsert/删除 + 时间戳 + re-embedding 策略 + 漂移监控的一整套 SLA。</li>
+<li>权限过滤不能放在 prompt 里「提醒」模型——必须在检索层就把无权文档挡在外面。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>一个 RAG 答案 faithfulness 分很低,但 context relevance 分很高。最可能的故障在哪?</p>
+<details><summary>A. 检索环节:检回的块跟问题不相干</summary>不对。context relevance 高恰恰说明检回的块是相关的,检索这段没问题。</details>
+<details><summary>B. 生成环节:模型忽略/覆盖了相关上下文,凭参数化知识编答案 ✅</summary>正确。上下文相关(context relevance 高)却不忠实(faithfulness 低),说明模型没据上下文作答——典型的「有据不用」幻觉,该去修 prompt/生成。</details>
+<details><summary>C. 用户问题本身有歧义</summary>那通常反映在 answer relevance,而非 faithfulness 与 context relevance 的这种组合。</details>
+<details><summary>D. embedding 模型选错了</summary>embedding 问题会先拉低 context relevance,与题设矛盾。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于「可答 vs 不可答」的检索分阈值,下面哪句最准确?</p>
+<details><summary>A. 用一个业界通用的相似度魔数(如 0.75)套所有系统即可</summary>错。原始相似度未校准,尺度随 embedding 和语料变,通用魔数不可移植。</details>
+<details><summary>B. 阈值越高越好,能最大化答案质量</summary>错。阈值太高会大量误拒本可回答的问题;高低要按「误拒 vs 幻觉」的容忍度权衡。</details>
+<details><summary>C. 用可答/不可答两类真实 query 的检索分分布来定,每系统单独调、组件变了重调,并线上监控拒答率 ✅</summary>正确。阈值是个数据驱动的分类边界,不能猜,也不能跨系统照搬。</details>
+<details><summary>D. 一旦调好就永久固定,不用再动</summary>错。换 embedding/语料或数据漂移都会让阈值失效,需监控拒答率并重调。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</strong>(Lewis et al., 2020)——RAG 原论文,理解「答案该锚定在检回证据上」的源头。</li>
+<li><strong>Ragas: Automated Evaluation of Retrieval Augmented Generation</strong>(Es et al., 2023)——把 context relevance / faithfulness / answer relevance 三元指标工程化落地的参考。</li>
+<li><strong>Lost in the Middle: How Language Models Use Long Contexts</strong>(Liu et al., 2023)——解释为何「块检回来了」不等于「模型用上了」,是 faithfulness 掉分的一个结构性原因。</li>
+<li><strong>AI Evals for Everyone</strong>(Reganti &amp; Badam,免费课)——golden set 构建、LLM-as-judge 校准、模型评估 vs 产品评估、线上监控的系统讲法。</li>
+<li>下一步:从「评估检索系统」走向「Agent 本身」——第 0018 课讲 Agent 的本质。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>评估分两段(检索看召回,生成看 faithfulness/相关性/正确性);RAG triad = context relevance + faithfulness + answer relevance,组合定位故障;拒答靠指令 + 数据驱动阈值 + eval 含不可答例;企业级瓶颈在数据层——新鲜度当 SLA、权限在检索层过滤、引用要核验不要空信。</strong></p>
+<nav class="lesson-nav">
+<a href="0016-agentic-rag-graphrag.html">← 上一课:Agentic RAG 与 GraphRAG</a>
+<a class="next" href="0018-agent-fundamentals.html">下一课:Agent 本质 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>行为型模式 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第五部分 · 设计模式 · 第 0018 节</p>
+<h1>行为型模式:策略、观察者、模板方法</h1>
+<p class="lede">创建型管"怎么造对象",结构型管"怎么拼对象",行为型则管一件更活的事:对象之间<strong>怎么分工、怎么通信</strong>。这一节只讲透三个高频到几乎必问的:策略(Strategy)、观察者(Observer)、模板方法(Template Method)。</p>
+
+<div class="recall">
+<p>先想一个真实场景:你有一个 <code>checkout()</code> 结账函数,里面一大坨 <code>if kind == "vip" ... elif kind == "staff" ...</code>,每加一种折扣就得回来改这个函数一次。你会怎么重构它,让"加折扣"不再需要动 <code>checkout</code>?先在心里给答案,再往下看——你多半已经会写策略模式了,只是没给它起名字。</p>
+</div>
+
+<h2>一、直觉:行为型模式在解决什么</h2>
+
+<p>把设计模式按 GoF 的分法想成三箱工具:<strong>创建型</strong>关心"对象如何被创建",<strong>结构型</strong>关心"对象如何组合成更大的结构",<strong>行为型</strong>关心"对象之间如何分配职责、如何互相通信"。行为型的核心矛盾几乎都是同一个:<em>把"会变的那部分行为"从"稳定的那部分流程"里抽出来</em>,让变化能独立发生,而不牵动调用方。</p>
+
+<div class="trio">
+<div class="cell"><div class="role">让算法可换</div><div class="head">策略</div><div class="sub">Strategy</div></div>
+<div class="cell"><div class="role">让状态可广播</div><div class="head">观察者</div><div class="sub">Observer</div></div>
+<div class="cell"><div class="role">让步骤可填空</div><div class="head">模板方法</div><div class="sub">Template Method</div></div>
+</div>
+
+<div class="keydef">
+<dl>
+<dt>策略 Strategy</dt>
+<dd>把一组<strong>可互换的算法</strong>各自封装成独立对象(或函数),让它们能在<strong>运行时替换</strong>。典型用途:消灭大段 <code>if/elif</code> 分支——每个分支变成一个策略。</dd>
+<dt>观察者 Observer</dt>
+<dd>定义<strong>一对多</strong>的依赖:被观察对象(subject)状态一变,就<strong>自动通知</strong>所有注册过的观察者(observers)。理念接近发布-订阅(pub/sub)。</dd>
+<dt>模板方法 Template Method</dt>
+<dd>父类定义算法<strong>骨架</strong>(固定的步骤顺序),把其中某些步骤<strong>延迟到子类</strong>实现。一句话:<em>骨架在父类,细节在子类。</em></dd>
+</dl>
+</div>
+
+<h2>二、策略:把 if/elif 变成可插拔的算法</h2>
+
+<p>先看那个"会长胖"的版本。它的病根不在于用了 <code>if</code>,而在于:每多一种折扣,就得回来<strong>修改</strong>这个已经能跑的函数——违反开闭原则(OCP:对扩展开放,对修改关闭)。</p>
+
+<pre><code># ❌ 未用策略:一坨 if/elif,加一种折扣就改一次这个函数
+def checkout(total, kind):
+    if kind == "normal":
+        return total
+    elif kind == "vip":
+        return total * 0.8
+    elif kind == "staff":
+        return total * 0.5
+    # 加"黑五折扣"?又得回来改这里 —— 违反 OCP
+</code></pre>
+
+<p>策略模式的解法:把每个分支<strong>提取成一个独立算法</strong>,调用方只负责"选一个策略传进去"。在 Python 里,因为函数是一等对象(可以像值一样传递),策略常常直接<strong>退化成"传一个函数"</strong>:</p>
+
+<pre><code># ✅ Python 式策略:每个算法就是一个函数,运行时传进去
+def normal(total): return total
+def vip(total):    return total * 0.8
+def staff(total):  return total * 0.5
+
+def checkout(total, discount):   # discount 就是"策略":一个可调用对象
+    return discount(total)
+
+checkout(100, vip)     # 80.0
+checkout(100, staff)   # 50.0
+# 加"黑五 5 折"?再定义一个函数,checkout 一行都不用改 —— 这就是 OCP
+</code></pre>
+
+<p>但面试官往往想看你懂<strong>经典(GoF)策略长什么样</strong>——即"策略接口 + 若干具体策略 + 持有策略的 Context":</p>
+
+<pre><code>from abc import ABC, abstractmethod
+
+class Discount(ABC):              # 策略接口:统一签名
+    @abstractmethod
+    def apply(self, total): ...
+
+class Vip(Discount):             # 具体策略
+    def apply(self, total): return total * 0.8
+
+class Staff(Discount):
+    def apply(self, total): return total * 0.5
+
+class Checkout:                  # Context:持有一个策略,可运行时替换
+    def __init__(self, strategy):
+        self._strategy = strategy
+    def set_strategy(self, strategy):
+        self._strategy = strategy      # 运行时换算法,Context 不用改
+    def pay(self, amount):
+        return self._strategy.apply(amount)
+
+c = Checkout(Vip())
+c.pay(100)              # 80.0
+c.set_strategy(Staff())
+c.pay(100)              # 50.0
+</code></pre>
+
+<p>两版是同一个思想的两种落地:函数版轻,类版在"策略自己也需要状态/配置"时更合适。共同点是——<strong>加算法 = 加策略,不改调用方</strong>。</p>
+
+<h2>三、观察者:状态一变,自动广播</h2>
+
+<p>观察者解决的是"一处变、多处要跟着反应"的耦合问题。反面教材是让 subject 亲自去调用每一个关心它的对象——那样 subject 就得<strong>硬编码</strong>它的所有下游,新增一个下游又得改 subject。观察者把关系倒过来:下游<strong>主动注册</strong>,subject 只管在变化时挨个通知,并不关心它们是谁。</p>
+
+<pre><code>class Subject:                    # 被观察者
+    def __init__(self):
+        self._observers = []      # 注册表:一对多的"多"
+    def register(self, obs):
+        self._observers.append(obs)
+    def unregister(self, obs):    # 退订!不给退订就是内存泄漏隐患(见易错点)
+        self._observers.remove(obs)
+    def notify(self, event):
+        for obs in self._observers:   # 挨个通知,不关心是谁
+            obs.update(event)
+
+class EmailAlert:                 # 观察者:只需实现约定好的 update
+    def update(self, event):
+        print(f"发邮件:{event}")
+
+class Logger:
+    def update(self, event):
+        print(f"记日志:{event}")
+
+s = Subject()
+s.register(EmailAlert())
+s.register(Logger())
+s.notify("库存告罄")     # 两个观察者都被自动通知,新增下游不改 Subject
+</code></pre>
+
+<p>这套"注册 / 通知"结构你其实天天在用:GUI 的按钮点击回调、前端框架的响应式更新、消息通知——底层都是观察者的血脉。</p>
+
+<h2>四、模板方法:骨架在父类,细节在子类</h2>
+
+<p>当一批流程"大步骤完全一样、只有个别小步骤不同"时,模板方法让父类把<strong>步骤顺序(骨架)固定下来</strong>,只把变化的步骤留成抽象方法交给子类填。子类无法改动骨架,只能填空——这既是约束,也是保证。</p>
+
+<pre><code>from abc import ABC, abstractmethod
+
+class Report(ABC):
+    def generate(self):          # ← 模板方法:骨架 + 固定步骤顺序,子类别覆盖
+        self.load()
+        body = self.render()     # 变化的一步,延迟到子类
+        self.save(body)
+
+    def load(self):              # 公共步骤,父类实现
+        print("读数据")
+    def save(self, body):
+        print(f"落盘:{body}")
+
+    @abstractmethod
+    def render(self): ...        # 抽象步骤,交给子类填空
+
+class HtmlReport(Report):
+    def render(self): return "&lt;h1&gt;报表&lt;/h1&gt;"
+
+class CsvReport(Report):
+    def render(self): return "a,b,c"
+
+HtmlReport().generate()   # 骨架(load→render→save)在父类,render 细节在子类
+</code></pre>
+
+<p>注意模板方法和策略解决的问题<strong>高度相似</strong>——都是"固定流程 + 可变的一步"。区别在实现手段,这正是最爱考的对比:</p>
+
+<div class="pipeline">
+<div class="node"><span class="n-title">模板方法</span><span class="n-sub">靠继承</span></div>
+<div class="arrow">·</div>
+<div class="node"><span class="n-title">子类填空</span><span class="n-sub">编译期定制</span></div>
+<div class="arrow">vs</div>
+<div class="node"><span class="n-title">策略</span><span class="n-sub">靠组合</span></div>
+<div class="arrow">·</div>
+<div class="node"><span class="n-title">注入对象</span><span class="n-sub">运行时替换</span></div>
+</div>
+
+<p>模板方法用<strong>继承</strong>(子类通过覆盖钩子来定制,一旦定下就是编译期/类定义期的事);策略用<strong>组合</strong>(把算法作为对象注入,能在运行时随时换)。这条对比直接呼应"<a href="0010-composition-vs-inheritance.html">组合优于继承</a>"那一节:需要运行时灵活切换、或一个对象要在多种算法间来回换,优先策略;流程骨架天然稳定、只想让子类补几个洞,模板方法更省事。</p>
+
+<div class="interview">
+<p><strong>高频追问链(这三个模式几乎绑定出现):</strong></p>
+<ul>
+<li>"策略和模板方法都能定制算法,区别是什么?" → <strong>策略用组合(运行时可换),模板方法用继承(子类填空、骨架固定)。</strong>这是最经典的一问,能把"组合 vs 继承"顺势带出来就是加分。</li>
+<li>"观察者和发布-订阅(pub/sub)是一回事吗?" → 理念相近但不等同。经典观察者里 subject <strong>直接持有</strong> observer 列表、亲自通知;pub/sub 通常多一个中间 <strong>broker/事件总线</strong>,发布者与订阅者互不知道对方存在,<strong>更解耦</strong>(代价是多一层间接)。</li>
+<li>"策略怎么体现开闭原则(OCP)?" → 加新算法 = 新增一个策略类/函数,<strong>调用方(Context)一行不改</strong>,即"对扩展开放、对修改关闭"。</li>
+<li>"在 Python 里策略还需要建一堆类吗?" → 通常不必——函数是一等对象,传函数即可;但要能同时讲清经典类版长什么样(见易错点)。</li>
+<li>"观察者会不会有内存问题?" → 会,观察者不退订就一直被 subject 持有(见易错点)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>① "策略模式=一定要建接口+一堆策略类"——这是把 Java 习惯搬到 Python。</strong>Python 的一等函数让策略常常退化成"传一个函数",硬造一堆只有一个方法的类反而是过度设计。但反过来别走极端:面试时要能<strong>同时</strong>说清"经典 GoF 类版"和"Python 函数版",只会一种会被追到底。</p>
+<p><strong>② 模板方法 vs 策略别混为一谈。</strong>核心差异是<strong>继承 vs 组合</strong>:模板方法把可变步骤绑在子类里(定制发生在类定义期),策略把算法作为对象注入(能运行时替换)。答题时点出这条,并顺带一句"这正是组合优于继承的体现"。</p>
+<p><strong>③ 观察者的退订与内存泄漏。</strong>subject 的注册表默认是<strong>强引用</strong>:观察者只要没 <code>unregister</code>,就会被 subject 一直持有、无法被垃圾回收——在长生命周期的 subject 上尤其危险。务必提供退订接口;若希望"观察者被回收时自动掉线",可用 <code>weakref</code>(弱引用)存注册表来缓解。</p>
+</div>
+
+<div class="crosslang">
+<p>行为型里"把一段<strong>行为</strong>当参数传"(策略、命令等)在不同语言里的成本差很多——这也是"为什么 Python 的策略这么轻"的根因:</p>
+<table>
+<tr><th>传一个"行为"</th><th>写法</th><th>样板量</th></tr>
+<tr><td><strong>Python</strong></td><td>直接传函数(一等对象),或传任意可调用对象</td><td>几乎为零</td></tr>
+<tr><td><strong>Java 8 之前</strong></td><td>只能用匿名内部类包一个方法传进去</td><td>大(一坨样板)</td></tr>
+<tr><td><strong>Java 8+</strong></td><td>lambda / 方法引用(配合函数式接口)</td><td>小,已大幅简化</td></tr>
+<tr><td><strong>C++</strong></td><td>函数指针 / <code>std::function</code> / lambda</td><td>中等</td></tr>
+</table>
+<p>一句话:<strong>语言越把"函数当值",策略/命令这类"行为参数化"模式就越轻</strong>。Python 天生如此,所以经典策略在这里常常"瘦"成一个函数参数。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写一遍,把三个模式各摸一次:</p>
+<ul>
+<li><strong>策略</strong>:写一个 <code>sort_by(items, key_fn)</code>,把"按什么排序"作为函数策略传进去;再写一个"按价格 / 按名字"两种策略验证。(想想:这跟 Python 内置 <code>sorted(..., key=...)</code> 是不是同一个套路?)</li>
+<li><strong>观察者</strong>:给上面的 <code>Subject</code> 补一个 <code>unregister</code> 的自测——注册两个观察者,退订一个,再 <code>notify</code>,确认只剩一个被通知。</li>
+<li><strong>模板方法</strong>:写一个 <code>Beverage</code> 基类,模板方法 <code>prepare()</code> 固定"烧水→冲泡→倒杯→加料"四步,把"冲泡"和"加料"留给 <code>Coffee</code> / <code>Tea</code> 子类填。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:开头那个 <code>checkout()</code> 里一大坨 <code>if kind == ...</code> 的折扣分支,用哪个模式重构最贴切?为什么它顺带满足了开闭原则?</summary>
+<div class="answer">
+<p><strong>答案:策略模式(Strategy)。</strong>把每个折扣分支提取成一个独立算法(Python 里一个函数即可,或经典的一个策略类),<code>checkout</code> 只接收并调用传进来的策略。</p>
+<p><strong>为什么满足 OCP:</strong>加一种新折扣 = 新增一个策略,而不需要回去修改已经能跑的 <code>checkout</code>——对扩展开放、对修改关闭。原来的 <code>if/elif</code> 版本恰恰相反,每加一种都要改动老代码,风险随分支增长。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:两个场景——(A) 一个排序控件要让用户<strong>随时</strong>在"按价格/按销量/按评分"之间切换;(B) 一套报表生成流程,读数据和落盘完全一样,只有"渲染格式"因类型而异。各该用策略还是模板方法?判断依据是什么?</summary>
+<div class="answer">
+<p><strong>(A) 用策略。</strong>关键词是"随时切换"——需要<strong>运行时替换</strong>算法,这是组合(注入策略对象/函数)的强项;用继承的话没法在运行中把一个对象从"按价格"换成"按评分"。</p>
+<p><strong>(B) 用模板方法。</strong>流程骨架(读数据→渲染→落盘)天然稳定,只想让不同报表类型<strong>各自填"渲染"这一步</strong>,用继承让子类覆盖抽象步骤最省事。</p>
+<p><strong>判断依据一句话:</strong>要不要"运行时换"?要 → 策略(组合);只是"不同子类各定制固定的几步" → 模板方法(继承)。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>行为型模式管"对象间如何分工与通信"。<strong>策略</strong>=可互换算法、靠组合、运行时替换、消灭 if/elif 并满足 OCP;<strong>观察者</strong>=一对多、subject 状态变则自动通知 observers(记得留退订、防内存泄漏);<strong>模板方法</strong>=骨架在父类、细节在子类、靠继承。策略 vs 模板方法的分水岭,就是<strong>组合 vs 继承 / 运行时 vs 编译期</strong>。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>canon(权威锚定,非源题库):</strong>本节属 canon 层,不取自课程源 README,而是锚定 GoF 原著《Design Patterns: Elements of Reusable Object-Oriented Software》(Gamma / Helm / Johnson / Vlissides, 1994)对 Strategy、Observer、Template Method 三个行为型模式的定义。</li>
+<li><strong>可读的白话版:</strong>Refactoring.Guru —— <a href="https://refactoring.guru/design-patterns/strategy">Strategy</a>、<a href="https://refactoring.guru/design-patterns/observer">Observer</a>、<a href="https://refactoring.guru/design-patterns/template-method">Template Method</a>,以及 <a href="https://refactoring.guru/design-patterns/behavioral-patterns">行为型模式总览</a>(含与 pub/sub 的对比)。</li>
+<li><strong>OCP 出处:</strong>开闭原则见 Robert C. Martin 的 SOLID 系列,概述见 <a href="https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle">Open–Closed Principle</a>。</li>
+<li><strong>语言机制:</strong>Python 一等函数/函数式风格见官方 <a href="https://docs.python.org/3/howto/functional.html">Functional Programming HOWTO</a>;观察者防泄漏用的弱引用见 <a href="https://docs.python.org/3/library/weakref.html"><code>weakref</code> 文档</a>。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我把"策略 vs 模板方法"用 ELI5 再讲一遍、或者把你写的 <code>Beverage</code>/观察者代码拿来评一评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节从"模式"回到语言机制本身——多重继承带来的钻石问题,以及 Python 用 MRO(方法解析顺序)如何化解。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0017-design-patterns-structural.html"><span class="dir">← 上一课</span>0017 · 结构型模式:适配器、装饰器、代理</a>
+<a class="next" href="0019-multiple-inheritance-mro.html"><span class="dir">下一课 →</span>0019 · 多重继承与 MRO:钻石问题怎么解</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

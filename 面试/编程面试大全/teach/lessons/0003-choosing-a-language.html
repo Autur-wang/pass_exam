@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0003 · 面试该用哪门语言</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0003 课 · 起步与方法 · 预计 10 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>面试该用哪门语言</h1>
+
+<p class="lede">面试白板上,你没有 IDE、没有自动补全、没有 Google。选错语言,常常不是败在算法上,而是败在"这个 API 到底怎么写来着"。这节讲清一个容易被忽视的分工:<strong>你学数据结构与算法用的语言,和面试当场写代码用的语言,可以不是同一门</strong>——以及,面试语言到底该按什么标准挑。</p>
+
+<div class="recall">
+<p>上一课我们用抽认卡和主动回忆对抗遗忘,目标是"面试当天还能从空白记忆里取回知识"。这一课把同一个逻辑推到语言层面:面试现场临时去翻语法,和记不住知识一样致命。先想一想——你现在最顺手的那门语言,能不能不查文档就写出一个可变数组、一个哈希表的基本用法?</p>
+</div>
+
+<h2>一、两种语言,两种用途</h2>
+
+<p>作者把语言问题拆成了两半,这是这节最重要的一个区分:</p>
+
+<ul>
+<li><strong>学 DS&amp;A 的语言</strong>:作者主要用 <strong>C 和 Python</strong>。C 非常底层,让你直接接触指针、内存的分配与释放,从而看清数据结构与硬件的联系——这些细节在 Python/Java 里被隐藏了。Python 则现代、灵活、代码量少,学起来实用。</li>
+<li><strong>面试当场用的语言</strong>:大公司通常只接受固定的几种。这门语言的首要标准不是"底层不底层",而是"你能不能在白板上把它写对"。</li>
+</ul>
+
+<p>理想情况是<strong>两者用同一门语言</strong>,这样你只需精通一门(比如通篇用 Python)。但作者也说了,这是个人偏好,你完全可以学习时用 C 摸清底层、面试时换一门写起来更快的语言。二者<strong>不必强行绑定</strong>。</p>
+
+<h2>二、面试语言的选择原则</h2>
+
+<p>面试官真正在乎的,是你<strong>解决问题的能力</strong>——识别问题、选对数据结构与算法、把思路讲清楚——而不是你用的是哪门语言。所以面试语言的选择原则非常朴素:</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">该用哪门语言进面试?</div>
+  <div class="down">↓</div>
+  <div class="step">候选:你<strong>最熟</strong>、能<strong>不查语法快速写对</strong>、且面试官<strong>常见</strong>的那门</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">三条都满足</div>
+      <div class="step terminal">就用它</div>
+    </div>
+    <div class="branch">
+      <div class="label">为"显得厉害"想换门不熟的</div>
+      <div class="step">别换 → 会在语法上翻车</div>
+    </div>
+  </div>
+</div>
+<figcaption>对大公司,面试语言基本只有三种固定选择:<strong>C++、Java、Python</strong>。<strong>JavaScript</strong> 和 <strong>Ruby</strong> 也可能可以,但<strong>可能有限制,需要事先查明</strong>。</figcaption>
+</figure>
+
+<h2>三、三门主流面试语言的权衡</h2>
+
+<p>下面是面试语境下的常见取舍(是启发式,不是铁律——最终仍以"你哪门最熟"为准):</p>
+
+<figure class="diagram">
+<div class="trio">
+  <div class="cell"><div class="role">简洁 / 代码量少</div><div class="head">Python</div><div class="sub">写得快,但运行慢、类型隐晦</div></div>
+  <div class="cell"><div class="role">稳健 / 生态成熟</div><div class="head">Java</div><div class="sub">啰嗦、样板多,但类型清晰稳定</div></div>
+  <div class="cell"><div class="role">强大 / 贴近底层</div><div class="head">C++</div><div class="sub">功能强、控制力足,但易出错</div></div>
+</div>
+<figcaption>作者本人在面试里偏爱 <strong>Python</strong>——理由正是"能写更少的代码"。但"写得少"要建立在你确实熟练的前提上,否则简洁反而掩盖了你没想清楚的边界。</figcaption>
+</figure>
+
+<p>注意别把这张表当成排名。三门语言在面试里都被大公司接受;真正决定成败的,是<strong>你对其中某一门的熟练度</strong>,而不是语言本身"更强"或"更弱"。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>学 DS&amp;A 的语言</dt>
+<dd>用来学习数据结构与算法、看清底层的语言。作者用 <strong>C</strong>(直接操作指针与内存,理解结构与硬件的联系)+ <strong>Python</strong>(实用、代码少)。<em>避免</em>把"学习用语言"和"面试用语言"当成必须是同一门。</dd>
+<dt>面试语言</dt>
+<dd>在白板或协作编辑器上<strong>当场</strong>写解法的语言。大公司常见的固定选择是 <strong>C++ / Java / Python</strong>;JavaScript、Ruby 可能可以但<strong>需事先查明限制</strong>。</dd>
+<dt>选择原则</dt>
+<dd>选你<strong>最熟、能不查语法快速写对、面试官也常见</strong>的那一门。<em>避免</em>为了"显得厉害"而选一门自己不熟的语言。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>语言本身几乎从不是考点,但它会成为<strong>暗礁</strong>:面试官看的是你能否识别问题、选对结构、把复杂度分析清楚、边写边讲。如果你为了炫技选了一门不熟的语言,时间就会耗在"这个标准库函数叫什么""这里的语法怎么写"上,把本可以拿分的算法思路淹没掉。反过来,用你最熟的语言,你能把注意力全放在解法和沟通上——那才是面试真正给分的地方。所以最优策略往往很反直觉:<strong>选那门"无聊但你闭着眼都能写对"的语言。</strong></p>
+</div>
+
+<div class="gotcha">
+<p><strong>两个关于"选语言"的常见误判。</strong></p>
+<p>其一,<strong>为了"显得厉害"而选一门不熟的语言</strong>(比如平时写 Python,面试硬上 C++)——结果在语法和内存细节上翻车,得不偿失。其二,<strong>以为某门语言"一定加分"</strong>——并不存在这种语言;面试官在乎的是能力而非语言标签。还有一个务实的坑:<strong>JavaScript、Ruby 在大公司面试可能受限</strong>,别默认能用,<strong>面试前先查清楚</strong>。</p>
+</div>
+
+<div class="implement">
+<p><strong>本周就动手做的一件事:</strong>用你打算带进面试的那门语言,<strong>把一个动态数组的 <code>push</code> 从零写出来</strong>——申请底层数组、追踪 size/capacity、满了就扩容。目标不是实现得多漂亮,而是确认一件事:<strong>你连语法(数组声明、扩容、边界判断)都不用查</strong>。哪一步卡住要翻文档,哪一步就是你面试当天会翻车的地方。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>面试语言的唯一标准是"<strong>你能在白板上不查语法把它写对</strong>"。熟练度 &gt; 语言本身的强弱;能力才是考点,语言只是载体。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:对大公司的编程面试,通常固定接受的三种语言是哪三种?</summary>
+<div class="answer">
+<p><strong>C++、Java、Python</strong>。这是作者点明的、大公司面试基本固定的三个选择。此外 <strong>JavaScript 和 Ruby 也可能可以,但可能有限制,需要你事先向面试方查明</strong>,不要默认能用。核心不是"哪门最好",而是从被接受的语言里,挑一门你最熟、能不查语法快速写对的。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:作者学习数据结构与算法时用到 C,主要理由是下面哪一个? (A) C 运行最快,能拿高分 (B) C 很底层,能直接操作指针与内存,让你看清数据结构与硬件的联系 (C) C 是面试唯一接受的语言</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。C 让你亲手处理指针、内存的分配与释放,这些细节在 Python/Java 这类高级语言里被隐藏了;学底层结构时"感受它们与硬件的联系"非常有益。(A) 把"学习价值"误当成"跑分"——面试不按运行速度给分;(C) 更是错的,面试固定接受的是 C++/Java/Python。注意区分:C 是作者的<strong>学习用</strong>语言,而不是他推荐的<strong>面试用</strong>语言(面试他偏爱 Python)。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题对应仓库大纲的「选择编程语言」一节。下面的一手链接都出自这一段:</p>
+<ul>
+<li><a href="https://startupnextdoor.com/important-pick-one-language-for-the-coding-interview/">为编程面试选择一种语言(作者文章)</a> —— 作者对"面试只挑一门、并把它练到极熟"的完整论述。</li>
+<li><a href="https://web.archive.org/web/20210516054124/http://blog.codingforinterviews.com/best-programming-language-jobs/">Choosing a Programming Language for Interviews(原始文章存档)</a> —— 作者上文所基于的原帖。</li>
+<li><a href="http://www.byte-by-byte.com/choose-the-right-language-for-your-coding-interview/">选择适合你的编程面试的语言(Byte by Byte)</a> —— 另一份关于面试选语言的延伸阅读。</li>
+<li><a href="https://www.amazon.com/Programming-Language-Brian-W-Kernighan/dp/0131103628">《C 程序设计语言(第 2 版)》K&amp;R</a> —— 若你想走"用 C 学底层"这条路,这本薄书足够帮你看懂程序与内存如何工作(不必读完)。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELII(对实习生)讲清"为什么面试更看熟练度而非语言强弱",或陪你把 <code>push</code> 的实现在你的目标语言里逐行写一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0002-flashcards-spaced-repetition.html"><span class="dir">← 上一课</span>记得住才算学会:主动回忆与间隔重复</a>
+  <a class="next" href="0004-big-o-intuition.html"><span class="dir">下一课 →</span>大 O 的直觉:增长率,不是秒表</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

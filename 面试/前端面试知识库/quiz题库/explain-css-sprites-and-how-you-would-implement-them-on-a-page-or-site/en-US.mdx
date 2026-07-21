@@ -1,0 +1,48 @@
+---
+title: Explain CSS sprites, and how you would implement them on a page or site.
+---
+
+CSS sprites combine multiple images into one larger image file and use a combination of CSS `background-image`, `background-position`, and `background-size` to select a specific part of the larger image as the desired image.
+
+It used to be a commonly-used technique for icons (e.g. Gmail uses sprites for all their images).
+
+## Advantages
+
+- Reduces the number of HTTP requests for multiple images (only a single request is required per spritesheet). With HTTP/2, however, loading multiple images is no longer much of an issue.
+- Allows assets to be downloaded in advance before they are needed, such as images that only appear on `:hover` pseudo-states. No flicker would be seen.
+
+## How to implement
+
+1. Use a sprite generator that packs multiple images into one and generates the appropriate CSS for it.
+1. Each image would have a corresponding CSS class with `background-image` and `background-position` properties defined.
+1. To use that image, add the corresponding class to your element.
+
+The generated stylesheet might look something like:
+
+```css
+.icon {
+  background-image: url('https://example.com/images/spritesheet.png');
+  width: 24px;
+  height: 24px;
+}
+
+.icon-cart {
+  background-position: 0 0;
+}
+
+.icon-arrow {
+  background-position: -24px 0;
+}
+```
+
+And can be used in the HTML as such:
+
+```html
+<span class="icon icon-cart"></span>
+
+<span class="icon icon-arrow"></span>
+```
+
+## References
+
+- [Implementing image sprites in CSS - CSS: Cascading Style Sheets | MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Images/Implementing_image_sprites_in_CSS)

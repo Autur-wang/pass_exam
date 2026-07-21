@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0011 · 微调与 PEFT:SFT、LoRA/QLoRA、何时微调 vs RAG</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第四部分 微调与对齐 · 第 0011 课</p>
+<h1>微调与 PEFT:SFT、LoRA/QLoRA、何时微调 vs RAG</h1>
+<p class="lede">这节课一次答清微调这条线上最常被连问的几道真题:<strong>「什么是微调、为什么微调、prompting / 微调 / 从头训练怎么选?」「微调有哪三大类?」「PEFT 里 Adapter/LoRA/QLoRA/Prompt Tuning 分别是什么?」</strong>(源:微调 101·"微调三选一"与"三大类"与"PEFT"三节),外加两道工程决策题:<strong>「什么是蒸馏、为何用它?」(AI 工程师 Q16)、「量化如何影响 AI 工程师的决策?」(Q102)</strong>,并收在那道经典对答上:<strong>「何时微调而不是 RAG?」(Q32 / Q135 交集)</strong>。</p>
+
+<div class="recall">
+<p>上一课我们把 prompt 当"代码"来管:版本化、评测、把要求写进 system prompt。它便宜、即时、改一行就生效。<strong>先别往下看:如果一个用例你已经把 prompt 打磨到极限,输出还是时好时坏、prompt 越堆越长、还要塞一堆 few-shot 例子——这时你已经花掉了什么、又还差什么?</strong>这正是"该不该动模型权重"的分界线。</p>
+</div>
+
+<h2>一、什么是微调,以及"三选一"怎么选</h2>
+<p>直觉先行。预训练模型像一个读遍全网的通才,什么都懂一点。<strong>微调(Fine-Tuning)</strong>就是把它拉到你的小灶上,用一批<strong>针对性的、带标签的数据</strong>继续训练,让它在你的场景里成为专才——而不是从零再养一个。</p>
+
+<dl class="keydef">
+<dt>微调(Fine-Tuning)</dt>
+<dd>在预训练模型的基础上,用一个更小、更有针对性的数据集<strong>继续训练</strong>,以<strong>较低的学习率</strong>更新(多数)参数。低学习率是关键:它让模型既<strong>保住预训练学到的通用知识</strong>,又能特化到新任务/新领域,而不是把老本忘光。</dd>
+</dl>
+
+<p>为什么要微调?因为 prompting 到某个点会撞墙:预训练模型广而不深,在医学、法律、特定代码库这类专业领域可能不够精;要<strong>稳定可靠</strong>的输出格式、要<strong>缩短 prompt</strong>(省 token)、要让模型贴合团队的语气与规范——这些是 prompting 难以稳定做到、而微调擅长的。</p>
+
+<p>但"能微调"不等于"该微调"。面试官想听的是这条<strong>成本递增的决策链</strong>:</p>
+
+<div class="flow">
+  <div class="step decision"><strong>先试 Prompting</strong><br>快、灵活、零训练,即时上线、随时改口</div>
+  <div class="down">↓ 若:输出不稳 / prompt 越堆越长 / 已有足量领域数据</div>
+  <div class="step"><strong>再考虑 Fine-Tuning</strong><br>有明确用例 + 足够的领域数据时,换来稳定输出与更短 prompt(代价:要数据、算力、专业度)</div>
+  <div class="down">↓ 若:预训练模型<em>根本</em>满足不了 + 手握海量算力与数据</div>
+  <div class="step terminal"><strong>才轮到 从头训练(from scratch)</strong><br>极其少见——多在大型研究机构、全新架构、或隐私压倒一切时</div>
+</div>
+
+<p>实务上大多数团队都<strong>从 prompting 起步验证用例</strong>,需求固化后再转微调;从头训练在头部研究机构之外很罕见。答这道题,把"便宜灵活 → 稳定特化 → 极端自建"这个梯度讲出来,比背定义更值钱。</p>
+
+<h2>二、微调的三大类</h2>
+<p>"微调"是个大伞。面试问"有哪几类",标准框架是三块:</p>
+
+<div class="trio">
+  <div class="cell"><strong>① 任务适配</strong><br><em>把模型练成某项活儿的专才</em></div>
+  <div class="cell"><strong>② 对齐</strong><br><em>让模型行为贴合人类偏好</em></div>
+  <div class="cell"><strong>③ PEFT</strong><br><em>只动一小部分参数,省钱省显存</em></div>
+</div>
+
+<p><strong>① 任务适配(Task Adaptation)</strong>——教模型把某个具体任务做好:</p>
+<ul>
+<li><strong>SFT(有监督微调)</strong>:用<strong>带标签的"输入-输出"对</strong>直接教任务,调权重让它在标注数据上误差最小。例:把客户反馈分成正面/负面/中性。</li>
+<li><strong>指令微调(Instruction Tuning)</strong>:用<strong>"指令-响应"对</strong>训练,让模型更会"听话、按要求回应",更交互友好。是把基座模型变成能对话的助手的关键一步。</li>
+<li><strong>GRPO</strong>:一种强化学习式方法,让模型<strong>在一组自己的输出里做相对比较</strong>(和组内平均比),面向<strong>可验证奖励</strong>的场景(如数学解题——对错可判)。</li>
+</ul>
+
+<p><strong>② 对齐(Alignment)</strong>——RLHF / DPO / ORPO 等,让模型的行为符合人类偏好与价值。这是下一课(0012)的主角,这里只占个位。</p>
+
+<p><strong>③ PEFT(参数高效微调)</strong>——不更新全部参数、只训一小部分,是资源受限时的主力。下一节展开。</p>
+
+<h2>三、PEFT:用小代价改大模型</h2>
+<p>全参数微调要更新模型的绝大多数权重,大模型下显存和算力都吃不消。<strong>PEFT(Parameter-Efficient Fine-Tuning)</strong>的思路是:冻住原模型,只训练一小撮新增/选中的参数,就能拿到接近全参微调的效果。四种常见做法:</p>
+
+<table>
+<thead><tr><th>方法</th><th>核心做法</th><th>典型场景</th></tr></thead>
+<tbody>
+<tr><td><strong>Adapter</strong></td><td>在层间<strong>插入小模块</strong>,只训这些小模块,原权重不动</td><td>给模型加一项小能力(如识别讽刺)</td></tr>
+<tr><td><strong>LoRA</strong></td><td>用<strong>低秩矩阵</strong>近似权重更新量,只训这对小矩阵</td><td>适配新语言/新风格,主流首选</td></tr>
+<tr><td><strong>QLoRA</strong></td><td>在<strong>量化后的基座</strong>上做 LoRA,进一步省显存</td><td>显存紧张,甚至笔记本 GPU 上微调</td></tr>
+<tr><td><strong>Prompt Tuning</strong></td><td>只训一段<strong>特殊的提示向量</strong>,完全不改模型权重</td><td>轻量引导风格(如写成诗体)</td></tr>
+</tbody>
+</table>
+
+<p>其中 <strong>LoRA(Low-Rank Adaptation)</strong>最该讲清。它的观察是:微调所需的"权重变化量" $\Delta W$ 往往<strong>低秩</strong>——没必要用一个满秩大矩阵去表示。于是把更新写成两个瘦长小矩阵的乘积:</p>
+
+<dl class="keydef">
+<dt>LoRA 的低秩分解</dt>
+<dd>$$W_{\text{new}} = W + \Delta W,\qquad \Delta W = BA$$</dd>
+<dd><em>$W$ 是冻结的原权重;$B\in\mathbb{R}^{d\times r}$、$A\in\mathbb{R}^{r\times k}$,秩 $r \ll \min(d,k)$。训练只更新 $A,B$ 这一小撮参数,原 $W$ 不动。因为 $r$ 极小,要训的参数量比全参微调小几个量级——这正是它省显存、能在小卡上跑的原因。</em></dd>
+</dl>
+
+<p><strong>QLoRA</strong> 再进一步:先把基座<strong>量化</strong>(降精度存储,见下一节)压缩显存占用,再在其上叠 LoRA 训练。两招叠加,才有了"消费级 GPU 也能微调大模型"的可能。</p>
+
+<p>怎么选?一个粗略的选型矩阵(面向多目标的领域适配):</p>
+<ul>
+<li><strong>资源有限</strong>:Prompt Tuning + LoRA(最省)。</li>
+<li><strong>看重效率</strong>:LoRA 或 Adapter,依可用算力定。</li>
+<li><strong>资源充裕</strong>:QLoRA 处理多语言等更重的任务。</li>
+</ul>
+
+<h2>四、蒸馏与量化:两个常被连问的工程手段</h2>
+<p>微调之外,面试官爱把话题拐到"怎么把模型做小做快"。两个高频词:</p>
+
+<dl class="keydef">
+<dt>蒸馏(Distillation)</dt>
+<dd>训练一个小的<strong>"学生"模型去模仿大的"教师"模型</strong>,把大模型的多数能力迁移到一个更便宜、更快的小模型上。一种实用玩法:用强模型给<strong>你自己的任务</strong>造标注数据,再拿这批数据微调小模型。<em>代价:学生会被<strong>窄化</strong>到被蒸馏的那部分分布,丧失通用广度——所以务必在<strong>你的任务分布</strong>上验证,别默认它还保有教师的全部本事。</em></dd>
+<dt>量化(Quantization)</dt>
+<dd>把权重/激活从高精度降到<strong>低精度(如 8-bit、4-bit)</strong>存储与计算,换取更小显存、更低延迟。<em>代价:精度损失是<strong>任务相关</strong>的——有的任务几乎无感,有的会明显掉点。即便你不自己训、只是<strong>用</strong>一个量化版模型,也要在自己的 eval 上测一测"掉了多少",而不是假设无损。</em></dd>
+</dl>
+
+<p>面试想听的落点是同一句话:蒸馏和量化都在做"用一点质量换很多成本/速度",而<strong>换掉了多少质量,只有在你自己的评测集上跑过才知道</strong>。这也呼应第 0010 课——没有 eval,一切"更快更省"都是盲赌。</p>
+
+<h2>五、经典对答:何时微调,何时 RAG?</h2>
+<p>这是微调这条线的压轴题,也是通往下一部分(检索增强)的桥。别把它当二选一,而要按<strong>"你想改的是知识,还是行为"</strong>来分:</p>
+
+<div class="trio">
+  <div class="cell"><strong>选 RAG</strong><br>知识常变 / 量大 / 私有 / 需引用出处<br><em>保鲜、可审计、免重训</em></div>
+  <div class="cell"><strong>选微调</strong><br>要改行为、格式、语气、固化某项技能<br><em>把"怎么做"焊进模型</em></div>
+  <div class="cell"><strong>常常两个都用</strong><br>RAG 管知识 + 轻量微调管行为<br><em>各司其职</em></div>
+</div>
+
+<p>关键区分:<strong>易变的事实知识不要用微调去"灌"</strong>——今天灌进去,明天知识变了就得重训,又贵又容易过时;这类需求交给 RAG,把知识放在可随时更新、可给出引用的检索库里。而<strong>稳定的行为</strong>(固定输出格式、专业语气、某个反复出现的技能)才适合焊进权重。</p>
+
+<p>还是那条成本梯度:<strong>先 prompting + RAG</strong>(便宜、快、可解释),只有当 prompting 加检索都够不到你要的行为时,才升级到微调。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「prompting、微调、从头训练怎么选?」——讲成本递增的决策链,别只背定义;强调"绝大多数从 prompting 起步"。</li>
+<li>「微调有哪三大类?」——任务适配 / 对齐 / PEFT;能顺口举出 SFT、指令微调、GRPO 就加分。</li>
+<li>「LoRA 为什么省?QLoRA 又比 LoRA 多做了什么?」——LoRA 只训低秩的 $A,B$;QLoRA 在量化基座上再叠 LoRA,省的是显存。</li>
+<li>「什么是蒸馏?风险在哪?」——学生模仿教师,便宜快;风险是窄化到被蒸馏的分布、丢通用性,须在任务分布上验。</li>
+<li>「量化会不会影响你的选型?」——会:精度损失任务相关,用量化模型也要在自己 eval 上测掉了多少。</li>
+<li>「这个需求你会微调还是 RAG?」——先问"改的是知识还是行为";易变事实走 RAG,稳定行为走微调,常两者并用。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别把微调当成"往模型里塞事实知识"的手段——<strong>易变知识该交给 RAG</strong>,微调改的是行为、格式、技能。把这两件事说反是常见扣分点。</li>
+<li>"微调<strong>一定</strong>比 prompting 好"是错的:prompting 更快更灵活、零训练成本,很多用例它就够了;微调要有明确用例 + 足量数据才划算。</li>
+<li>别说微调是"从头训练"——它是在预训练权重上<strong>继续</strong>训、且用<strong>较低</strong>学习率,目的正是保住老知识。二者不是一回事。</li>
+<li>"量化/蒸馏基本无损"是想当然:损失<strong>任务相关</strong>,没在自己的 eval 上验证过就别下这个结论。</li>
+<li>PEFT 不是"更弱的微调",而是<strong>用一小撮参数拿到接近全参微调的效果</strong>;LoRA 的前提假设是"权重更新量近似低秩",不是万能。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>一个内部客服机器人,要回答产品文档里的问题,而文档几乎每周都在更新。最合适的首选方案是?</p>
+<details><summary>A. 用最新文档做一次全参数微调,以后每周重训一次</summary>知识每周变,靠重训保鲜又贵又滞后——这正是微调不该干的活。</details>
+<details><summary>B. 用 RAG:把文档放进可随时更新的检索库,回答时检索并引用 ✅</summary>正确。知识常变、需引用出处,是 RAG 的典型场景;文档更新只需更新索引,无需动模型。</details>
+<details><summary>C. 从头训练一个专属模型</summary>极端且几乎不必要——从头训练只在预训练模型根本满足不了且资源海量时才考虑。</details>
+<details><summary>D. 用 Prompt Tuning 把整份文档训成提示向量</summary>Prompt Tuning 引导的是行为/风格,不是灌入大量易变事实;文档一变就失效。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 LoRA 与 QLoRA,下列哪句最准确?</p>
+<details><summary>A. QLoRA 就是 LoRA 换了个名字,两者完全等价</summary>不对。QLoRA 是在量化后的基座上再做 LoRA,多了量化这一步来省显存。</details>
+<details><summary>B. LoRA 会更新模型的全部权重,所以比全参微调更慢</summary>恰恰相反,LoRA 冻结原权重,只训低秩的小矩阵 $A,B$,参数量小几个量级。</details>
+<details><summary>C. LoRA 只训低秩矩阵 $\Delta W=BA$;QLoRA 在量化基座上叠 LoRA,进一步省显存 ✅</summary>正确。这也是"消费级 GPU 也能微调大模型"的来由。</details>
+<details><summary>D. Prompt Tuning 和 LoRA 一样都要改模型权重</summary>Prompt Tuning 只训一段提示向量,完全不动模型权重,这是它和 LoRA 的关键区别。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>LoRA: Low-Rank Adaptation of Large Language Models</strong>(Hu et al., 2021)——低秩更新 $\Delta W=BA$ 的原始论文,本课公式即出自此。</li>
+<li><strong>QLoRA: Efficient Finetuning of Quantized LLMs</strong>(Dettmers et al., 2023)——量化基座 + LoRA,把大模型微调拉进单卡可达范围。</li>
+<li><strong>Retrieval-Augmented Generation</strong>(Lewis et al., 2020)——"微调 vs RAG"里 RAG 一侧的源头,下一部分正式展开。</li>
+<li>本课事实底座:仓库内《Fine-Tuning 101 Guide》(三大类、PEFT、选型矩阵、评测指标)。</li>
+<li>下一步:对齐三法 RLHF / DPO / GRPO,怎么把"符合人类偏好"训进模型(第 0012 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>先 prompting、不够再微调、极端才从头;微调分任务适配/对齐/PEFT,PEFT 用 LoRA(训低秩 $BA$)/QLoRA(量化基座上叠 LoRA)省显存;改行为用微调,灌易变知识用 RAG,常两者并用。</strong></p>
+<nav class="lesson-nav">
+<a href="0010-prompt-as-code.html">← 上一课:Prompt 工程化</a>
+<a class="next" href="0012-alignment-rlhf-dpo.html">下一课:对齐:RLHF/DPO/GRPO →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

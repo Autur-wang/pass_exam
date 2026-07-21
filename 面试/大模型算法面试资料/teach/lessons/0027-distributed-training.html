@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0027 · 多卡与分布式训练:DP / DDP / DeepSpeed ZeRO</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第 8 部分 训练与推理工程 · 第 0027 课</p>
+<h1>多卡与分布式训练:DP / DDP / DeepSpeed ZeRO</h1>
+<p class="lede">「怎么多卡训练?」是大模型岗位的高频送分题,但答好并不容易——面试官真正想听的是:你知不知道显存里到底装了什么、为什么一张卡装不下,以及数据并行、模型并行、ZeRO 各自在<strong>拿通信换显存还是拿显存换通信</strong>。这节课把这条脉络一次讲透,让你从「会调 API」升级到「讲得清取舍」。</p>
+
+<div class="recall">
+<p>前面几课聊的都是微调方法(LoRA、全参数、增量训练)。它们回答的是「更新<em>哪些</em>参数」。这节课换一个正交的维度:哪怕你已经选好了训练方法,当模型和数据大到一张卡放不下时——<strong>先别往下看,想一想:一张 24GB 的卡训练时,显存除了模型权重本身,还被哪几样东西吃掉了?</strong></p>
+</div>
+
+<h2>一、先搞清楚:显存到底被谁吃了</h2>
+<p>不理解显存构成,后面所有并行策略都是背口诀。用混合精度 + Adam 优化器训练时,单卡显存主要由四块组成:</p>
+
+<dl class="keydef">
+<dt>训练时的四大显存来源</dt>
+<dd><strong>① 模型参数(parameters)</strong>:前向/反向都要用到的权重本身。</dd>
+<dd><strong>② 梯度(gradients)</strong>:反向传播为每个参数算出的梯度,形状和参数一样大。</dd>
+<dd><strong>③ 优化器状态(optimizer states)</strong>:Adam 要为每个参数额外存一阶动量 $m$ 和二阶动量 $v$,外加一份 FP32 的参数副本。这一块往往是<strong>最大</strong>的。</dd>
+<dd><strong>④ 激活值(activations)</strong>:前向过程中要缓存下来、供反向用的中间结果。它随 batch size 和序列长度增长,和前三块的行为很不一样。</dd>
+</dl>
+
+<p>为什么优化器状态这么占地方?做个量级估算。设参数量为 $\Psi$,用混合精度 + Adam:参数和梯度各存一份 FP16(每个 2 字节),优化器要存 FP32 的参数副本、动量、方差(每个 4 字节)。于是前三块合计约:</p>
+$$2\Psi + 2\Psi + (4\Psi + 4\Psi + 4\Psi) = 16\Psi \ \text{字节}$$
+<p class="formula-note">$\Psi$ 是参数个数。粗略记忆:混合精度 + Adam 下,「参数 + 梯度 + 优化器状态」大约是参数量的 16 倍字节数——这还没算激活值。</p>
+<p>这就解释了一个反直觉的现象:一个「只有」若干 B 参数的模型,权重本身看着不大,可一旦进入训练,乘上这个系数再叠加激活值,单卡就爆了。<strong>ZeRO 的全部动机,就是砍掉这里的冗余。</strong></p>
+
+<h2>二、三种并行:切的东西不一样</h2>
+<p>「分布式训练」不是一个东西,而是三条正交的思路。面试最爱让你区分它们——关键就一句话:<strong>它们各自切分的是什么?</strong></p>
+
+<div class="trio">
+  <div class="cell"><strong>数据并行<br>Data Parallel</strong><br>每张卡一份<em>完整</em>模型<br>切分的是<em>数据(batch)</em></div>
+  <div class="cell"><strong>模型并行(张量并行)<br>Tensor Parallel</strong><br>一层的权重矩阵<em>横竖切开</em>分到多卡<br>切分的是<em>单层内的参数</em></div>
+  <div class="cell"><strong>流水线并行<br>Pipeline Parallel</strong><br>不同<em>层</em>放到不同卡<br>切分的是<em>层(模型的深度)</em></div>
+</div>
+
+<h3>数据并行(DP / DDP):最常用</h3>
+<p>思路最简单:每张卡都放一份完整模型,把一个大 batch 切成若干小份,各卡各算各的前向和反向,得到各自的梯度;然后把所有卡的梯度<strong>求平均</strong>同步一致,再各自更新。因为初始权重相同、每步梯度又同步,所有卡的模型始终保持一致。</p>
+<p>前提:<strong>模型本身能装进单卡</strong>。数据并行解决的是「算得慢」,不是「装不下」。</p>
+
+<h3>模型并行(张量并行):单层都放不下时</h3>
+<p>当<em>单独一层</em>的权重都超过单卡显存(超大模型的某些矩阵),就得把这一层的矩阵沿行或列切开,分片放到多张卡,每张卡算一部分矩阵乘,再通过通信拼起来。它的通信极其频繁(每一层前向反向都要通信),所以对卡间带宽要求极高——通常只在<strong>单机内部</strong>用 NVLink 这类高速互联时才划算。</p>
+
+<h3>流水线并行:把深度切开</h3>
+<p>把模型按层切成几段,第 1~k 层放卡 1,第 k+1~2k 层放卡 2……数据像流水线一样在卡之间逐段前向、逐段反向。它的天敌是<strong>流水线气泡(bubble)</strong>:前几段还没算完时后面的卡在空转,靠把 batch 拆成多个 micro-batch 交错送入来缓解。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">装不下?</div>
+  <div class="node">单卡能装模型<br>只是想更快<br>→ <strong>数据并行</strong></div>
+  <div class="node">单卡装不下<br>但显存冗余大<br>→ <strong>ZeRO</strong></div>
+  <div class="node">单层都放不下<br>机内高速互联<br>→ <strong>张量并行</strong></div>
+  <div class="node good">层数太多<br>跨机切段<br>→ <strong>流水线并行</strong></div>
+</div>
+<figcaption>选型决策链:先看装不装得下,再看冗余大不大、瓶颈在层内还是层间。实际训练超大模型时这几种常常<strong>叠加</strong>使用(3D 并行)。</figcaption>
+</figure>
+
+<h2>三、DP vs DDP:一个高频「送命题」</h2>
+<p>两者都是数据并行,但实现天差地别,面试问到时答错会显得基础不牢。</p>
+
+<table>
+<thead><tr><th></th><th>DP(<code>DataParallel</code>)</th><th>DDP(<code>DistributedDataParallel</code>)</th></tr></thead>
+<tbody>
+<tr><td>进程模型</td><td>单进程多线程,一个主卡调度</td><td>多进程,每张卡一个独立进程</td></tr>
+<tr><td>Python GIL</td><td>受全局解释器锁拖累</td><td>多进程不受 GIL 影响</td></tr>
+<tr><td>梯度同步方式</td><td>梯度汇总到主卡求平均再广播<br>(gather / scatter)</td><td>各卡对等做 <strong>all-reduce</strong><br>反向时就重叠通信</td></tr>
+<tr><td>负载</td><td>主卡显存/计算是瓶颈,负载不均</td><td>各卡对称,负载均衡</td></tr>
+<tr><td>结论</td><td>已过时,不推荐</td><td>现在的标准做法</td></tr>
+</tbody>
+</table>
+
+<p>核心要点两句话:<strong>DP 是单进程多线程、主卡集中同步,受 GIL 和主卡瓶颈拖累;DDP 是多进程、每卡一份模型,用 all-reduce 对等同步梯度,并把通信和反向计算重叠起来。</strong>DDP 之所以快,一大关键是它不等整个反向算完,而是梯度一算出来就分桶(bucket)启动 all-reduce,让通信藏在计算后面。</p>
+
+<dl class="keydef">
+<dt>all-reduce</dt>
+<dd>一种集合通信原语:让所有进程各持一份数据(这里是各自的梯度),经过通信后<strong>每个进程都得到全体的规约结果</strong>(这里是梯度之和/均值)。它是数据并行梯度同步的核心操作,常用 Ring-AllReduce 实现,通信量与卡数关系较友好。</dd>
+</dl>
+
+<h2>四、DeepSpeed ZeRO:用通信换显存</h2>
+<p>回到第一节的痛点:标准数据并行下,<strong>每张卡都存了一份完整的参数、梯度、优化器状态</strong>——$N$ 张卡就有 $N$ 份完全一样的东西,冗余巨大。ZeRO(Zero Redundancy Optimizer)的洞见是:既然是冗余,那就<strong>切开分片存,谁用到再临时通信取回来</strong>。它分三个逐级激进的阶段:</p>
+
+<table>
+<thead><tr><th>阶段</th><th>切分什么(在数据并行组内分片)</th><th>省显存 vs 通信代价</th></tr></thead>
+<tbody>
+<tr><td><strong>ZeRO-1</strong></td><td>优化器状态(动量/方差/FP32 副本)</td><td>先啃最大那块;通信基本不增加</td></tr>
+<tr><td><strong>ZeRO-2</strong></td><td>优化器状态 <strong>+ 梯度</strong></td><td>再省一块;通信量与标准 DP 相当</td></tr>
+<tr><td><strong>ZeRO-3</strong></td><td>优化器状态 + 梯度 <strong>+ 模型参数</strong></td><td>省最多,单卡不再存完整模型;通信最重,前向/反向要临时聚合参数分片</td></tr>
+</tbody>
+</table>
+
+<p>记忆钩子:<strong>1 切优化器状态,2 再切梯度,3 连参数也切</strong>——一层层往上叠,省得越多、通信越重。到了 ZeRO-3,每张卡平时只持有参数的一个分片,轮到要算某层时才通过通信把这层完整参数临时拼出来,用完即弃。这也是源材料里那句「ZeRO-3 会把模型参数、梯度和优化器状态分散到所有显卡」的确切含义。</p>
+
+<p>ZeRO 还能配合 <strong>offload</strong>:把优化器状态甚至参数临时挪到 CPU 内存(乃至 NVMe),进一步腾出显存,代价是 CPU-GPU 之间的搬运更慢。源材料的 <code>ds_config.json</code> 里 <code>"offload_optimizer": {"device": "cpu"}</code> 就是干这个的。</p>
+
+<div class="implement">
+<p>ZeRO 在实践中就是一份 DeepSpeed 配置。ZeRO-2 + 优化器 offload 的最小配置(来自源材料):</p>
+<pre><code>{
+  "fp16": { "enabled": true },
+  "zero_optimization": {
+    "stage": 2,
+    "offload_optimizer": { "device": "cpu" },
+    "overlap_comm": true,
+    "contiguous_gradients": true
+  },
+  "train_batch_size": "auto",
+  "train_micro_batch_size_per_gpu": "auto"
+}</code></pre>
+<p>把 <code>stage</code> 改成 3 并加上 <code>"offload_param": {"device": "cpu"}</code>,就切到最激进的 ZeRO-3。在 HuggingFace <code>TrainingArguments</code> 里只需一行 <code>deepspeed="ds_config.json"</code> 即可挂上。</p>
+</div>
+
+<h2>五、通信是瓶颈:三个常配的省钱手段</h2>
+<p>无论哪种并行,卡间/机间通信都可能成为瓶颈(尤其跨机不是 InfiniBand 而是普通万兆网时,延迟会明显上升)。有三个几乎标配的手段,面试时能顺带说出会加分:</p>
+<ul>
+<li><strong>梯度累积(gradient accumulation)</strong>:连续算好几个 micro-batch、把梯度攒起来再同步一次,等效于放大 batch,同时<strong>降低梯度同步的频率</strong>。源材料里 <code>gradient_accumulation_steps=4</code> 就是它。</li>
+<li><strong>混合精度(FP16 / BF16)</strong>:用半精度做前向反向,参数、梯度、通信量直接减半;BF16 动态范围更大,在大模型训练里更稳。</li>
+<li><strong>重计算 / 梯度检查点(activation checkpointing)</strong>:针对第一节的第 ④ 块——激活值。前向时<em>不</em>缓存全部激活,反向需要时再重算一遍。<strong>用额外算力换显存</strong>,能显著压低激活占用。</li>
+</ul>
+<p>注意这三者和 ZeRO 正交:ZeRO 砍的是参数/梯度/优化器状态的冗余,重计算砍的是激活,梯度累积和混合精度降的是通信与精度成本——实际训练里它们经常一起上。</p>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「DP 和 DDP 有什么区别?」——DP 单进程多线程、主卡集中同步、受 GIL;DDP 多进程、每卡一份模型、all-reduce 对等同步且通信与反向重叠。DDP 是现在的标准。</li>
+<li>「ZeRO 三个阶段分别切什么?」——1 切优化器状态,2 加切梯度,3 再加切参数;越往上省显存越多、通信越重。</li>
+<li>「训练时显存都花在哪?」——参数、梯度、优化器状态、激活四块;Adam 的优化器状态通常最大,故 ZeRO 先从它下手。</li>
+<li>「模型并行(张量并行)什么时候才用?」——单层权重都装不下、且有机内高速互联(如 NVLink)时;它通信极频繁,跨普通网络不划算。</li>
+<li>「怎么降低通信/显存压力?」——梯度累积降同步频率、混合精度减通信量、重计算(梯度检查点)换激活显存。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把「数据并行」和「模型并行」混为一谈。数据并行每卡都是<em>完整</em>模型、切的是数据;模型并行切的是<em>模型本身</em>。前者解决慢,后者解决装不下。</li>
+<li>以为 ZeRO 属于模型并行。ZeRO 本质是<strong>数据并行的显存优化版</strong>——逻辑上仍是数据并行,只是把冗余的状态分片存了。</li>
+<li>说「ZeRO-1 就切梯度」。ZeRO-1 只切优化器状态,梯度要到 ZeRO-2 才切,参数到 ZeRO-3 才切。顺序别记反。</li>
+<li>把梯度累积当成「省显存」。它主要降的是同步<em>频率</em>并等效放大 batch;真正省激活显存的是重计算。</li>
+<li>忽视网络:多机张量并行对带宽极敏感,普通万兆网下跨机通信会成为主要瓶颈——这点源材料在推理部署里也专门强调过。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>DeepSpeed ZeRO-3 相比 ZeRO-2,额外切分了什么?</p>
+<details><summary>A. 激活值(activations)</summary>激活是靠重计算/梯度检查点来省的,不是 ZeRO 阶段切分的对象。</details>
+<details><summary>B. 模型参数(parameters) ✅</summary>正确。ZeRO-1 切优化器状态,ZeRO-2 再加切梯度,ZeRO-3 在此基础上连模型参数也切分——单卡不再持有完整模型,代价是前向反向要临时聚合参数分片,通信最重。</details>
+<details><summary>C. 优化器状态(optimizer states)</summary>优化器状态在 ZeRO-1 就已经切了,不是 ZeRO-3 新增的。</details>
+<details><summary>D. 数据 batch</summary>切 batch 是数据并行本身就在做的事,不是 ZeRO 各阶段的区别所在。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 DP 与 DDP,下列哪项说法正确?</p>
+<details><summary>A. DP 用多进程 all-reduce,DDP 用单进程主卡同步</summary>说反了。多进程 all-reduce 是 DDP 的做法。</details>
+<details><summary>B. 两者完全等价,只是名字不同</summary>不对。二者在进程模型、是否受 GIL、同步方式、负载均衡上都不同。</details>
+<details><summary>C. DDP 每张卡一个进程、用 all-reduce 对等同步梯度,不受 GIL 拖累,是现在的标准做法 ✅</summary>正确。DP 是单进程多线程、主卡集中 gather/scatter、受 GIL 和主卡瓶颈影响,已过时。</details>
+<details><summary>D. DP 比 DDP 快,因为线程比进程轻量</summary>恰恰相反。DP 受 GIL 和主卡负载不均拖累,通常慢于 DDP。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>ZeRO: Memory Optimizations Toward Training Trillion Parameter Models</strong>(Rajbhandari et al., 2020)——DeepSpeed ZeRO 的原始论文,三阶段切分与 $16\Psi$ 的显存分析都出自此。</li>
+<li><strong>Megatron-LM</strong>(Shoeybi et al., 2019)——张量并行(把单层矩阵切开分卡)的代表工作,想深挖模型并行读它。</li>
+<li><strong>GPipe</strong>(Huang et al., 2019)——流水线并行与 micro-batch 缓解气泡的经典。</li>
+<li>下一步:训练完的模型如何压到能部署的体积——第 0028 课「量化(AWQ / GPTQ / GGUF)」。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>数据并行切数据(DDP 多进程 all-reduce)、模型并行切层内参数、流水线并行切层;ZeRO 是数据并行的省显存版,1 切优化器状态、2 加梯度、3 加参数,拿通信换显存。</strong></p>
+<nav class="lesson-nav">
+<a href="0026-agent-memory-multiagent.html">← 上一课:Agent 记忆与多智能体</a>
+<a href="0028-quantization.html">下一课:模型量化 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

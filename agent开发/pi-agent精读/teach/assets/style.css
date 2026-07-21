@@ -1,0 +1,107 @@
+/* ============================================================
+   Pi-Agent SDK 深度精读 · 共享房屋风格
+   自包含、零外部依赖。所有微课 <link> 这一份。
+   体裁:源码精读(同 learn-code 读 xv6)——「书」的质感 + 代码块高亮。
+   ============================================================ */
+
+:root{
+  --ink:#1a1a1a; --paper:#fdfcf8; --muted:#6b6b5f; --rule:#d8d4c5;
+  --accent:#7a3b2e;      /* 砖红:标题/术语强调 */
+  --accent2:#2e5a6b;     /* 青蓝:链接/次级强调 */
+  --good:#2f6b3a; --bad:#a23a2e;
+  --code-bg:#272b33; --code-fg:#e6e3d8;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Songti SC",serif;
+  line-height:1.62; margin:0; padding:3rem 1.5rem 5rem; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:47rem; margin:0 auto}
+
+/* —— 头部导航 / 标题 —— */
+.crumbs{font-size:.78rem; letter-spacing:.06em; color:var(--muted); margin-bottom:1.4rem}
+.crumbs a{color:var(--accent2); text-decoration:none}
+.crumbs a:hover{text-decoration:underline}
+.kicker{font-size:.78rem; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); margin:0 0 .4rem}
+h1{font-size:1.9rem; line-height:1.22; margin:.1rem 0 .5rem; font-weight:600; letter-spacing:-.01em}
+h2{font-size:1.18rem; margin:2.6rem 0 .7rem; padding-bottom:.25rem; border-bottom:1px solid var(--rule)}
+h3{font-size:1.02rem; margin:1.8rem 0 .5rem; color:var(--accent)}
+p{margin:.8rem 0}
+strong{font-weight:600}
+
+/* —— 教学装置框 —— */
+.mission{font-size:.9rem; color:var(--muted); border-left:3px solid var(--accent); padding:.5rem .9rem; background:#f4f1e6; border-radius:0 6px 6px 0; margin:1.2rem 0 2rem}
+.recall{background:#f4f1e6; border:1px dashed var(--accent); border-radius:8px; padding:.8rem 1.1rem; margin:1.4rem 0; font-size:.92rem}
+.win{background:#eef3ee; border:1px solid #c3dcc3; border-radius:8px; padding:1rem 1.2rem; margin:1.4rem 0}
+.win strong{color:var(--good)}
+.analogy{background:#eef2f4; border:1px solid #c3d2dc; border-left:3px solid var(--accent2); border-radius:8px; padding:1rem 1.2rem; margin:1.4rem 0; font-size:.93rem}
+.analogy b{color:var(--accent2)}
+.term{background:#f4f1e6; border:1px solid var(--rule); border-radius:6px; padding:.6rem .9rem; margin:1rem 0; font-size:.88rem}
+.term b{color:var(--accent)}
+/* 「为什么这样设计」——源码精读体裁的核心装置 */
+.why{background:#faf3ec; border:1px solid #e3c9b3; border-left:3px solid var(--accent); border-radius:8px; padding:1rem 1.2rem; margin:1.4rem 0; font-size:.93rem}
+.why b{color:var(--accent)}
+/* 「减法/取舍」——Pi 的设计哲学专用 */
+.tradeoff{background:#f4f1e6; border:1px solid var(--rule); border-radius:8px; padding:.9rem 1.1rem; margin:1.4rem 0; font-size:.9rem}
+
+/* —— 代码块(TypeScript 高亮)—— */
+pre{background:var(--code-bg); color:var(--code-fg); border-radius:8px; padding:1.1rem 1.2rem; overflow-x:auto; font-size:.83rem; line-height:1.6; margin:1.2rem 0;
+  font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+pre .ln{color:#6f7681; user-select:none; display:inline-block; width:2.1em; text-align:right; margin-right:1em}
+pre .key{color:#c98fd0}   /* 关键字 import/const/class/return/type/interface */
+pre .str{color:#9ece6a}   /* 字符串 */
+pre .cm{color:#7d8590; font-style:italic}  /* 注释 */
+pre .fn{color:#e0a45e; font-weight:600}    /* 函数/方法名 */
+pre .type{color:#7fb3c9}  /* 类型名 */
+pre .num{color:#d19a66}   /* 数字 */
+pre .sys{color:#e0a45e; font-weight:600}   /* 高亮的关键符号 */
+pre .dim{color:#6f7681}   /* 暗掉:留给后续课的代码 */
+pre .hl{background:#3a3f4a; display:inline-block; width:calc(100% - 0px); border-radius:3px}  /* 高亮行 */
+
+code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.85em; background:#eeeadb; padding:.08em .35em; border-radius:3px}
+.sys-pill{color:var(--accent); font-weight:600}
+
+/* —— 表格 —— */
+table.bd{width:100%; border-collapse:collapse; font-size:.9rem; margin:1rem 0}
+table.bd th,table.bd td{text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--rule); vertical-align:top}
+table.bd th{font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+table.bd td:first-child{font-weight:600; color:var(--accent2); white-space:nowrap}
+
+/* —— 出处引用 —— */
+cite{font-size:.82rem; color:var(--muted); font-style:normal; display:block; margin-top:.4rem}
+cite a{color:var(--accent2)}
+
+/* —— ASCII / 流程图 —— */
+.diagram{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.78rem; line-height:1.5; background:#f7f4ea; border:1px solid var(--rule); border-radius:8px; padding:1.1rem 1.2rem; white-space:pre; overflow-x:auto; color:#333}
+
+/* —— 自测 —— */
+.quiz{background:#f7f4ea; border:1px solid var(--rule); border-radius:10px; padding:1.2rem 1.3rem; margin:1.3rem 0}
+.q{margin:0 0 1.5rem} .q:last-child{margin-bottom:0}
+.q p.stem{font-weight:600; margin:.2rem 0 .7rem}
+.opt{display:block; width:100%; text-align:left; font:inherit; font-size:.92rem; background:#fff; border:1px solid var(--rule);
+  border-radius:6px; padding:.55rem .8rem; margin:.4rem 0; cursor:pointer; transition:all .12s}
+.opt:hover{border-color:var(--accent2)}
+.opt.correct{background:#e7f1e7; border-color:var(--good); color:var(--good)}
+.opt.wrong{background:#f6e7e4; border-color:var(--bad); color:var(--bad)}
+.fb{font-size:.86rem; margin:.5rem 0 0; min-height:1.2em}
+.fb.ok{color:var(--good)} .fb.no{color:var(--bad)}
+
+/* —— 提问 / 下一步 / 页脚 —— */
+.ask{background:#272b33; color:#e6e3d8; border-radius:10px; padding:1.1rem 1.3rem; margin:2.4rem 0 0; font-size:.92rem}
+.ask b{color:#e0a45e}
+.next{font-size:.92rem}
+footer{margin-top:2.6rem; padding-top:1rem; border-top:1px solid var(--rule); font-size:.82rem; color:var(--muted)}
+footer a{color:var(--accent2)}
+
+/* —— 门户 index.html 专用 —— */
+.hero{border-bottom:2px solid var(--ink); padding-bottom:1.2rem; margin-bottom:1.6rem}
+.lead{font-size:1.02rem; background:#f4f1e6; border-left:3px solid var(--accent); padding:.9rem 1.1rem; border-radius:0 6px 6px 0; margin:1.4rem 0}
+.part{margin:2.2rem 0 .6rem; font-size:.95rem; font-weight:600; color:var(--accent); border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+.cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(15rem,1fr)); gap:.7rem; margin:.8rem 0}
+.card{display:block; text-decoration:none; color:inherit; background:#fff; border:1px solid var(--rule); border-radius:8px; padding:.7rem .9rem; transition:all .12s}
+.card:hover{border-color:var(--accent2); box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.card .n{font-size:.72rem; color:var(--accent2); font-variant-numeric:tabular-nums; font-weight:600}
+.card .t{display:block; margin-top:.2rem; font-size:.92rem}
+
+@media print{ body{padding:0;background:#fff} pre{background:#f0eee4;color:#222} .opt{border:1px solid #999} .ask{background:#eee;color:#222} }

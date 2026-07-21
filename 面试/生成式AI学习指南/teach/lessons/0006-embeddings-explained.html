@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0006 · Embedding 本质:词/句/上下文/跨模态嵌入与对比学习</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第二部分 Embedding 与向量检索 · 第 0006 课</p>
+<h1>Embedding 本质:词/句/上下文/跨模态嵌入与对比学习</h1>
+<p class="lede">这节课把「embedding」从一个模糊词讲成你能上手用的工具,一口气答清五道高频题:<strong>「embedding 是什么、为什么比原始输入更紧凑?」「词嵌入 vs 句嵌入怎么选?」「上下文嵌入(BERT)怎么生成、强在哪?」「triplet loss 和 margin 是什么意思?」「工程上 embedding 怎么用?」</strong>(源:60 题·Embedding 第 1、2、3、13、14 题;AI 工程师题库 Q5)。学完你能空口讲出向量检索的离线/在线两条链路,并答得住对比学习那一串追问。</p>
+
+<div class="recall">
+<p>上一课我们把文本切成 token、再解码回文本,处理的都是<strong>离散符号</strong>。但模型内部不吃符号,吃的是<strong>向量</strong>——每个 token 进网络前都先被查成一串浮点数。<strong>先别往下看:如果用最土的办法,把词表里第 5000 个词表示成一个「除了第 5000 位是 1、其余全是 0」的长向量(one-hot),这种表示有什么致命毛病?</strong></p>
+</div>
+
+<h2>一、直觉:embedding 是「稠密的语义坐标」</h2>
+<p>one-hot 的毛病有两个:一是<strong>太长太稀疏</strong>——词表有几万词,每个词就是几万维里只有 1 个非零,存储和计算都浪费;二是<strong>没有语义</strong>——「猫」和「狗」的 one-hot 正交,距离和「猫」与「桌子」完全一样,模型看不出谁更像谁。</p>
+<p>embedding 换个思路:给每个对象一串<strong>低维、稠密、连续</strong>的坐标(比如几百维的浮点向量),让<strong>语义相近的对象在这个空间里挨得近</strong>。「猫」和「狗」靠拢,「猫」和「桌子」离远。维度从几万压到几百,信息不但没丢,反而把「谁像谁」这种关系编码了进去——模型于是能更高效地学模式,而不必从零去发现「猫和狗有关」。</p>
+
+<dl class="keydef">
+<dt>Embedding(嵌入)</dt>
+<dd>把高维、稀疏、离散的输入(如 one-hot 词、类别 ID、整段文本、一张图)映射成<strong>低维稠密连续向量</strong>的表示。核心性质:<strong>降维</strong>(几万维 → 几百维)+ <strong>保语义</strong>(相似的挨得近)。因此它比原始输入更紧凑,也更好学。</dd>
+</dl>
+<p>「更紧凑」这三个字面试要能拆开答:紧凑既指<em>维度低</em>(存得下、算得快),也指<em>信息密</em>(每一维都在承载语义,而不是像 one-hot 那样绝大多数维恒为 0)。</p>
+
+<h2>二、词嵌入 vs 句嵌入:粒度决定用途</h2>
+<p>同样是 embedding,粒度不同,能干的活也不同。</p>
+
+<div class="trio">
+  <div class="cell"><strong>词嵌入</strong><br>每个词一个向量<br><em>词级任务:同义词、词性、NER</em></div>
+  <div class="cell"><strong>句嵌入</strong><br>整句压成一个向量<br><em>句/篇级任务:分类、语义相似、情感</em></div>
+  <div class="cell"><strong>选择依据</strong><br>你的检索/比较单位<br><em>比的是词还是整段?</em></div>
+</div>
+
+<p><strong>词嵌入</strong>给词表里每个词一个向量,适合需要在<em>词这一层</em>做判断的任务:找同义词、判断词性、命名实体识别(NER)。<strong>句嵌入</strong>把一整句(或一段)压成<em>单个</em>向量,适合以整段为单位的任务:文档分类、判断两句话语义是否相似、情感分析。做语义搜索/RAG 时你比较的是「query 段 vs 文档段」,天然用句/段嵌入。</p>
+
+<div class="gotcha">
+<p><strong>这里埋着一个关键局限:</strong>传统<em>静态</em>词嵌入给每个词一个<strong>固定</strong>向量,不看上下文。于是「bank」在「河岸」和「银行」两种意思里共用同一个向量——对<strong>多义词</strong>乏力。这正是下一节上下文嵌入要解决的问题。</p>
+</div>
+
+<h2>三、上下文嵌入(BERT):同一个词,随语境变身</h2>
+<p>静态词嵌入的软肋是「一词一向量」。<strong>上下文嵌入</strong>(contextual embedding)把它打破:同一个词在不同句子里得到<strong>不同</strong>的向量,因为向量是把<em>整句一起</em>喂进模型算出来的。</p>
+<p>BERT 怎么做到?它是一个深层 <strong>Transformer 编码器</strong>,靠自注意力让句中每个词都「看到」其余所有词(第 0002 课那套 $QK^\top$ 机制),从而捕捉词与词的依赖。于是「bank」的输出向量会因为旁边是「river」还是「money」而不同——歧义在这一步就被语境消解了。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">整句 tokens</div>
+  <div class="arrow">→</div>
+  <div class="node">深层 Transformer<br>自注意力互相看</div>
+  <div class="arrow">→</div>
+  <div class="node good">每个 token 一个<br><strong>随上下文变化</strong>的向量</div>
+</div>
+<figcaption>静态词嵌入是「查表得固定向量」;上下文嵌入是「整句一起算、逐词输出因语境而异的向量」。</figcaption>
+</figure>
+
+<p><strong>优势</strong>:对强依赖上下文的任务——情感分析、歧义消解、指代理解——上下文嵌入通常明显强于静态嵌入,因为它能区分同形异义、能感知否定与修饰(「not good」里的「good」不该被当成褒义)。代价是每次都要跑一遍模型,比查表贵。</p>
+
+<h2>四、工程用法:离线建索引,在线查最近邻</h2>
+<p>面试问「embedding 怎么用」,答的就是<strong>向量检索</strong>的两条链路。记住一句话:<strong>文档离线算一次并存起来,query 在线现算再去比。</strong></p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">文档(离线)</div>
+  <div class="arrow">→</div>
+  <div class="node">embedding 模型</div>
+  <div class="arrow">→</div>
+  <div class="node">向量存进索引</div>
+</div>
+<div class="pipeline">
+  <div class="node">query(在线)</div>
+  <div class="arrow">→</div>
+  <div class="node">同一模型嵌入</div>
+  <div class="arrow">→</div>
+  <div class="node">按 cosine 相似度</div>
+  <div class="arrow">→</div>
+  <div class="node good">取最近的 top-k</div>
+</div>
+<figcaption>离线把文档批量编码入库(算一次);在线把 query 编码后,按向量相似度检索最近邻。</figcaption>
+</figure>
+
+<p>比「近」用得最多的是 <strong>cosine 相似度</strong>——只看方向不看长度:</p>
+$$\operatorname{cos}(a,b)=\frac{a\cdot b}{\lVert a\rVert\,\lVert b\rVert}$$
+<p>值越接近 1 越相似。这套机制支撑起一大片应用:<strong>语义搜索、RAG(把检索到的段喂给 LLM)、聚类、去重、分类</strong>。</p>
+
+<dl class="keydef">
+<dt>选 embedding 模型是一个真实的工程决策</dt>
+<dd>不是随手挑一个就行。要权衡:<strong>向量维度</strong>(影响存储与检索成本)、<strong>最大输入长度</strong>(能不能吃下你的长文档)、<strong>领域契合度</strong>(通用模型未必懂你的法律/医疗/代码语料)、<strong>成本</strong>。关键纪律:<strong>在你自己的数据上评检索质量,别只信公开榜单</strong>——榜单高分不等于在你的语料上召回得准。</dd>
+</dl>
+
+<h2>五、这些好向量从哪来?triplet loss 与对比学习</h2>
+<p>「相似的挨得近」不是天上掉下来的,要靠训练目标去<em>塑造</em>这个空间。最经典的思路是 <strong>triplet loss(三元组损失)</strong>:每次取三个样本——<strong>anchor</strong>(锚)、<strong>positive</strong>(与锚相似)、<strong>negative</strong>(与锚不相似),要求锚离正例<em>足够近</em>、离负例<em>足够远</em>。</p>
+
+<dl class="keydef">
+<dt>Triplet Loss</dt>
+<dd>$$\mathcal{L}=\max\bigl(0,\; d(a,p)-d(a,n)+\text{margin}\bigr)$$</dd>
+<dd><em>$a,p,n$ 分别是 anchor / positive / negative 的嵌入,$d$ 是距离。目标:让 anchor 到 positive 的距离,比到 negative 的距离<strong>至少小一个 margin</strong>。当 $d(a,p)+\text{margin} &lt; d(a,n)$(已经分得够开)时损失为 0,不再管;否则产生梯度,把正例拉近、负例推远。</em></dd>
+</dl>
+
+<p><strong>margin 参数的意义</strong>:它是「安全间隔」——你要求正负例之间至少空出多大的缝。</p>
+<ul>
+<li><strong>margin 越大</strong>:要求正负例分得越开,类间边界更宽,辨别力可能更强。</li>
+<li><strong>但 margin 太大</strong>:约束过苛,很多三元组永远满足不了,导致训练困难甚至<strong>退化</strong>(模型学不动或把向量挤成一团)。</li>
+<li>所以 margin 是要调的超参,不存在一个「一定最好」的值。</li>
+</ul>
+
+<p><strong>对比学习(contrastive learning)</strong>是同一思想的更一般形式:核心都是「拉近正对、推远负对」来组织嵌入空间。triplet 是「一正一负」的特例,更一般的对比目标会一次对<em>多个</em>负例做对比。<strong>CLIP</strong>用它对齐图文两个模态(把一张图和它的正确描述拉近、和错误描述推远)——这就是<strong>跨模态嵌入</strong>:让图片和文本落进<em>同一个</em>空间,于是可以用文字搜图。现代<strong>句嵌入</strong>模型也普遍用对比学习训练。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「embedding 为什么比原始输入更紧凑?」——维度低(几万→几百)+ 信息密(每维承载语义,不像 one-hot 大量恒零),同时保留「相似的挨得近」。</li>
+<li>「词嵌入和句嵌入怎么选?」——看比较单位:词级任务(同义词/词性/NER)用词嵌入,句/篇级(分类/语义相似/情感、RAG)用句嵌入。</li>
+<li>「静态词嵌入的最大问题是什么?」——多义词:一词一固定向量,分不清「bank」两义;引出上下文嵌入。</li>
+<li>「BERT 的上下文嵌入怎么生成、强在哪?」——深层 Transformer 整句一起过自注意力,同词随语境出不同向量;对情感/歧义消解等强上下文任务占优。</li>
+<li>「线上怎么用 embedding 做检索?」——文档离线编码入库,query 在线编码,按 cosine 取 top-k;支撑语义搜索/RAG/聚类/去重。</li>
+<li>「triplet loss 里 margin 调大调小各有什么影响?」——大→分得开、辨别力可能更强;太大→训练难、易退化。是要调的超参。</li>
+<li>「triplet 和对比学习什么关系?」——triplet 是对比学习「一正一负」的特例;对比学习更一般,CLIP/句嵌入常用。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别把 embedding 说成「一定就是词向量」。文本、图像、类别、用户/商品 ID 都能嵌入;它是一类<em>表示方法</em>,不限于词。</li>
+<li>别说「上下文嵌入永远比静态嵌入好」。上下文嵌入更强但更贵(每次要跑模型);对很多简单词级任务或极致低延迟场景,静态嵌入依旧够用且省。有取舍,不是绝对。</li>
+<li>别把 query 和文档用<strong>两个不同</strong>的模型分别嵌入还直接比距离——检索要求 query 与文档落在<em>同一</em>向量空间,通常用同一模型(或成对训练的双塔)。</li>
+<li>margin 不是「越大越好」:太大反而让训练无法收敛。绝对化调参口径是扣分点。</li>
+<li>别只拿公开榜单排名下结论——要在自己的数据上评召回质量,领域契合往往比榜单名次更决定成败。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>相比 one-hot,词 embedding「更紧凑」最准确的含义是?</p>
+<details><summary>A. 它把所有词压成同一个向量,所以省空间</summary>错得离谱——那样所有词就无法区分了。embedding 是每个对象<em>各有</em>一个稠密向量。</details>
+<details><summary>B. 维度从几万降到几百,且每维都承载语义、相似的挨得近 ✅</summary>正确。紧凑 = 维度低(存算省)+ 信息密(保语义),而非丢信息。</details>
+<details><summary>C. 它只保留词频信息,丢掉语义</summary>恰恰相反,embedding 的核心价值就是编码了语义关系。</details>
+<details><summary>D. 它把浮点向量换成 0/1,所以更省</summary>方向反了——one-hot 才是 0/1 且稀疏,embedding 是稠密浮点。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 triplet loss 的 margin,下列哪句最准确?</p>
+<details><summary>A. margin 越大训练一定越稳、效果一定越好</summary>不对。太大反而让约束过苛、三元组难满足,训练困难甚至退化。</details>
+<details><summary>B. margin 是正负例之间要求的最小间隔,调大辨别力可能更强但太大易致训练困难 ✅</summary>正确。它是安全间隔,是要权衡调节的超参,没有「一定最优」的值。</details>
+<details><summary>C. margin 只影响推理速度,不影响训练</summary>无关。margin 是训练损失里的项,直接决定梯度何时产生。</details>
+<details><summary>D. margin 为 0 时和普通分类损失完全等价</summary>不成立。margin=0 只是取消了间隔要求,triplet 仍在比较三元组内部的相对距离。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>FaceNet: A Unified Embedding for Face Recognition and Clustering</strong>(Schroff et al., 2015)——triplet loss 与「嵌入空间 + margin」的经典来源,本课损失公式即出自这一脉。</li>
+<li><strong>BERT: Pre-training of Deep Bidirectional Transformers</strong>(Devlin et al., 2018)——上下文嵌入的代表工作,理解「同词随语境变向量」看它。</li>
+<li><strong>Learning Transferable Visual Models From Natural Language Supervision</strong>(CLIP,Radford et al., 2021)——用对比学习对齐图文的跨模态嵌入。</li>
+<li>回顾:上下文嵌入的自注意力机制见第 0002 课;下一步:把这些向量真正建成可查的索引(第 0007 课 向量检索工程)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>embedding = 稠密低维、语义相近则挨得近的坐标;词嵌入比词、句嵌入比段,上下文嵌入让同词随语境变身;工程上文档离线入库、query 在线按 cosine 取 top-k;triplet/对比学习靠 margin 把相似拉近、不相似推远来塑造这个空间。</strong></p>
+<nav class="lesson-nav">
+<a href="0005-tokenization-and-decoding.html">← 上一课:token 化与解码控制</a>
+<a class="next" href="0007-vector-search-engineering.html">下一课:向量检索工程 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0037 · OOP 与常见设计模式</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0037 课 · 工程与设计 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>OOP 与常见设计模式</h1>
+
+<p class="lede">前 36 课都在攻数据结构与算法——那是<strong>砖</strong>。这节进入工程与设计部分,换个尺度:当代码规模变大、需求会变,怎么把砖<strong>砌</strong>得让人改得动、扩得开?面向对象(OOP)给了组织代码的四条地基,设计模式则是前人反复踩坑后沉淀下来的「砌法套路」。面试里它以两种形态出现:直接问「手写线程安全单例」,或在系统设计题里看你能不能<strong>点名</strong>用合适的模式解决问题。这节不背 23 个模式,只把面试真正在乎的那几个讲透。</p>
+
+<div class="recall">
+<p>回忆前一部分:我们花了很多篇幅在<a href="0036-greedy-vs-dp.html">贪心 vs 动态规划</a>上区分「什么问题该用什么解法」。设计模式是同一种思维在更大尺度上的复现——不是「什么算法」,而是「什么结构」:面对一类反复出现的设计问题,有没有一个被验证过的组织方式?数据结构是砖,设计模式是砌法。</p>
+</div>
+
+<h2>一、OOP 的四条地基</h2>
+
+<p>设计模式全都建立在面向对象的四个特性上,先把它们分清——面试常让你「用自己的话解释封装和抽象的区别」。</p>
+
+<table>
+<thead><tr><th>特性</th><th>一句话</th><th>解决什么</th></tr></thead>
+<tbody>
+<tr><td><strong>封装</strong> Encapsulation</td><td>把数据和操作它的方法包在一起,只暴露必要接口</td><td>隐藏内部状态,外部改不了、也不必知道细节</td></tr>
+<tr><td><strong>抽象</strong> Abstraction</td><td>只呈现「做什么」,隐藏「怎么做」</td><td>调用者面向接口编程,不依赖具体实现</td></tr>
+<tr><td><strong>继承</strong> Inheritance</td><td>子类复用并特化父类</td><td>共性上提、差异下沉,减少重复</td></tr>
+<tr><td><strong>多态</strong> Polymorphism</td><td>同一个调用,不同对象给出不同行为</td><td>写一次逻辑,对未来新增的类型也成立</td></tr>
+</tbody>
+</table>
+
+<p><strong>多态是设计模式的引擎。</strong>几乎所有模式的「可扩展」都来自这一句:调用方持有一个接口引用,运行时到底执行哪个实现,由对象自己决定。记住这条,后面每个模式你都能看穿它在利用什么。</p>
+
+<h2>二、设计模式是什么(和不是什么)</h2>
+
+<p>设计模式不是能直接 <code>import</code> 的库,也不是语法特性。它是<strong>针对一类反复出现的设计问题的、可复用的解决方案模板</strong>——是经验的名字。它的价值一半在「解决问题」,另一半在「命名」:当你和面试官都知道「这里用观察者」时,一个词就替代了半页解释。</p>
+
+<p>经典按目的分三大类(源自 GoF《设计模式》):</p>
+
+<div class="trio">
+  <div class="cell"><div class="role">Creational</div><div class="head">创建型</div><div class="sub">怎么造对象</div></div>
+  <div class="cell"><div class="role">Structural</div><div class="head">结构型</div><div class="sub">怎么拼对象</div></div>
+  <div class="cell"><div class="role">Behavioral</div><div class="head">行为型</div><div class="sub">对象怎么协作</div></div>
+</div>
+
+<p>仓库大纲列了十几个模式,但面试高频的就下面这几个。逐类挑一两个讲透,胜过背全表。</p>
+
+<table>
+<thead><tr><th>类别</th><th>模式</th><th>一句话用途</th></tr></thead>
+<tbody>
+<tr><td>创建型</td><td><strong>单例</strong> Singleton</td><td>全局只有一个实例(配置、连接池、日志器)</td></tr>
+<tr><td>创建型</td><td><strong>工厂 / 抽象工厂</strong> Factory</td><td>把「new 哪个类」的决定从调用方挪出去</td></tr>
+<tr><td>结构型</td><td><strong>适配器</strong> Adapter</td><td>把不兼容的接口包一层,让旧类接入新代码</td></tr>
+<tr><td>结构型</td><td><strong>装饰器</strong> Decorator</td><td>不改原类,层层包裹动态加功能</td></tr>
+<tr><td>行为型</td><td><strong>策略</strong> Strategy</td><td>把一族可互换的算法各封一个类,运行时切换</td></tr>
+<tr><td>行为型</td><td><strong>观察者</strong> Observer</td><td>状态变了,自动通知所有订阅者</td></tr>
+</tbody>
+</table>
+
+<h2>三、行为型代表:观察者与策略</h2>
+
+<p><strong>观察者</strong>是「发布—订阅」的骨架:一个主体(Subject)维护一份观察者名单,状态一变就挨个 <code>notify()</code>。GUI 的事件监听、消息推送、MVC 里视图跟着模型刷新,全是它。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 460 200" width="460" height="200" role="img" aria-label="观察者模式:主体状态变化后通知三个观察者">
+  <rect class="dgm-accent-node" x="20" y="75" width="120" height="50" rx="8"/>
+  <text class="dgm-accent-text" x="80" y="97" text-anchor="middle" font-size="14" font-weight="700">Subject</text>
+  <text class="dgm-muted" x="80" y="114" text-anchor="middle" font-size="11">状态改变</text>
+
+  <rect class="dgm-good-node" x="300" y="15" width="140" height="42" rx="8"/>
+  <text class="dgm-good-text" x="370" y="41" text-anchor="middle" font-size="13">Observer A（视图）</text>
+  <rect class="dgm-good-node" x="300" y="79" width="140" height="42" rx="8"/>
+  <text class="dgm-good-text" x="370" y="105" text-anchor="middle" font-size="13">Observer B（日志）</text>
+  <rect class="dgm-good-node" x="300" y="143" width="140" height="42" rx="8"/>
+  <text class="dgm-good-text" x="370" y="169" text-anchor="middle" font-size="13">Observer C（缓存）</text>
+
+  <defs>
+    <marker id="arrow37" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path class="dgm-accent" d="M0,0 L7,3 L0,6 Z"/>
+    </marker>
+  </defs>
+  <path class="dgm-edge" style="stroke:var(--accent)" d="M140,90 C210,60 240,40 298,36" marker-end="url(#arrow37)"/>
+  <path class="dgm-edge" style="stroke:var(--accent)" d="M140,100 L298,100" marker-end="url(#arrow37)"/>
+  <path class="dgm-edge" style="stroke:var(--accent)" d="M140,110 C210,140 240,160 298,164" marker-end="url(#arrow37)"/>
+  <text class="dgm-muted" x="215" y="88" text-anchor="middle" font-size="11">notify()</text>
+</svg>
+</div>
+<figcaption>主体不认识具体的观察者类型,只认「Observer 接口」——所以能随时加订阅者而不改主体代码。这就是多态在做扩展。</figcaption>
+</figure>
+
+<p><strong>策略</strong>解决另一件事:同一个任务有多种算法(排序比较器、支付方式、压缩算法),想在运行时切换,又不想写一大坨 <code>if/else</code>。做法是把每种算法封成实现同一接口的类,让上下文持有一个接口引用。想换算法,换注入的对象即可——这正是「组合优于继承」的样板。</p>
+
+<h2>四、创建型代表:线程安全单例</h2>
+
+<p>单例是面试最爱手写的一个,因为它把「懒加载 + 线程安全」两个坑都塞进了十几行里。朴素写法在多线程下会造出两个实例:</p>
+
+<pre><code>// 反例:两个线程同时看到 instance == null,各 new 一个
+if (instance == null) {
+    instance = new Singleton();   // race！
+}</code></pre>
+
+<p>面试想听的是<strong>双重检查锁(double-checked locking)</strong>:先无锁检查一次(快路径),只有真为空时才加锁,锁内再检查一次。关键是 <code>volatile</code>——它禁止指令重排,防止别的线程拿到一个「已分配地址但还没构造完」的半成品对象。</p>
+
+<pre><code>class Singleton {
+    private static volatile Singleton instance;   // volatile 必需
+    private Singleton() {}
+    static Singleton get() {
+        if (instance == null) {                    // 1. 无锁快检查
+            synchronized (Singleton.class) {
+                if (instance == null) {            // 2. 锁内再检查
+                    instance = new Singleton();
+                }
+            }
+        }
+        return instance;
+    }
+}</code></pre>
+
+<p>更省心的替代:Java 里用<strong>静态内部类(holder idiom)</strong>或 <code>enum</code>,靠类加载机制天然线程安全且懒加载;C++11 起局部 <code>static</code> 的初始化由标准保证线程安全。能说出「其实我更倾向 holder / enum,双检锁容易写错 volatile」是加分项。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>多态(Polymorphism)</dt>
+<dd>同一接口调用作用于不同对象时产生不同行为,由对象的实际类型在运行时决定。它是几乎所有设计模式「可扩展」的来源。</dd>
+<dt>设计模式(Design Pattern)</dt>
+<dd>针对一类反复出现的设计问题的可复用解决方案模板,以及它的通用命名。<em>避免</em>把它当成能直接调用的库或语法特性。</dd>
+<dt>SOLID 原则</dt>
+<dd>五条面向对象设计准则(单一职责、开闭、里氏替换、接口隔离、依赖倒置)。模式是准则的具体落地,尤其常体现「对扩展开放、对修改关闭」的开闭原则。</dd>
+<dt>组合优于继承(Composition over Inheritance)</dt>
+<dd>用「持有一个对象并委托」而非「继承一个父类」来复用行为,更灵活、耦合更低。策略与装饰器都是它的样板。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>两条主线:</p>
+<ul>
+<li><strong>手写题</strong>:「实现一个线程安全单例」是经典中的经典。追问会顺着 <code>volatile</code> 为什么必需、懒加载与饿汉式的取舍、有没有更好的写法一路深挖。</li>
+<li><strong>系统设计题</strong>:描述一个场景让你设计。如果你能自然说出「这里日志接入用适配器」「通知机制用观察者」「支付方式用策略」,面试官立刻知道你有工程判断,而不只是会刷题。</li>
+<li>SOLID 一句带过即可,不必背五条定义,但要能说出「开闭原则:加新功能靠加类而非改老代码」。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>别背 23 个模式的定义。</strong>面试考的从来不是「说出享元模式的定义」,而是「能不能用合适的模式解决眼前的问题」。背了全表却在设计题里一个都用不上,反而暴露是死记。挑 5~6 个高频的讲到能手写、能说清适用场景,远胜过泛泛知道二十个名字。</p>
+<p><strong>单例的两个高频扣分点</strong>:① 说「加了 <code>synchronized</code> 就线程安全」却漏掉 <code>volatile</code>——没有它,双检锁在重排下仍会返回半成品对象;② 把单例当成「全局变量的美化」到处滥用,它其实引入全局状态、给单元测试和依赖注入添麻烦,该克制。</p>
+</div>
+
+<div class="implement">
+<p>挑三个模式各写一个最小可运行例子,不看答案凭理解写:</p>
+<p>① <strong>策略</strong>:定义 <code>SortStrategy</code> 接口,写两个实现(升序 / 降序),一个 <code>Sorter</code> 上下文运行时切换比较器。② <strong>观察者</strong>:一个 <code>NewsAgency</code>(Subject)+ 若干 <code>Subscriber</code>,<code>publish()</code> 时全部收到。③ <strong>单例</strong>:把上面的双检锁版和 holder 版都写一遍,用两个线程并发调用 <code>get()</code> 打印对象哈希,验证只造了一个实例。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>设计模式的本质是「用多态换可扩展」——调用方只依赖接口,新增行为靠加类而非改老代码。面试不考你背了几个模式,考你能不能在对的地方点名用对一个。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:双重检查锁单例里,为什么 <code>instance</code> 必须声明为 <code>volatile</code>?去掉会怎样?</summary>
+<div class="answer">
+<p><code>new Singleton()</code> 在底层不是原子的,大致分三步:①分配内存 → ②调用构造函数初始化 → ③把引用指向该内存。②和③可能被<strong>指令重排</strong>成 ①→③→②。若重排发生,一个线程刚做完 ③(引用已非空)还没做 ②(还没构造完),另一个线程的无锁快检查看到 <code>instance != null</code> 就直接返回并使用这个<strong>半成品对象</strong>,导致难复现的崩溃。<code>volatile</code> 禁止这种重排、并保证写入对其他线程立即可见,所以必需。这也是为什么很多人转而用 holder idiom / enum——把线程安全交给类加载机制,避开这个坑。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:面试官描述:「一个订单状态改变后,要同时刷新页面、写审计日志、清理缓存,而且以后可能还要加短信通知。」最贴切的模式是哪个?为什么?</summary>
+<div class="answer">
+<p><strong>观察者(Observer)</strong>。关键信号是「一变多」+「以后还要加更多接收方」:订单(Subject)状态一改,已注册的所有观察者自动收到通知;将来加短信通知,只需新增一个观察者、注册进去,<strong>订单本身的代码一行都不用改</strong>——这正是开闭原则。若硬写成订单里一长串「刷新、写日志、清缓存、发短信」的直接调用,每加一种就要改订单类,耦合越堆越死。(注意别选策略:策略是「多选一地替换算法」,这里是「同时通知多个」,方向不同。)</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:「继承」和「组合(委托)」都能复用代码,为什么现代设计普遍主张「组合优于继承」?</summary>
+<div class="answer">
+<p>继承是<strong>编译期</strong>绑定的强耦合:子类被钉死在父类的实现细节上,父类一改子类可能崩,而且行为无法在运行时更换;深层继承树还容易催生「为了复用一个方法而背上一堆用不到的父类包袱」。组合则是<strong>运行时</strong>持有一个接口引用并委托——想换行为就换注入的对象(正是策略模式),耦合低、可测试、可动态切换。经验法则:表达「是一个(is-a)」用继承,表达「有一个 / 用一个(has-a / uses-a)」用组合;拿不准时优先组合。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题在仓库大纲的「设计模式」小节。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=3cmzqZzwNDM&list=PLGLfVvz_LVvQ5G-LdJ8RLqe-ndo7QITYc&index=3">UML 统一建模语言概览(视频)</a> —— 看模式前先会读类图,面试白板上能画。</li>
+<li><a href="https://www.youtube.com/playlist?list=PLF206E906175C7E07">设计模式系列视频(27 个)</a> —— 逐个模式讲解,挑高频的几个看。</li>
+<li><a href="https://sourcemaking.com/design-patterns-and-tips">101 Design Patterns &amp; Tips for Developers（SourceMaking 速查）</a> —— 每个模式的意图与结构图,查阅友好。</li>
+<li>入门书:<a href="https://www.amazon.com/Head-First-Design-Patterns-Freeman/dp/0596007124">《Head First 设计模式》</a> —— 大纲推荐的 OO 入门读物(经典权威本是 GoF《设计模式》)。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「多态怎么变成可扩展」,或让你手写一遍单例并解释每一处 <code>volatile</code>/<code>synchronized</code> 的作用。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0036-greedy-vs-dp.html"><span class="dir">← 上一课</span>贪心 vs 动态规划:什么时候能贪</a>
+  <a class="next" href="0038-combinatorics-probability.html"><span class="dir">下一课 →</span>组合与概率:面试要的那点数学</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

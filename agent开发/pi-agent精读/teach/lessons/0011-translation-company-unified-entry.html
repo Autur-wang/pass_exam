@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0011 · 翻译公司:一个入口消化30多家Provider</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 4 章 · 模型调用 ›
+  <a href="./0010-steering-vs-followup-and-hooks.html">上一课</a> ›
+  <strong>Lesson 0011</strong>
+</div>
+
+<p class="kicker">Lesson 0011 · 第 4 章 模型调用</p>
+<h1>翻译公司:一个入口<br>消化 30 多家 Provider</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:第 3 章我们拆过 Agent Loop,当时有一行代码被一笔带过——
+  <code>streamSimple(model, context)</code>。这节课我们回去补上这个悬念:
+  这行看似平平无奇的调用背后,是一整套<strong>三层抽象层</strong>,专门用来吞下 30 多家 Provider 的差异。
+  这节课先啃第一层——统一入口怎么用「查表派活」两步解决路由问题。
+</div>
+
+<div class="recall">
+  🔁 <strong>回忆一下</strong>:第 3 章讲 Agent Loop 时,我们说它调用模型只有一行代码,
+  拿到回复就根据 <code>stopReason</code> 决定继续还是停止——那时我们没深究「调用模型」这四个字底下发生了什么。
+  今天就打开这个黑盒。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 讲清楚为什么<span class="sys-pill">同一句纯文本消息</span>
+  在 Anthropic / OpenAI / Google / Bedrock 下有四种不同写法,并说出 Pi 的第一层 <code>stream()</code>
+  函数为什么只做「查表 + 派活」两步,不掺一丝业务逻辑。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:一家国际翻译公司</b>
+  客户(Agent Loop)进门只跟<b>前台</b>打交道,前台问一句「你要翻译什么语言」,
+  查一下<b>通讯录</b>就找到对应语种的翻译员,把工作原样派给他。
+  客户不懂外语,翻译员不懂公司流程——两者靠一份<b>标准报告模板</b>解耦。
+  今天先看前台怎么工作。
+</div>
+
+<h2>1 · 问题:一句话,四种翻译</h2>
+<p>
+  市面上几十家模型供应商——Anthropic、OpenAI、Google、AWS Bedrock……每家都有自己的 API 规范,
+  用不同字段名、不同数据结构描述同一件事。有多不一样?看一个最简单的例子:用户说了一句
+  <em>「帮我读一下 main.ts」</em>。这条消息在 Pi 内部统一存成:
+</p>
+<pre><span class="ln">1</span><span class="cm">// Pi 内部统一格式</span>
+<span class="ln">2</span>{ role: <span class="str">"user"</span>, content: <span class="str">"帮我读一下 main.ts"</span>, timestamp: <span class="num">1748697600000</span> }
+</pre>
+<p>但要发给不同模型,就得翻译成各家要求的私有格式。同一句话,四种长相:</p>
+<pre><span class="ln">1</span><span class="cm">// Anthropic —— content 必须是数组,每项带 type 字段</span>
+<span class="ln">2</span>{ role: <span class="str">"user"</span>, content: [{ type: <span class="str">"text"</span>, text: <span class="str">"帮我读一下 main.ts"</span> }] }
+<span class="ln">3</span>
+<span class="ln">4</span><span class="cm">// OpenAI —— 字符串 content;若含工具结果需独立 role: "tool" 消息</span>
+<span class="ln">5</span>{ role: <span class="str">"user"</span>, content: <span class="str">"帮我读一下 main.ts"</span> }
+<span class="ln">6</span>
+<span class="ln">7</span><span class="cm">// Google(Gemini)—— content 换成 parts,结构更扁平</span>
+<span class="ln">8</span>{ role: <span class="str">"user"</span>, parts: [{ text: <span class="str">"帮我读一下 main.ts"</span> }] }
+<span class="ln">9</span>
+<span class="ln">10</span><span class="cm">// Bedrock(AWS)—— text 没有 type 字段,和 Anthropic 不一样</span>
+<span class="ln">11</span>{ role: <span class="str">"user"</span>, content: [{ text: <span class="str">"帮我读一下 main.ts"</span> }] }
+</pre>
+<p>
+  <strong>连最简单的纯文本消息都有四种写法。</strong>字段名不同(<code>content</code> vs <code>parts</code>),
+  结构不同(有的要 <code>type</code>,有的不要)。
+</p>
+<cite>🔎 出处:教程第4章 §一 / provider 消息格式四写法(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第4章-模型调用-一行代码驾驭多个模型.md</code>)。</cite>
+
+<h2>2 · 差异不止消息格式,是四个维度全都不同</h2>
+<p>消息格式只是冰山一角。Provider 之间的差异是全方位的,主要在四个维度上:</p>
+<table class="bd">
+  <thead><tr><th>维度</th><th>差在哪</th><th>举个例子</th></tr></thead>
+  <tbody>
+    <tr><td>消息格式</td><td>同一条消息,字段名和结构不同</td><td>Anthropic 用 <code>content[]</code>,Google 用 <code>parts[]</code></td></tr>
+    <tr><td>流式传输</td><td>模型的「逐字返回」机制不同</td><td>Anthropic 发原始 SSE 要自己解析,OpenAI SDK 直接返回结构化 chunk</td></tr>
+    <tr><td>思考模式</td><td>「让模型深度思考」参数完全不同</td><td>Anthropic 用 <code>thinking.budget_tokens</code>,OpenAI 用 <code>reasoning_effort</code></td></tr>
+    <tr><td>缓存控制</td><td>「标记不变内容」方式不同</td><td>Anthropic 打 <code>cache_control</code>,Bedrock 插入 <code>cachePoint</code> 节点</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么这值得单独强调?</b> 每个维度单独看都不复杂,但<strong>四个维度 × 30 多个 Provider</strong>,
+  组合起来的差异量是巨大的。Agent Loop 只有一行 <code>streamSimple(model, context)</code>,
+  它不可能为每个 Provider 写一套不同逻辑——这就是为什么 Pi 需要专门设计一层抽象来吸收这些差异。
+</div>
+<cite>🔎 出处:教程第4章 §一 / 四维度差异表。</cite>
+
+<h2>3 · 解法:三层架构,各管一件事</h2>
+<p>
+  直觉的答案是「给所有 Provider 封装一层,让它们看起来都一样」。Pi 正是这么做的,
+  具体拆成三层,每层职责单一:
+</p>
+<div class="diagram">第一层 · 统一入口    →  "接收请求,查出该找谁处理"
+第二层 · 事件协议    →  "约定输出格式——不管谁处理,交回来的都是这个样子"
+第三层 · 翻译器      →  "真正干活的人——每个翻译器精通一种 Provider 的方言"
+
+     客户                前台                标准报告            翻译员们
+  Agent Loop  ───────▶  stream()  ───────▶  12种统一事件 ◀───────  4+个 Provider
+
+  客户永远只跟前台打交道,从不直接接触翻译员</div>
+<p>
+  回到翻译公司类比:<b>前台(第一层)</b>问「你要翻译什么语言」,查通讯录找到翻译员派活;
+  <b>标准报告模板(第二层)</b>规定不管翻译员翻的是法语还是日语,交出来的报告格式必须统一;
+  <b>翻译员们(第三层)</b>各自精通一种语言,内部怎么翻是他们的事。
+</p>
+<div class="tradeoff">
+  🔑 <b>为什么拆三层而不是一坨?</b> 前台不需要懂外语,翻译员不需要懂公司流程——
+  中间靠标准报告解耦,职责隔离让每层可以独立演化:新增一个 Provider 只需要加一个翻译员,
+  不动前台;修改报告格式(事件协议)所有翻译员一起遵守。今天这一课只展开第一层,
+  第二、三层留给下一课。
+</div>
+<cite>🔎 出处:教程第4章 §二 / 三层架构与翻译公司类比。</cite>
+
+<h2>4 · 第一层拆开看:查表,派活</h2>
+<p>
+  入口函数叫 <code>stream()</code>,代码极其简单——这正是它被设计成这样的核心目的:
+</p>
+<pre><span class="ln">1</span><span class="cm">// compat.ts</span>
+<span class="ln">2</span><span class="key">export</span> <span class="key">function</span> <span class="fn">stream</span>(model, context, options?) {
+<span class="hl"><span class="ln">3</span>  <span class="key">const</span> provider = <span class="fn">resolveApiProvider</span>(model.api);  <span class="cm">// 查表:这个model该找谁?</span></span>
+<span class="hl"><span class="ln">4</span>  <span class="key">return</span> provider.<span class="fn">stream</span>(model, context, options);  <span class="cm">// 把工作派给翻译器</span></span>
+<span class="ln">5</span>}
+</pre>
+<p>
+  就两步:<strong>查表,派活。</strong> <code>model.api</code> 是一个字符串(如 <code>"anthropic-messages"</code>),
+  系统启动时已经把所有翻译器注册进了一份「通讯录」。这份通讯录长这样:
+</p>
+<pre><span class="ln">1</span><span class="key">const</span> BUILTIN_APIS = [
+<span class="ln">2</span>  [<span class="str">"anthropic-messages"</span>,       <span class="fn">anthropicMessagesApi</span>()],      <span class="cm">// Claude 的翻译器</span>
+<span class="ln">3</span>  [<span class="str">"openai-completions"</span>,       <span class="fn">openAICompletionsApi</span>()],      <span class="cm">// GPT 的翻译器</span>
+<span class="ln">4</span>  [<span class="str">"google-generative-ai"</span>,     <span class="fn">googleGenerativeAIApi</span>()],     <span class="cm">// Gemini 的翻译器</span>
+<span class="ln">5</span>  [<span class="str">"bedrock-converse-stream"</span>,   <span class="fn">bedrockConverseStreamApi</span>()], <span class="cm">// Bedrock 的翻译器</span>
+<span class="ln">6</span>  <span class="cm">// ... 还有 5 个</span>
+<span class="ln">7</span>];
+</pre>
+<p>
+  左边是 key(「工号」),右边是翻译器(「翻译员」)。<code>model.api</code> 的值就是 key——
+  拿 key 查表,找到翻译器,调用它。<strong>整个入口层不处理任何业务逻辑,纯粹是一个路由器。</strong>
+</p>
+<cite>🔎 出处:教程第4章 §二 / compat.ts:237-247 与 compat.ts:172-206。基于 pi <code>v0.80.2</code>。</cite>
+
+<div class="why">
+  <b>为什么第一层只做查表派活、不含任何业务逻辑?</b> 入口保持极简才能让「新增一个 Provider」
+  不牵动路由代码,复杂度全部沉到翻译器里。<br><br>
+  <b>为什么用 <code>model.api</code> 字符串 key 查表,而不是硬编码一堆 if-else?</b>
+  注册表模式让新翻译器「往通讯录加一条」即可被路由发现——这是开闭原则的体现:
+  对扩展开放(加条目),对修改关闭(不用改 <code>stream()</code> 本身)。<br><br>
+  <b>为什么 Agent Loop 被设计成永不直接接触翻译员?</b> 客户只认标准报告,
+  底层换任何模型,上层代码一行不改。这也是为什么第 3 章里 Agent Loop 那一行
+  <code>streamSimple(model, context)</code> 能看起来如此云淡风轻——所有复杂度都被这一层挡住了。
+</div>
+
+<h2>5 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① 三层架构里第一层 <code>stream()</code> 到底做了什么?</p>
+    <button class="opt">把统一格式的消息翻译成各 Provider 的私有格式</button>
+    <button class="opt">定义并输出 12 种统一事件</button>
+    <button class="opt">用 model.api 当 key 到通讯录查出对应翻译器,再把工作派给它</button>
+    <button class="opt">逐行解析 Provider 返回的原始 SSE 文本流</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② Pi 为什么要引入统一入口,而不是让 Agent Loop 自己 if-else 判断是哪个 Provider?</p>
+    <button class="opt">差异是四维度 × 30 多个 Provider 的组合,入口只做路由把复杂度隔离在翻译器里,Agent Loop 一行不改</button>
+    <button class="opt">因为 TypeScript 不支持 if-else 语句</button>
+    <button class="opt">因为所有 Provider 其实格式完全相同,不需要判断</button>
+    <button class="opt">单纯为了让代码看起来更长更复杂</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="3">
+    <p class="stem">③ 同一句纯文本消息,Google(Gemini)与 Anthropic 的关键格式差异是?</p>
+    <button class="opt">两家写法完全一样</button>
+    <button class="opt">Google 需要独立的 role:tool 消息,Anthropic 不需要</button>
+    <button class="opt">Bedrock 的 text 带 type 字段而 Anthropic 不带</button>
+    <button class="opt">Anthropic 要求 content 是数组、每项带 type,Google 则把 content 换成 parts、结构更扁平</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果通讯录里两个 key 撞了会怎样?</em>」「<em>`model.api` 这个字符串是谁在什么时候写进 Model 对象的?</em>」
+  「<em>第二层那份「标准报告」——12 种统一事件——具体长什么样、为什么偏偏是这个数字?</em>」——最后这个问题,
+  正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>6 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第4章-模型调用-一行代码驾驭多个模型.md">第 4 章 · 模型调用——一行代码驾驭多个模型</a>——
+  原文 §二、§三 还讲了第二层事件协议的 12 种事件、第三层翻译器的 5 步骨架、以及
+  <code>StreamFunction</code> 这份「翻译员入职要求」,值得通读建立全局观。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0012):</strong> 我们把翻译员真正干活的样子摊开——
+  所有翻译器共享的<strong>5 步工作流程</strong>(创建客户端 → 构建请求参数 → 发送请求 → 处理响应流 → 发送终止事件),
+  以及第二层那份「标准报告模板」——12 种统一事件——到底长什么样、为什么必须是「开始 → 逐字增量 → 结束」三段式。
+</p>
+
+<footer>
+  Lesson 0011 · 第 4 章 模型调用 ·
+  下一课:<a href="./0012-translator-five-steps-and-event-protocol.html">0012 翻译器五步骨架与事件协议 →</a> ·
+  上一课:<a href="./0010-steering-vs-followup-and-hooks.html">0010</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。第一层是纯路由器——查表 + 派活两步,不碰任何业务逻辑。延伸一下:正因为它这么「薄」,接入新模型时它几乎不用改,只需往 BUILTIN_APIS 加一条。',
+               '✓ 对。四维度乘几十家 Provider 的差异量太大,塞进 Agent Loop 会让它每接一个模型就改一次。延伸:这正是「复杂度封装在翻译器、外部接口保持简洁」的核心价值。',
+               '✓ 对。字段名(content vs parts)和结构(要不要 type)都不同,这就是「连最简单的消息都有四种写法」。延伸:独立 tool 消息是 OpenAI 的特点,无 type 的 text 是 Bedrock 的特点,别混淆。'];
+  var msgNo = ['回到「三层各管一件事」的分工:翻译私有格式、定义事件、解析 SSE 分别是哪一层干的?第一层的类比是「前台」,前台会翻译外语吗?',
+               '想想本章开头说的「四个维度 × 30 多个 Provider」意味着多大的差异量,如果这些判断都写进 Agent Loop 会发生什么?',
+               '回看四家消息格式对比:Google 那一行用的是 content 还是 parts?Anthropic 的 content 里每项有没有 type 字段?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

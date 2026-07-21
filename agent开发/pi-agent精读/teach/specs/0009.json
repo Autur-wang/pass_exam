@@ -1,0 +1,82 @@
+{
+ "num": "0009",
+ "slug": "kernel-onion-and-streaming-replace",
+ "title": "内核+叠加的洋葱架构与流式原地替换",
+ "narrowTopic": "只讲一件事:最简 Loop 内核(十几行,所有 Agent 的最小公约数)与 coding-agent 在外面叠加的两层外壳(steering/followUp)如何拼成 runLoop 骨架;并聚焦调 LLM 那一步里'先 push 空壳、逐 token 原地替换'的流式设计。",
+ "analogySeed": "洋葱:剥到最里层是十几行的最简 Loop(调模型→执行工具→再调模型),外面一层层裹上 coding-agent 的产品特性;剥掉任何一层,里层仍能独立运转——这是判断'内核有没有被污染'的试金石。而流式原地替换像一幅正在画的画:先在墙上钉一张空画布(空壳),画师一笔一笔往上添(text_delta/toolcall_delta),观众实时看着它长成完整作品(done)。",
+ "keyPoints": [
+  "最简 Loop 只需十几行:while(true){ 调模型→push;若 stopReason!=='toolUse' 就 return;否则逐个执行工具、把结果 push 回去 }——任何 Agent 都需要这个内核。",
+  "coding-agent 作为交互式编程助手,在内核外叠加两层:叠加1 steering(内层循环条件多了 ||pendingMessages.length>0,紧急消息插队);叠加2 外层 followUp 循环(while(true) 包住内层,内层停后可重启)。",
+  "完整 runLoop 骨架 = 首次 steering 检查 + 外层 while(true)[followUp] + 内层 while(hasMoreToolCalls||pending)[内核+steering],步骤 A~F 分别标注内核还是叠加。",
+  "调 LLM(streamAssistantResponse)分四阶段:A 上下文预处理(可选 transformContext)、B convertToLlm 转换(两层消息边界)、C 构建全新 llmContext 并调用、D 流式处理响应。",
+  "流式原地替换:start 时 push 一个空壳消息到 context,之后每个 delta 事件用 context.messages[last]=partialMessage 覆盖最后一条(数量不变、内容在长大),done 时用最终完整消息替换。",
+  "为什么要原地替换而非等完成再 push:让 UI 通过 message_update 事件拿到最新部分消息、逐字渲染,避免用户在模型思考的几秒里盯着空白屏幕。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "§四'最简 Loop(伪代码)'的 simpleLoop 函数块(while(true)、callModel、若 stopReason!=='toolUse' return、for 循环 executeTool 并 push 结果)",
+   "cite": "教程 §四 / 最简 Agent Loop 伪代码"
+  },
+  {
+   "desc": "§4.2 完整 runLoop 骨架伪代码(首次 getSteeringMessages、外层 while(true)、内层 while(hasMoreToolCalls||pendingMessages.length>0)、步骤 A~F 注释、末尾 getFollowUpMessages 与 continue/break)",
+   "cite": "教程 §4.2 / runLoop 内核+两层叠加骨架"
+  },
+  {
+   "desc": "§4.4 阶段D'流式处理响应'的 for await 代码块(case start push 空壳、case *_delta 原地替换 context.messages[last]=partialMessage 并 emit message_update、case done/error 用 finalMessage 替换)及其后 context.messages[last] 演变的数据示意",
+   "cite": "教程 §4.4 / agent-loop.ts:313-357 流式原地替换"
+  }
+ ],
+ "designRationale": [
+  "为什么把 Loop 拆成'内核+叠加':内核是所有 Agent 的通用法则(十几行就能跑),steering/followUp/钩子都是 coding-agent 的产品功能选择;这样做自己的简单 Agent 时可以只搭内核、按场景加叠加,而不是被迫背负全部复杂度。",
+  "为什么每圈重建全新的 llmContext wrapper:虽然 tools 和 systemPrompt 是引用赋值、字节稳定,但 prepareNextTurn 可能换模型/改 systemPrompt、扩展系统可能动态注册工具——重建 wrapper 成本可忽略却能防止共享引用导致的状态污染。",
+  "为什么先 push 空壳再原地替换:目的是 UI 实时展示;若等全部响应完成才 push,用户会在模型思考的几秒里对着空白屏幕,原地替换让消息数量不变、内容逐 token 长大,配合 message_update 做到逐字渲染。",
+  "为什么需要 convertToLlm 这个翻译官:Agent 内部维护的消息含自己的'内部语言'(如 CompactionSummary/BashExecution/BranchSummary),LLM 只认 user/assistant/toolResult 三种标准消息,默认实现就是一个 filter 只保留这三种。"
+ ],
+ "quiz": [
+  {
+   "stem": "关于'内核+叠加'的架构思路,下面哪个说法符合本章观点?",
+   "options": [
+    "steering 和 followUp 是所有 Agent 的通用法则,缺一不可",
+    "洋葱架构意味着各层紧耦合,不能单独抽出内核",
+    "内核越复杂越好,应该把所有产品特性都塞进最里层",
+    "内核(最简 Loop)是所有 Agent 的通用法则,steering/followUp/钩子是 coding-agent 的按需产品选择,剥掉外层内核仍能跑"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。内核是通用法则、叠加是产品选择,剥掉任何一层里层仍能运转是'内核未被污染'的试金石。延伸:做简单'一问一答带工具'的 Agent 时,steering/followUp 那张表全是多余的。",
+   "noMsg": "回看§4.2 与§五第3点洋葱图:哪部分是所有 Agent 都需要的、哪部分是 coding-agent 加的?'剥掉外层内核还能跑吗'是关键判据。"
+  },
+  {
+   "stem": "流式处理响应时,收到 text_delta 事件后代码执行 context.messages[last]=partialMessage。这一步的准确含义是?",
+   "options": [
+    "用新内容覆盖最后一条消息,数组长度不变、最后一条内容在长大",
+    "往 context.messages 数组里 push 一条新消息,数组变长",
+    "删除最后一条消息再插入新的",
+    "把 delta 单独存到另一个数组,最后再合并"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。'原地替换'是覆盖最后一条(context.messages[last]=...),消息数量不变、内容长大。延伸:这样 UI 通过 message_update 拿到最新部分消息就能逐字渲染,不用盯着空白屏幕。",
+   "noMsg": "回看§4.4 阶段D:'原地替换'到底是 push 新条目还是覆盖最后一条?注意 start 时已经先 push 了一个空壳。"
+  },
+  {
+   "stem": "coding-agent 在内核外叠加的'叠加1 steering'具体如何体现在内层循环的条件上?",
+   "options": [
+    "把内层循环改成 while(true) 无条件循环",
+    "在外层再包一个 while 循环",
+    "内层循环条件从 while(hasMoreToolCalls) 变为 while(hasMoreToolCalls || pendingMessages.length>0)",
+    "在内核里增加一个 stopReason==='steering' 分支"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。steering 让紧急消息也能驱动循环,所以内层条件多了 ||pendingMessages.length>0。延伸:注意区分——外层 while(true) 是叠加2 followUp,内层多出的 pending 条件才是叠加1 steering。",
+   "noMsg": "回看§4.2:steering(叠加1)改的是内层循环条件,followUp(叠加2)是外面再包一层。这道题问的是内层条件——别把两层叠加搞混。"
+  }
+ ],
+ "_chapter": "3",
+ "_chapterCN": "Agent Loop —— 让模型转动起来的引擎",
+ "prevFile": "0008-stopreason-the-only-signal.html",
+ "prevNum": "0008",
+ "nextFile": "0010-steering-vs-followup-and-hooks.html",
+ "nextNum": "0010",
+ "crumbLabel": "第 3 章 · Agent Loop",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第3章-Agent-Loop-让模型转动起来的引擎.md",
+ "filename": "0009-kernel-onion-and-streaming-replace.html"
+}

@@ -1,0 +1,88 @@
+{
+ "num": "0025",
+ "slug": "system-prompt-assembly-and-pipeline",
+ "title": "系统提示词组装与全景管道",
+ "narrowTopic": "只讲输入侧的\"加法\"——多层 CLAUDE.md 向上递归 + XML 包装 + Skills 懒加载,并把它嵌进一次调用的全景漏斗,不涉及截断算法细节",
+ "analogySeed": "把系统提示词组装比作\"入职资料袋\":公司总则(全局)、部门手册(祖先目录)、项目须知(当前目录)从外到内叠好装订;再附一张\"技能目录\",让你需要时自己去档案室取全文,而不是把整个档案室搬到你桌上",
+ "keyPoints": [
+  "加法问题:怎么让 LLM 自动知道项目约定(如\"这个子项目用 pnpm 不用 npm\"、\"测试用 vitest\"),又不用用户每轮重复说一遍",
+  "多层 CLAUDE.md 递归:每个目录找 AGENTS.md 或 CLAUDE.md(大小写都试),从 cwd 向上递归到根目录,把沿途所有目录的规范文件全部合并",
+  "合并顺序从外到内:①agentDir/CLAUDE.md 全局(用户级)→②祖先目录(从根到 cwd 上一层,最通用)→③cwd/CLAUDE.md 当前项目(最具体,排在后面可覆盖前面),像分层手册\"先读总则再读细则\"(loadProjectContextFiles,resource-loader.ts:85-123)",
+  "XML 包装:用 <project_instructions path=\"...\"> 包裹——边界明确(</project_instructions> 是清晰结束标记,不与外部指令混淆)+ path 属性让 LLM 区分组织级/项目级优先级(buildSystemPrompt,system-prompt.ts:154-161)",
+  "Skills 懒加载:系统提示词只放轻量清单(name/description/location),LLM 看清单主动调 read 取全文——这是\"拉\"模式,对比全文塞 10 个 skill≈50K token,懒加载清单只需≈500 token(formatSkillsForPrompt,skills.ts:335-361)",
+  "系统提示词骨架末尾才是 Current date 和 cwd——这两个\"基本元数据\"让 LLM 能处理相对时间(\"昨天\")和相对路径",
+  "全景漏斗:一次调用依次经过 [1] 提示词组装(加法)→…→[6] 工具输出截断(减法)→[9] shouldCompact 判定,四层组合成一道漏斗,每层塑形一部分内容"
+ ],
+ "codeRefs": [
+  {
+   "desc": "§四\"系统提示词组装顺序\"的三行框(1. agentDir/CLAUDE.md 全局 → 2. 祖先目录/CLAUDE.md 从 / 到 cwd 上一层 → 3. cwd/CLAUDE.md 当前项目)",
+   "cite": "教程 §四 / resource-loader.ts:85-123"
+  },
+  {
+   "desc": "§四 <project_context> 里两个带 path 属性的 <project_instructions path=\"...\"> XML 包装示例(全组织规范 + 本项目 pnpm/vitest 规范)",
+   "cite": "教程 §四 / system-prompt.ts:154-161"
+  },
+  {
+   "desc": "§四\"全文塞 vs 懒加载\"的 Token 开销对照表(全文塞:10 skill×2000 字≈50K token,大部分无关;懒加载:10 skill×4 行≈500 token,精准命中才展开)",
+   "cite": "教程 §四 / Token 对照表"
+  },
+  {
+   "desc": "§七\"一次工具调用经过的完整上下文工程链路\"的 ASCII 全景图([1] 系统提示词组装 → [6] 工具输出截断 → [9] 检查 shouldCompact,以及分支切换触发 [10] Branch Summarization)",
+   "cite": "教程 §七 / 全景链路"
+  }
+ ],
+ "designRationale": [
+  "为什么向上递归合并而非只读 cwd:现代项目常是 monorepo 嵌套结构,组织级/团队级/项目级规范分散在不同层,向上递归才能凑齐一本完整的\"分层规范手册\"",
+  "为什么祖先在前、项目在后:从外到内=从通用到具体,后出现的项目规范能覆盖前面的通用规范,符合\"细则优先于总则\"的直觉",
+  "为什么用 XML 而非 Markdown 包装:XML 有明确闭合标记,LLM 不会把项目规范和外部指令混淆;path 属性还能传递\"内容来自哪个文件\"的来源优先级——这是主流 LLM 都吃得准的标准 prompt 技巧",
+  "为什么 Skills 用拉模式而非推模式:大部分 skill 当前任务用不上,全文预付 token 浪费巨大;把 LLM 的主动性(调 read)纳入上下文工程,做到\"用时才付、不用不付\"",
+  "为什么 date/cwd 放在提示词末尾:它们是基本元数据,靠近 LLM 实际推理的位置,便于它随手解相对时间与相对路径"
+ ],
+ "quiz": [
+  {
+   "stem": "多层 CLAUDE.md 合并时,哪一份规范排在最后(最具体、可覆盖前面的通用规范)?",
+   "options": [
+    "agentDir 全局规范",
+    "祖先目录规范",
+    "cwd 当前项目规范",
+    "顺序是随机的"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对,从外到内=从通用到具体,cwd 项目规范排在后面,像手册\"先总则后细则\"。延伸:这样 LLM 遇到冲突时会以更具体的项目规范为准。",
+   "noMsg": "回看 §四\"系统提示词组装顺序\"那三行框,想想哪个目录离你正在写的代码最近、最具体。"
+  },
+  {
+   "stem": "Pi 为什么用 XML 标签而不是 Markdown 来包装项目规范?",
+   "options": [
+    "XML 体积更小、更省 token",
+    "边界明确(闭合标记)且 path 属性能传递来源优先级",
+    "Markdown 不支持中文内容",
+    "XML 加载解析速度更快"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对,</project_instructions> 是清晰的闭合标记,LLM 不会把规范与外部指令混淆,path 让它区分组织级/项目级。延伸:主流 LLM 对 XML 结构化理解都很到位,这是标准 prompt 技巧。",
+   "noMsg": "回看 §四\"XML 包装\"小节列出的两条理由,它们都和体积/速度无关。"
+  },
+  {
+   "stem": "Skills 懒加载(\"拉\"模式)相比把全文塞进提示词(\"推\"模式)的关键优势是?",
+   "options": [
+    "用时才付 token,不用不付",
+    "完全不占用任何 token",
+    "不需要用到 read 工具",
+    "能把 skill 内容加密保护"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对,清单≈500 token vs 全文≈50K token,只有精准命中时才 read 展开全文。延伸:这揭示了更深的设计模式——工具调用本身就是按需上下文加载的载体。",
+   "noMsg": "回看 §四 Token 对照表和\"拉模式\"流程图:清单是进 prompt 的,但 skill 全文是 LLM 按需 read 进来的。"
+  }
+ ],
+ "_chapter": "第8章",
+ "_chapterCN": "上下文工程 —— 让有限窗口装下无限对话",
+ "prevFile": "0024-context-engineering-overview.html",
+ "prevNum": "0024",
+ "nextFile": "0026-tool-output-truncation.html",
+ "nextNum": "0026",
+ "crumbLabel": "第 8 章 · 上下文工程",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第8章-上下文工程-让有限窗口装下无限对话.md",
+ "filename": "0025-system-prompt-assembly-and-pipeline.html"
+}

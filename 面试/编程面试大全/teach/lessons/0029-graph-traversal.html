@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0029 · 图的遍历:BFS 求最短、DFS 探连通</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0029 课 · 图 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>图的遍历:BFS 求最短、DFS 探连通</h1>
+
+<p class="lede">有了图的表示(上一课),现在要把图「走一遍」。图论里超过一半的面试题,内核都是两种遍历之一:<strong>BFS(广度优先,逐层扩散)</strong>和 <strong>DFS(深度优先,一条路走到黑)</strong>。这节课攻透它们的机制、复杂度,以及从树遍历跨到图遍历时那个绝不能忘的动作——<strong>记 visited</strong>。</p>
+
+<div class="recall">
+<p>先回忆<a href="0018-trees-and-traversal.html">树的 BFS 与 DFS(第 0018 课)</a>:BFS 靠一个队列逐层展开,DFS 靠递归(或栈)一路探到叶子再回退。图的遍历用的是<strong>同一套机制</strong>——但树是「没有环」的特例。先想一个问题:树遍历为什么从来不用记「这个节点访问过没有」?而图为什么非记不可?</p>
+</div>
+
+<h2>一、和树遍历只差一件事:图有环</h2>
+
+<p>树里从根出发,每个节点只有一个父亲,你永远不会绕回来,所以「走过的就不会再走」是自动成立的。<strong>图不一样——图可以有环</strong>。A→B→C→A 这样一圈,如果你不记录「A 已经访问过」,遍历就会 A→B→C→A→B→C… 无限循环下去。</p>
+
+<p>所以图遍历的模板比树遍历只多一样东西:一个 <code>visited</code> 集合(或布尔数组)。每到一个顶点,先问「来过没有?来过就跳过」,再标记为已访问。这一个改动,把树遍历升级成了图遍历。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node"><span class="n-title">取出一个顶点</span><span class="n-sub">队列头 / 栈顶</span></div>
+  <div class="arrow">→</div>
+  <div class="node bad"><span class="n-title">visited 里有?</span><span class="n-sub">有 → 直接跳过</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">标记 + 处理</span><span class="n-sub">加入 visited</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">邻居入容器</span><span class="n-sub">队列 / 栈</span></div>
+</div>
+<figcaption>图遍历通用模板。相比树遍历,红色这一步「查 visited」是新增的、也是防死循环的命门。</figcaption>
+</figure>
+
+<h2>二、BFS:一圈一圈往外扩</h2>
+
+<p>BFS 用<strong>队列</strong>(FIFO):从起点出发,先访问所有「距离 1」的邻居,再访问「距离 2」的,像水波纹一圈圈扩出去。正因为它严格<strong>按距离由近到远</strong>展开,在<strong>无权图</strong>上,第一次到达某个顶点时走过的边数,就是从起点到它的<strong>最短路径长度</strong>。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 320 210" width="320" role="img" aria-label="从顶点A做BFS,按层染色:A为第0层,B、C为第1层,D、E为第2层">
+  <line class="dgm-edge" x1="50" y1="105" x2="140" y2="55" stroke-width="2"/>
+  <line class="dgm-edge" x1="50" y1="105" x2="140" y2="155" stroke-width="2"/>
+  <line class="dgm-edge" x1="140" y1="55" x2="240" y2="55" stroke-width="2"/>
+  <line class="dgm-edge" x1="140" y1="155" x2="240" y2="155" stroke-width="2"/>
+  <line class="dgm-edge" x1="140" y1="55" x2="140" y2="155" stroke-width="2"/>
+  <circle class="dgm-accent-node" cx="50" cy="105" r="20" stroke-width="2"/>
+  <circle class="dgm-link-node" cx="140" cy="55" r="20" stroke-width="2"/>
+  <circle class="dgm-link-node" cx="140" cy="155" r="20" stroke-width="2"/>
+  <circle class="dgm-good-node" cx="240" cy="55" r="20" stroke-width="2"/>
+  <circle class="dgm-good-node" cx="240" cy="155" r="20" stroke-width="2"/>
+  <text class="dgm-text" x="50" y="111" text-anchor="middle" font-size="17">A</text>
+  <text class="dgm-text" x="140" y="61" text-anchor="middle" font-size="17">B</text>
+  <text class="dgm-text" x="140" y="161" text-anchor="middle" font-size="17">C</text>
+  <text class="dgm-text" x="240" y="61" text-anchor="middle" font-size="17">D</text>
+  <text class="dgm-text" x="240" y="161" text-anchor="middle" font-size="17">E</text>
+  <text class="dgm-muted" x="50" y="150" text-anchor="middle" font-size="11">第0层</text>
+  <text class="dgm-muted" x="140" y="200" text-anchor="middle" font-size="11">第1层</text>
+  <text class="dgm-muted" x="240" y="200" text-anchor="middle" font-size="11">第2层</text>
+</svg>
+</div>
+<figcaption>从 A 做 BFS:队列依次弹出 A → B → C → D → E。距离 = 层号:d(A)=0,d(B)=d(C)=1,d(D)=d(E)=2。注意 B、C 之间也有边,但 C 在被 B 加入前已在队列中,visited 会拦住重复访问。</figcaption>
+</figure>
+
+<h2>三、DFS:一条路走到底再回头</h2>
+
+<p>DFS 用<strong>栈</strong>(或递归调用栈):从起点冲进一个邻居,再冲进它的邻居,一路探到没有新顶点可走,才回退换另一条路。它不保证按距离展开,所以<strong>不能</strong>用来求无权最短路——但它天然适合「探到底」类问题:一张图里有几个连通块?两点之间存不存在一条路径?能不能检测出环?</p>
+
+<div class="trio">
+  <div class="cell">
+    <div class="role">容器</div>
+    <div class="head">BFS 用队列</div>
+    <div class="sub">DFS 用栈 / 递归</div>
+  </div>
+  <div class="cell">
+    <div class="role">扩展方式</div>
+    <div class="head">逐层 / 探底</div>
+    <div class="sub">近到远 / 一路到黑</div>
+  </div>
+  <div class="cell">
+    <div class="role">拿手好戏</div>
+    <div class="head">无权最短路</div>
+    <div class="sub">连通分量 / 环检测</div>
+  </div>
+</div>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>BFS(广度优先搜索,Breadth-First Search)</dt>
+<dd>用队列逐层扩展的图遍历;在无权图上,首次到达一个顶点的层数即为最短路径长度。<em>避免</em>「BFS 和 DFS 只是顺序不同、效果一样」——只有 BFS 保证无权最短路。</dd>
+<dt>DFS(深度优先搜索,Depth-First Search)</dt>
+<dd>用栈/递归一路探到底再回退的图遍历;适合连通分量、路径存在性、环检测。不保证最短路。</dd>
+<dt>visited(已访问标记)</dt>
+<dd>图遍历中记录哪些顶点已处理过的集合。<strong>图有环,必须记 visited 才不会无限循环</strong>;树无环,可省。</dd>
+</dl>
+
+<h2>五、复杂度:两者相同</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">遍历(邻接表)</th><th>时间</th><th>额外空间</th></tr></thead>
+<tbody>
+<tr><td class="op">BFS(队列)</td><td class="best">O(V+E)</td><td>O(V) <small>(队列 + visited)</small></td></tr>
+<tr><td class="op">DFS(栈 / 递归)</td><td class="best">O(V+E)</td><td>O(V) <small>(栈深最坏 V)</small></td></tr>
+</tbody>
+</table>
+<p><strong>时间同为 O(V+E)</strong>:每个顶点入队/入栈一次(V),每条边在遍历邻居时被看一次(无向图 2E,仍是 O(E))。若图用<strong>邻接矩阵</strong>存,遍历每个点的邻居要扫一整行,退化成 <strong>O(V²)</strong>——这又是上一课「表 vs 矩阵」取舍的回声。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>见到图题,先问自己一句「无权最短?还是探连通/路径?」,答案直接决定用哪个:</p>
+<ul>
+<li><strong>无权图最短路 / 最少步数</strong>(迷宫最少几步、单词接龙、二叉树层序)→ <strong>BFS</strong>。看到「最少」「最短」「几步」且边无权,几乎就是它。</li>
+<li><strong>连通分量 / 岛屿数量</strong>(数一数有几片相连的陆地)→ <strong>DFS 或 BFS 都行</strong>,或用<a href="0046-union-find.html">并查集(第 0046 课)</a>。做法:对每个还没 visited 的顶点发起一次遍历,发起了几次就有几个连通块。</li>
+<li><strong>路径是否存在 / 全排列式搜索</strong>→ <strong>DFS</strong>(常配回溯)。</li>
+<li><strong>网格题</strong>:把格子当顶点、上下左右当边,直接在二维数组上跑 BFS/DFS,<code>visited</code> 可以复用原数组(把访问过的格子改成特殊值)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>忘记 visited = 死循环。</strong>这是图遍历第一大坑。树遍历代码直接搬到图上、没加 visited,一旦图里有环(而图很容易有环)就会栈溢出或队列爆炸。记住这条因果:<em>树无环所以不用记,图有环所以必须记。</em></p>
+<p><strong>「DFS 也能求最短路」——错。</strong>DFS 找到的是<em>某一条</em>路径,不是最短的那条。无权最短路必须用 BFS(靠逐层扩展的性质保证)。反过来,带权图连 BFS 都不够,得用下下课的 Dijkstra——BFS 只是「所有边权都为 1」的特例。</p>
+<p>还有个细节:visited 要在<strong>入队时</strong>标记,而不是出队时。否则同一个顶点可能被多个邻居重复塞进队列,虽然结果仍对,但会浪费空间、在某些实现里还会错算距离。</p>
+</div>
+
+<div class="implement">
+<p>照仓库大纲把这些遍历都手写一遍(大纲明确要求实现邻接表/邻接矩阵、递归/迭代的多种版本):</p>
+<p><code>bfs(start)</code>(队列 + visited,同时记录每个点的距离 <code>dist[]</code>)· <code>dfs_recursive(u)</code>(递归 + visited)· <code>dfs_iterative(start)</code>(显式栈)· <code>count_components()</code>(对每个未访问点发起一次 DFS,计数)。</p>
+<p>动手核对:造一张带环的图(比如 A-B-C-A),故意先<strong>不</strong>加 visited 跑一遍,亲眼看它死循环;再加上 visited,确认恢复正常。这个对比会让你永远记住这个坑。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>无权图求最短路用 BFS(队列,逐层),探连通/路径存在用 DFS(栈/递归);两者都必须记 <code>visited</code>,因为图有环——这是它和树遍历唯一的本质差别。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:在一个 <code>m×n</code> 的 0/1 网格里,1 表示陆地、0 表示水,上下左右相连的 1 算同一座岛。求岛屿数量。该用什么思路?</summary>
+<div class="answer">
+<p><strong>遍历 + 连通分量计数。</strong>把每个陆地格子当顶点,四个方向的相邻陆地当边。扫描整个网格,遇到一个还没访问过的 <code>1</code>,就从它发起一次 DFS(或 BFS),把这一整座岛全部标记为已访问;<strong>发起了几次遍历,就有几座岛</strong>。BFS、DFS 都可以;visited 可以直接把访问过的 <code>1</code> 改成 <code>0</code> 来省空间。这就是「隐式图 + 连通分量」的经典套路。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:一张<strong>无权</strong>图,你要求从 s 到 t 的最短步数。有人用 DFS 找到了一条 s 到 t 的路径就返回长度。这样对吗?</summary>
+<div class="answer">
+<p><strong>不对。</strong>DFS 找到的是它恰好先探到的<em>某一条</em>路径,完全可能绕远,不保证最短。无权最短路必须用 <strong>BFS</strong>:它逐层扩展,<em>第一次</em>到达 t 时的层数就是最短步数,这由「按距离由近到远访问」的性质保证。这是 BFS 和 DFS 一个不可互换的关键区别。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:BFS 遍历一张用邻接表存的图,V 个顶点、E 条边,时间复杂度是?如果这张图改用邻接矩阵存呢?</summary>
+<div class="answer">
+<p>邻接表:<strong>O(V+E)</strong>——每个顶点入队一次、每条边被检查一次。邻接矩阵:<strong>O(V²)</strong>——遍历每个顶点的邻居时要扫矩阵的一整行(V 个格子,无论那里是否真有边)。所以稀疏图上邻接表快得多,这正是上一课选表不选矩阵的又一理由。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题在仓库大纲的「图 → BFS/DFS」小节(笔记要求掌握两者的复杂度、设计权衡与代码实现)。一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=s-CYnVz-uh4&list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb&index=13">MIT 6.006 · 广度优先搜索(视频)</a></li>
+<li><a href="https://www.youtube.com/watch?v=AfSk24UTFS8&list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb&index=14">MIT 6.006 · 深度优先搜索(视频)</a></li>
+<li><a href="https://www.youtube.com/watch?v=ufj5_bppBsA&list=PLFDnELG9dpVxQCxuD-9BSy2E7BWY3t5Sm&index=7">Aduni 图算法 II · DFS、BFS、Kruskal、并查集(视频)</a></li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师带你在纸上对同一张图分别跑一遍 BFS 和 DFS,把队列/栈的每一步状态和 visited 的变化都写出来。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0028-graph-representation.html"><span class="dir">← 上一课</span>图的表示:邻接表 vs 邻接矩阵</a>
+  <a class="next" href="0030-topological-sort.html"><span class="dir">下一课 →</span>拓扑排序与环检测</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

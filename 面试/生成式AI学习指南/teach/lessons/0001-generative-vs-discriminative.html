@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0001 · 生成式 vs 判别式:GAN、VAE 与生成模型全景</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第一部分 基础与 Transformer · 第 0001 课</p>
+<h1>生成式 vs 判别式:GAN、VAE 与生成模型全景</h1>
+<p class="lede">整门课从这里开局。这节课把生成模型的地基一次性打牢,逐字对应题库里的四道真题:<strong>「生成式与判别式模型的区别?」「描述 GAN 架构与生成器/判别器如何交互训练」「VAE 的概念,它如何把隐变量纳入架构」「什么是 GAN 的模式坍塌,如何缓解」</strong>(源:60 题·生成模型 第 1、2、3、5 题)。目标是让你答得出一句话本质,也扛得住面试官对每个「为什么」的追问。</p>
+
+<div class="recall">
+<p>这是第一课,没有上文可回忆——那就先自己想一分钟:你手机相册里的「人脸生成」App、Stable Diffusion 画图、ChatGPT 续写,它们和「垃圾邮件分类器」「猫狗识别器」到底差在哪?<strong>先别往下看:如果要「造出一张从没存在过的人脸」,模型必须掌握什么,而分类器可以不管?</strong></p>
+</div>
+
+<h2>一、直觉:一个学「画出来」,一个学「分开来」</h2>
+<p>把两类模型想象成两种学生。<strong>判别式模型</strong>是只会做选择题的学生:给它一张图,它回答「是猫还是狗」,它只关心猫和狗之间那条<strong>分界线</strong>画在哪。<strong>生成式模型</strong>是会画画的学生:它得先真正理解「猫长什么样」——毛色、耳朵、姿态的整体规律,理解到能<strong>凭空画出一只新猫</strong>。</p>
+<p>差别的根子在于它们建模的对象不同。判别式只学「给定输入,标签是什么」;生成式要学「数据本身长什么样」,所以它能采样出全新样本,而判别式不能。</p>
+
+<dl class="keydef">
+<dt>一句话本质(面试直接背这句)</dt>
+<dd>生成式模型建模数据分布 $P(x)$ 或联合分布 $P(x,y)$,能<strong>生成新样本</strong>;判别式模型只建模条件分布 $P(y\mid x)$,即在类别之间学一条<strong>决策边界</strong>。</dd>
+<dd><em>典型生成式:VAE、GAN、扩散模型(以及朴素贝叶斯这类经典方法);典型判别式:逻辑回归、SVM、大多数分类/回归网络。</em></dd>
+</dl>
+
+<div class="trio">
+  <div class="cell"><strong>判别式</strong><br>学 $P(y\mid x)$<br><em>只关心分界线,不会造样本</em></div>
+  <div class="cell"><strong>生成式(显式)</strong><br>VAE / 扩散<br><em>建模分布、可采样、可估计不确定性</em></div>
+  <div class="cell"><strong>生成式(隐式)</strong><br>GAN<br><em>不写出分布式子,靠对抗直接产样本</em></div>
+</div>
+<p>为什么这个区分重要?因为它决定了模型「能做什么」:判别式在分类准确率上往往更省数据、更直接;生成式则解锁了创作、数据增强、异常检测、无监督表示学习——今天大模型时代的「生成」二字,正是这一支的胜利。</p>
+
+<h2>二、GAN:两个网络的对抗博弈</h2>
+<p>GAN(Generative Adversarial Network)的精妙之处,是把「学会画画」变成一场<strong>造假者 vs 鉴定师</strong>的持续对抗:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">随机噪声 $z$</div>
+  <div class="arrow">→</div>
+  <div class="node">生成器 $G$<br>(造假者)</div>
+  <div class="arrow">→</div>
+  <div class="node">假样本 $G(z)$</div>
+  <div class="arrow">→</div>
+  <div class="node">判别器 $D$<br>(鉴定师)</div>
+  <div class="arrow">→</div>
+  <div class="node good">真 / 假 打分</div>
+</div>
+<figcaption>真实样本也会喂给 $D$;$D$ 学着分辨真假,$G$ 学着让假的骗过 $D$,梯度反向推动两者一起变强。</figcaption>
+</figure>
+
+<ul>
+<li><strong>生成器 $G$</strong>:输入一段随机噪声 $z$,输出一张假样本,目标是<strong>骗过</strong>判别器,让它把假的判成真的。</li>
+<li><strong>判别器 $D$</strong>:输入一张样本(可能真可能假),输出「它是真的」的概率,目标是<strong>越来越会辨</strong>真假。</li>
+</ul>
+<p>两者交替训练:$D$ 变强 → $G$ 被迫造得更逼真 → $G$ 变强又逼 $D$ 更精。这是一场零和博弈,写成 minimax 目标:</p>
+$$\min_{G}\max_{D}\;\mathbb{E}_{x\sim p_{\text{data}}}[\log D(x)]+\mathbb{E}_{z\sim p_z}[\log(1-D(G(z)))]$$
+<p class="formula-note">$D$ 想最大化它(把真样本判高、把假样本判低);$G$ 想最小化它(让 $D(G(z))$ 变大)。</p>
+<p>理想情况下,博弈收敛到<strong>纳什均衡</strong>:$G$ 生成的分布逼近真实数据分布,$D$ 再也分不清真假、只能随机猜(输出约 $0.5$)。此时造假者已「以假乱真」。注意「理想情况下」几个字——现实中 GAN 训练出了名地不稳,这就引出下一节的核心毛病。</p>
+
+<h2>三、VAE:把隐变量做成一个概率分布</h2>
+<p>VAE(Variational Autoencoder)走的是另一条路。普通自编码器把输入压成一个<strong>确定的点</strong>再重建;VAE 的关键改动是——编码器不输出一个点,而输出隐空间里的<strong>一个概率分布</strong>(具体说,输出这个分布的均值 $\mu$ 和方差 $\sigma^2$),再从中<strong>采样</strong>一个隐变量 $z$,交给解码器重建。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">输入 $x$</div>
+  <div class="arrow">→</div>
+  <div class="node">编码器<br>输出 $\mu,\sigma$</div>
+  <div class="arrow">→</div>
+  <div class="node">采样 $z\sim\mathcal{N}(\mu,\sigma^2)$</div>
+  <div class="arrow">→</div>
+  <div class="node">解码器</div>
+  <div class="arrow">→</div>
+  <div class="node good">重建 $\hat{x}$</div>
+</div>
+<figcaption>隐变量 $z$ 不再是一个死点,而是从一个学出来的分布里采出来的。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>VAE 的损失 = 重建误差 + KL 正则</dt>
+<dd>$$\mathcal{L}=\underbrace{\mathbb{E}_{q(z\mid x)}\big[-\log p(x\mid z)\big]}_{\text{重建误差:重建得像不像}}+\underbrace{\operatorname{KL}\!\big(q(z\mid x)\,\|\,\mathcal{N}(0,I)\big)}_{\text{KL:逼隐分布靠近标准正态先验}}$$</dd>
+<dd><em>这就是 ELBO(证据下界)的两项。重建项拉着模型「还原得像」;KL 项把每个样本的隐分布往标准正态 $\mathcal{N}(0,I)$ 上压,使整个隐空间连续、规整、没有空洞。</em></dd>
+</dl>
+
+<p>为什么非要让隐变量是「分布」而不是「点」?因为概率性直接换来三样能力:</p>
+<ul>
+<li><strong>可采样</strong>:从先验 $\mathcal{N}(0,I)$ 里随便抽一个 $z$,解码就能得到一个全新样本——这正是它作为生成模型的资格。</li>
+<li><strong>可插值</strong>:隐空间连续,两个样本的 $z$ 之间平滑过渡,解码出的样本也平滑渐变(比如人脸从微笑慢慢到严肃)。</li>
+<li><strong>可估计不确定性</strong>:输出的方差 $\sigma$ 本身就是模型对「这个隐维度有多确定」的度量。</li>
+</ul>
+<p class="formula-note">工程细节「重参数化技巧」——把采样写成 $z=\mu+\sigma\odot\epsilon,\;\epsilon\sim\mathcal{N}(0,I)$——让梯度能穿过随机采样反传;面试提一句名字即可,不必展开。</p>
+
+<h2>四、模式坍塌:GAN 最著名的病</h2>
+<p><strong>模式坍塌(mode collapse)</strong>指的是:生成器发现「只要死死盯着某几种最容易骗过判别器的样本」就能过关,于是<strong>放弃多样性</strong>,反复产出少数几种雷同的输出。让它生成手写数字,它可能只会写「1」和「7」,其它八个数字集体消失——真实分布有很多「模式」,它只占住了其中几个。</p>
+<p>根子在对抗博弈的偏心:$G$ 只被要求「骗过 $D$」,并没有被直接要求「覆盖全部真实分布」。缓解手段是面试高频落点:</p>
+<div class="trio">
+  <div class="cell"><strong>让 D 看批次</strong><br>mini-batch discrimination<br><em>判别器同时看一批样本,一眼识破「批内全一样」</em></div>
+  <div class="cell"><strong>换损失/加约束</strong><br>WGAN-GP、谱归一化<br><em>梯度惩罚强制 Lipschitz,让训练更稳</em></div>
+  <div class="cell"><strong>改数据/架构</strong><br>更多样训练数据<br>DCGAN / PGGAN<br><em>从源头和结构上给足多样性</em></div>
+</div>
+<p>一句话记住这条链:模式坍塌 = 只求骗过、不求覆盖 → 对策核心是「让判别器更难被单一模式糊弄」或「让训练目标更稳、梯度更健康」。</p>
+
+<h2>五、全景一瞥:扩散模型在哪</h2>
+<p>今天图像生成的主流其实是<strong>扩散模型(diffusion)</strong>:它不玩对抗,而是学会<strong>逐步去噪</strong>——训练时把真图一点点加噪直到变成纯噪声,生成时反过来从噪声一步步去噪,还原出清晰样本。相比 GAN,它训练更稳、样本更多样,代价是采样步数多、较慢。</p>
+<p class="formula-note">本课到此为止:题库(60 题·生成模型)聚焦 GAN 与 VAE,扩散的数学细节不在源材料里,这里只做全景定位,后续课程再展开。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「生成式和判别式的本质区别?」——一个建模 $P(x)$/$P(x,y)$ 能采样、一个建模 $P(y\mid x)$ 只画边界;别只答「一个生成一个分类」,要点出建模对象。</li>
+<li>「GAN 怎么训练?会遇到什么问题?」——顺势自己抛出「训练不稳 + 模式坍塌」,把第四节的对策讲出来,主动权就在你手里。</li>
+<li>「VAE 和普通 AutoEncoder 差在哪?」——差在编码器输出的是<strong>分布</strong>(均值/方差)且有 KL 正则,所以能采样生成;普通 AE 只能压缩重建,隐空间有空洞、不能可靠采样。</li>
+<li>「VAE vs GAN 各自优劣?」——VAE 训练稳、隐空间规整可插值,但样本偏模糊;GAN 样本更锐利,但训练不稳、易模式坍塌。这是经典对比题。</li>
+<li>「为什么现在图像生成主流是扩散不是 GAN?」——扩散训练更稳、覆盖更全,回避了 GAN 的对抗不稳定与模式坍塌(点到为止即可)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别把判别式说成「不能处理概率」——它照样输出概率,只是 $P(y\mid x)$ 这种<strong>条件</strong>概率,不建模 $x$ 本身的分布,所以不能采样造样本。</li>
+<li>别说「GAN 一定收敛到纳什均衡」:那是<strong>理想情况</strong>,现实中训练常震荡、不收敛或模式坍塌。绝对化说法是扣分点。</li>
+<li>VAE 编码器输出的是<strong>分布的参数($\mu,\sigma$)</strong>,不是一个隐向量点——这一点答错,后面「为什么能采样/插值」就全塌了。</li>
+<li>模式坍塌是<strong>丢多样性</strong>(只产少数几种),不是「生成质量差」或「过拟合」——别混为一谈。</li>
+<li>别断言「某种缓解手段一定能根治模式坍塌」;这些是缓解(mitigate)而非保证消除的方法,面试如实说「缓解」更稳。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>下面哪句最准确地区分了生成式与判别式模型?</p>
+<details><summary>A. 生成式一定比判别式准确率更高</summary>不对。分类任务里判别式常更省数据、更直接;两者各有所长,无绝对高下。</details>
+<details><summary>B. 生成式建模 $P(x)$ 或 $P(x,y)$ 因而能采样新样本,判别式建模 $P(y\mid x)$ 只学决策边界 ✅</summary>正确。建模对象不同,是两者最本质的分界。</details>
+<details><summary>C. 判别式不能输出概率,生成式才能</summary>错。判别式照样输出条件概率 $P(y\mid x)$,区别在它不建模 $x$ 的分布、不能采样。</details>
+<details><summary>D. 只有生成式模型用神经网络实现</summary>无关。两类都可以用神经网络,也都有非神经网络的经典方法。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 GAN 的模式坍塌(mode collapse),下列哪句最准确?</p>
+<details><summary>A. 判别器把所有样本都判成假,导致训练停止</summary>那是另一种失败模式,不是模式坍塌的定义。</details>
+<details><summary>B. 生成器只产出少数几种雷同样本、丢失多样性,可用 mini-batch discrimination、WGAN-GP 等缓解 ✅</summary>正确。根因是 $G$ 只求骗过 $D$、不被要求覆盖全部真实分布。</details>
+<details><summary>C. 模型在训练集上过拟合,测试集表现差</summary>模式坍塌讲的是生成多样性的丧失,不是经典意义的过拟合。</details>
+<details><summary>D. 只要加大学习率就一定能彻底消除模式坍塌</summary>错。这些方法只能缓解,且「一定/彻底」是绝对化陷阱。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Generative Adversarial Nets</strong>(Goodfellow et al., 2014)——GAN 与本课 minimax 目标的原始论文。</li>
+<li><strong>Auto-Encoding Variational Bayes</strong>(Kingma &amp; Welling, 2013)——VAE、ELBO 与重参数化技巧的出处。</li>
+<li><strong>Wasserstein GAN / WGAN-GP</strong>(Arjovsky et al., 2017;Gulrajani et al., 2017)——用梯度惩罚稳住训练、缓解模式坍塌。</li>
+<li><strong>Denoising Diffusion Probabilistic Models</strong>(Ho et al., 2020)——想补齐第五节「扩散」全景,从这篇入门。</li>
+<li>下一步:进入 Transformer 主线,先搞懂撑起整个大模型的自注意力(第 0002 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>生成式学 $P(x)$ 能造样本、判别式学 $P(y\mid x)$ 只画边界;GAN = 造假者 vs 鉴定师对抗,VAE = 编码成分布再采样重建(重建 + KL);模式坍塌 = 只求骗过、丢了多样性。</strong></p>
+<nav class="lesson-nav">
+<span class="none"></span>
+<a class="next" href="0002-self-attention-and-multi-head.html">下一课:自注意力与多头 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

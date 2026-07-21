@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>结构型模式 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第五部分 · 设计模式 · 第 0017 节</p>
+<h1>结构型模式:适配器、装饰器、代理</h1>
+<p class="lede">创建型管"对象怎么造出来",结构型管"对象怎么拼成更大的结构"。这一节吃透三个高频:Adapter(转接口)、Decorator(加职责)、Proxy(控访问)——顺带拆穿那个最爱考的坑:Python 的 <code>@decorator</code> 和 GoF 的装饰器模式,根本不是一回事。</p>
+
+<div class="recall">
+<p>先想一个真实场景:你手上有个第三方旧类,方法叫 <code>print_document(text)</code>,你不能改它的源码;可你整套系统的其他打印器都统一用 <code>render(content)</code>。你会怎么让这个旧类"混进"你的系统,而不去动它一行代码?先给个思路,再往下看。</p>
+</div>
+
+<h2>一、直觉:结构型模式在解决什么</h2>
+
+<p>GoF 把二十三个模式分成三类。<strong>创建型</strong>关心"对象如何被创建"(工厂、单例…);<strong>结构型</strong>关心"如何把类和对象组合成更大的结构,同时保持结构灵活、可扩展";<strong>行为型</strong>关心"对象之间如何分工与通信"。</p>
+
+<p>结构型的共同套路是<strong>"包装 + 委托"</strong>:一个外层对象持有(或指向)一个内层对象,对外提供某种接口,把真正的活儿转交给内层去做。三个高频模式,区别只在于<strong>包装的目的</strong>不同:</p>
+
+<div class="trio">
+  <div class="cell"><div class="role">目的:改接口</div><div class="head">Adapter</div><div class="sub">把 A 接口转成 B 接口</div></div>
+  <div class="cell"><div class="role">目的:加职责</div><div class="head">Decorator</div><div class="sub">接口不变,叠加行为</div></div>
+  <div class="cell"><div class="role">目的:控访问</div><div class="head">Proxy</div><div class="sub">替身/占位符</div></div>
+</div>
+
+<p>三个都"包着一个对象",但意图天差地别——这也正是面试官最爱借它们互相比较来考你的地方。先各个击破。</p>
+
+<div class="keydef">
+<dl>
+<dt>结构型模式 (Structural Patterns)</dt>
+<dd>关注<strong>类与对象如何组合成更大的结构</strong>,让结构在可扩展的同时保持灵活。核心手法是"包装一个对象,再把调用委托给它"。</dd>
+<dt>① 适配器 Adapter</dt>
+<dd>把一个类的接口<strong>转换成</strong>客户端期望的另一个接口,让原本不兼容的类能协作。关键词:<strong>转接</strong>(接口 A → 接口 B)。</dd>
+<dt>② 装饰器 Decorator</dt>
+<dd>在<strong>不改原类、不靠继承爆炸</strong>的前提下,运行时动态给对象<strong>叠加职责</strong>(层层包裹)。关键词:<strong>增强</strong>(接口不变,行为变多)。</dd>
+<dt>③ 代理 Proxy</dt>
+<dd>给对象提供一个<strong>替身/占位符</strong>,以<strong>控制对它的访问</strong>。常见变体:虚代理(延迟创建昂贵对象)、保护代理(权限控制)、远程代理(代表远端对象)。关键词:<strong>把关</strong>(接口不变,访问受控)。</dd>
+</dl>
+</div>
+
+<h2>二、适配器 Adapter:让不兼容的接口握手</h2>
+
+<p>回到开场那个旧打印器。适配器的思路是:<strong>另写一个类,对外实现你系统要的新接口,对内持有那个旧对象,把新方法的调用"转接"到旧方法上。</strong>旧类一行不动,系统也不必知道底下是个老古董。</p>
+
+<pre><code># —— 适配器 Adapter:把旧接口"转接"成客户端期望的新接口 ——
+
+# 旧类:接口是 print_document(text),我们不能改它(第三方 / 遗留代码)
+class LegacyPrinter:
+    def print_document(self, text):
+        print(f"[Legacy] {text}")
+
+# 客户端只认这个新接口:render(content)
+class ModernPrinter:
+    def render(self, content):
+        raise NotImplementedError
+
+# 适配器:实现新接口,内部持有旧对象,把 render 转接到 print_document
+class PrinterAdapter(ModernPrinter):
+    def __init__(self, legacy):
+        self._legacy = legacy                    # 包裹被适配对象(Adaptee)
+
+    def render(self, content):
+        self._legacy.print_document(content)     # 转接:新接口 → 旧方法
+
+# 客户端只跟 render 打交道,完全不知道底下是旧类
+def client(printer):
+    printer.render("Hello, patterns!")
+
+client(PrinterAdapter(LegacyPrinter()))          # [Legacy] Hello, patterns!
+</code></pre>
+
+<p>这里演示的是<strong>对象适配器</strong>(用组合:持有被适配对象)。还有一种<strong>类适配器</strong>用多继承来实现——Python 支持多继承,可以写,但对象适配器更常用、更松耦合,面试首选讲组合版。适配器的一句话本质:<strong>"包装 + 转接",改的是接口的形状,不改功能。</strong></p>
+
+<h2>三、装饰器 Decorator:层层包裹地加料</h2>
+
+<p>经典例子:一杯咖啡,可以加奶、加糖、加双份浓缩……每种加料都改变描述和价格。如果用继承来穷举组合(<code>CoffeeWithMilk</code>、<code>CoffeeWithMilkAndSugar</code>…),类会<strong>组合爆炸</strong>。装饰器的解法:<strong>每个加料是一个"装饰器",它实现和咖啡相同的接口,同时包裹一杯"里面的饮料",在其基础上叠加自己的价格和描述。</strong>包裹可以层层嵌套,运行时随意组合。</p>
+
+<pre><code># —— GoF 装饰器 Decorator:运行时层层包裹,叠加职责,保持同一接口 ——
+from abc import ABC, abstractmethod
+
+class Beverage(ABC):                    # 共同接口(Component)
+    @abstractmethod
+    def cost(self): ...
+    @abstractmethod
+    def description(self): ...
+
+class Coffee(Beverage):                 # 被装饰的核心对象(ConcreteComponent)
+    def cost(self):
+        return 10.0
+    def description(self):
+        return "Coffee"
+
+class CondimentDecorator(Beverage):     # 装饰器基类:持有一个 Beverage
+    def __init__(self, beverage):
+        self._beverage = beverage       # 关键:包裹一个"同接口"的对象
+
+class Milk(CondimentDecorator):
+    def cost(self):
+        return self._beverage.cost() + 2.0             # 在被包裹对象基础上叠加
+    def description(self):
+        return self._beverage.description() + " + Milk"
+
+class Sugar(CondimentDecorator):
+    def cost(self):
+        return self._beverage.cost() + 1.0
+    def description(self):
+        return self._beverage.description() + " + Sugar"
+
+drink = Sugar(Milk(Coffee()))           # 层层包裹:Coffee 外套 Milk,再套 Sugar
+print(drink.description())              # Coffee + Milk + Sugar
+print(drink.cost())                     # 13.0
+</code></pre>
+
+<p>注意 <code>Sugar</code>、<code>Milk</code>、<code>Coffee</code> 对外<strong>接口完全一样</strong>(都有 <code>cost()</code>/<code>description()</code>),所以谁包谁都行,客户端拿到 <code>drink</code> 也不用关心它裹了几层。这就是装饰器的威力:<strong>接口不变,职责可叠加,组合在运行时决定。</strong></p>
+
+<h3>对比:Python 的 <code>@decorator</code> 语法糖</h3>
+
+<p>下面这个才是 Python 语言级的 <code>@decorator</code>——它是一颗<strong>语法糖</strong>,在函数/类<strong>定义时</strong>就地把它替换成"被包装过的版本":</p>
+
+<pre><code># —— Python 的 @decorator:语法糖,定义时应用,装饰的是"函数/类"本身 ——
+import functools
+
+def timing(func):
+    @functools.wraps(func)                 # 保留原函数的 __name__ 等元信息
+    def wrapper(*args, **kwargs):
+        print(f"calling {func.__name__}")
+        return func(*args, **kwargs)
+    return wrapper
+
+@timing                    # 等价于:add = timing(add) —— 在 def 完成的那一刻立即应用
+def add(a, b):
+    return a + b
+
+add(1, 2)                  # 打印 "calling add",然后返回 3
+</code></pre>
+
+<p>两段代码<strong>理念相通</strong>(都是"包裹一层来增强"),但<strong>不是同一个东西</strong>——这正是下面易错点要讲清的分界。</p>
+
+<h2>四、代理 Proxy:给对象派个替身把关</h2>
+
+<p>代理和装饰器长得很像(都实现相同接口、都持有目标对象),但它的意图是<strong>控制访问</strong>而不是增强功能。最常考的是<strong>虚代理</strong>:一个对象创建起来很贵(比如从磁盘加载大图),就先给个便宜的替身占位,<strong>等真正用到时才创建真身</strong>(懒加载)。</p>
+
+<pre><code># —— 代理 Proxy(虚代理):延迟创建昂贵对象,接口与真身一致 ——
+class HeavyImage:
+    def __init__(self, filename):
+        self._filename = filename
+        self._load()                          # 一构造就加载,很贵
+    def _load(self):
+        print(f"loading {self._filename} from disk...")
+    def display(self):
+        print(f"showing {self._filename}")
+
+class ImageProxy:
+    def __init__(self, filename):
+        self._filename = filename
+        self._real = None                     # 先不加载,只记住文件名
+    def display(self):
+        if self._real is None:                # 第一次真正用到时,才创建真身
+            self._real = HeavyImage(self._filename)
+        self._real.display()
+
+img = ImageProxy("huge.png")                  # 此刻不加载,几乎零成本
+# ...页面滚动到这张图时才:
+img.display()                                 # 首次调用才 loading... 再 showing
+</code></pre>
+
+<p>把 <code>if self._real is None</code> 换成"检查当前用户有没有权限",就成了<strong>保护代理</strong>;把真身换成"网络另一端的对象、内部帮你收发请求",就成了<strong>远程代理</strong>。变体不同,骨架一样:<strong>替身实现相同接口,在转发调用前后插入"访问控制"。</strong></p>
+
+<div class="interview">
+<p><strong>高频追问链(结构型的坑几乎都藏在"三者互相比较"里):</strong></p>
+<ul>
+<li>"适配器和装饰器都包裹一个对象,区别是什么?" → <strong>适配器改接口</strong>(A 接口转成 B 接口,为了让不兼容的东西能协作);<strong>装饰器不改接口</strong>(进出都是同一个接口),只是<strong>叠加职责</strong>。一个换形状,一个加内容。</li>
+<li>"代理和装饰器接口都一样、都持有目标,怎么区分?" → 看<strong>意图</strong>:代理是<strong>控制访问</strong>(可能延迟创建、拦截、限权,甚至不让你碰真身),通常<strong>自己掌管目标的生命周期</strong>;装饰器是<strong>增强功能</strong>,目标一般由客户端<strong>从外部组装好再传进来</strong>,而且装饰器天生鼓励层层叠加。</li>
+<li>"Python 的 <code>@decorator</code> 就是 GoF 装饰器模式吗?" → 不是同一个层次的东西,见下方易错点——这是本节头号考点。</li>
+<li>"什么时候用虚代理?" → 目标对象创建/加载昂贵、又未必真会用到时(大图、大文件、重连接),用替身做<strong>懒加载</strong>省资源。</li>
+<li>"举个标准库里真实的装饰器模式例子?" → Java 的 <code>java.io</code>:<code>new BufferedReader(new FileReader(f))</code>——<code>BufferedReader</code> 包裹一个 <code>Reader</code>,加了缓冲,接口还是 <code>Reader</code>。这是 GoF 装饰器的教科书级实例。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>头号翻车点:把 Python 的 <code>@decorator</code> 语法直接等同于 GoF 的装饰器模式。</strong>它们<strong>相关但不是一回事</strong>:</p>
+<ul>
+<li><strong>联系:</strong>理念相通——都是"包裹一层来增强/改变原来的东西"。</li>
+<li><strong>区别(要能一口气说清):</strong>Python 的 <code>@</code> 是<strong>语言语法糖</strong>,装饰的是<strong>函数或类</strong>,在<strong>定义时(import 那一刻)</strong>就应用,本质是 <code>f = deco(f)</code>;GoF Decorator 是一种<strong>对象结构设计模式</strong>,包裹的是<strong>运行时的对象实例</strong>,在<strong>运行时</strong>动态组装、还能层层叠加,靠"实现同接口 + 持有被包裹对象"来搭。一个是语法层的便利写法,一个是对象层的结构安排。</li>
+</ul>
+<p><strong>第二个坑:适配器 vs 装饰器分不清。</strong>记死这句:<strong>适配器改接口(换形状),装饰器加职责但保持接口(加内容)。</strong>如果包裹后对外的方法名/签名变了,是适配器;如果对外还是同一套接口、只是行为增强了,是装饰器。</p>
+</div>
+
+<div class="crosslang">
+<p>为什么这个坑几乎只在 Python 面试里出现?因为<strong>只有 Python 把 <code>@decorator</code> 做进了语言语法</strong>,名字又恰好撞上 GoF 的 Decorator。别的语言没这颗糖,想实现 GoF 装饰器只能老老实实"实现同接口 + 持有对象 + 委托":</p>
+<table>
+<tr><th>语言</th><th>有无 <code>@decorator</code> 语法糖</th><th>实现 GoF 装饰器模式的方式</th></tr>
+<tr><td><strong>Python</strong></td><td>有(<code>@</code>,装饰函数/类,<strong>定义时</strong>应用)</td><td>既能用 <code>@</code>,也能像本节那样用类:实现同接口 + 持有对象</td></tr>
+<tr><td><strong>Java</strong></td><td>无</td><td>手写:<code>implements</code> 同接口 + 持有字段委托(标准库实例:<code>BufferedReader</code> 包 <code>Reader</code>)</td></tr>
+<tr><td><strong>C++</strong></td><td>无</td><td>手写:继承抽象基类 + 持有指针/引用,转发调用</td></tr>
+<tr><td><strong>C#</strong></td><td>无(有 <code>[Attribute]</code>,但那是<strong>元数据标注</strong>,语义不同)</td><td>手写委托同接口对象</td></tr>
+</table>
+<p>提醒:Java 的注解 <code>@Override</code>、C# 的 <code>[Serializable]</code> 虽然也用 <code>@</code>/<code>[]</code>,但它们是<strong>元数据/编译提示</strong>,和"运行时包裹对象增强行为"更不搭边,别混为一谈。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,挑一个自己写一遍,检验是否真懂:</p>
+<ul>
+<li><strong>适配器:</strong>有个旧类 <code>CelsiusSensor.get_celsius()</code> 只返回摄氏度;你的系统要 <code>read_fahrenheit()</code>。写一个 <code>FahrenheitAdapter</code>,持有旧传感器,转接并换算。</li>
+<li><strong>装饰器:</strong>把本节的咖啡例子扩展一个 <code>DoubleShot</code>(加 3.0 元),验证 <code>DoubleShot(Milk(Coffee()))</code> 的价格和描述都对。</li>
+<li><strong>代理:</strong>给 <code>HeavyImage</code> 的代理再加一层"保护":<code>display()</code> 前检查 <code>self._user == "admin"</code>,否则打印"无权限",不创建真身。</li>
+</ul>
+<p>自问一句:你的"装饰器"改变对外方法名了吗?(不该改——改了就变成适配器了。)</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:面试官问"Python 的 <code>@staticmethod</code>、你写的 <code>@timing</code> 这类 <code>@decorator</code>,是不是 GoF 里的装饰器模式?"——最准确的回答是?</summary>
+<div class="answer">
+<p><strong>答案:不是同一个东西,但理念相通。</strong>Python 的 <code>@decorator</code> 是<strong>语言语法糖</strong>,装饰的是函数/类、在<strong>定义时</strong>应用,本质 <code>f = deco(f)</code>;GoF Decorator 是<strong>对象结构设计模式</strong>,在<strong>运行时</strong>包裹对象实例、可层层叠加、靠"同接口 + 持有对象"搭成。二者都体现"包裹增强"的思想,但一个在语法层、一个在对象结构层。</p>
+<p>只答"是"或只答"完全无关"都会被扣分——要点在于同时说清<strong>联系(包裹增强)</strong>和<strong>区别(语法糖 vs 对象结构模式、定义时 vs 运行时)</strong>。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:下面三个包装类,分别最可能是适配器、装饰器还是代理?<br>(a) 实现新接口 <code>render()</code>,内部调旧对象的 <code>print_document()</code>;<br>(b) 和目标同接口,<code>display()</code> 里先判断权限、无权就不转发;<br>(c) 和目标同接口,<code>cost()</code> 返回 <code>inner.cost() + 2.0</code>。</summary>
+<div class="answer">
+<p><strong>(a) 适配器</strong>——对外接口(<code>render</code>)和被包裹对象的接口(<code>print_document</code>)<strong>不同</strong>,做的是"转接",典型适配器。</p>
+<p><strong>(b) 代理</strong>——接口不变,包裹的目的是<strong>控制访问</strong>(权限把关),典型保护代理。</p>
+<p><strong>(c) 装饰器</strong>——接口不变,在被包裹对象的结果上<strong>叠加职责</strong>(加价),典型装饰器。</p>
+<p>判别口诀:<strong>接口变没变?</strong>变了 → 适配器;没变再看意图:<strong>加功能</strong> → 装饰器,<strong>控访问</strong> → 代理。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>结构型模式都是"包装 + 委托",区别只在意图——<strong>Adapter 改接口(换形状)、Decorator 加职责且接口不变(加内容)、Proxy 控访问(把关)</strong>。判别先问"对外接口变没变",再看"目的是加功能还是控访问"。最后守住那条红线:<strong>Python 的 <code>@decorator</code> 是语法糖(定义时装饰函数/类),GoF Decorator 是运行时包裹对象的结构模式——理念相通,层次不同。</strong></p>
+</div>
+
+<div class="paper">
+<p>本节内容来源层:<strong>canon(锚定 GoF 权威),非取自本课源 README。</strong>结构型三模式的定义、意图与分类,均以下列一手/权威资料为准:</p>
+<ul>
+<li><strong>GoF 原书:</strong>Gamma, Helm, Johnson, Vlissides,《Design Patterns: Elements of Reusable Object-Oriented Software》(1994)——Adapter / Decorator / Proxy 的原始定义与结构分类("Structural Patterns"一章)。</li>
+<li><strong>Refactoring.Guru(结构清晰的现代讲解 + 类图):</strong><a href="https://refactoring.guru/design-patterns/adapter">Adapter</a>、<a href="https://refactoring.guru/design-patterns/decorator">Decorator</a>、<a href="https://refactoring.guru/design-patterns/proxy">Proxy</a>。</li>
+<li><strong>Python 语法糖(与 GoF Decorator 区分的一手依据):</strong><a href="https://peps.python.org/pep-0318/">PEP 318 – Decorators for Functions and Methods</a>、<a href="https://docs.python.org/3/library/functools.html#functools.wraps"><code>functools.wraps</code> 文档</a>。</li>
+<li><strong>真实装饰器模式实例:</strong>Java 标准库 <a href="https://docs.oracle.com/javase/8/docs/api/java/io/BufferedReader.html"><code>java.io.BufferedReader</code></a> 包裹 <code>Reader</code>,是 GoF Decorator 的教科书级案例。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"适配器 vs 装饰器 vs 代理"、或把你写的 <code>FahrenheitAdapter</code> / 咖啡装饰器代码拿来评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节转向行为型模式——对象之间如何分工与通信:观察者、策略、模板方法等。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0016-design-patterns-creational.html"><span class="dir">← 上一课</span>0016 · 创建型模式:工厂、单例、建造者</a>
+<a class="next" href="0018-design-patterns-behavioral.html"><span class="dir">下一课 →</span>0018 · 行为型模式:观察者、策略、模板方法</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

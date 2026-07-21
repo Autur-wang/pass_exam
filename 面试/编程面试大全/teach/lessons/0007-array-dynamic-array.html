@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0007 · 数组与动态数组:连续内存的代价与红利</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0007 课 · 线性结构 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>数组与动态数组:连续内存的代价与红利</h1>
+
+<p class="lede">数组是所有数据结构里最朴素的一个,也是面试里出现频率最高的底座——双指针、滑动窗口、原地操作,全都建立在它一个特性上:<strong>元素在内存里是连续排列的</strong>。这节课把这条特性的红利(O(1) 随机访问)和代价(中间插入要搬 n 个元素)讲透,并弄清面试最爱追问的那句:<strong>「动态数组的 push 为什么是摊还 O(1)?」</strong></p>
+
+<div class="recall">
+<p>动手前先回忆:上一课<a href="0006-amortized-analysis.html">摊还分析</a>里,我们说「偶发的昂贵操作可以均摊到一长串便宜操作上」。这节你会看到它最经典的落地——动态数组扩容。先试着自己说出:为什么「偶尔一次 O(n) 的搬家」平均下来还是 O(1)?</p>
+</div>
+
+<h2>一、直觉:一排编好号的连续格子</h2>
+
+<p>把数组想成内存里<strong>一排紧挨着的格子</strong>,每个格子大小相同、从地址 0 开始编号。因为格子等宽又连续,要拿第 <code>i</code> 个元素,不用一个个数——直接算 <code>基址 + i × 元素大小</code> 一步跳到,这就是 <strong>O(1) 随机访问</strong>的来源。</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell on"><span class="idx">0</span>7</div>
+  <div class="cell on"><span class="idx">1</span>3</div>
+  <div class="cell on"><span class="idx">2</span>9</div>
+  <div class="cell hi"><span class="idx">3</span>1</div>
+  <div class="cell on"><span class="idx">4</span>5</div>
+  <div class="cell"><span class="idx">5</span></div>
+  <div class="cell"><span class="idx">6</span></div>
+  <div class="cell"><span class="idx">7</span></div>
+</div>
+<figcaption>size=5(已用绿格),capacity=8(总格子)。<code>at(3)</code> 直接跳到第 3 格拿到 <code>1</code>,不看前面几个。空格子是<strong>预留容量</strong>——动态数组的关键设计。</figcaption>
+</figure>
+
+<p>但连续也有代价:要在中间插一个元素,后面所有元素都得<strong>整体后移一格</strong>腾位置;删中间元素同理要前移填坑。这是 O(n)。数组的全部性格,都是「连续」这一个决定推导出来的。</p>
+
+<h2>二、动态数组:数组不够长了怎么办</h2>
+
+<p>原生数组容量是固定的。<strong>动态数组</strong>(C++ 的 <code>vector</code>、Java 的 <code>ArrayList</code>、Python 的 <code>list</code>)在容量用满时,做一件事:<strong>申请一块两倍大的新内存,把旧元素全搬过去,再释放旧的</strong>。这次操作是 O(n),但它不常发生。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node good"><span class="n-title">push</span><span class="n-sub">还有空位 → O(1)</span></div>
+  <div class="arrow">→</div>
+  <div class="node bad"><span class="n-title">容量满</span><span class="n-sub">申请 2× 新内存</span></div>
+  <div class="arrow">→</div>
+  <div class="node bad"><span class="n-title">搬家</span><span class="n-sub">拷贝 n 个元素 O(n)</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">继续 push</span><span class="n-sub">又有一批空位 O(1)</span></div>
+</div>
+<figcaption>扩容策略是<strong>按倍数</strong>(×2)而非按固定量(+1)。这是摊还 O(1) 成立的前提。</figcaption>
+</figure>
+
+<p>为什么翻倍这么关键?因为翻倍后,下一次扩容前你能免费 push 掉的元素数,和这次搬家的代价<strong>成正比</strong>。把每次搬家的总代价摊到这中间的一长串 O(1) push 上,平均每次 push 仍是常数——这正是上一课摊还分析的结论。反之,如果每次只 +1 扩容,每次 push 都触发搬家,就退化成 O(n²) 建数组。</p>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>动态数组(Dynamic Array)</dt>
+<dd>底层是连续内存、容量满时按倍数扩容的可变长数组。随机访问 O(1),末尾 push 摊还 O(1)。<em>避免</em>与「链表」混用「数组」一词。</dd>
+<dt>容量 vs 大小(capacity vs size)</dt>
+<dd>size 是当前元素个数,capacity 是当前已申请、可容纳的格子数,capacity ≥ size。扩容改变的是 capacity。</dd>
+<dt>摊还 O(1)(amortized O(1))</dt>
+<dd>单次操作偶尔 O(n)(扩容),但均摊到一长串操作上平均是 O(1)。<em>避免</em>说成「每次都 O(1)」。</dd>
+</dl>
+
+<h2>四、复杂度:一张必须背下来的表</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>平均 / 摊还</th><th>最坏</th></tr></thead>
+<tbody>
+<tr><td class="op">随机访问 <code>at(i)</code> / 更新</td><td class="best">O(1)</td><td class="best">O(1)</td></tr>
+<tr><td class="op">末尾 <code>push</code> / <code>pop</code></td><td class="best">O(1)</td><td class="warn">O(n) <small>(push 触发扩容)</small></td></tr>
+<tr><td class="op">任意位置 <code>insert</code> / <code>delete</code></td><td class="warn">O(n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">头部 <code>prepend</code></td><td class="warn">O(n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">按值查找 <code>find</code> / <code>remove</code></td><td class="warn">O(n)</td><td class="warn">O(n)</td></tr>
+</tbody>
+</table>
+<p>空间复杂度 <strong>O(n)</strong>:即便预留容量让实际占用达到 2n,常数不影响量级。连续内存还带来一个表里看不见的红利——<strong>缓存友好</strong>,顺序遍历时 CPU 缓存命中率高,这也是后面<a href="0041-cache.html">缓存</a>一课会回收的伏笔。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>数组本身很少单独出题,但它是这些高频套路的地基,看到就该联想:</p>
+<ul>
+<li><strong>双指针 / 滑动窗口</strong>:靠 O(1) 随机访问在数组上移动指针,把很多 O(n²) 暴力解压到 O(n)。</li>
+<li><strong>「原地(in-place)」要求</strong>:面试官说「不许开新数组」,考的就是你会不会用下标腾挪(如原地去重、旋转数组)。</li>
+<li><strong>会被追问的证明题</strong>:「push 为什么摊还 O(1)?」——答:按倍数扩容,每个元素平均只被搬运常数次。能把这句话说清,面试官就知道你不是背的。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「动态数组 push 是 O(1)」——漏了「摊还」两个字就可能被扣分。</strong>准确说法是「摊还 O(1),最坏单次 O(n)」。有的场景(如实时系统、对单次延迟敏感)恰恰在乎那次 O(n) 的抖动,这时候答「O(1)」就暴露了理解不到位。</p>
+<p>另一个坑:<strong>缩容不是「删一半就缩」,而是元素降到容量的 1/4 才缩到一半</strong>。为什么留这么大余量?防止在临界点反复「push 一个就扩、pop 一个就缩」的抖动(thrashing),否则又退化成每次 O(n)。</p>
+</div>
+
+<div class="implement">
+<p>照仓库大纲徒手实现一个动态数组(别用语言自带的 vector/list 语法糖,自己管理一块原生数组 + capacity),把这些方法写全:</p>
+<p><code>size()</code> · <code>capacity()</code> · <code>is_empty()</code> · <code>at(i)</code>(越界要报错)· <code>push(x)</code> · <code>insert(i, x)</code> · <code>prepend(x)</code> · <code>pop()</code> · <code>delete(i)</code> · <code>remove(x)</code> · <code>find(x)</code> · 私有 <code>resize(new_cap)</code>(满则 ×2,降到 1/4 则 ÷2)。</p>
+<p>从 capacity=16 起步,用 2 的幂。写完打印每次 push 时的 capacity,亲眼看它 16→32→64 跳变。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一个动态数组从空开始,连续 push 了 n 个元素(每次满就翻倍扩容)。这 n 次 push 的<strong>总</strong>时间复杂度是多少?</summary>
+<div class="answer">
+<p><strong>O(n)</strong>。虽然其中有若干次 O(k) 的扩容搬家,但翻倍策略下所有搬家的总代价是 n + n/2 + n/4 + … &lt; 2n,即 O(n)。所以 n 次 push 总共 O(n),平均每次 <strong>摊还 O(1)</strong>。若改成每次 +1 扩容,总代价才会变成 1+2+…+n = O(n²)。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪个操作在动态数组上是 O(n),但在(带头指针的)链表上是 O(1)?</summary>
+<div class="answer">
+<p><strong>头部插入 <code>prepend</code></strong>。数组头插要把后面全部元素后移一格,是 O(n);链表头插只需改几个指针,是 O(1)。反过来,<code>at(i)</code> 随机访问在数组是 O(1)、在链表是 O(n)——这正是下一课<a href="0008-linked-list.html">链表</a>要展开的取舍。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲的「数据结构 → 数组」小节。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.coursera.org/lecture/data-structures/dynamic-arrays-EwbnV">动态数组(Coursera 视频)</a> —— 把扩容与摊还讲得最清楚的一条。</li>
+<li><a href="https://www.youtube.com/watch?v=tI_tIZFyKBw&t=3009s">数组 · CS50 哈佛大学(视频)</a> —— 从内存布局建立最初的直觉。</li>
+<li><a href="https://archive.org/details/ucberkeley_webcast_Wp8oiO_CZZE">UC Berkeley CS61B · 线性和多维数组(视频)</a>(从 15:32 起)。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「摊还」,或带你把 <code>resize</code> 的边界(何时扩、何时缩)在纸上跑一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0006-amortized-analysis.html"><span class="dir">← 上一课</span>摊还分析:为什么均摊下来是 O(1)</a>
+  <a class="next" href="0008-linked-list.html"><span class="dir">下一课 →</span>链表:指针的舞蹈与 vs 数组的取舍</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

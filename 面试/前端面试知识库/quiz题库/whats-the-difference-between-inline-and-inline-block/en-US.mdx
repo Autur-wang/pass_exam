@@ -1,0 +1,13 @@
+---
+title: What's the difference between `block`, `inline`, and `inline-block`?
+---
+
+| Property | `block` | `inline-block` | `inline` |
+| --- | --- | --- | --- |
+| Size | Fills up the width of its parent container. | Depends on content. | Depends on content. |
+| Positioning | Starts on a new line and tolerates no HTML elements next to it (except when you add `float`). | Flows along with other content and allows other elements beside it. | Flows along with other content and allows other elements beside it. |
+| Can specify `width` and `height` | Yes | Yes | No. Will be ignored if set. |
+| Can be aligned with `vertical-align` | No | Yes | Yes |
+| Margins and paddings | All sides respected. | All sides respected. | Only horizontal sides respected. Vertical sides, if specified, do not affect layout. Vertical space it takes up depends on `line-height`, even though the `border` and `padding` appear visually around the content. |
+| Float | - | - | Becomes like a `block` element where you can set vertical margins and paddings. |
+| Use cases | Layout elements like `<div>`, `<p>`, `<section>`. | Used for buttons, images, and form fields that need custom sizes but stay in line with text. | Links `<a>`, text formatting `<span>`, text styling — bold `<b>`, italics `<i>`. |

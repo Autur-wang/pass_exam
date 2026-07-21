@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0016 · 并行 vs 串行:一批工具不是「一起跑就完了」</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 5 章 · 工具系统 ›
+  <a href="./0015-five-step-tool-pipeline.html">上一课</a> ›
+  <strong>Lesson 0016</strong>
+</div>
+
+<p class="kicker">Lesson 0016 · 第 5 章 · 工具系统</p>
+<h1>并行 vs 串行<br>—— 一批工具不是「一起跑就完了」</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们拆完了单个 ToolCall 的五步流水线
+  (prepareArguments→validate→beforeToolCall→execute→afterToolCall)。
+  但模型的一次回复经常<strong>不止一个</strong> ToolCall——这节课回答:
+  一批工具该怎么调度?全部并行省时间,还是有时必须排队?Pi 怎么判断、怎么执行?
+</div>
+
+<div class="recall">
+  ↩️ <b>先回忆上一课:</b> 单个 ToolCall 走五步管道,任何一步出错都被兜成
+  <code>isError: true</code> 的消息,不会打断循环。今天要处理的是<strong>更上一层</strong>的问题——
+  当一次回复里同时冒出好几个 ToolCall,循环该怎么安排它们的执行顺序?
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 说清 Pi 的<span class="sys-pill">一票否决</span>调度策略
+  ——为什么只要一个工具声明 sequential,整批就得排队;以及并行执行时那套
+  「准备顺序、执行并行、事件有序」的<strong>三阶段设计</strong>,和它背后的分层防御逻辑。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:独木桥 vs 大草坪</b>
+  一队人要过河:如果都是空手的人(只读工具),大草坪可以并排一起走,谁也不挡谁;
+  但只要队里有一个人推着<b>会占满桥面的独轮车</b>(sequential 工具),
+  那整队就都得排成一列走独木桥——不是独轮车的人本身危险,是<b>只要有它在,谁也没法确定安全并排</b>。
+  Pi 的调度策略,就是「宁可让所有人多等一列,也不去赌谁和独轮车能擦肩而过」。
+</div>
+
+<h2>1 · 问题:模型一次回复常常不止一个 ToolCall</h2>
+<p>
+  Agent Loop 的内层循环里,模型的一次回复经常同时列出好几个 ToolCall。比如同时要
+  <code>read</code>、<code>grep</code>、<code>find</code> 三个只读操作:
+</p>
+<pre><span class="ln">1</span>assistantMessage.content = [
+<span class="ln">2</span>    { type: <span class="str">"text"</span>, text: <span class="str">"我来查一下文件"</span> },
+<span class="ln">3</span>    { type: <span class="str">"toolCall"</span>, id: <span class="str">"call_1"</span>, name: <span class="str">"read"</span>, arguments: {path: <span class="str">"a.ts"</span>} },
+<span class="ln">4</span>    { type: <span class="str">"toolCall"</span>, id: <span class="str">"call_2"</span>, name: <span class="str">"grep"</span>, arguments: {pattern: <span class="str">"TODO"</span>} },
+<span class="ln">5</span>    { type: <span class="str">"toolCall"</span>, id: <span class="str">"call_3"</span>, name: <span class="str">"find"</span>, arguments: {pattern: <span class="str">"*.test.ts"</span>} },
+<span class="ln">6</span>]
+</pre>
+<p>
+  三个都是只读操作,直觉告诉我们该并行——用 <code>Promise.all</code> 一起跑,省时间。
+  但「并行」这件事没那么简单。
+</p>
+
+<h2>2 · 但并行不是无脑 Promise.all</h2>
+<p>
+  如果这一批里有两个 <code>edit</code>,而且都改同一个文件,并行执行就会互相覆盖:
+</p>
+<pre><span class="ln">1</span>ToolCall 1: edit { path: <span class="str">"app.ts"</span>, oldText: <span class="str">"v1"</span>, newText: <span class="str">"v2"</span> }
+<span class="ln">2</span>ToolCall 2: edit { path: <span class="str">"app.ts"</span>, oldText: <span class="str">"v3"</span>, newText: <span class="str">"v4"</span> }
+<span class="ln">3</span>                     <span class="sys">^^^^^^^^</span>
+<span class="ln">4</span>                     <span class="cm">同一个文件!并行执行 → ToolCall 1 的修改被 ToolCall 2 覆盖</span>
+</pre>
+<p>
+  所以 Pi 需要一种机制,判断「这一批里哪些工具能并行,哪些必须串行」。
+</p>
+<cite>🔎 出处:教程 §三 / 并行冲突示例(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md</code>)。</cite>
+
+<h2>3 · Pi 的调度策略:一票否决</h2>
+<p>
+  Pi 的策略很简单:<strong>只要有一个工具标记为 sequential,整个批次都串行执行。</strong>
+  用 <code>toolCalls.some(...)</code> 扫一遍这一批,命中一个就够了:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 检查是否有串行工具</span>
+<span class="ln">2</span><span class="key">const</span> hasSequentialToolCall = toolCalls.<span class="fn">some</span>(
+<span class="ln">3</span>    (tc) =&gt; tools?.<span class="fn">find</span>((t) =&gt; t.name === tc.name)?.executionMode === <span class="str">"sequential"</span>,
+<span class="ln">4</span>);
+<span class="ln">5</span>
+<span class="cm"><span class="ln">6</span>// 有串行工具 → 整批串行;没有 → 并行</span>
+<span class="ln">7</span><span class="key">if</span> (config.toolExecution === <span class="str">"sequential"</span> || hasSequentialToolCall) {
+<span class="ln">8</span>    <span class="key">return</span> <span class="fn">executeToolCallsSequential</span>(...);
+<span class="ln">9</span>}
+<span class="ln">10</span><span class="key">return</span> <span class="fn">executeToolCallsParallel</span>(...);
+</pre>
+<cite>🔎 出处:教程 §三 / agent-loop.ts:382。</cite>
+<div class="why">
+  <b>为什么是「一票否决」,而不是「只串行冲突的那几个」?</b>
+  因为「哪些工具会冲突」很难精确判断——两个 edit 操作不同文件是不是就能并行?
+  万一它们编辑的文件之间有隐藏的依赖关系呢?Pi 选择了保守策略:
+  <strong>宁可多等,不可出错。</strong> 判断冲突的成本和风险,都比「多等一会儿」贵。
+</div>
+
+<h2>4 · 并行执行的三阶段设计</h2>
+<p>
+  就算判定「可以并行」,Pi 也不是简单地把整批扔进 <code>Promise.all</code> 跑完就完事——
+  它把执行拆成三个各有各的顺序约束的阶段:
+</p>
+<div class="diagram">并行执行的三阶段 —— 各阶段的「顺序」要求各不相同
+
+阶段 1 - 准备(顺序执行):
+  ToolCall 1: emit_start → prepareArguments → validate → beforeToolCall
+  ToolCall 2: emit_start → prepareArguments → validate → beforeToolCall
+  ToolCall 3: emit_start → prepareArguments → validate → beforeToolCall
+  // 准备阶段必须顺序,因为 beforeToolCall 可能有副作用(如修改全局状态)
+
+阶段 2 - 执行(并行):
+  ToolCall 1: execute ────────────────┐
+  ToolCall 2: execute ───────────────┤ Promise.all
+  ToolCall 3: execute ───────────────┘
+  // 只有 tool.execute() 并行
+
+阶段 3 - 事件发送(有序):
+  ToolCall 2: emit_end    ← 先完成的先发 tool_execution_end
+  ToolCall 1: emit_end
+  ToolCall 3: emit_end
+  ToolCall 1: emit_result ← 但 ToolResultMessage 按调用顺序发
+  ToolCall 2: emit_result
+  ToolCall 3: emit_result
+</div>
+<cite>🔎 出处:教程 §三 / 三阶段设计。</cite>
+<div class="why">
+  <b>为什么准备阶段必须顺序?</b> <code>beforeToolCall</code> 可能有副作用(比如修改全局/共享状态),
+  并行准备会让这些副作用彼此干扰、结果不可预测,所以逐个做——这里没有性能诉求,只有正确性诉求。
+</div>
+<div class="tradeoff">
+  🔑 <b>为什么 ToolResultMessage 必须按调用顺序发,而 emit_end 不用?</b>
+  模型是<em>依赖调用顺序</em>理解结果的——它先要求 read 再要求 grep,消息就得照这个序排给它看,
+  乱序会误导模型对因果关系的理解;而 <code>emit_end</code> 只是一个「执行结束了」的观测事件,
+  谁先跑完就先发,不影响模型的推理链条。<b>同一批操作里,不同种类的顺序约束可以并存。</b>
+</div>
+
+<h2>5 · 内置工具默认 parallel,靠什么兜底文件安全?</h2>
+<p>
+  这里有个容易被忽略的细节:<code>v0.80.2</code> 的 7 个内置工具
+  (<code>read/write/edit/bash/grep/find/ls</code>)<strong>都没有显式声明</strong>
+  <code>executionMode</code>,默认全部是 <code>"parallel"</code>。运行时只在
+  <code>agent-loop.ts:382</code> 判断是否 <code>"sequential"</code>,未声明就按并行处理。
+</p>
+<p>
+  那两个 <code>edit</code> 并行改同一个文件时,怎么保证不互相覆盖?答案不在外层调度,
+  而在工具<strong>内部</strong>——<code>edit.ts:312</code> 调用了
+  <code>withFileMutationQueue</code>(<code>file-mutation-queue.ts:32-61</code>),
+  对同一个文件的编辑操作做串行化排队。扩展工具如果自己需要串行,可以显式声明
+  <code>executionMode: "sequential"</code>。
+</p>
+<cite>🔎 出处:教程 §三 脚注(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md</code>)。</cite>
+<div class="tradeoff">
+  🔑 <b>分层防御:</b> 外层调度选择保守(一票否决,宁可多等);工具内部再做精细兜底
+  (只对真正冲突的同一文件排队)。前者保安全底线,后者保性能——两层配合,
+  才做到「内置工具默认并行却依然安全」,而不必把整批都拖成串行。
+</div>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 一个批次里有 read、grep 和一个声明了 <code>executionMode:"sequential"</code> 的自定义工具,Pi 会怎么调度这一批?</p>
+    <button class="opt">read 和 grep 并行,只有那个 sequential 工具单独串行</button>
+    <button class="opt">整批串行执行——只要有一个工具是 sequential,一票否决</button>
+    <button class="opt">整批并行,sequential 声明会被忽略</button>
+    <button class="opt">先并行 read/grep,失败后再回退到串行</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② 并行三阶段中,为什么「准备阶段」(prepareArguments/validate/beforeToolCall)必须顺序执行,不能一起并行?</p>
+    <button class="opt">因为 TypeBox 验证不是线程安全的</button>
+    <button class="opt">因为准备阶段耗时太长,并行反而更慢</button>
+    <button class="opt">因为 beforeToolCall 可能有副作用(如修改共享状态),顺序执行才能避免相互干扰</button>
+    <button class="opt">因为模型要求准备阶段必须逐个上报</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">③ 内置的 7 个工具默认都是 parallel,那两个 edit 同时改同一个文件时,靠什么防止互相覆盖?</p>
+    <button class="opt">工具内部的 withFileMutationQueue,对同一文件的编辑操作串行化</button>
+    <button class="opt">外层 executionMode 会自动把 edit 识别为 sequential</button>
+    <button class="opt">beforeToolCall 会阻止第二个 edit</button>
+    <button class="opt">Schema 验证会拒绝重复文件路径</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>为什么不做「静态依赖分析」去精确判断哪些 edit 真的冲突,而是粗暴一刀切?</em>」
+  「<em>emit_end 乱序、emit_result 严格有序,这两条事件流是怎么在实现里被分开维护的?</em>」
+  「<em>如果 tool.execute() 内部真的抛出一个没被 try-catch 接住的异常,三阶段设计还能兜住吗?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一节(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md">第 5 章 · 工具系统</a> §三——
+  原文配图更直观地画出了「一票否决」决策树与三阶段瀑布图,值得对照着看一遍。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0017):</strong> 上一课说「任何一步出错都变成 isError:true 的消息」,
+  这节课又提到「tool.execute() 内部可能抛异常」——下一课就专门拆这件事:
+  <strong>Pi 怎么把 6 种不同的出错场景,统一收口成同一种产物「错误也是消息」</strong>,
+  以及为什么这是最佳实践。
+</p>
+
+<footer>
+  Lesson 0016 · 第 5 章 工具系统 ·
+  下一课:<a href="./0017-errors-are-messages.html">0017 错误也是消息 →</a> ·
+  上一课:<a href="./0015-five-step-tool-pipeline.html">0015 五步工具管道</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。hasSequentialToolCall 用 some 检查,只要命中一个 sequential,整批走 executeToolCallsSequential。这是「宁可多等不可出错」的保守策略。延伸:因为「哪些工具真会冲突」难以精确判断,Pi 索性一刀切。',
+               '✓ 对。准备阶段可能带副作用,必须顺序;真正并行的只有 tool.execute() 这一步。延伸:阶段3 里 emit_result 也仍按调用顺序发,因为模型依赖调用序理解结果——三阶段各有各的顺序约束。',
+               '✓ 对。这是工具自己的第二道防线——edit.ts 调用 withFileMutationQueue,对同一文件写入串行化,不依赖外层 executionMode 声明。延伸:这体现了「分层防御」——外层保守调度 + 工具内部精细兜底。'];
+  var msgNo = ['回看「一票否决」那段代码里用的是 some 还是 filter——some 意味着「有一个就…」。',
+               '回看三阶段图下方的解释,重点在准备阶段里哪个钩子「可能有副作用」。',
+               '回看 v0.80.2 那条脚注——Edit 并行下的文件安全是「工具自己做的第二道防线」,找出那个队列的名字。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

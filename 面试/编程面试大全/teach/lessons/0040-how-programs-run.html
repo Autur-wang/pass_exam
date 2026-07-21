@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0040 · 程序如何运行:从源码到内存布局</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0040 课 · 工程与设计 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>程序如何运行:从源码到内存布局</h1>
+
+<p class="lede">你写的 <code>.c</code> / <code>.java</code> 文件是一段文本,CPU 却只认机器码;程序跑起来时,变量、函数、动态分配的对象又各自躺在内存的哪一块?这节把两条链条讲清:源码<strong>怎么变成能执行的东西</strong>,以及运行时进程的内存<strong>怎么划分地盘</strong>。其中「栈 vs 堆」是所有系统类面试绕不开的高频概念题——搞清它,你才能解释清楚栈溢出、内存泄漏、为什么局部大数组会崩。</p>
+
+<div class="recall">
+<p>回忆<a href="0010-stack.html">栈</a>那课:栈是「后进先出、只在一端 push/pop」的结构。当时我们把它当抽象数据结构讲;这节你会看到它在真实机器里最重要的化身——<strong>调用栈(call stack)</strong>。每次函数调用压入一个栈帧,返回时弹出,活生生就是 LIFO。数据结构不是纸上的,它就跑在你程序的内存里。</p>
+</div>
+
+<h2>一、从源码到执行:一条流水线</h2>
+
+<p>以编译型语言为例,一段源码要经过几道工序才能被 CPU 执行。每一步都把它「降低」一层,越来越接近硬件:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node"><span class="n-title">源码</span><span class="n-sub">人读的文本<br>.c / .cpp</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">编译</span><span class="n-sub">→ 汇编<br>特定架构指令</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">汇编</span><span class="n-sub">→ 目标文件<br>机器码 .o</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">链接</span><span class="n-sub">拼库 + 符号<br>→ 可执行文件</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">加载执行</span><span class="n-sub">载入内存<br>CPU 取指执行</span></div>
+</div>
+<figcaption>编译得到「针对某种 CPU 架构」的机器码,所以换架构要重新编译。CPU 执行时反复做取指(fetch)→ 译码(decode)→ 执行(execute)的循环。</figcaption>
+</figure>
+
+<p>不同语言在这条链上落点不同:C/C++ 直接编成机器码;Java 先编成<strong>字节码</strong>再由 JVM 解释/即时编译(JIT);Python 则边解释边跑。但只要真的在 CPU 上执行,最终都要变成机器指令——区别只在「什么时候翻译」。</p>
+
+<h2>二、进程的内存地盘:五个分区</h2>
+
+<p>程序被加载后,操作系统给这个<strong>进程</strong>划出一块地址空间,分成几个用途分明的段。记住一张图胜过背五个名词:</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 430 400" width="430" height="400" role="img" aria-label="进程内存布局:自顶向下为栈、空闲区、堆、BSS、数据段、代码段">
+  <text class="dgm-muted" x="215" y="20" text-anchor="middle" font-size="12">高地址 ↑</text>
+
+  <rect class="dgm-accent-node" x="60" y="32" width="310" height="60" rx="4"/>
+  <text class="dgm-accent-text" x="215" y="58" text-anchor="middle" font-size="14" font-weight="700">栈 Stack</text>
+  <text class="dgm-muted" x="215" y="78" text-anchor="middle" font-size="11">栈帧:局部变量·参数·返回地址　向下增长 ↓</text>
+
+  <text class="dgm-muted" x="215" y="130" text-anchor="middle" font-size="11">↕ 空闲区(栈与堆相向增长,共用这段空间)</text>
+
+  <rect class="dgm-good-node" x="60" y="150" width="310" height="60" rx="4"/>
+  <text class="dgm-good-text" x="215" y="176" text-anchor="middle" font-size="14" font-weight="700">堆 Heap</text>
+  <text class="dgm-muted" x="215" y="196" text-anchor="middle" font-size="11">动态分配 malloc/new　向上增长 ↑</text>
+
+  <rect class="dgm-link-node" x="60" y="224" width="310" height="42" rx="4"/>
+  <text class="dgm-text" x="215" y="243" text-anchor="middle" font-size="13" font-weight="700">BSS 段</text>
+  <text class="dgm-muted" x="215" y="259" text-anchor="middle" font-size="11">未初始化的全局 / 静态变量(自动清零)</text>
+
+  <rect class="dgm-link-node" x="60" y="272" width="310" height="42" rx="4"/>
+  <text class="dgm-text" x="215" y="291" text-anchor="middle" font-size="13" font-weight="700">数据段 Data</text>
+  <text class="dgm-muted" x="215" y="307" text-anchor="middle" font-size="11">已初始化的全局 / 静态变量</text>
+
+  <rect class="dgm-node" x="60" y="320" width="310" height="48" rx="4"/>
+  <text class="dgm-text" x="215" y="341" text-anchor="middle" font-size="13" font-weight="700">代码段 Text</text>
+  <text class="dgm-muted" x="215" y="357" text-anchor="middle" font-size="11">机器指令(通常只读,防被改写)</text>
+
+  <text class="dgm-muted" x="215" y="390" text-anchor="middle" font-size="12">低地址 ↓</text>
+</svg>
+</div>
+<figcaption>栈从高地址往下长,堆从低地址往上长,中间的空闲区被两者共享——一方涨得太狠就会撞上另一方。代码段和数据段在加载时大小就定死了,只有堆和栈在运行时伸缩。</figcaption>
+</figure>
+
+<h2>三、栈 vs 堆:面试必答的那道题</h2>
+
+<p>「栈和堆有什么区别」几乎是系统类面试的开胃菜。把这张表说清就稳了:</p>
+
+<table>
+<thead><tr><th>维度</th><th>栈 Stack</th><th>堆 Heap</th></tr></thead>
+<tbody>
+<tr><td>存什么</td><td>局部变量、函数参数、返回地址</td><td>动态分配的对象(<code>malloc</code>/<code>new</code>)</td></tr>
+<tr><td>谁来管</td><td>编译器自动:进函数分配、出函数回收</td><td>程序员手动 / 垃圾回收器(GC)</td></tr>
+<tr><td>速度</td><td>快:只移动栈指针一步</td><td>慢:要找合适空闲块、可能加锁</td></tr>
+<tr><td>大小</td><td>小且有上限(典型几 MB)</td><td>大,受可用内存限制</td></tr>
+<tr><td>生命周期</td><td>随函数返回自动消失</td><td>手动释放 / 无引用后被回收前一直在</td></tr>
+<tr><td>典型事故</td><td>栈溢出(递归太深 / 局部数组太大)</td><td>内存泄漏、碎片、悬空指针</td></tr>
+</tbody>
+</table>
+
+<p>一句话概括取舍:<strong>栈快、自动、但小且短命;堆大、灵活、但慢且要自己收拾</strong>。所以能放栈就放栈,需要「活得比当前函数久」或「大小运行时才知道」的数据才上堆。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>三条常见追问:</p>
+<ul>
+<li><strong>「栈和堆区别?各存什么?」</strong>——上表就是标准答案。加一句「栈由编译器自动管理、堆要手动或 GC」立刻显专业。</li>
+<li><strong>「栈溢出怎么发生的?」</strong>——递归太深(每层一个栈帧)或在栈上开了巨大的局部数组,把几 MB 的栈撑爆。对比堆溢出/OOM 是另一回事。</li>
+<li><strong>「内存泄漏是什么?」</strong>——在堆上分配了却一直不释放、又丢了引用,内存只增不减。C/C++ 靠 <code>free</code>/<code>delete</code>,带 GC 的语言靠「没有引用可达」判定回收,但仍可能因意外持有引用而泄漏。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>两个「堆」根本不是一回事。</strong>这节的堆是<strong>内存区(heap 内存区)</strong>——进程用来动态分配的那块地址空间;而<a href="0022-heap-priority-queue.html">数据结构那节的堆</a>是<strong>优先队列</strong>——一棵满足堆序的完全二叉树。它们只是碰巧同名,毫无关系。面试里听到「堆」先确认对方指哪个,答题时也别串台(术语表专门标了这条)。</p>
+<p><strong>「栈是无限的」——错。</strong>栈空间通常只有几 MB 且有硬上限,这正是「用递归还是用迭代」有时要看栈深度的原因;把一个上百万元素的数组声明成函数里的局部变量(放栈上)大概率直接崩,得改成堆分配。</p>
+</div>
+
+<div class="implement">
+<p>动手核对(把抽象变成看得见):① 写个无限递归函数跑起来,观察它报 <code>StackOverflow</code> / 段错误,估算你的栈能撑多少层。② 在 C 里分别用局部变量、<code>static</code> 全局、<code>malloc</code> 各建一个变量,打印它们的地址,看是不是分别落在栈(高地址)、数据/BSS 段、堆(低地址往上)三个区间。③ 故意 <code>malloc</code> 后不 <code>free</code>,用内存监控工具看进程内存持续上涨——亲眼看一次内存泄漏。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>源码经「编译→汇编→链接→加载」变成 CPU 能执行的机器码;运行时进程内存分成代码/数据/BSS/堆/栈五段,栈向下长、堆向上长。栈快自动但小,堆大灵活但慢且要自己回收——「栈 vs 堆」几乎必考。</p>
+</div>
+
+<h2>四、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:下面三个变量分别落在进程内存的哪个段?<br>(a) 函数里的 <code>int i;</code>　(b) 文件顶部的 <code>int global = 42;</code>　(c) <code>int* p = malloc(100);</code> 指向的那 100 字节</summary>
+<div class="answer">
+<p>(a) <strong>栈</strong>——局部变量随栈帧分配,函数返回即回收。(b) <strong>数据段(Data)</strong>——已初始化的全局变量;若写成 <code>int global;</code>(未初始化)则落在 <strong>BSS 段</strong>并被清零。(c) <strong>堆</strong>——<code>malloc</code> 动态分配的内存;注意<strong>指针 <code>p</code> 本身</strong>(那 8 字节地址)是局部变量,在栈上,而它<strong>指向</strong>的 100 字节在堆上,两者分属不同段。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:一个函数里写 <code>int arr[5000000];</code>(约 20MB)一运行就崩,改成 <code>malloc(5000000 * sizeof(int))</code> 就好了。为什么?</summary>
+<div class="answer">
+<p>局部数组放在<strong>栈</strong>上,而栈空间通常只有几 MB 的硬上限,一次要 20MB 直接把栈撑爆 → 栈溢出崩溃。改用 <code>malloc</code> 是在<strong>堆</strong>上分配,堆的可用空间大得多(受整机内存限制),自然放得下。这也是「大块 / 大小运行时才定 / 要活得比函数久的数据,一律上堆」这条经验的由来。(用完记得 <code>free</code>,否则就变成 Q 里说的内存泄漏。)</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:「Java 是解释型语言,所以不用编译。」这句话准确吗?</summary>
+<div class="answer">
+<p><strong>不准确。</strong>Java 源码先被 <code>javac</code> <strong>编译成字节码</strong>(<code>.class</code>),再由 JVM 执行;JVM 会解释字节码,并把热点代码用 <strong>JIT(即时编译)</strong>进一步编译成本地机器码以提速。所以 Java 既有编译(源码→字节码)也有运行时编译(字节码→机器码),不是「纯解释、不编译」。核心观念:任何真正在 CPU 上跑的东西,最终都要变成机器指令,区别只在「提前编译还是运行时编译」。</p>
+</div>
+</details>
+</div>
+
+<h2>五、主推资源</h2>
+
+<p>本主题在仓库大纲的「计算机如何处理程序」小节。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=XM4lGflQFvA">CPU 如何执行程序(视频)</a> —— 取指→译码→执行的循环,先建立这个直觉。</li>
+<li><a href="https://youtu.be/FZGugFqdr60">中央处理器 CPU(Crash Course 视频)</a> —— CPU 内部结构总览。</li>
+<li><a href="https://youtu.be/fpnE6UAfbtU">寄存器和 RAM(视频)</a> —— 数据在硬件里怎么存取。</li>
+<li><a href="https://youtu.be/zltgXvg6r3k">指令和程序(视频)</a> —— 机器指令如何组成一个程序。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「栈和堆的区别」,或带你打印几个变量的地址、亲眼确认它们落在不同的内存段。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0039-np-completeness.html"><span class="dir">← 上一课</span>NP 完全:识别「大概没有多项式解」</a>
+  <a class="next" href="0041-cache.html"><span class="dir">下一课 →</span>缓存:局部性与命中率</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

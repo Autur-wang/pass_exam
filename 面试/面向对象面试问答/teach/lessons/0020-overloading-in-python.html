@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方法重载 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第六部分 · Python 机制与跨语言 · 第 0020 节</p>
+<h1>"重载"在动态语言里怎么办</h1>
+<p class="lede">面试官问"怎么重载一个方法",如果你是 Python 程序员,最漂亮的答案是先温柔地纠正这个前提——Python 根本不做方法重载,它有别的招。这一节讲透:重载在静态语言里是什么、为什么 Python 做不了、以及 Python 拿什么替代。</p>
+
+<div class="recall">
+<p>先想一个问题:你在<strong>同一个类里</strong>写了两个同名方法——<code>def f(self, a)</code> 和 <code>def f(self, a, b)</code>。在 Java 里这叫方法重载,编译器按参数个数区分。那在 Python 里,运行 <code>obj.f(1)</code> 会发生什么?先在心里给个答案,再往下看。</p>
+</div>
+
+<h2>一、先回到 Java:重载到底是什么</h2>
+
+<p>源题问的是"列举几种重载方法的方式",给的是 Java 语境。<strong>方法重载(Method Overloading)</strong>指的是:<em>同一个类里允许多个同名方法,只要它们的参数签名不同</em>。编译器在编译期,根据你传入实参的<strong>静态类型和个数</strong>,挑出匹配的那一个。常见的三种"造出不同签名"的手法:</p>
+
+<ul>
+<li><strong>改变参数个数</strong>:<code>add(int a, int b)</code> vs <code>add(int a, int b, int c)</code>——两参版和三参版并存。</li>
+<li><strong>改变参数类型</strong>:<code>print(int x)</code> vs <code>print(String x)</code>——同名,类型不同。</li>
+<li><strong>调整参数顺序</strong>:<code>combine(int a, String b)</code> vs <code>combine(String a, int b)</code>——靠不同顺序造出不同签名。</li>
+</ul>
+
+<p>注意:能被区分,靠的是<strong>参数列表(签名)</strong>。仅仅返回值类型不同<em>不算</em>重载。这一切成立的大前提是——编译器在编译期就知道每个变量是什么类型,所以能"按签名选择"。记住这个前提,下一节它会崩塌。</p>
+
+<h2>二、Python 的当头一棒:没有方法重载</h2>
+
+<p>Python 是<strong>动态类型</strong>语言:变量的类型要到运行时才知道,方法名只是绑定到某个函数对象的一个名字。于是同一个类里写两个同名方法,后定义的会<strong>直接覆盖(rebind)</strong>前一个——不是"两个版本并存",是"第一个彻底消失":</p>
+
+<pre><code>class C:
+    def f(self, a):
+        return f"单参版: {a}"
+
+    def f(self, a, b):        # 同名!直接覆盖上面那个 f
+        return f"双参版: {a}, {b}"
+
+c = C()
+print(c.f(1, 2))    # 双参版: 1, 2  —— 后定义的赢了
+print(c.f(1))       # ❌ TypeError: f() missing 1 required positional argument: 'b'
+</code></pre>
+
+<p>看到没?回到开场那个问题:<code>obj.f(1)</code> 不会"智能地"找回单参版本,因为单参版<strong>已经不存在了</strong>——它在类命名空间里被同名的双参版覆盖掉了。这就是 Python 的名字绑定规则:<strong>最后一个赢(last one wins)</strong>。既然运行时没有"按静态签名挑函数"这回事,方法重载自然无从谈起。</p>
+
+<div class="keydef">
+<dl>
+<dt>方法重载 (Method Overloading)</dt>
+<dd>同一作用域内多个<strong>同名、不同签名</strong>的方法,由<strong>编译器按签名选择</strong>调用哪个。是<em>静态类型</em>语言的编译期特性。<strong>Python 不支持。</strong></dd>
+<dt>运算符重载 (Operator Overloading)</dt>
+<dd>通过定义 <code>__add__</code>、<code>__eq__</code> 等 dunder(双下划线魔术)方法,让 <code>+</code> <code>==</code> 等运算符对<strong>自定义对象</strong>有自定义行为。<strong>Python 支持。</strong>——它和方法重载是两码事,别混。</dd>
+<dt>名字绑定:最后一个赢</dt>
+<dd>Python 里同名方法后者覆盖前者,类命名空间中只留最后一个。这正是"不能重载"的根因。</dd>
+</dl>
+</div>
+
+<h2>三、那 Python 怎么办?四条替代路子</h2>
+
+<p>"不能重载"不等于"不能用一个名字应对多种输入"。Python 换了套思路——不在<strong>编译期按签名分</strong>,而是在<strong>运行时按值/类型分</strong>,或者干脆用灵活的参数收口。四条常用路子:</p>
+
+<h3>路子 1:默认参数值——模拟"多个版本"</h3>
+
+<pre><code>class Greeter:
+    def greet(self, name, greeting="你好"):   # 一个函数,覆盖"带/不带问候语"两种调用
+        return f"{greeting}, {name}!"
+
+g = Greeter()
+print(g.greet("Alice"))            # 你好, Alice!      —— 用默认值
+print(g.greet("Bob", "早上好"))     # 早上好, Bob!      —— 显式传入
+</code></pre>
+
+<p>Java 里"两参版 + 三参版"的重载,在 Python 里常常一个带默认值的函数就解决了。这是最轻量、最 Pythonic 的替代。</p>
+
+<h3>路子 2:*args / **kwargs——在函数体内自己分派</h3>
+
+<pre><code>class Box:
+    def pack(self, *args, **kwargs):
+        # 运行时根据实参个数/类型,在函数体内手动分流
+        if len(args) == 1:
+            return f"单个物品: {args[0]}"
+        elif len(args) == 2:
+            return f"两个物品: {args[0]} + {args[1]}"
+        return f"关键字打包: {kwargs}"
+
+b = Box()
+print(b.pack("书"))              # 单个物品: 书
+print(b.pack("书", "笔"))        # 两个物品: 书 + 笔
+print(b.pack(color="红"))       # 关键字打包: {'color': '红'}
+</code></pre>
+
+<p>灵活但要自己写分流逻辑,代码容易变脏——适合参数形态确实多变的场景,不要滥用。</p>
+
+<h3>路子 3:functools.singledispatch——按第一个实参的类型注册实现</h3>
+
+<p>如果你想要的正是"按类型走不同实现"(Java 靠类型重载的那种效果),标准库给了<strong>单分派泛函数</strong>:</p>
+
+<pre><code>from functools import singledispatch
+
+@singledispatch
+def describe(arg):                       # 兜底实现:没匹配到类型时走这里
+    return f"未知类型: {arg!r}"
+
+@describe.register
+def _(arg: int):                         # 按注解的类型注册
+    return f"整数,平方是 {arg ** 2}"
+
+@describe.register
+def _(arg: str):
+    return f"字符串,长度是 {len(arg)}"
+
+@describe.register(list)                 # 也可以把类型写进括号
+def _(arg):
+    return f"列表,有 {len(arg)} 个元素"
+
+print(describe(4))          # 整数,平方是 16
+print(describe("hi"))       # 字符串,长度是 2
+print(describe([1, 2, 3]))  # 列表,有 3 个元素
+print(describe(3.14))       # 未知类型: 3.14   —— 走兜底
+</code></pre>
+
+<p>它在<strong>运行时</strong>根据<strong>第一个实参的类型</strong>选实现。注意"单"字:它只看第一个参数。想在类的方法里用,配套的是 <code>functools.singledispatchmethod</code>(因为方法第一个参数是 <code>self</code>,分派要落在第二个上)。</p>
+
+<h3>路子 4:typing.@overload——只给类型检查器看的"签名声明"</h3>
+
+<pre><code>from typing import overload
+
+class Adder:
+    @overload
+    def add(self, a: int, b: int) -&gt; int: ...
+    @overload
+    def add(self, a: str, b: str) -&gt; str: ...
+
+    def add(self, a, b):        # ← 唯一真正会被执行的实现
+        return a + b
+</code></pre>
+
+<p>这看着最像"重载",但请务必记牢:那两个 <code>@overload</code> 块<strong>只是给 mypy / IDE 看的类型签名声明</strong>,函数体是 <code>...</code>,<strong>运行时没有任何分派效果</strong>——它们会被后面那个真正的实现覆盖。所以你<em>仍然必须</em>写一个真实的 <code>add</code>,否则运行时根本没有可执行的方法。它解决的是"让类型检查器理解不同参数组合返回不同类型",不是运行时行为。</p>
+
+<h2>四、别混淆:运算符重载是另一回事(而且 Python 支持)</h2>
+
+<p>面试里最容易被绕晕的一点:"Python 支持重载吗?"——分开答。<strong>方法重载不支持,运算符重载支持。</strong>运算符重载靠的是 dunder 方法:</p>
+
+<pre><code>class Vector:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+
+    def __add__(self, other):        # 定制 + 的行为
+        return Vector(self.x + other.x, self.y + other.y)
+
+    def __eq__(self, other):         # 定制 == 的行为
+        return self.x == other.x and self.y == other.y
+
+    def __repr__(self):
+        return f"Vector({self.x}, {self.y})"
+
+print(Vector(1, 2) + Vector(3, 4))     # Vector(4, 6)   —— 触发 __add__
+print(Vector(1, 2) == Vector(1, 2))    # True           —— 触发 __eq__
+</code></pre>
+
+<p>类似地,<code>__lt__</code> 定制 <code>&lt;</code>、<code>__len__</code> 定制 <code>len()</code>、<code>__getitem__</code> 定制 <code>obj[i]</code>。这是 Python 数据模型的核心,让自定义对象"像内置类型一样用"。但它管的是<strong>运算符对对象的行为</strong>,和"同名方法按签名分派"毫无关系——两个概念共用了"重载"这个词,仅此而已。</p>
+
+<div class="interview">
+<p><strong>高频追问链(这簇几乎必被连环问):</strong></p>
+<ul>
+<li>"Python 支持方法重载吗?" → 送分也是坑。<strong>方法重载不支持</strong>(同名后者覆盖前者),<strong>运算符重载支持</strong>(靠 dunder)。两个都提到才算答全。</li>
+<li>"那 <code>functools.singledispatch</code> 算重载吗?" → 严格说不是语言级重载,是"单分派泛函数",在<strong>运行时按第一个实参的类型</strong>选实现——是重载的<em>替代方案</em>。想按多个参数分派,标准库不支持,得用第三方库(如 <code>multipledispatch</code>)。</li>
+<li>"<code>typing.@overload</code> 运行时会按签名分派吗?" → <strong>不会。</strong>它只是给静态类型检查器 / IDE 看的签名声明,运行时被真正的实现覆盖,没有分派效果;而且你必须再写一个真实现。</li>
+<li>"为什么静态语言能重载,Python 不能?" → 静态语言编译期就知道每个实参的类型,能<strong>按签名在编译期选函数</strong>;Python 动态类型,名字运行时绑定,同名就是覆盖——根上没有"编译期按签名选"这个环节。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>翻车点一:笼统说"Python 支持重载"。</strong>这是错的,也是最常被追问穿帮的地方。准确说法:<strong>方法重载(method overloading)不支持,运算符重载(operator overloading)支持。</strong>把这两个词拆开答,立刻和"只会背概念"的人拉开距离。</p>
+<p><strong>翻车点二:以为 <code>@overload</code> 会在运行时按签名分派。</strong>它只是静态提示,函数体是 <code>...</code>,运行时会被后面那个真实现覆盖——真正执行的永远是最后那个非 <code>@overload</code> 的定义。忘了写真实现,运行时就没有可调用的方法。</p>
+<p><strong>翻车点三:忘了 <code>singledispatch</code> 只看第一个参数。</strong>它做的是"单分派",不看 <code>self</code> 之外的其它参数;在类里用要换成 <code>singledispatchmethod</code>,否则分派会落在 <code>self</code> 上,永远匹配不到。</p>
+</div>
+
+<div class="crosslang">
+<p>这正是"<strong>静态 vs 动态类型如何影响 OOP 机制</strong>"的典型样本——同一个需求,静态语言在编译期解决,动态语言把它推到运行时:</p>
+<table>
+<tr><th>语言</th><th>类型系统</th><th>方法重载</th><th>怎么实现"多版本"</th></tr>
+<tr><td><strong>Python</strong></td><td>动态</td><td>不支持</td><td>默认参数 / <code>*args</code> / <code>singledispatch</code></td></tr>
+<tr><td><strong>JavaScript</strong></td><td>动态</td><td>不支持</td><td>默认参数 / <code>arguments</code> / 运行时类型判断</td></tr>
+<tr><td><strong>Java</strong></td><td>静态</td><td>支持(编译期按签名解析)</td><td>直接写同名、不同签名的方法</td></tr>
+<tr><td><strong>C++</strong></td><td>静态</td><td>支持(编译期)</td><td>同名不同签名;另有运算符重载 <code>operator+</code></td></tr>
+<tr><td><strong>C#</strong></td><td>静态</td><td>支持(编译期)</td><td>同名不同签名;另有语言级运算符重载</td></tr>
+</table>
+<p>一句话:<strong>静态语言编译期就能"按签名选函数",所以有真重载;动态语言只能运行时"按值/类型分流",于是用默认参数、分派函数来替代。</strong>(顺带一提,C++ 里 <code>std::cout &lt;&lt; v</code> 之所以能打印自定义对象,靠的正是运算符重载 <code>operator&lt;&lt;</code>,和方法重载是两个特性。)</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,用两种路子各写一遍,体会差别:</p>
+<ul>
+<li><strong>singledispatch 版</strong>:写一个泛函数 <code>area</code>,对 <code>int</code>(当作正方形边长)返回 <code>边长²</code>,对 <code>tuple</code>(当作 <code>(宽, 高)</code>)返回 <code>宽 × 高</code>,其它类型走兜底抛 <code>TypeError</code>。</li>
+<li><strong>运算符重载版</strong>:给一个 <code>Money</code> 类实现 <code>__add__</code>,让 <code>Money(10) + Money(5)</code> 得到 <code>Money(15)</code>;再实现 <code>__repr__</code> 方便打印。</li>
+</ul>
+<p>写完自测:在类里把 <code>area</code> 做成方法,直接用 <code>@singledispatch</code> 装饰会失灵——想想为什么(提示:第一个参数是 <code>self</code>),该换成谁?</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:下面这段 Python 运行 <code>c.f(1)</code> 会怎样?为什么?<br><code>class C:<br>&nbsp;&nbsp;&nbsp;&nbsp;def f(self, a): return a<br>&nbsp;&nbsp;&nbsp;&nbsp;def f(self, a, b): return a + b</code></summary>
+<div class="answer">
+<p><strong>答案:抛 <code>TypeError</code>,提示缺少参数 <code>b</code>。</strong></p>
+<p>因为 Python 不支持方法重载。第二个 <code>def f</code> 在类命名空间里<strong>直接覆盖</strong>了第一个,单参版本已不存在;类里只剩下双参的 <code>f</code>。<code>c.f(1)</code> 只传了一个实参,双参版缺 <code>b</code>,于是报错。这就是"最后一个赢"的名字绑定规则,也正是"不能重载"的根因。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:<code>functools.singledispatch</code> 和 <code>typing.@overload</code>,哪个在运行时真的会按类型选择不同实现?</summary>
+<div class="answer">
+<p><strong>答案:只有 <code>singledispatch</code> 会。</strong></p>
+<p><code>singledispatch</code> 在<strong>运行时</strong>根据第一个实参的类型,真的去调你注册的对应实现——有实际分派效果。<br><code>typing.@overload</code> 只是<strong>给静态类型检查器 / IDE 看的签名声明</strong>,函数体是 <code>...</code>,运行时会被后面那个真正的实现覆盖,没有任何分派效果——真正执行的永远是最后那个非 <code>@overload</code> 的定义。一个是运行时机制,一个是静态提示,别搞反。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>Python <strong>不支持方法重载</strong>(同名方法后者覆盖前者,"最后一个赢"),因为动态类型没有"编译期按签名选函数"这一步;替代方案是默认参数、<code>*args</code>、<code>functools.singledispatch</code>(运行时按第一个实参类型分派)、<code>typing.@overload</code>(仅静态提示,运行时不分派)。但 Python <strong>支持运算符重载</strong>(<code>__add__</code>/<code>__eq__</code> 等 dunder)——这和方法重载是两码事,面试时务必拆开答。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《OOP Interview Questions》Q10(Name some ways to overload a method)——重载的三种方式(改变参数个数 / 类型 / 顺序)取自源题原文,是 Java 语境、编译器按签名选择。</li>
+<li><strong>canon(补充锚定):</strong>"Python 不支持方法重载、用什么替代、运算符重载"这部分源题未涉及,锚定 Python 官方文档:<a href="https://docs.python.org/3/library/functools.html#functools.singledispatch"><code>functools.singledispatch</code></a>、<a href="https://docs.python.org/3/library/functools.html#functools.singledispatchmethod"><code>singledispatchmethod</code></a>、<a href="https://docs.python.org/3/library/typing.html#typing.overload"><code>typing.overload</code></a>、<a href="https://docs.python.org/3/reference/datamodel.html#emulating-numeric-types">Data Model:运算符重载(<code>__add__</code> 等)</a>;Java 侧对照 <a href="https://docs.oracle.com/javase/tutorial/java/javaOO/methods.html">Oracle Java Tutorial:Defining Methods / Overloading</a>。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"为什么动态类型就不能重载"、或者拿你写的 <code>singledispatch</code> / <code>Money</code> 代码来评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节继续动态类型这条线——既然不靠签名和类型选方法,Python 靠什么判断"能不能这么用"?答案是鸭子类型,以及 ABC / Protocol 怎么给它加约束。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0019-multiple-inheritance-mro.html"><span class="dir">← 上一课</span>0019 · 多继承与 MRO:菱形继承怎么解</a>
+<a class="next" href="0021-duck-typing-abc-protocol.html"><span class="dir">下一课 →</span>0021 · 鸭子类型、ABC 与 Protocol</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

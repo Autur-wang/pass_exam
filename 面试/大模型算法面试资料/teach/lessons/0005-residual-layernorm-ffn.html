@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0005 · 残差、归一化、FFN 与激活</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第一部分 Transformer 精讲 · 第 0005 课</p>
+<h1>残差、归一化、FFN 与激活:把注意力「粘」成一个能训练的深层网络</h1>
+<p class="lede">前几课把注意力拆到骨头里,但注意力本身<strong>只是子层</strong>。真正让几十层堆起来还能训得动的,是包在它外面的三样「胶水」:残差连接、归一化、前馈网络(FFN)。面试官问 Transformer,除了 attention,追得最凶的就是这三块——「残差为什么能防梯度消失」「为什么用 LayerNorm 不用 BatchNorm」「Pre-Norm 和 Post-Norm 差在哪」「SwiGLU 比 ReLU 好在哪」。这节课把它们一次讲透。</p>
+
+<div class="recall">
+<p>上节课(位置编码与 RoPE)解决了「注意力天生看不见顺序」的问题。<strong>先别往下看,试着回忆:如果把很多个「注意力 + FFN」的子层直接首尾相连堆到 24、48 层,训练时最先崩掉的会是什么?</strong>(提示:想想梯度要从最顶层一路传回最底层,中间经过了多少次乘法。)</p>
+</div>
+
+<h2>一、先看骨架:一个 Transformer Block 长什么样</h2>
+<p>把镜头拉远。一个标准的 Transformer 层(block)其实只有<strong>两个子层</strong>:一个多头自注意力,一个前馈网络。它们各自被同一套「胶水」包起来——<strong>残差连接 + 层归一化</strong>。源教材里那句话说得很准:</p>
+<p>「两个子层之间通过残差连接(residual connection),然后进行层归一化(layer normalization)。」</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">输入 $x$</div>
+  <div class="node">LayerNorm</div>
+  <div class="node">多头自注意力</div>
+  <div class="node good">残差:$+\,x$</div>
+  <div class="node">LayerNorm</div>
+  <div class="node">FFN</div>
+  <div class="node good">残差:$+$ → 输出</div>
+</div>
+<figcaption>这是现代常用的 <strong>Pre-Norm</strong> 排法:归一化放进子层<em>内部</em>,残差在<em>外面</em>把输入直接加回来。注意——注意力和 FFN 是两个「独立打包」的模块,各带一条自己的残差旁路。</figcaption>
+</figure>
+
+<p>接下来逐块拆:<strong>残差</strong>负责让梯度传得回去,<strong>归一化</strong>负责让每层的数值分布稳定,<strong>FFN</strong>负责提供逐位置的非线性变换。缺一不可。</p>
+
+<h2>二、残差连接:给梯度留一条恒等「高速路」</h2>
+<p>直觉先行。深层网络最怕两件事——训着训着底层的梯度变成 0(<strong>梯度消失</strong>),或者炸到无穷(<strong>梯度爆炸</strong>)。为什么?因为反向传播时,底层梯度是一长串 Jacobian 连乘;每一项若小于 1,连乘几十次就指数级衰减到 0;若大于 1,就指数级放大。这正是源教材点出的:「靠近输出的层学得很好,靠近输入的层学得很慢。」</p>
+
+<p>残差连接的做法极简单——不让子层直接输出结果,而是让它学「<strong>残差</strong>」,再把原输入加回去:</p>
+$$y = x + F(x)$$
+<p class="formula-note">$F$ 是子层(注意力或 FFN),$x$ 是它的输入。子层只需学「在 $x$ 基础上要改动多少」,而不是从零重建整个映射。</p>
+
+<p>关键在反向传播这一步。对上式求导:</p>
+$$\frac{\partial \mathcal{L}}{\partial x} = \frac{\partial \mathcal{L}}{\partial y}\left(I + \frac{\partial F}{\partial x}\right)$$
+<p class="formula-note">括号里那个单位矩阵 $I$,就是「恒等映射保底」的数学本体。</p>
+
+<p>看那个 $I$:哪怕子层的 $\partial F/\partial x$ 已经小到几乎为 0(本该梯度消失),梯度里仍有 $I$ 这一项,让上层梯度<strong>原封不动</strong>穿过去。堆 $L$ 层时,没有残差的梯度是 $L$ 个 Jacobian 的连乘(指数衰减);有残差后展开成一堆求和项,里面永远含一条「直连恒等路径」。可以把它想成:主干道再堵,总有一条应急车道保证梯度能开回起点。</p>
+
+<pre>
+无残差:  x ─[F1]─[F2]─...─[FL]─ y      梯度 = J1·J2·...·JL   (连乘 → 易消失/爆炸)
+
+有残差:  x ─┬─[F1]─(+)─┬─[F2]─(+)─...─ y
+            └──────────┘└──────────┘
+            每个模块都有一条「恒等旁路」,梯度里总保留 I 项 (求和 → 保底)
+</pre>
+
+<p>源教材还特意区分了残差和激活函数:两者都跟「非线性/可训练性」沾边,但<strong>分工不同</strong>——残差解决的是<strong>梯度怎么传回去</strong>(优化问题),激活函数解决的是<strong>网络能不能表达非线性</strong>(表达能力问题)。别在面试里把两者混为一谈。</p>
+
+<h2>三、LayerNorm vs BatchNorm:NLP 为什么偏偏选 LayerNorm</h2>
+<p>归一化的目标:把每层的激活值拉回「均值约 0、方差约 1」的健康分布,避免数值随层数越漂越远,从而<strong>让训练更稳、收敛更快</strong>。区别只在一件事上——<strong>沿哪个维度求均值和方差</strong>。</p>
+
+<p>设一个 batch 的张量形状是 $[B,\,T,\,D]$(批大小、序列长度、特征维度):</p>
+
+<table>
+<thead><tr><th></th><th>BatchNorm</th><th>LayerNorm</th></tr></thead>
+<tbody>
+<tr><td>沿哪维统计</td><td>沿 <strong>batch(和时间)</strong> 维,对<em>每个特征</em>算均值方差</td><td>沿 <strong>特征 $D$</strong> 维,对<em>每个 token 单独</em>算</td></tr>
+<tr><td>依赖 batch 吗</td><td>依赖,batch 越小统计越不准</td><td>不依赖,单样本就能算</td></tr>
+<tr><td>变长序列</td><td>难办,不同位置样本数不等</td><td>天然支持,每个 token 各归各的</td></tr>
+<tr><td>训练/推理一致性</td><td>要维护滑动均值,两阶段行为不同</td><td>训练推理完全一致</td></tr>
+</tbody>
+</table>
+
+<p>NLP 选 LayerNorm 的两条硬理由,正是源教材反复强调的:</p>
+<ol>
+<li><strong>序列长度可变</strong>。BatchNorm 要跨样本对齐同一位置做统计,但句子长短不一、还带 padding,统计量抖得厉害。LayerNorm「针对单个样本」,对每个 token 在它自己的特征维上归一化,和别的样本、别的位置都无关。</li>
+<li><strong>不受 batch 大小绑架</strong>。大模型训练常用很小的有效 batch(甚至梯度累积),BatchNorm 在小 batch 下统计噪声大;LayerNorm 完全不看 batch。</li>
+</ol>
+
+<p>LayerNorm 的公式(对一个 token 的 $d$ 维向量 $x$):</p>
+$$\operatorname{LN}(x)=\gamma\odot\frac{x-\mu}{\sqrt{\sigma^2+\epsilon}}+\beta,\qquad \mu=\frac{1}{d}\sum_{i=1}^{d}x_i,\quad \sigma^2=\frac{1}{d}\sum_{i=1}^{d}(x_i-\mu)^2$$
+<p class="formula-note">$\mu,\sigma^2$ 只在这一个 token 的 $d$ 个特征上算;$\gamma,\beta$ 是可学习的缩放和平移(逐特征),$\epsilon$ 防止除零。归一化后再乘 $\gamma$ 加 $\beta$,是为了让网络<em>有权利</em>还原它需要的尺度。</p>
+
+<h2>四、Pre-Norm vs Post-Norm:深层模型为什么倒向 Pre-Norm</h2>
+<p>同样是「残差 + LN」,LN 摆在残差<em>里面</em>还是<em>外面</em>,结果差很多。这是面试高频追问点。</p>
+
+<div class="trio">
+  <div class="cell"><strong>Post-Norm</strong>(原始 Transformer)<br>$x_{l+1}=\operatorname{LN}\big(x_l+F(x_l)\big)$<br><em>先残差相加,再归一化</em></div>
+  <div class="cell"><strong>Pre-Norm</strong>(现代主流)<br>$x_{l+1}=x_l+F\big(\operatorname{LN}(x_l)\big)$<br><em>先归一化,再进子层,残差直连</em></div>
+  <div class="cell"><strong>差别的核心</strong><br>残差那条恒等路上,<br>有没有夹一个 LN?</div>
+</div>
+
+<p>看 Pre-Norm 的式子:$x_l$ 到 $x_{l+1}$ 之间,有一条<strong>纯净的加法恒等路径</strong>(LN 只作用在进入子层 $F$ 的那一支上,不挡主干)。于是从最顶层一路到最底层,残差主干是一条不被归一化「压缩」的直通道,梯度传播特别顺——这也是为什么很深的现代模型偏爱它:<strong>训练更稳定,对学习率 warmup 的依赖更小,更容易堆到很深还不发散</strong>。</p>
+
+<p>Post-Norm 则把 LN 卡在残差<em>之后</em>:每加一层,梯度回传都要先穿过一个 LN,深层时更容易出现梯度尺度失衡,通常需要更小心的 warmup 和初始化才能训稳。它并非一无是处——在层数不太多时,Post-Norm 有时能拿到略好的最终效果——但要把网络堆得很深,Pre-Norm 的可训练性优势就压倒一切了。</p>
+
+<p class="formula-note">注意用词:说 Pre-Norm「更容易训深、更稳」是站得住的普遍经验;但别说成「Pre-Norm 一定比 Post-Norm 效果好」——这是两个不同维度(可训练性 vs 最终精度),存在反例。</p>
+
+<h2>五、RMSNorm:把 LayerNorm 再砍一刀</h2>
+<p>源材料的优化清单里写着 <code>RMSNorm ==> LayerNorm</code>。RMSNorm 的思路是:LayerNorm 里的「减均值」这一步(中心化)其实贡献不大,真正起稳定作用的是「除以尺度」。那就<strong>把减均值项去掉</strong>,只用均方根(Root Mean Square)来缩放:</p>
+$$\operatorname{RMSNorm}(x)=\gamma\odot\frac{x}{\sqrt{\dfrac{1}{d}\sum_{i=1}^{d}x_i^2+\epsilon}}$$
+<p class="formula-note">对比 LayerNorm:没有 $\mu$(不减均值),也常省掉偏置 $\beta$。分母从「标准差」换成「均方根」。</p>
+
+<p>好处很实际:<strong>少算一遍均值、少一组减法,计算更省</strong>,而在实践中效果与 LayerNorm 相当。这是它被很多现代大模型(如 LLaMA 系列)采用的原因——在动辄几十层、每层都要归一化的规模下,省下的开销会累积。面试里这样答就到位:「RMSNorm 是 LayerNorm 去掉中心化(减均值)后的简化版,只做均方根缩放,更省算力、效果相当。」</p>
+
+<h2>六、FFN:每个位置各自过的「非线性小工厂」</h2>
+<p>注意力负责「跨位置」地把信息混合;但混合本身是线性加权。要给模型真正的非线性变换能力,靠的是 FFN(Feed-Forward Network)。它对序列里<strong>每一个位置独立、且共享同一套权重</strong>地做一次「升维 → 非线性 → 降维」:</p>
+$$\operatorname{FFN}(x)=\operatorname{ReLU}(xW_1+b_1)\,W_2+b_2$$
+<p class="formula-note">$W_1:\;d_{\text{model}}\to d_{\text{ff}}$ 先把维度撑大,激活函数注入非线性,$W_2:\;d_{\text{ff}}\to d_{\text{model}}$ 再压回原维度。原始 Transformer 论文里 $d_{\text{ff}}=4\,d_{\text{model}}$。</p>
+
+<p>三个关键点,面试常考:</p>
+<ul>
+<li><strong>逐位置(position-wise)</strong>:FFN 不看别的位置,每个 token 各过各的;跨位置交互全交给注意力。所以它等价于一个 kernel size 为 1 的卷积。</li>
+<li><strong>先升维再降维</strong>:中间层维度更大,给非线性变换更大的「操作空间」,类似先展开到高维特征空间做变换再投影回来。</li>
+<li><strong>非线性的来源</strong>:去掉中间的激活函数,两个线性层会塌缩成一个线性层(源教材说的「没有激活函数,网络仅能表示线性映射」)。激活函数是 FFN 表达能力的命门。</li>
+</ul>
+
+<h2>七、激活函数:从 ReLU 到 GELU、SwiGLU</h2>
+<p>为什么必须有激活函数?两条:<strong>提供非线性建模能力</strong>(否则整个网络退化成线性),以及<strong>基于梯度优化要求可微</strong>。源教材把这两点都点到了。演进路线大致是:</p>
+
+<h3>ReLU:简单但有「死区」</h3>
+$$\operatorname{ReLU}(x)=\max(0,x)$$
+<p>计算极快、缓解了 sigmoid 那种两端饱和导致的梯度消失。但它在 $x&lt;0$ 处梯度恒为 0,神经元一旦落入负区间可能「死掉」再也不更新,而且在 $x=0$ 处不光滑。</p>
+
+<h3>GELU:用「概率门」平滑地开关</h3>
+$$\operatorname{GELU}(x)=x\cdot\Phi(x)\approx 0.5x\Big(1+\tanh\big[\sqrt{2/\pi}\,(x+0.044715\,x^3)\big]\Big)$$
+<p class="formula-note">$\Phi$ 是标准正态分布的累积分布函数(CDF)。直觉:不像 ReLU「非 0 即 1」地硬砍,GELU 按输入大小给一个<em>平滑的通过概率</em>,越大的值越可能被保留。右边是论文给的 tanh 近似式。</p>
+
+<h3>SwiGLU / GeGLU:用门控机制升级 FFN</h3>
+<p>这是源材料优化清单里的 <code>SwiGLU/GeGLU ==> ReLU</code>。它把 FFN 的第一层拆成两支,一支当「内容」,一支过激活当「门」,再逐元素相乘(GLU,门控线性单元):</p>
+$$\operatorname{FFN}_{\text{SwiGLU}}(x)=\big(\operatorname{Swish}(xW_1)\odot (xW_3)\big)W_2,\qquad \operatorname{Swish}(z)=z\cdot\sigma(z)$$
+<p class="formula-note">$\odot$ 是逐元素乘,$\sigma$ 是 sigmoid。门那一支决定「让内容那一支的哪些成分通过、通过多少」。把 Swish 换成 GELU 就是 <strong>GeGLU</strong>。</p>
+<p>代价是从 2 个权重矩阵变成 3 个($W_1,W_3,W_2$)。为了让总参数量和原始 FFN 对齐,实现里<strong>通常把中间隐藏维度按比例缩小(约 $\tfrac{2}{3}$)</strong>。经验上这类门控激活能给 Transformer 带来稳定的质量提升,因此被许多现代大模型采用。</p>
+
+<h2>八、顺手补一刀:因果 mask 与其他防梯度问题的手段</h2>
+<h3>因果 mask 放在 softmax 之前</h3>
+<p>解码器的自注意力是「带掩码」的(源教材第 6 点):翻译/生成第 $i$ 个词时只能看到 $i$ 及之前,不能偷看未来。做法上——把未来位置的注意力分数<strong>在 softmax 之前</strong>置为 $-\infty$:</p>
+$$\operatorname{scores}_{ij}\leftarrow -\infty\quad(j&gt;i),\quad\text{然后}\ \operatorname{softmax}$$
+<p class="formula-note">为什么必须在 softmax <em>之前</em>?因为 $\operatorname{softmax}(-\infty)=0$,能让被遮位置权重干净地归零、其余位置仍正确归一化(和为 1)。若在 softmax <em>之后</em>再置 0,归一化就被破坏了。这点第 0002 课已经埋过,这里再钉一次。</p>
+
+<h3>缓解梯度消失/爆炸,不止残差一招</h3>
+<p>面试若追「还有别的手段吗」,可以成串报出(源教材第 14 点的延伸):</p>
+<ul>
+<li><strong>选对激活函数</strong>:用 ReLU/GELU 一族替代 sigmoid/tanh,避开两端饱和区。</li>
+<li><strong>归一化</strong>:LayerNorm/RMSNorm 稳住每层数值分布。</li>
+<li><strong>残差连接</strong>:恒等旁路给梯度保底(本课主角)。</li>
+<li><strong>合理的权重初始化</strong>:让前向/反向的方差在层间大致守恒。</li>
+<li><strong>梯度裁剪(gradient clipping)</strong>:给梯度范数设上限,专治爆炸。</li>
+<li><strong>学习率 warmup + 调度</strong>:训练初期小步慢走,避免早期大梯度把模型带飞。</li>
+</ul>
+
+<dl class="keydef">
+<dt>残差连接(Residual Connection)</dt>
+<dd>$$y=x+F(x)\quad\Rightarrow\quad \frac{\partial \mathcal{L}}{\partial x}=\frac{\partial \mathcal{L}}{\partial y}\Big(I+\frac{\partial F}{\partial x}\Big)$$</dd>
+<dd><em>恒等项 $I$ 保证梯度总有一条不衰减的直通路径,让深层网络可训练。子层学的是「残差」而非完整映射。</em></dd>
+<dt>LayerNorm</dt>
+<dd>$$\operatorname{LN}(x)=\gamma\odot\frac{x-\mu}{\sqrt{\sigma^2+\epsilon}}+\beta$$</dd>
+<dd><em>沿<strong>特征维</strong>、对<strong>单个 token</strong> 归一化,不依赖 batch 与序列长度,故 NLP 首选。</em></dd>
+<dt>RMSNorm</dt>
+<dd>$$\operatorname{RMSNorm}(x)=\gamma\odot\frac{x}{\sqrt{\frac1d\sum_i x_i^2+\epsilon}}$$</dd>
+<dd><em>LayerNorm 去掉减均值(中心化)的简化版,只做均方根缩放,更省算力。</em></dd>
+<dt>FFN(逐位置前馈网络)</dt>
+<dd>$$\operatorname{FFN}(x)=\operatorname{ReLU}(xW_1+b_1)W_2+b_2$$</dd>
+<dd><em>对每个位置独立地「升维 → 非线性 → 降维」,是 Transformer 里非线性表达的主要来源。</em></dd>
+</dl>
+
+<div class="implement">
+<p>把一个 Pre-Norm 的 Transformer block 敲一遍,注意残差是「在归一化之外」把原输入加回来:</p>
+<pre><code>import torch, torch.nn as nn
+
+class PreNormBlock(nn.Module):
+    def __init__(self, d_model, n_head, d_ff):
+        super().__init__()
+        self.ln1  = nn.LayerNorm(d_model)
+        self.attn = nn.MultiheadAttention(d_model, n_head, batch_first=True)
+        self.ln2  = nn.LayerNorm(d_model)
+        self.ffn  = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),                 # ReLU -> GELU 的那一刀
+            nn.Linear(d_ff, d_model),
+        )
+
+    def forward(self, x, attn_mask=None):
+        # 子层1:LN 在里面,残差在外面把 x 直接加回来
+        h = self.ln1(x)
+        a, _ = self.attn(h, h, h, attn_mask=attn_mask)  # 因果 mask 在 softmax 之前生效
+        x = x + a
+        # 子层2:同样的「LN -> 子层 -> 残差」结构
+        x = x + self.ffn(self.ln2(x))
+        return x
+
+# 最小化的 RMSNorm(去掉减均值)
+class RMSNorm(nn.Module):
+    def __init__(self, d, eps=1e-6):
+        super().__init__()
+        self.g = nn.Parameter(torch.ones(d)); self.eps = eps
+    def forward(self, x):
+        rms = x.pow(2).mean(-1, keepdim=True).add(self.eps).sqrt()
+        return self.g * x / rms</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「残差连接为什么能缓解梯度消失?」——反向传播里恒等项 $I$ 保底,梯度总有一条不衰减的直通路径;子层只学残差,更好优化。</li>
+<li>「为什么 Transformer 用 LayerNorm 不用 BatchNorm?」——LN 沿特征维对单个 token 归一化,不依赖 batch、天然支持变长序列;BN 依赖跨样本统计,变长 + 小 batch 时不稳。</li>
+<li>「Pre-Norm 和 Post-Norm 区别?现在为什么多用 Pre-Norm?」——LN 在残差里(Pre)还是外(Post);Pre-Norm 残差主干是纯恒等路,梯度更顺、更易训深、对 warmup 依赖更小。</li>
+<li>「RMSNorm 和 LayerNorm 差在哪?」——RMSNorm 去掉减均值,只做均方根缩放,更省算力、效果相当。</li>
+<li>「FFN 起什么作用?为什么要升维再降维?」——逐位置的非线性变换,是模型非线性表达的主要来源;中间升维给变换更大空间,去掉激活会塌成线性层。</li>
+<li>「从 ReLU 到 SwiGLU 的动机?」——平滑激活(GELU)避免 ReLU 死区;门控(SwiGLU/GeGLU)用一支当门控制另一支通过,经验上稳定提升质量。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别把<strong>残差</strong>和<strong>激活函数</strong>的作用混为一谈:残差解决梯度<em>怎么传回去</em>(优化),激活解决网络<em>能否表达非线性</em>(表达能力)。</li>
+<li>LayerNorm 是沿<strong>特征维</strong>、对<strong>每个 token 单独</strong>算,不是「对整个 batch」算——那是 BatchNorm。</li>
+<li>Pre-Norm 的公式是 $x+F(\operatorname{LN}(x))$,LN 只作用在进子层的那一支;写成 $\operatorname{LN}(x)+F(x)$ 或把 LN 套在残差外面就成 Post-Norm 了。</li>
+<li>别说「Pre-Norm 一定比 Post-Norm 效果更好」——它胜在<em>可训练性/训深的稳定性</em>,最终精度并非绝对更高,存在反例。</li>
+<li>因果 mask 要在 softmax <strong>之前</strong>把未来位置置 $-\infty$;之后再置 0 会破坏归一化。</li>
+<li>SwiGLU 用了 3 个权重矩阵,为对齐参数量通常缩小隐藏维度(约 $2/3$),不要以为它「白嫖」了参数。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>关于 Transformer 里用 LayerNorm 而非 BatchNorm,下列说法正确的是?</p>
+<details><summary>A. BatchNorm 参数更多,所以换成更省参的 LayerNorm</summary>两者可学习参数量同量级,原因不在参数多少。</details>
+<details><summary>B. LayerNorm 会跨样本统计均值方差,更适合大 batch</summary>说反了。跨样本统计的是 BatchNorm;LayerNorm 恰恰不依赖 batch。</details>
+<details><summary>C. LayerNorm 沿特征维对单个 token 归一化,不依赖 batch、天然支持变长序列 ✅</summary>正确。NLP 序列变长、有效 batch 常很小,LayerNorm 对每个 token 各归各的,统计稳定且训练推理一致。</details>
+<details><summary>D. 两者完全等价,只是命名习惯不同</summary>不等价——归一化的统计维度不同,行为差异很大。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>下面哪一项<strong>最能</strong>解释「残差连接为什么能缓解梯度消失」?</p>
+<details><summary>A. 反向传播时梯度里恒有一个恒等项 $I$,保证存在一条不衰减的直通路径 ✅</summary>正确。$y=x+F(x)$ 求导得 $I+\partial F/\partial x$,即使 $\partial F/\partial x\to 0$,$I$ 仍让梯度原样穿过。</details>
+<details><summary>B. 残差把激活值限制在 0~1,防止数值溢出</summary>把数值拉回标准分布是归一化(LN)的活儿,不是残差的机制。</details>
+<details><summary>C. 残差引入了非线性,增强了表达能力</summary>提供非线性的是激活函数;残差本身是线性的加法旁路。</details>
+<details><summary>D. 残差减少了模型的参数量,使训练更容易</summary>残差是加法连接,不减少参数,与参数量无关。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Attention Is All You Need</strong>(Vaswani et al., 2017)——block 结构、残差 + LayerNorm(原始为 Post-Norm)、逐位置 FFN($d_{\text{ff}}=4\,d_{\text{model}}$)都出自此。</li>
+<li><strong>Deep Residual Learning for Image Recognition</strong>(He et al., 2015)——残差连接的原始论文,「学残差」的思想源头。</li>
+<li><strong>Layer Normalization</strong>(Ba, Kiros & Hinton, 2016)与 <strong>Batch Normalization</strong>(Ioffe & Szegedy, 2015)——两种归一化的原始出处。</li>
+<li><strong>On Layer Normalization in the Transformer Architecture</strong>(Xiong et al., 2020)——系统分析 Pre-LN 与 Post-LN 的梯度行为与训练稳定性。</li>
+<li><strong>Root Mean Square Layer Normalization</strong>(Zhang & Sennrich, 2019)——RMSNorm 原始论文。</li>
+<li><strong>Gaussian Error Linear Units (GELUs)</strong>(Hendrycks & Gimpel, 2016)与 <strong>GLU Variants Improve Transformer</strong>(Shazeer, 2020)——GELU 与 SwiGLU/GeGLU 的来源。</li>
+<li>下一步:推理时如何缓存 K、V 省掉重复计算(第 0006 课 KV Cache)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>残差(恒等旁路保梯度)+ LayerNorm/RMSNorm(稳分布,Pre-Norm 更易训深)+ FFN(逐位置升维→非线性→降维,激活从 ReLU 走到 SwiGLU)= 让注意力能堆成深层网络的三块胶水。</strong></p>
+<nav class="lesson-nav">
+<a href="0004-positional-encoding-rope.html">← 上一课:位置编码与 RoPE</a>
+<a href="0006-kv-cache.html">下一课:KV Cache →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

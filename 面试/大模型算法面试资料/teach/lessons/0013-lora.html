@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0013 · LoRA 原理与数学</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第四部分 微调 PEFT · 第 0013 课</p>
+<h1>LoRA 原理与数学</h1>
+<p class="lede">全参微调要为每个参数存梯度和优化器状态,一个 7B 模型光优化器状态就能压垮一张卡。LoRA 用一个近乎「作弊」的观察绕开了它:模型适配到新任务时,权重的<strong>变化量</strong> $\Delta W$ 其实很「扁」——秩很低。于是不去动那张巨大的 $W_0$,只在旁边挂一条低秩旁路 $BA$。这节课把 $W'=W_0+BA$ 拆到你能手写实现,并答得出面试官最爱追的四问:冻结了什么、$r$ 怎么选、$\alpha$ 干什么、为什么推理不变慢。</p>
+
+<div class="recall">
+<p>上节课(全参微调 vs PEFT)讲到:全参微调的真正开销不在权重本身,而在<strong>为每个可训练参数额外维护的梯度 + Adam 的一阶/二阶动量</strong>——大约是参数量的好几倍显存。<strong>先别往下看,试着回忆:如果我们想微调一个巨大的权重矩阵 $W_0$,却又不想为它的每个元素都存优化器状态,能不能只训练「一小块」东西,同时保证一开始不破坏原模型?</strong></p>
+</div>
+
+<h2>一、直觉:不改大矩阵,只挂一条低秩旁路</h2>
+<p>微调本质上是把预训练权重 $W_0$ 改成 $W_0+\Delta W$。全参微调直接学整个 $\Delta W$,它和 $W_0$ 一样大。LoRA 的赌注是:<strong>这个 $\Delta W$ 不需要那么「满」</strong>——它可以被两个瘦长矩阵的乘积很好地近似。</p>
+<p>打个比方:$\Delta W$ 是一张 $4096\times 4096$ 的大照片,但它的信息量其实很低(像一面纯色墙)。与其逐像素存,不如存「一个先降维、再升维」的小通道:先用 $A$ 把输入压到 $r$ 维的瓶颈(比如 $r=8$),再用 $B$ 把它升回原维度。中间这个 $r$ 就是这条旁路能表达的「秩」上限。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">输入 $x$</div>
+  <div class="node">冻结主干<br>$W_0 x$</div>
+  <div class="node">降维 $A$<br>$k\to r$</div>
+  <div class="node">升维 $B$<br>$r\to d$</div>
+  <div class="node good">相加<br>$h=W_0x+\tfrac{\alpha}{r}BAx$</div>
+</div>
+<figcaption>输入 $x$ 同时走两条路:冻结的主干 $W_0$(不学),和可训练的低秩旁路 $B(Ax)$(只学 $A,B$),输出相加。</figcaption>
+</figure>
+
+<p>训练时只有旁路里的 $A$、$B$ 有梯度,$W_0$ 被冻住——于是需要存优化器状态的参数量从 $dk$ 骤降到 $r(d+k)$。这就是「参数高效」四个字的全部秘密。</p>
+
+<h2>二、关键定义与公式</h2>
+<dl class="keydef">
+<dt>低秩自适应(LoRA, Low-Rank Adaptation)</dt>
+<dd>冻结预训练权重 $W_0\in\mathbb{R}^{d\times k}$,把权重更新约束成低秩分解:
+$$\Delta W = BA,\qquad W' = W_0 + \Delta W = W_0 + BA$$
+<em>其中 $A\in\mathbb{R}^{r\times k}$ 是降维(下投影)矩阵,$B\in\mathbb{R}^{d\times r}$ 是升维(上投影)矩阵,秩 $r\ll\min(d,k)$。$W_0$ 冻结不更新,只训练 $A$ 和 $B$。</em></dd>
+<dt>前向传播</dt>
+<dd>$$h = W_0 x + BAx = W_0 x + B(Ax)$$
+<em>注意括号:先算 $Ax$(得到 $r$ 维小向量)再乘 $B$,永远不要显式构造 $d\times k$ 的 $BA$,否则就没省下内存了。</em></dd>
+<dt>缩放因子 $\alpha$</dt>
+<dd>为了让「调 $r$」和「调学习率」尽量解耦,实际增量乘一个固定缩放 $\tfrac{\alpha}{r}$:
+$$h = W_0 x + \frac{\alpha}{r}\,BAx$$
+<em>$\alpha$(代码里的 <code>lora_alpha</code>)是超参。因为分母有 $r$,当你把 $r$ 从 8 调到 16 时,只要按比例同步调 $\alpha$,旁路输出的整体幅度就大致不变,不必重新找学习率。</em></dd>
+</dl>
+
+<h3>初始化:让训练从「原模型」这个起点出发</h3>
+<p>$A$ 用随机<strong>高斯</strong>初始化,$B$ 初始化为<strong>全零</strong>。于是训练第 0 步:</p>
+$$\Delta W = BA = B\cdot A = \mathbf{0}\cdot A = \mathbf{0} \quad\Rightarrow\quad W' = W_0$$
+<p class="formula-note">起点处旁路输出恒为 0,模型行为与原预训练模型完全一致。</p>
+<p>这一步设计得很巧:如果 $A$、$B$ 都随机初始化,一开机就给 $W_0$ 叠加了一个随机扰动,相当于先把好好的预训练模型「打乱」再学,起点更差、更不稳。让 $B=0$ 保证从一个已知的好起点平滑出发。<strong>(不必两个都置零——若 $A=B=0$,梯度也会卡在零点,旁路永远学不动。)</strong></p>
+
+<h3>为什么低秩就够用?</h3>
+<p>这不是拍脑袋。已有工作观察到:预训练模型在下游任务上的适配,其实发生在一个<strong>低维本征子空间</strong>里——真正需要调整的「自由度」远少于参数总数。LoRA 把这个观察直接写进结构:强制 $\Delta W$ 的秩 $\le r$。原论文的一个有意思的发现是,即便把 $r$ 取得很小,在很多任务上效果依然能打——这反过来支持了「适配矩阵内在秩很低」的假设。但这更像一个<strong>经验规律而非定理</strong>:任务和原模型差异越大(比如跨语言、跨模态),需要的 $r$ 通常越高,不要当成对所有任务都成立的铁律。</p>
+
+<h3>参数省了多少?算一笔账</h3>
+<p>取 $d=k=4096$、$r=8$:</p>
+<table>
+<thead><tr><th></th><th>可训练参数量</th><th>数值</th></tr></thead>
+<tbody>
+<tr><td>全参微调</td><td>$dk$</td><td>$4096\times4096 \approx 1.68\times10^{7}$</td></tr>
+<tr><td>LoRA</td><td>$r(d+k)$</td><td>$8\times(4096+4096) = 65536$</td></tr>
+</tbody>
+</table>
+<p>这一层的可训练参数减少约 $99.6\%$。省下的不只是参数本身,还有它们对应的梯度与优化器动量——那才是省显存的大头。</p>
+
+<h2>三、加在哪些层 &amp; 推理为什么不变慢</h2>
+<p><strong>加在哪些层:</strong>LoRA 是「即插即用」的,原则上任何线性层都能挂旁路。原论文主要在注意力的投影矩阵($W_q,W_k,W_v,W_o$)上做实验,并发现<strong>同时适配 Q、V 投影</strong>通常是性价比很高的配置——这就是 <code>target_modules=["q_proj","v_proj"]</code> 成为常见默认的原因。想要更强表达力时,再把 K、O 投影甚至 MLP 的 <code>gate/up/down</code> 也加上,代价是可训练参数变多。</p>
+
+<p><strong>推理为什么不增延迟:</strong>训练时 $W_0$ 和旁路 $BA$ 是分开的两条路(为了只对 $A,B$ 求梯度)。但部署时可以把它们<strong>提前算好合并</strong>:</p>
+$$W' = W_0 + \frac{\alpha}{r}BA$$
+<p class="formula-note">$W'$ 和 $W_0$ 形状完全相同,合并后前向就是一次普通的 $W'x$,和原模型一模一样。</p>
+<p>合并后没有任何多出来的矩阵乘,所以推理延迟不增加。这正是 LoRA 相对 <strong>Adapter</strong> 的关键优势:Adapter 往网络里<strong>串联</strong>插入额外的小层,这些层必须在前向里顺序执行,天然带来额外延迟,且无法「吸收」回原权重(下一课细讲)。反过来说,合并是把某一套 LoRA「焊死」进权重;如果你想在多个 LoRA 之间热切换(一个底座 + 多套任务旁路),就<strong>别合并</strong>,保留旁路即可。</p>
+
+<pre><code>from peft import LoraConfig, get_peft_model
+
+config = LoraConfig(
+    r=8,                       # 秩:低秩瓶颈的宽度,控制旁路表达力
+    lora_alpha=16,             # 缩放:实际增量 = (alpha/r)·BA
+    target_modules=["q_proj", "v_proj"],  # 通常先只挂注意力的 Q、V 投影
+    lora_dropout=0.05,
+    bias="none",               # 一般不训练 bias
+    task_type="CAUSAL_LM",
+)
+model = get_peft_model(base_model, config)
+model.print_trainable_parameters()   # 打印可训练参数量及占比(常见远低于 1%)</code></pre>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「LoRA 到底冻结了什么、训练了什么?」——冻结全部预训练权重 $W_0$(以及通常的 embedding、LayerNorm),只训练注入的低秩矩阵 $A$、$B$;$\alpha$、$r$ 是固定超参不参与训练。</li>
+<li>「$r=8$ 和 $r=16$ 怎么选?」——$r$ 是旁路的表达力上限。任务简单/数据少 → 小 $r$(如 8)够用且更省、更抗过拟合;任务与原模型差异大或欠拟合 → 加大 $r$。工程上常从 8 起步,看验证集是否欠拟合再往上调。别背具体准确率数字,讲清「容量 vs 参数量/过拟合」的权衡即可。</li>
+<li>「<code>lora_alpha</code> 是干嘛的?」——缩放 $\tfrac{\alpha}{r}$ 控制旁路增量的幅度;有了 $r$ 做分母,改 $r$ 时按比例同步改 $\alpha$ 就能让整体幅度稳定,把「调秩」和「调学习率」解耦。</li>
+<li>「为什么 LoRA 推理不增加延迟?」——可把 $W'=W_0+\tfrac{\alpha}{r}BA$ 提前合并成同形状的单个矩阵,前向与原模型无异;对比 Adapter 的串联层必然带来延迟。</li>
+<li>「为什么 $A$ 高斯、$B$ 置零?」——保证起点 $BA=0$,初始等价于原模型,从好起点平滑出发。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把 $A$、$B$ <strong>都</strong>初始化为 0:梯度会卡死,旁路永远学不出东西。正确是「$A$ 高斯、$B$ 置零」(或反过来其中一个非零),关键是保证起点 $BA=0$ 且梯度不为零。</li>
+<li>前向别显式构造 $BA$:要写成 $B(Ax)$。先算出 $d\times k$ 的 $BA$ 再乘 $x$,内存和算力都白省了。</li>
+<li>混淆 $r$ 与 $\alpha$:$r$ 决定「能表达多复杂的更新」(容量),$\alpha/r$ 决定「这个更新叠加多强」(幅度)。两者作用不同。</li>
+<li>说「LoRA 一定不损失效果」——过于绝对。多数任务能接近全参微调,但任务差异大、$r$ 太小时仍可能欠拟合;讲成「通常能打平」更稳妥。</li>
+<li>合并了权重就不能再切换任务 LoRA。要热切换多套旁路,推理时保留 $A,B$ 分离,别 merge。</li>
+</ul>
+</div>
+
+<div class="implement">
+<p>把公式翻译成一个最小的 LoRA 线性层,自己敲一遍(注意初始化与 $B(Ax)$ 的括号顺序):</p>
+<pre><code>import torch, torch.nn as nn
+
+class LoRALinear(nn.Module):
+    def __init__(self, base: nn.Linear, r=8, alpha=16):
+        super().__init__()
+        self.base = base                       # 冻结的 W0
+        for p in self.base.parameters():
+            p.requires_grad = False
+        d, k = base.out_features, base.in_features
+        self.A = nn.Parameter(torch.randn(r, k) * 0.01)  # 高斯初始化
+        self.B = nn.Parameter(torch.zeros(d, r))         # 置零 → 起点 BA=0
+        self.scaling = alpha / r
+
+    def forward(self, x):                       # x: [..., k]
+        # h = W0 x + (alpha/r) * B (A x)，注意先算 A x
+        lora = (x @ self.A.T) @ self.B.T        # [..., r] -> [..., d]
+        return self.base(x) + self.scaling * lora</code></pre>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>为什么说 LoRA 相比 Adapter「推理时不增加延迟」?</p>
+<details><summary>A. 因为 $r$ 很小,那次额外的矩阵乘可以忽略不计</summary>不对。不是「忽略不计」,而是合并后<em>根本没有</em>额外矩阵乘;而且训练/未合并时旁路确实要多算一次。</details>
+<details><summary>B. 因为 LoRA 只在训练时起作用,推理阶段会被丢弃</summary>错误,推理时旁路的贡献必须保留,否则等于没微调。</details>
+<details><summary>C. 因为可把 $W'=W_0+\tfrac{\alpha}{r}BA$ 提前合并成同形状的单个矩阵,部署时前向与原模型完全相同 ✅</summary>正确。合并后就是一次普通的 $W'x$,没有多出来的层或乘法;Adapter 的串联层则必须顺序执行,带来延迟。</details>
+<details><summary>D. 因为它依赖 4-bit 量化来加速前向</summary>混淆了。量化是 QLoRA(下一课)的事,与「无额外延迟」无关。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>LoRA 中 $A$ 用高斯初始化、$B$ 初始化为全零,最主要的目的是?</p>
+<details><summary>A. 保证初始时 $BA=0$,模型输出等于原预训练模型,训练从一个稳定的好起点出发 ✅</summary>正确。$B=0$ 使起点处旁路贡献为 0,不会一开机就用随机扰动破坏预训练权重。</details>
+<details><summary>B. 零矩阵参与运算更快,能加速训练</summary>不对,这与训练速度无关,零只是初始值,很快就会被更新。</details>
+<details><summary>C. 为了节省存储 $B$ 的显存</summary>错误。$B$ 是可训练参数,置零只是初始值,并不省存储。</details>
+<details><summary>D. 如果 $A$、$B$ 都用高斯初始化会导致梯度爆炸</summary>不准确。两个都高斯的主要问题是起点即给 $W_0$ 叠加随机扰动、起点更差,而不是必然梯度爆炸。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>LoRA: Low-Rank Adaptation of Large Language Models</strong>(Hu et al., 2021)——本课全部公式的原始出处,含 $r$、$\alpha$、target modules 的消融与「秩很小也够用」的实验。</li>
+<li><strong>Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning</strong>(Aghajanyan et al., 2020)——「低内在秩/低维本征子空间」假设的来源,解释了为什么低秩够用。</li>
+<li><strong>Parameter-Efficient Transfer Learning for NLP</strong>(Houlsby et al., 2019)——Adapter 的原始论文,理解它「串联插层带来延迟」才能体会 LoRA 可合并的优势。</li>
+<li>下一步:把主干量化成 4-bit 再挂 LoRA(QLoRA),以及 Adapter / Prefix Tuning 的对比(第 0014 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>冻结 $W_0$,只训练低秩旁路 $BA$($A$ 高斯、$B$ 置零使起点不变),$W'=W_0+\tfrac{\alpha}{r}BA$ 可合并回权重,故推理零额外延迟。</strong></p>
+<nav class="lesson-nav">
+<a href="0012-full-vs-peft.html">← 上一课:全参微调 vs PEFT</a>
+<a href="0014-qlora-adapter-prefix.html">下一课:QLoRA / Adapter / Prefix →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

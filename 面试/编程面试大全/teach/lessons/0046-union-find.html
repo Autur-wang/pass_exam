@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0046 · 并查集:近乎 O(1) 的连通性</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0046 课 · 更多结构与文本 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>并查集:近乎 O(1) 的连通性</h1>
+
+<p class="lede">「这两个元素连通吗?」「把这两个集合并起来。」当连接关系<strong>动态、不断加入</strong>时,反复跑 DFS/BFS 太贵。<strong>并查集(Union-Find)</strong>用一片父指针森林 + 两个小优化,把 union 和 find 摊到<strong>近乎常数</strong>时间——这是一个「结构极简、复杂度分析极深」的经典结构。</p>
+
+<div class="recall">
+<p>先回忆<a href="0029-graph-traversal.html">图遍历</a>那节:判断两点是否连通,可以从一点 BFS/DFS,看能否到达另一点,单次 O(V+E)。先想一个问题:如果要回答「成千上万次连通性查询」,而且图的边还在<strong>一条条动态加入</strong>,每次都重跑一遍遍历,代价受得了吗?并查集就是为这个场景生的。</p>
+</div>
+
+<h2>一、直觉:每个集合选一个「代表」</h2>
+
+<p>把每个元素看成一个节点,给它一个「父指针」。同一集合里的节点最终都指向同一个<strong>根</strong>(代表元)。判断两元素是否同集合,就是<strong>各自往上找根,看根是否相同</strong>(<code>find</code>);合并两集合,就是<strong>把一个根挂到另一个根下</strong>(<code>union</code>)。整个结构是一片「孩子指向父亲」的森林,和树遍历里「父指向孩子」的方向正好相反。</p>
+
+<p>朴素实现有个隐患:如果每次都把树越接越高,<code>find</code> 要顺着长链一路爬到根,最坏退化成 O(n)。两个优化联手根治这件事。</p>
+
+<h2>二、两个优化:让树永远又矮又胖</h2>
+
+<p><strong>路径压缩(path compression)</strong>:每次 <code>find</code> 爬到根之后,顺手把这一路上的节点<strong>直接改挂到根</strong>下。下次再查它们就一步到根。<strong>按秩/按大小合并(union by rank/size)</strong>:<code>union</code> 时总是把「矮的/小的」树挂到「高的/大的」树下,避免把高树越叠越高。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 480 262" role="img" aria-label="路径压缩前后对比">
+  <defs>
+    <marker id="uf-arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path class="dgm-accent" d="M0,0 L7,3 L0,6 Z"/>
+    </marker>
+  </defs>
+  <text class="dgm-muted" x="90" y="18" text-anchor="middle" font-size="12">find(1) 之前:一条长链</text>
+  <text class="dgm-muted" x="370" y="18" text-anchor="middle" font-size="12">路径压缩之后:全挂到根</text>
+  <!-- left: chain -->
+  <line class="dgm-edge" x1="90" y1="202" x2="90" y2="176" marker-end="url(#uf-arrow)"/>
+  <line class="dgm-edge" x1="90" y1="142" x2="90" y2="116" marker-end="url(#uf-arrow)"/>
+  <line class="dgm-edge" x1="90" y1="82" x2="90" y2="56" marker-end="url(#uf-arrow)"/>
+  <circle class="dgm-accent-node" cx="90" cy="40" r="16"/>
+  <text class="dgm-accent-text" x="90" y="45" text-anchor="middle" font-size="14">4</text>
+  <circle class="dgm-node" cx="90" cy="100" r="16"/>
+  <text class="dgm-text" x="90" y="105" text-anchor="middle" font-size="14">3</text>
+  <circle class="dgm-node" cx="90" cy="160" r="16"/>
+  <text class="dgm-text" x="90" y="165" text-anchor="middle" font-size="14">2</text>
+  <circle class="dgm-node" cx="90" cy="220" r="16"/>
+  <text class="dgm-text" x="90" y="225" text-anchor="middle" font-size="14">1</text>
+  <!-- right: flat -->
+  <line class="dgm-edge" x1="306" y1="128" x2="354" y2="54" marker-end="url(#uf-arrow)"/>
+  <line class="dgm-edge" x1="370" y1="124" x2="370" y2="58" marker-end="url(#uf-arrow)"/>
+  <line class="dgm-edge" x1="434" y1="128" x2="386" y2="54" marker-end="url(#uf-arrow)"/>
+  <circle class="dgm-accent-node" cx="370" cy="40" r="16"/>
+  <text class="dgm-accent-text" x="370" y="45" text-anchor="middle" font-size="14">4</text>
+  <circle class="dgm-node" cx="300" cy="142" r="16"/>
+  <text class="dgm-text" x="300" y="147" text-anchor="middle" font-size="14">1</text>
+  <circle class="dgm-node" cx="370" cy="142" r="16"/>
+  <text class="dgm-text" x="370" y="147" text-anchor="middle" font-size="14">2</text>
+  <circle class="dgm-node" cx="440" cy="142" r="16"/>
+  <text class="dgm-text" x="440" y="147" text-anchor="middle" font-size="14">3</text>
+</svg>
+</div>
+<figcaption>红色是根(代表元)。左边 <code>find(1)</code> 要爬 3 步到根;返回途中路径压缩把 1、2、3 全部改挂到根 4,变成右边的扁平状。此后对它们的 <code>find</code> 都一步到位。两个优化合用,平均查找路径趋于常数。</figcaption>
+</figure>
+
+<p>神奇之处在复杂度:路径压缩 + 按秩合并<strong>合用</strong>时,每次操作的摊还代价是 <strong>O(α(n))</strong>,α 是<strong>反阿克曼函数(inverse Ackermann)</strong>——它增长得极其极其慢,对宇宙里任何可能的 n,α(n) 都不超过 4~5。所以工程上直接当作<strong>常数</strong>看待。</p>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>并查集(Union-Find / Disjoint Set)</dt>
+<dd>维护若干不相交集合、支持 <code>union</code>(合并)与 <code>find</code>(查代表元)的结构,配合路径压缩 + 按秩合并近似 O(1)。<em>避免</em>「联合查找」「不相交集」混称——本课统一叫并查集。</dd>
+<dt>代表元 / 根(representative / root)</dt>
+<dd>每个集合选出的唯一节点,父指针链的终点。「两元素同集合」等价于「两者的根相同」。</dd>
+<dt>反阿克曼函数 α(n)</dt>
+<dd>路径压缩 + 按秩合并后的摊还复杂度因子,增长慢到对一切实际 n 都 ≤ 5,故视为常数。<em>避免</em>把它说成「严格 O(1)」——严谨说法是「摊还 O(α(n))」。</dd>
+</dl>
+
+<h2>四、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">实现方式</th><th>find 摊还</th><th>union 摊还</th></tr></thead>
+<tbody>
+<tr><td class="op">朴素(无优化)</td><td class="warn">O(n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">仅按秩合并</td><td>O(log n)</td><td>O(log n)</td></tr>
+<tr><td class="op">路径压缩 + 按秩合并</td><td class="best">O(α(n))≈O(1)</td><td class="best">O(α(n))≈O(1)</td></tr>
+</tbody>
+</table>
+<p>空间 O(n)(一个父指针数组,可再加一个秩/大小数组)。看清这张表的层次:两个优化<strong>各自单用</strong>都只到 O(log n),<strong>合用</strong>才近乎常数;不加优化则退化到 O(n)。这正是面试官爱挖的点。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>听到这些信号词,并查集应第一个跳进脑子:</p>
+<ul>
+<li><strong>「动态连通性 / 朋友圈 / 省份数量」</strong>:边或关系一条条加入,反复问「连通吗」——并查集比每次重跑 DFS 高效得多。</li>
+<li><strong>「岛屿合并 / 账户合并 / 等式方程可满足性」</strong>:本质都是「把有关系的元素并进同一集合,再查询」。</li>
+<li><strong>Kruskal 最小生成树</strong>:按边权从小到大加边,用并查集判「加这条边会不会成环」(两端已同集合就跳过)。</li>
+<li><strong>无向图判环</strong>:遍历每条边,若两端已在同一集合,则出现环。</li>
+</ul>
+<p>相比 DFS/BFS,并查集的优势正是<strong>边流式加入</strong>的场景——它不需要一开始就拿到整张图。</p>
+</div>
+
+<div class="gotcha">
+<p><strong>不加优化会退化成 O(n)。</strong>朴素并查集能把树接成一条长链,<code>find</code> 就成了顺链爬,最坏 O(n)。写并查集<strong>一定要带上路径压缩</strong>(通常还配按秩/按大小合并),否则在链式输入下和暴力没区别。</p>
+<p><strong>两个优化要一起用才近常数。</strong>只用其中一个是 O(log n),合用才是 O(α(n))。面试答题时把这个层次说清楚,比笼统说「并查集是 O(1)」专业得多。另外别把 α(n) 神化——它是反阿克曼函数,极小但严格来说复杂度是「摊还 O(α(n))」,不是「每次都 O(1)」。</p>
+</div>
+
+<div class="implement">
+<p>动手清单:</p>
+<p>1. 用一个 <code>parent[]</code> 数组实现最朴素的 <code>find</code>(顺父指针爬到根)和 <code>union</code>。</p>
+<p>2. 给 <code>find</code> 加路径压缩(递归版:<code>parent[x] = find(parent[x])</code>)。</p>
+<p>3. 给 <code>union</code> 加按秩(或按大小)合并,维护一个 <code>rank[]</code> 或 <code>size[]</code>。</p>
+<p>4. 用它解 LeetCode 547「省份数量」或 200「岛屿数量」,并数一数「集合个数」= 有多少个 <code>parent[i]==i</code> 的根。</p>
+<p>5. 构造一条链式合并输入,对比「有无路径压缩」时 <code>find</code> 的爬升步数。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>并查集是一片「孩子指向父亲」的森林,靠<strong>路径压缩 + 按秩合并</strong>两招合用把 union/find 摊到近乎常数(O(α(n)))。见到「动态连通性/合并集合/判环/Kruskal」就想到它。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一个并查集只用了路径压缩,没用按秩合并。它单次操作的摊还复杂度大约是?</summary>
+<div class="answer">
+<p>大约 <strong>O(log n)</strong>(更精确是 O(log n) 级,与只用按秩合并同量级)。达到 <strong>O(α(n))≈O(1)</strong> 需要<strong>两个优化合用</strong>。这道题就是在考「层次」:无优化 O(n)、单个优化 O(log n)、合用 O(α(n))。把这三档背清楚,面试里被追问就不会含糊。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪个场景最适合用并查集,而不是每次都跑一遍 DFS/BFS?</summary>
+<div class="answer">
+<p><strong>「边一条条动态加入,期间要反复查询任意两点是否连通」</strong>。这种流式加边 + 大量连通性查询的场景,并查集每次操作近乎 O(1),而重跑遍历每次 O(V+E)。相反,若需要「求两点间最短路径长度」或「输出具体路径」,并查集做不到——它只回答「是否同一集合」,不保存路径。选「求最短路径」的话就用错了工具(那是 BFS/Dijkstra 的活)。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲「不相交集 &amp; 联合查找」小节。两条一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=MAEGXTwmUsI&amp;list=PL-XXv-cvA_iAlnI-BQr9hjqADPBtujFJd&amp;index=21">UCB 61B —— 不相交集;排序 &amp; 选择(视频)</a> —— 从头讲森林表示与两个优化。</li>
+<li><a href="https://www.coursera.org/learn/algorithms-part1/home/week/1">Sedgewick 算法 · Union-Find(6 段视频)</a> —— 经典入门,含 quick-find/quick-union/加权 + 路径压缩的演进。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师带你手动执行几次 <code>union</code> 再画出森林,亲眼看按秩合并如何压住树高、路径压缩如何把长链拍扁。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0045-trie.html"><span class="dir">← 上一课</span>字典树 Trie:前缀即路径</a>
+  <a class="next" href="0047-balanced-trees.html"><span class="dir">下一课 →</span>平衡查找树:对抗 BST 退化</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

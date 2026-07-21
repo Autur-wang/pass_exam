@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>组合 vs 继承 vs mixin · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第三部分 · 关系与耦合 · 第 0010 节</p>
+<h1>组合 vs 继承 vs mixin:三种复用手段,以及为什么"组合优于继承"</h1>
+<p class="lede">"你怎么在两个类之间复用代码?"——这个问题背后有三个答案:继承、组合、mixin。会背三个定义只是及格;能当场判断"这里到底该用哪个",才是加分项。这一节把三者摆在一起讲透,并说清那条著名准则的分寸。</p>
+
+<div class="recall">
+<p>先想一个具体场景:你有个 <code>Car</code> 类需要"启动引擎"的能力,又有个 <code>Boat</code> 类也要"启动引擎"。你有两个直觉选项:让 <code>Car</code>、<code>Boat</code> 都继承一个 <code>Engine</code> 类,或者让它们各自"持有"一个 <code>Engine</code> 对象。哪种更合理?为什么?先给自己一个答案,再往下看。</p>
+</div>
+
+<h2>一、直觉:三个问句,对应三种关系</h2>
+
+<p>继承、组合、mixin 表面上都在做同一件事——<strong>让一个类用上另一处写好的代码</strong>。区别不在"能不能复用",而在<strong>你在描述一种什么关系</strong>。三者各自对应一个你能大声说出口的句子:</p>
+
+<div class="trio">
+  <div class="cell">
+    <div class="role">继承 Inheritance</div>
+    <div class="head">is-a</div>
+    <div class="sub">Car <em>is a</em> Vehicle</div>
+  </div>
+  <div class="cell">
+    <div class="role">组合 Composition</div>
+    <div class="head">has-a</div>
+    <div class="sub">Car <em>has an</em> Engine</div>
+  </div>
+  <div class="cell">
+    <div class="role">Mixin</div>
+    <div class="head">can-do</div>
+    <div class="sub">Helicopter <em>can fly</em></div>
+  </div>
+</div>
+
+<ul>
+<li><strong>继承(is-a)</strong>:子类<em>就是</em>父类的一种。Car 本质上是一种 Vehicle,所以它天然拥有 Vehicle 的一切。你在建立<strong>分类学上的从属关系</strong>。</li>
+<li><strong>组合(has-a)</strong>:一个对象<em>拥有</em>另一个对象作为零件。Car 里面装了一台 Engine,但 Car 不"是"Engine。你在<strong>用小积木拼大积木</strong>。</li>
+<li><strong>Mixin(can-do / kind-of-a)</strong>:一个只提供某种<em>能力</em>的类,被混进来给别人加技能。直升机不"是"鸟,但它"能飞得像鸟"——飞行是一种可以被到处混入的横向能力,而不是一条纵向的血统。</li>
+</ul>
+
+<div class="keydef">
+<dl>
+<dt>继承 (Inheritance)</dt>
+<dd>子类继承父类的属性与行为,表达 <strong>"is-a"</strong> 关系。<br><em>优点:直接复用、关系直观;缺点:容易堆出复杂层级、过度泛化。</em></dd>
+<dt>组合 (Composition)</dt>
+<dd>通过把更简单的对象<strong>作为成员持有</strong>来搭建复杂对象,表达 <strong>"has-a"</strong> 关系。<br><em>优点:模块化、组件可替换;缺点:前期要多想一点设计、可能多写些委托样板。</em></dd>
+<dt>Mixin</dt>
+<dd>一个<strong>只提供方法、不作为独立实体存在</strong>的类,把某种能力"混入"其它不相关的类,表达 <strong>"can-do-this"</strong>。<br><em>优点:跨越继承树复用代码、避免深继承;缺点:方法来源不直观、多个 mixin 可能命名冲突。</em></dd>
+</dl>
+</div>
+
+<h2>二、三种写法,同一件事:给 Car 一个"启动"能力</h2>
+
+<h3>① 继承 —— Car is a Vehicle</h3>
+
+<pre><code>class Vehicle:
+    def __init__(self, brand):
+        self.brand = brand
+
+    def start(self):
+        print(f"{self.brand} 启动")
+
+class Car(Vehicle):          # Car is-a Vehicle:子类"就是"一种父类
+    def honk(self):
+        print("Beep!")
+
+c = Car("Toyota")
+c.start()   # 继承来的行为,一行没写就有了
+c.honk()    # 自己新增的行为
+</code></pre>
+
+<p>继承最爽的地方:<code>Car</code> 一个字没写就白得了 <code>start()</code>。但代价是——<code>Car</code> 和 <code>Vehicle</code> <strong>被焊死在一条继承链上</strong>。父类改一处,所有子类跟着受影响;层级一深,你就得在脑子里同时装下整条链才能读懂一个方法。</p>
+
+<h3>② 组合 —— Car has an Engine</h3>
+
+<pre><code>class Engine:
+    def start(self):
+        print("引擎点火")
+
+class Car:                   # Car has-a Engine:Car 不"是"引擎,而是"装了"一台
+    def __init__(self):
+        self.engine = Engine()      # 持有一个 Engine 实例(组合)
+
+    def start(self):
+        self.engine.start()         # 把动作委托(delegate)给内部组件
+        print("车子出发")
+
+c = Car()
+c.start()
+</code></pre>
+
+<p>注意 <code>Car.start()</code> 里那句 <code>self.engine.start()</code>——这叫<strong>委托(delegation)</strong>:自己不干,交给持有的零件干。好处是<code>Engine</code> 随时能换成 <code>ElectricMotor</code>,只要它也有 <code>start()</code>,<code>Car</code> 内部改一行、外部零改动。<code>Car</code> 依赖的是"一个能 start 的东西",而不是某个具体父类。这就是组合更松耦合的原因。</p>
+
+<h3>③ Mixin —— 谁混入,谁就 can-do</h3>
+
+<pre><code>import json
+
+class JSONSerializableMixin:
+    """只提供行为、自己不独立存在。混入谁,谁就获得 to_json() 这个能力。"""
+    def to_json(self):
+        return json.dumps(self.__dict__)
+
+class User(JSONSerializableMixin):       # User can-do: to_json
+    def __init__(self, name):
+        self.name = name
+
+class Product(JSONSerializableMixin):    # Product 与 User 毫无血缘,却也 can-do
+    def __init__(self, price):
+        self.price = price
+
+print(User("Ann").to_json())     # {"name": "Ann"}
+print(Product(9.9).to_json())    # {"price": 9.9}
+</code></pre>
+
+<p>关键看点:<code>User</code> 和 <code>Product</code> <strong>没有任何共同的 is-a 关系</strong>——一个是人,一个是商品,硬给它们造一个共同父类会很别扭。但它们都需要"能序列化成 JSON"这项<strong>横向能力</strong>。mixin 就是干这个的:不建立血缘,只发能力。你还能给一个类混入多个:<code>class User(JSONSerializableMixin, ComparableMixin):</code>,每个 mixin 负责一簇技能。</p>
+
+<div class="interview">
+<p><strong>高频追问链(这一簇几乎必被问,答对区分度很高):</strong></p>
+<ul>
+<li><strong>"'组合优于继承'这句话出自哪里、到底在说什么?"</strong> → 出自 GoF《Design Patterns》(1994) 的设计原则 "Favor object composition over class inheritance",Joshua Bloch《Effective Java》也专列一条。它<strong>不是</strong>说"永远别用继承",而是说:当你只是想复用代码时,默认先考虑组合;只有存在真正的 is-a 关系时才用继承。</li>
+<li><strong>"那什么时候<em>该</em>用继承?"</strong> → 当 "X is a Y" 说得通<em>并且</em>满足里氏替换原则(LSP):任何用到 Y 的地方都能塞一个 X 进去而不出错。说不通 is-a,却为了省代码去继承,就是反模式(见易错点)。</li>
+<li><strong>"Python 的 mixin 靠什么实现?<code>super()</code> 在 mixin 里指向谁?"</strong> → Python 用<strong>多继承</strong>实现 mixin(把 mixin 类列进基类列表)。而 <code>super()</code> 走的是 <strong>MRO(方法解析顺序)</strong>,它指向的是 MRO 里的"下一个",<em>未必是</em>直接父类——在多继承下可能是一个兄弟 mixin。这是协作式多继承的关键,也是新手常踩的点。</li>
+<li><strong>"组合的缺点是什么?"</strong> → 要多写委托代码(转发方法),前期得先想清楚拆成哪些组件。换来的是灵活和可测试性,大多数情况值得。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>头号反模式:"为了复用代码而继承"。</strong> 看到父类里有个现成方法很好用,就随手 <code>class A(B)</code> 把它继承过来——哪怕 A 根本不"是"一种 B。后果是:① <strong>强耦合</strong>,A 被绑死在 B 的实现上;② <strong>脆弱基类问题(fragile base class)</strong>,B 改动可能悄悄弄坏 A;③ A 被迫继承了 B 里它<em>用不到甚至不该有</em>的一堆方法。判断法则一句话:<strong>能说通 "X is a Y" 才继承;"X has a Y" 用组合;"X can do Z" 用 mixin。</strong></p>
+<p><strong>mixin 的两个坑:</strong>① <strong>方法来源不透明</strong>——对象上冒出个 <code>to_json()</code>,读代码的人得翻遍所有基类才知道它从哪来;② <strong>命名冲突</strong>——两个 mixin 都定义了 <code>save()</code>,谁生效由 MRO 决定,容易踩雷。所以 mixin 类应当<strong>小而专一</strong>,名字最好带 <code>Mixin</code> 后缀,一眼看出它不是主血统。</p>
+</div>
+
+<div class="crosslang">
+<p>"横向复用能力(mixin)"在各语言里名字不同,机制大同小异——但<strong>"优先组合"这条准则跨语言一致</strong>:</p>
+<table>
+<tr><th>语言</th><th>实现 mixin / 横向复用的机制</th></tr>
+<tr><td><strong>Python</strong></td><td>多继承(把 mixin 类列进基类列表,靠 MRO 协作)</td></tr>
+<tr><td><strong>Ruby</strong></td><td><code>module</code> + <code>include</code></td></tr>
+<tr><td><strong>Java</strong></td><td>接口 + <code>default</code> 方法(Java 8+)近似 mixin</td></tr>
+<tr><td><strong>Scala</strong></td><td><code>trait</code></td></tr>
+<tr><td><strong>C++</strong></td><td>多继承</td></tr>
+</table>
+<p>不管语法叫什么,核心思想都一样:<strong>纵向血统(继承)要克制,横向能力(mixin)要专一,拼装(组合)是默认选项。</strong></p>
+</div>
+
+<h2>三、三选一决策树:把法则变成动作</h2>
+
+<div class="flow">
+  <div class="step decision">你想让 A 用上 B 里的代码。先问:A 和 B 到底是什么关系?</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">"A is a B" 说得通</div>
+      <div class="step terminal">继承:<code>class A(B)</code></div>
+    </div>
+    <div class="branch">
+      <div class="label">"A has a B" 更自然</div>
+      <div class="step terminal">组合:A 内部持有 B 实例并委托</div>
+    </div>
+    <div class="branch">
+      <div class="label">"A can do Z"(一种能力)</div>
+      <div class="step terminal">Mixin:混入提供该能力的小类</div>
+    </div>
+  </div>
+</div>
+
+<p>拿不准时,<strong>默认走组合</strong>——这正是"组合优于继承"的实操含义:继承是"除非确有 is-a,否则不轻易动用"的选项,因为组合更灵活、更模块化、更好维护。</p>
+
+<div class="implement">
+<p>合上讲义,自己实现一次三选一:</p>
+<ul>
+<li>写一个 <code>LoggerMixin</code>,提供一个 <code>log(msg)</code> 方法(打印带类名前缀的日志);把它混入两个<strong>互不相关</strong>的类(比如 <code>Order</code> 和 <code>EmailSender</code>),验证两者都能 <code>log(...)</code>。</li>
+<li>再写一个 <code>Stack</code>,内部<strong>组合</strong>一个 <code>list</code>(<code>self._items = []</code>),只暴露 <code>push</code> / <code>pop</code> / <code>peek</code>。</li>
+<li>自问:第二题为什么不写成 <code>class Stack(list)</code>?(提示:那样会把 <code>insert</code>、<code>__setitem__</code> 等一堆能破坏"后进先出"约束的方法全暴露出去——Stack 并不"是"一个通用 list。)</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:一个团队里,<code>Order</code>、<code>User</code>、<code>Report</code> 三个毫无关联的类都需要"写审计日志"的能力。有人提议:建一个 <code>Auditable</code> 基类放 <code>log()</code>,让三者都继承它。这样做好不好?更合适的是什么?</summary>
+<div class="answer">
+<p><strong>不好。</strong> "写日志"是一种<strong>横向能力(can-do)</strong>,不是一条分类学血统——说 "Order is an Auditable" 相当勉强,而且一旦 <code>Order</code> 已经有别的父类,单继承语言就卡住了。硬造一个共同父类,是"为复用而继承"的典型反模式。</p>
+<p><strong>更合适:用 mixin。</strong> 写一个 <code>AuditLogMixin</code> 只提供 <code>log()</code>,混入需要的类即可(Python 里 <code>class Order(AuditLogMixin):</code>)。它不建立血缘、可被任意组合、也不占用"唯一父类"的名额。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:下面哪种说法最准确?"组合优于继承(Composition over Inheritance)"这条准则的意思是……</summary>
+<div class="answer">
+<p><strong>答案:当目标只是复用代码时,默认优先选组合;继承留给真正成立的 "is-a" 关系。</strong></p>
+<p>常见的错误理解是"永远不要用继承""继承是坏东西"。这太绝对了——继承在表达真实的 is-a 层级(如 <code>Car(Vehicle)</code>)且满足里氏替换时完全恰当。这条准则针对的是<strong>把继承当纯代码复用工具</strong>的滥用:那会带来强耦合和脆弱基类。它出自 GoF《Design Patterns》,是一条"默认倾向",不是一刀切禁令。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>三种复用对应三句话——<strong>is-a 用继承、has-a 用组合、can-do 用 mixin</strong>。"为省代码而继承"是反模式(强耦合 + 脆弱基类);拿不准就走组合,这就是"组合优于继承"的实操含义。它是一条有分寸的默认倾向,不是"禁用继承"。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《OOP Interview Questions》Q15(Compare inheritance vs. mixin vs. composition)——三种技术的定义、is-a / can-do-this / has-a 关系,各自的优缺点,以及"组合优于继承"这条结论,均取自源题原文。</li>
+<li><strong>canon(补充锚定,非源自 README):</strong>"组合优于继承"这条准则的权威出处是 Gamma 等《Design Patterns》(GoF, 1994) 的 "Favor object composition over class inheritance",以及 Joshua Bloch《Effective Java》相应条目;概念综述见 <a href="https://en.wikipedia.org/wiki/Composition_over_inheritance">Wikipedia: Composition over inheritance</a>。Python 多继承与 MRO 见 <a href="https://docs.python.org/3/tutorial/classes.html#multiple-inheritance">Python 官方教程 · Multiple Inheritance</a>;Java 用 <code>default</code> 方法近似 mixin 见 <a href="https://docs.oracle.com/javase/tutorial/java/IandI/defaultmethods.html">Oracle Java Tutorial · Default Methods</a>。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想要我用 ELI5 把 mixin 与 <code>super()</code> 在 MRO 下的行为再拆一遍、或者把你写的 <code>Stack</code>/<code>LoggerMixin</code> 代码拿来评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>这一节讲的是"怎么复用代码"意义上的关系;下一节把 has-a 拆得更细——关联、聚合、组合三种"拥有"到底差在哪。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0009-static-class-instance-members.html"><span class="dir">← 上一课</span>0009 · 类成员 vs 实例成员:static / class / instance</a>
+<a class="next" href="0011-associations-aggregation-composition.html"><span class="dir">下一课 →</span>0011 · 关联、聚合与组合:三种"has-a"的强弱</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

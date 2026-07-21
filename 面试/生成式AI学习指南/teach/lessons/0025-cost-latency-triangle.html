@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0025 · 延迟-吞吐-成本三角:缓存、投机解码、连续批处理</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第九部分 生产工程、幻觉与安全 · 第 0025 课</p>
+<h1>延迟-吞吐-成本三角:缓存、投机解码、连续批处理</h1>
+<p class="lede">这节课把 LLM 上线绕不开的一组「工程钱袋子」题一次答清:<strong>「解释 latency-throughput-cost 三角与主要旋钮」「怎么控制一个 LLM 功能的成本与延迟」「TTFT 与 inter-token latency 有何区别、为何在意」「什么是 prompt/KV caching、语义缓存、投机解码、连续批处理」</strong>(源:AI 工程师题库 Q99、Q98、Q104、Q100、Q105、Q106、Q107)。目标是让你能对着一个用例,先说清<strong>被绑定的约束是哪一角</strong>,再逐个旋钮往那个方向调。</p>
+
+<div class="recall">
+<p>上一课(0024)我们把「评估工程化」讲透:先定义指标、再拿它守住可靠性。评估回答的是「够不够好」,而这一课回答的是「够不够快、够不够便宜、能不能扛住量」。<strong>先别往下看:同一个功能,如果你既想它「秒回」、又想它「一台机器扛住十倍流量」、还想它「每次调用便宜到可以随便刷」——这三样能同时拿满吗?为什么不能?</strong></p>
+</div>
+
+<h2>一、三角:三样东西你只能挑重点,不能全拿</h2>
+<p>先把「性能」这个模糊词拆成三个互相拉扯的量。它们不是三个独立目标,而是<strong>一块预算的三种花法</strong>——朝一个方向使劲,另外两个多半要让步。</p>
+
+<div class="trio">
+  <div class="cell"><strong>Latency 延迟</strong><br>单个请求多快返回<br><em>用户「等」的体感</em></div>
+  <div class="cell"><strong>Throughput 吞吐</strong><br>每秒能服务多少请求<br><em>一台机器的产能</em></div>
+  <div class="cell"><strong>Cost 成本</strong><br>每个请求花多少钱<br><em>account 上的账单</em></div>
+</div>
+
+<p>为什么互相拉扯,举一眼就懂的例子:把很多请求<strong>攒成一批</strong>一起送进 GPU,单位时间处理的请求更多(吞吐↑、摊薄到每请求的成本↓),但排队攒批让每个请求多等一会儿(延迟↑)。反过来,想让单请求「立刻就走」,就没法攒批,GPU 利用率低、每请求更贵。<strong>三者不可兼得</strong>——所以面试要的答案不是「我全都要优化」,而是<strong>先认定这个用例被哪一角绑定,再朝它调</strong>。</p>
+
+<p>常见的「主要旋钮」,面试报得出这几个就够(Q99):</p>
+<ul>
+<li><strong>模型大小</strong>:小模型更快、更便宜,但更弱——最直接的一个旋钮。</li>
+<li><strong>批处理 / 连续批处理</strong>:提吞吐、摊薄成本,代价是单请求延迟略增(见第四节)。</li>
+<li><strong>KV / prompt 缓存</strong>:重复的上下文不必重算,省时又省钱(见第三节)。</li>
+<li><strong>上下文长度</strong>:上下文越短,越便宜越快——每个 token 都要花钱花时间。</li>
+<li><strong>流式(streaming)</strong>:不改真实总时长,但让用户<strong>感知</strong>的延迟大幅下降(字一个个往外蹦,人就不觉得卡)。</li>
+</ul>
+<p class="formula-note">口诀:先定「绑定约束」是哪一角,再决定这几个旋钮各往哪拧。脱离用例谈「优化」都是空话。</p>
+
+<h2>二、把「延迟」拆成两半:TTFT vs inter-token latency</h2>
+<p>面试官问「你们的延迟多少」,只报一个数字是外行(Q104)。生成式模型的延迟天然是<strong>两段</strong>,它们由不同的机制主导、要用不同的手法救。</p>
+
+<dl class="keydef">
+<dt>TTFT(Time To First Token,首 token 时间)</dt>
+<dd>从发出请求到吐出<strong>第一个</strong> token 的时间。由 <strong>prefill</strong>(把整段输入一次性算进 KV cache)主导,因此<strong>随输入长度增长</strong>——prompt 越长,第一个字越晚出来。</dd>
+<dt>Inter-token latency(token 间延迟 / 吐字速度,常记为 tps)</dt>
+<dd>吐出第一个 token 之后,每个后续 token 之间的间隔。由 <strong>decode</strong> 阶段主导,而 decode 是<strong>访存受限(memory-bound)</strong>的——每步都要把模型权重从显存搬一遍,所以它<strong>大体与输入长度无关</strong>,更多取决于模型大小和硬件带宽。</dd>
+</dl>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">发出请求</div>
+  <div class="arrow">→</div>
+  <div class="node">prefill<br><em>算完整段输入</em></div>
+  <div class="arrow">→</div>
+  <div class="node good">第 1 个 token<br><em>← TTFT 到此为止</em></div>
+  <div class="arrow">→</div>
+  <div class="node">decode 逐字<br><em>← inter-token 间隔</em></div>
+  <div class="arrow">→</div>
+  <div class="node">…直到结束</div>
+</div>
+<figcaption>TTFT 受 prefill(随输入变长)主导;吐字速度受 decode(访存受限、约与输入无关)主导。两段病,两种药。</figcaption>
+</figure>
+
+<p>对症下药:</p>
+<ul>
+<li><strong>TTFT 慢</strong>(用户点了半天没反应)→ 缩短 prompt、或<strong>缓存 prompt</strong>让重复前缀不必重新 prefill(见第三节)。</li>
+<li><strong>吐字慢</strong>(字出来了但一个个磨)→ 换<strong>更小 / 更快</strong>的模型,或靠服务层优化(投机解码,见第四节)。</li>
+<li><strong>流式</strong>能把 TTFT 藏起来——聊天场景里,字开始蹦了人就觉得「在动」;<strong>但</strong>对「要拿到整份输出才能用」的批作业(比如生成一份完整 JSON 再解析),流式帮不上忙,你在意的是<strong>总完成时间</strong>而非首字。</li>
+</ul>
+<p>所以答题的姿态是:<strong>优化你的用户体验真正绑定的那一段</strong>,而不是把「延迟」当成一个单一数字去糊。聊天绑 TTFT,批处理绑总时长,长文续写绑吐字速度。</p>
+
+<h2>三、缓存:三层,越省越险</h2>
+<p>控成本控延迟,最高杠杆的一手就是<strong>别重复算已经算过的东西</strong>。这里有三种层次不同的缓存,面试常要求分清 prompt/KV caching 与语义缓存的区别(Q100、Q105)。</p>
+
+<dl class="keydef">
+<dt>KV caching / prompt caching</dt>
+<dd>生成时,模型会算出并存下每个已处理 token 的 <strong>K/V</strong> 向量(即 KV cache),这样解码下一个 token 时不必把前面重算一遍。<strong>prompt caching</strong> 把这个能力<strong>暴露给你</strong>:重复出现的长前缀(固定 system prompt、工具 schema、few-shot 块、同一份检索文档)可以被大幅折扣地计费与处理,而不是每次请求都从头 prefill。</dd>
+<dt>语义缓存(semantic caching)</dt>
+<dd>检查新 query 是否与历史 query <strong>语义相似</strong>(通过 embedding 比对),命中就直接返回存好的答案——<strong>完全不调用模型</strong>,省下整个请求。</dd>
+</dl>
+
+<p>两者差在「省什么」:</p>
+<div class="bars">
+  <div class="row"><span class="lbl">无缓存</span><div class="track"><div class="val base" style="width:100%">每次全额 prefill + decode</div></div></div>
+  <div class="row"><span class="lbl">prompt 缓存命中</span><div class="track"><div class="val a" style="width:55%">省掉重复前缀的 prefill</div></div></div>
+  <div class="row"><span class="lbl">语义缓存命中</span><div class="track"><div class="val a" style="width:8%">整个请求都免了</div></div></div>
+</div>
+<p class="formula-note">示意相对开销,非精确数值。prompt caching 省的是「重复前缀不必重算」;语义缓存省的是「这次干脆不调用」。</p>
+
+<p><strong>prompt caching 什么时候真帮到</strong>(Q100):当多个请求共享一段很长的公共前缀时最划算——固定 system prompt、few-shot 示例、同一文档反复问。落地技巧:<strong>把上下文排序成「稳定、可缓存的部分在前,可变的部分在后」</strong>,前缀越稳定,命中率越高。</p>
+
+<p><strong>语义缓存的甜与险</strong>(Q105):对高重复流量(FAQ、客服常见问)极省——命中即零调用。但它比前缀缓存<strong>更危险</strong>:「近似命中」可能把一个<em>意思相近但答案该不同</em>的 query 匹配到旧答案上,给出微妙的错误。所以要<strong>设相似度阈值、有时对命中结果做核验、只对「复用安全」的 query 开启</strong>。生产里常把三层<strong>分开</strong>用并各自测命中率:精确缓存(query 完全相同)、语义缓存(意思相近)、前缀缓存(共享上下文)。</p>
+
+<h2>四、服务层的两台发动机:投机解码 + 连续批处理</h2>
+<p>这两个概念的共性是:<strong>它们多半发生在推理栈 / provider 那一侧,你通常是透明受益,而不是自己实现</strong>——但面试要你解释清它们「凭什么能省」(Q106、Q107)。</p>
+
+<h3>投机解码(speculative decoding)——省的是延迟</h3>
+<p>decode 是逐 token 串行的,一步一步慢。投机解码让一个<strong>小而快的「草稿」模型</strong>先一口气猜出接下来几个 token,再让<strong>大的「目标」模型一次性校验</strong>这几个:猜对的照单全收,猜错的从错处重来。因为把「多步串行」压成了「更少的串行步」,所以能<strong>以更低延迟拿到大模型的质量</strong>。</p>
+<div class="pipeline">
+  <div class="node">小草稿模型<br><em>快猜 k 个 token</em></div>
+  <div class="arrow">→</div>
+  <div class="node">大目标模型<br><em>一次并行校验</em></div>
+  <div class="arrow">→</div>
+  <div class="node good">接受猜对的<br><em>错处起重来</em></div>
+</div>
+<p>关键一句(也是它不掉质量的原因):<strong>目标模型仍然逐 token 校验每个输出,所以最终分布不变、质量不打折</strong>。这也解释了一个现象——为什么有些「快速端点」能在更低延迟下匹配更大模型的输出。</p>
+
+<h3>连续批处理(continuous / in-flight batching)——省的是吞吐/成本</h3>
+<p>传统静态批处理要等「一整批」都生成完才能收下一批,长短请求互相拖累,GPU 常空转。连续批处理改成 <strong>token 级调度</strong>:每一步生成后,<strong>把已完成的请求踢出、把新到的请求塞进来</strong>,让 GPU 不停歇——同一个端点的吞吐能成倍上去。</p>
+<ul>
+<li><strong>代价</strong>:高负载下单请求延迟会略增(要和别的请求分时间片)。这正是三角在服务层的体现——用一点单请求延迟,换整体吞吐与更低的每请求成本。</li>
+<li><strong>与显存耦合</strong>:它和 KV cache 显存强交互——并发的每一条序列都占一份 cache,能同时在跑多少请求,受显存上限约束。</li>
+</ul>
+<p>为什么这条对工程决策重要:<strong>托管 API 的吞吐/延迟会随负载波动</strong>(因为你在和别人共享连续批处理的调度);而<strong>自托管的经济性,基本系于你把批处理调得好不好</strong>——批没打好,买再贵的卡也在空转烧钱。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「这个功能你会优化三角里的哪一角?」——先反问用例:面向用户的聊天绑 TTFT/延迟;离线批处理绑吞吐/成本;别急着报旋钮。</li>
+<li>「延迟高,你先查什么?」——先分是 TTFT 高还是吐字慢:前者查 prompt 长度 / prefill / 能否缓存前缀,后者查模型大小 / 硬件 / 有无投机解码。</li>
+<li>「prompt caching 和语义缓存哪个更激进、风险在哪?」——语义缓存更省也更险(近似命中给错答案),要阈值 + 核验 + 限安全 query。</li>
+<li>「投机解码会不会让输出变差?」——不会,目标模型逐 token 校验,分布不变;它换的是延迟不是质量。</li>
+<li>「你们自托管,吞吐上不去怎么办?」——查连续批处理是否开、KV cache 显存是否是并发瓶颈、能否用小模型 / 量化腾出并发位。</li>
+<li>「怎么在不换模型的前提下砍成本?」——缓存稳定前缀、压最小上下文、子步降级到小模型、限工具调用与循环次数、缓存工具/检索结果、推理模型只给够用的思考预算(Q98)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞是扣分点):</strong></p>
+<ul>
+<li>别把「延迟」当<strong>一个</strong>数字。TTFT 和吐字速度由不同机制主导、要不同修法;只报一个数会被追到露馅。</li>
+<li>流式<strong>不是</strong>万能:它降的是<em>感知</em>延迟,总时长没变;对「要整份输出才能用」的批作业帮不上忙。</li>
+<li>缓存<strong>不是</strong>免费加速。语义缓存的近似命中会给出<em>微妙的错误答案</em>,高风险场景要设阈值、核验、限用;别无脑全开。</li>
+<li>批处理<strong>不总是</strong>更好:它提吞吐但会略增单请求延迟——延迟敏感的实时路径上,盲目加大批反而伤体验。</li>
+<li>投机解码 / 连续批处理<strong>多数时候不是你自己写的</strong>,是推理栈给的;面试别吹「我实现了投机解码」,除非你真的做了推理框架。</li>
+<li>「上下文越长越好」是错的:每个 token 都花钱花时间(TTFT 随输入涨),能短就短、能缓存就缓存。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>用户反馈「点了之后要等很久才开始出字,但字一旦出来就挺快」。最该先查/调的是?</p>
+<details><summary>A. 换更小的模型来提高吐字速度(tps)</summary>吐字已经不慢了,问题在「开始出字前」这段。换小模型主要救的是 inter-token 速度,没对上症状。</details>
+<details><summary>B. TTFT 偏高,查 prompt 长度与 prefill,考虑缓存稳定前缀 ✅</summary>正确。「等很久才开始出字」是 TTFT 问题,由 prefill 主导、随输入变长——缩短 prompt 或用 prompt caching 复用前缀最对症。</details>
+<details><summary>C. 开启连续批处理来降低这个用户的等待</summary>连续批处理提的是整体吞吐,高负载下反而略增单请求延迟,救不了单个用户的首字慢。</details>
+<details><summary>D. 关闭流式输出</summary>方向反了。流式恰恰能藏住 TTFT,关掉只会让体感更糟。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于投机解码与连续批处理,下列哪句最准确?</p>
+<details><summary>A. 投机解码用小模型代替大模型输出,所以会略微降低质量</summary>不对。草稿由小模型出,但目标大模型逐 token 校验,分布不变、质量不打折;它换的是延迟。</details>
+<details><summary>B. 连续批处理能在完全不增加任何单请求延迟的前提下提升吞吐</summary>不对。它提吞吐的代价正是高负载下单请求延迟略增——这是三角的体现。</details>
+<details><summary>C. 投机解码主要降延迟(更少串行步),连续批处理主要提吞吐(GPU 不空转),二者多在推理栈里、你通常透明受益 ✅</summary>正确。一个省单请求的延迟,一个提端点整体吞吐/成本,且都多来自服务框架而非自建。</details>
+<details><summary>D. 两者都要求你自己实现推理内核才能用上</summary>恰恰相反,绝大多数情况下你是透明受益于 provider / 推理框架,而非亲手实现。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Fast Inference from Transformers via Speculative Decoding</strong>(Leviathan et al., 2023)与 <strong>Accelerating Large Language Model Decoding with Speculative Sampling</strong>(Chen et al., 2023)——投机解码的原始工作,校验为何不改分布看这里。</li>
+<li><strong>Orca: A Distributed Serving System for Transformer-Based Generative Models</strong>(Yu et al., OSDI 2022)——连续 / iteration-level 批处理的奠基论文。</li>
+<li><strong>Efficient Memory Management for Large Language Model Serving with PagedAttention</strong>(Kwon et al., SOSP 2023,即 vLLM)——KV cache 显存管理与批处理如何耦合,这篇讲得最透。</li>
+<li><strong>Anthropic 官方文档 / 工程博客</strong>关于 prompt caching 的说明——「稳定前缀在前、可变在后」的实践建议出处。</li>
+<li>下一步:把这些旋钮落到真实上线里——部署决策与可观测(第 0026 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>延迟/吞吐/成本是一块预算的三种花法,先认绑定约束再拧旋钮;延迟拆成 TTFT(prefill 主导、随输入涨)与吐字(decode 访存受限);缓存分前缀/语义(越省越险);投机解码降延迟、连续批处理提吞吐,多来自推理栈。</strong></p>
+<nav class="lesson-nav">
+<a href="0024-evaluation-engineering.html">← 上一课:评估工程化与可靠性</a>
+<a class="next" href="0026-deployment-observability.html">下一课:部署决策与可观测 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

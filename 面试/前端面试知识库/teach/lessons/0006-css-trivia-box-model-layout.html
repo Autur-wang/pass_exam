@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0006 · CSS 高频问答 I:盒模型、定位与布局</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0006 课 · 3 HTML/CSS/浏览器高频问答 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>CSS 高频问答 I:盒模型、定位与布局</h1>
+
+<p class="lede">这节课用 9 道 h5bp 经典 CSS trivia 题,拆解前端面试里被问得最频繁的一组底层机制:盒子怎么计算尺寸(<code>box-sizing</code>)、一个元素怎么脱离或留在文档流(<code>position</code> 与 <code>float</code>)、脱离文档流之后父元素要靠什么才能重新"看见"它(BFC)、重叠元素到底谁盖着谁(<code>z-index</code> 与堆叠上下文),以及 <code>display</code> 属性怎么决定一个元素长什么样。这几件事平时写代码可能全靠手感,但面试官一句"为什么"追问下去,手感是顶不住的。</p>
+
+<div class="recall">
+<p>上一课确认了前端面试里算法题该刷到什么程度——那一课练的是"写代码解决问题"的能力。这一课换一个完全不同的考察维度:面试官不会让你写代码,只是拿着一个 CSS 概念追问"这到底是什么、为什么这样设计"。开课前先诚实测一下自己:如果被追问"<code>box-sizing: border-box</code> 到底改变了 width 的计算方式",你能不能脱口而出具体公式,而不是含糊说一句"更好算"?再想想"<code>position: relative</code> 和 <code>position: absolute</code> 的核心区别是什么"——是不是也只答得出"一个流、一个不流"这种笼统说法?这两个问题答得越模糊,接下来这节课就越该放慢速度读。</p>
+</div>
+
+<h2>一、盒模型与 box-sizing:两种算尺寸的方式</h2>
+
+<p>CSS 盒模型描述的是浏览器给每个元素生成的矩形框:一个内容区域,外面可以套着 <code>padding</code>、<code>border</code>、<code>margin</code> 三层。默认情况下(<code>box-sizing: content-box</code>),元素设置的 <code>width</code>/<code>height</code> 只描述内容区域本身,<code>padding</code> 和 <code>border</code> 是另外加到内容区域外面的,不计入 width/height 的数值。</p>
+
+<pre><code>.example {
+  box-sizing: content-box; /* 默认值 */
+  width: 100px;
+  padding: 10px;
+  border: 5px solid black;
+}
+</code></pre>
+
+<p>按 content-box 的算法,这个元素在页面上实际占用的宽度是 <strong>130px</strong>(100 内容 + 10×2 padding + 5×2 border)——width 说的 100px 只是内容区域,padding 和 border 都要额外往外加。把 <code>box-sizing</code> 换成 <code>border-box</code> 之后,情况反过来:width、padding、border 一起凑够 100px 总宽,内容区域反而被压缩成 <strong>70px</strong>(100 − 10×2 − 5×2)。也就是说 border-box 下,元素在页面上占用的空间就是你写的那个 width 数字,不用再手动加 padding/border。</p>
+
+<table>
+<tr><th>属性</th><th><code>box-sizing: content-box</code>(默认)</th><th><code>box-sizing: border-box</code></th></tr>
+<tr><td>content</td><td>是</td><td>是</td></tr>
+<tr><td><code>padding</code></td><td>否</td><td>是</td></tr>
+<tr><td><code>border</code></td><td>否</td><td>是</td></tr>
+<tr><td><code>margin</code></td><td>否</td><td>否</td></tr>
+</table>
+
+<p>这张表最后一行值得盯着看:<strong>不管选哪种 box-sizing,margin 都不参与 width/height 的计算</strong>。margin 只影响这个盒子在页面上占用的"外部空间",盒子本身的区域到 border 就截止,不会延伸进 margin 里。因为 border-box 把 padding、border 都算进总尺寸,更贴近设计师在网格里想象内容的直觉方式,所以 Bootstrap、Tailwind、Bulma 这类框架都会全局设 <code>* { box-sizing: border-box; }</code>,让页面上所有元素默认用这种算法。</p>
+
+<p>盒模型另外两条容易被问到、又和 box-sizing 完全无关的默认行为:<strong>边框不会和相邻元素的边框折叠</strong>,每个元素的边框各自独立渲染;<strong>垂直方向上相邻块级元素的 margin 会折叠</strong>——上面元素的下 margin 和下面元素的上 margin,只取较大的那个生效,但这只发生在垂直方向、只发生在块级元素之间,水平 margin 从不折叠。另外补充两个边界情况:<code>table</code>、<code>figure</code>、<code>input</code> 这类元素有自己的默认宽度,不会主动撑满父容器;<code>span</code> 是内联元素,没有默认宽度,同样不会撑满。延伸阅读见<a href="https://developer.mozilla.org/zh-CN/docs/Learn/CSS/Building_blocks/The_box_model#the_standard_css_box_model">MDN 的盒模型入门</a>和<a href="https://css-tricks.com/box-sizing/">CSS-Tricks 对 box-sizing 的讲解</a>。</p>
+
+<h2>二、定位:relative / fixed / absolute / sticky / static</h2>
+
+<p>"已定位元素"专指 <code>position</code> 计算值为 <code>relative</code>、<code>absolute</code>、<code>fixed</code> 或 <code>sticky</code> 的元素——这个定义后面讲 BFC 和 <code>z-index</code> 触发条件时还会反复用到,先记住它。</p>
+
+<table>
+<tr><th>值</th><th>行为</th></tr>
+<tr><td><code>static</code></td><td>默认值,元素照常随文档流排布;<code>top</code>/<code>right</code>/<code>bottom</code>/<code>left</code>/<code>z-index</code> 全部不生效。</td></tr>
+<tr><td><code>relative</code></td><td>位置相对自身做偏移,但不改变布局——原来该占的空间照样留着,就像它没被定位过一样。</td></tr>
+<tr><td><code>absolute</code></td><td>彻底脱离文档流,相对于最近的"已定位"祖先(没有的话就相对初始包含块)定位;它设的 margin 不会跟别的元素折叠,也不会挤占别的元素的位置。</td></tr>
+<tr><td><code>fixed</code></td><td>脱离文档流,相对视口固定一个位置,滚动页面时它不会跟着移动。</td></tr>
+<tr><td><code>sticky</code></td><td><code>relative</code> 和 <code>fixed</code> 的混合:没越过设定的阈值之前表现成 <code>relative</code>,越过阈值之后表现成 <code>fixed</code>。</td></tr>
+</table>
+
+<h2>三、float 与清除浮动</h2>
+
+<p><code>float</code> 是一个 CSS 定位属性,但浮动元素<strong>依然属于文档流的一部分</strong>——这正是它和 <code>position: absolute</code> 的关键区别:absolute 元素被整个移出文档流,其它元素完全不会绕着它排布;float 元素没被移出文档流,其它内容(比如文字)会绕着它环绕排布。</p>
+
+<p>float 带来一个经典坑:如果一个父元素<strong>只</strong>包含浮动的子元素,父元素的高度会直接塌缩成 0——浏览器算父元素高度时,压根没把浮动的子元素计算进去。"清除浮动"说白了就是想办法让父元素重新"看见"并包住这些浮动子元素,常见三种做法:</p>
+
+<table>
+<tr><th>方法</th><th>怎么做</th><th>适用场景 / 注意</th></tr>
+<tr><td>空 <code>div</code></td><td><code>&lt;div style="clear:both;"&gt;&lt;/div&gt;</code>,放在浮动元素之后</td><td>最直接,但每处需要清除浮动的地方都要手动插入一个空标签</td></tr>
+<tr><td>Clearfix</td><td>给父元素加一个 <code>.clearfix</code> 类,配合 <code>::after</code> 伪元素</td><td>在大型项目里当成通用工具类反复用,不用到处插空标签</td></tr>
+<tr><td><code>overflow: auto</code> / <code>hidden</code></td><td>直接给父元素设置 <code>overflow</code></td><td>父元素会顺带建立一个新的块格式化上下文(下一节讲),从而把浮动子元素包住;但如果子元素比父元素还高,<code>overflow: hidden</code> 可能把多出来的内容剪掉</td></tr>
+</table>
+
+<pre><code>.clearfix::after {
+  content: ' ';
+  visibility: hidden;
+  display: block;
+  height: 0;
+  clear: both;
+}
+</code></pre>
+
+<p>题外话:早期的 CSS 框架(比如 Bootstrap 2)曾经直接用 <code>float</code> 实现整套网格系统;今天有了 Flexbox 和 Grid,网格布局已经不再需要依赖 <code>float</code>。想看 clearfix 这个技巧完整的历史演变,可以读<a href="https://css-tricks.com/clearfix-a-lesson-in-web-development-evolution/">这篇 CSS-Tricks 的文章</a>。</p>
+
+<h2>四、BFC:块格式化上下文,浮动塌陷问题的答案</h2>
+
+<p>上一节 <code>overflow</code> 那种清除浮动方法,其实是在借用一个更底层的机制:块格式化上下文(Block Formatting Context,简称 BFC)。BFC 是网页视觉渲染里的一块独立区域,块级盒子在其中按规则布局;满足下面任意一条,一个 HTML 盒子就会建立自己的 BFC:</p>
+
+<ul>
+<li><code>float</code> 的值不是 <code>none</code>。</li>
+<li><code>position</code> 的值既不是 <code>static</code> 也不是 <code>relative</code>。</li>
+<li><code>display</code> 是 <code>table-cell</code>、<code>table-caption</code>、<code>inline-block</code>、<code>flex</code>/<code>inline-flex</code>、<code>grid</code>/<code>inline-grid</code> 中的一种。</li>
+<li><code>overflow</code> 的值不是 <code>visible</code>。</li>
+</ul>
+
+<p>留意第二条:<code>relative</code> 定位<strong>不会</strong>触发新的 BFC——这一条经常被记混。</p>
+
+<p>BFC 内部,每个盒子的左外边缘都贴着包含块的左边缘(从右到左的排版则贴右边缘)。同一个 BFC 内相邻块级盒子之间的垂直 margin,依然会按前面说的规则折叠;但 BFC 会挡住这种折叠<strong>往外扩散</strong>,不会影响到 BFC 外部的元素,详细规则见<a href="https://developer.mozilla.org/zh-CN/docs/Web/CSS/CSS_Box_Model/Mastering_margin_collapsing">MDN 的外边距折叠专题</a>。</p>
+
+<p>不建立新 BFC 会有什么后果?最典型的就是上一节的浮动塌陷——包含块不会自动包住浮动的子元素。这个坏处比 margin 折叠更隐蔽,因为整个盒子会用一种看起来莫名其妙的方式塌掉,不细查很难第一时间反应过来是 BFC 没建立。<a href="https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_display/Block_formatting_context#Make_float_content_and_alongside_content_the_same_height">MDN 这一节专门讲了怎么用 BFC 让浮动内容和旁边内容一样高</a>。</p>
+
+<h2>五、z-index 与堆叠上下文</h2>
+
+<p><code>z-index</code> 控制重叠元素的垂直堆叠顺序,但它<strong>只对"已定位元素"生效</strong>——也就是第二节表格里 <code>position</code> 不是 <code>static</code> 的那几种(以及它们的后代,或者 flex 项目)。没有设置任何 <code>z-index</code> 时,元素按 DOM 出现顺序堆叠,同一层级里后出现的元素会盖在前面元素上面;而只要一个元素的 <code>position</code> 不是 <code>static</code>,它(连带它的子元素)就会始终盖在所有默认 static 定位的元素之上,不管 HTML 结构里谁先谁后。</p>
+
+<p>真正容易踩坑的是<strong>堆叠上下文</strong>。堆叠上下文是一个自成一体的层叠单位:进入某个堆叠上下文内部之后,子元素的 <code>z-index</code> 只是相对<strong>这个上下文</strong>比大小,不是相对整个文档根元素比大小。等这个堆叠上下文内部全部排好序之后,浏览器会把它<strong>当成一个整体</strong>,拿去跟父级堆叠上下文里的其它层比排序。举个具体例子:如果元素 B 视觉上盖在元素 A 上面,而 C 是 A 的子元素,那么不管 C 的 <code>z-index</code> 设得比 B 高多少,C 也不可能显示在 B 之上——因为 C 的排序被限制在 A 这个堆叠上下文内部,翻不出 A 这层"盒子"。</p>
+
+<p>除了 <code>position</code> + <code>z-index</code> 这对组合,<code>opacity</code> 小于 1、<code>filter</code> 不是 <code>none</code>、<code>transform</code> 不是 <code>none</code> 这几个属性也会各自触发一个新的堆叠上下文——具体哪些条件会创建堆叠上下文,<a href="https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_positioned_layout/Stacking_context#The_stacking_context">MDN 列了一份很长的规则清单</a>。</p>
+
+<h2>六、display 属性:block、inline、inline-block 怎么选</h2>
+
+<p><code>display</code> 属性决定一个元素在布局里长什么样。常见取值:</p>
+
+<table>
+<tr><th>值</th><th>效果</th></tr>
+<tr><td><code>none</code></td><td>不渲染这个元素,子元素也全部一起消失,文档表现得就像它压根不存在。</td></tr>
+<tr><td><code>block</code></td><td>独占一整行(块方向,通常是水平方向)。</td></tr>
+<tr><td><code>inline</code></td><td>可以和别的内容并排放。</td></tr>
+<tr><td><code>inline-block</code></td><td>基本表现像 <code>inline</code>,但允许设置 <code>width</code>/<code>height</code> 等 block 才有的属性。</td></tr>
+<tr><td><code>flex</code> / <code>grid</code></td><td>变成块级 flex/grid 容器,可以用相应的布局模型摆放子元素。</td></tr>
+<tr><td><code>table</code> / <code>table-row</code> / <code>table-cell</code></td><td>分别表现得像 <code>&lt;table&gt;</code>/<code>&lt;tr&gt;</code>/<code>&lt;td&gt;</code>。</td></tr>
+<tr><td><code>list-item</code></td><td>表现得像 <code>&lt;li&gt;</code>,可以设置 <code>list-style-type</code>/<code>list-style-position</code>。</td></tr>
+</table>
+
+<p>完整取值列表见<a href="https://developer.mozilla.org/zh-CN/docs/Web/CSS/display">MDN 的 display 文档</a>。面试里被追问最多的,是 <code>block</code>、<code>inline-block</code>、<code>inline</code> 这三者的具体差别:</p>
+
+<table>
+<tr><th>维度</th><th><code>block</code></th><th><code>inline-block</code></th><th><code>inline</code></th></tr>
+<tr><td>尺寸</td><td>撑满父容器宽度</td><td>由内容决定</td><td>由内容决定</td></tr>
+<tr><td>换行</td><td>另起一行,旁边不能放别的元素(除非加 <code>float</code>)</td><td>和其它内容同一行流动,旁边能放别的元素</td><td>和其它内容同一行流动,旁边能放别的元素</td></tr>
+<tr><td>能设 width/height 吗</td><td>能</td><td>能</td><td>不能,设了会被忽略</td></tr>
+<tr><td>能用 <code>vertical-align</code> 对齐吗</td><td>不能</td><td>能</td><td>能</td></tr>
+<tr><td>margin / padding</td><td>四边都生效</td><td>四边都生效</td><td>只有水平方向生效;垂直方向设了不影响布局,占的垂直空间看 <code>line-height</code></td></tr>
+<tr><td>典型场景</td><td><code>&lt;div&gt;</code>、<code>&lt;p&gt;</code>、<code>&lt;section&gt;</code> 这类布局容器</td><td>需要自定义尺寸又要和文字对齐的按钮/图片/表单控件</td><td><code>&lt;a&gt;</code>、<code>&lt;span&gt;</code>、<code>&lt;b&gt;</code>、<code>&lt;i&gt;</code> 这类文本级标签</td></tr>
+</table>
+
+<h2>七、关键定义</h2>
+
+<dl class="keydef">
+<dt>盒模型(Box Model)</dt>
+<dd>浏览器把每个元素渲染成内容、padding、border、margin 四层嵌套的矩形框;<code>box-sizing</code> 决定 <code>width</code>/<code>height</code> 只算内容(<code>content-box</code>),还是把 padding 和 border 也算进去(<code>border-box</code>)。<em>避免</em>以为 <code>border-box</code> 会把 margin 也纳入计算——不管哪种 box-sizing,margin 都从来不计入元素自身的 width/height。</dd>
+<dt>BFC(块格式化上下文)</dt>
+<dd>块级盒子在其中布局的一块独立视觉区域;<code>float</code> 非 <code>none</code>、<code>position</code> 为 <code>absolute</code>/<code>fixed</code>、特定 <code>display</code> 值或 <code>overflow</code> 非 <code>visible</code> 都会触发它,最实际的用途是让容器"包住"浮动的子元素。<em>避免</em>以为 <code>position: relative</code> 也能触发 BFC——按判定条件,只有 <code>position</code> 既不是 <code>static</code> 也不是 <code>relative</code> 才算。</dd>
+<dt>堆叠上下文(Stacking Context)</dt>
+<dd>一个自成一体的层叠单位,内部子元素的 <code>z-index</code> 只在这个上下文内部比大小,拿到上下文外部毫无意义。<em>避免</em>以为子元素设一个超大 <code>z-index</code> 就能盖过父级堆叠上下文之外的元素——只要父元素本身的堆叠顺序被排在别人下面,子元素再高的 <code>z-index</code> 也翻不出这层"盒子"。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>写组件库或页面布局代码时,几乎默认会在全局 CSS 里设 <code>* { box-sizing: border-box; }</code>,照着 Bootstrap/Tailwind/Bulma 的做法,让宽高心算不用再手动加 padding/border;遇到"父元素高度莫名塌陷"这种诡异现象,先怀疑是不是浮动子元素在作怪,加一个 <code>overflow: hidden</code> 或专门的 <code>.clearfix</code> 类触发 BFC,把它包住;做弹窗、下拉菜单一类悬浮 UI 时,如果 <code>z-index</code> 加到很大还是压不住别的元素,别急着继续往上加数字,先查它和目标元素是不是根本不在同一个堆叠上下文里。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:以为 <code>z-index</code> 是全局的一把尺子,谁的数字大就一定盖住谁。</strong>它其实是分层比较的——一旦一个元素的祖先建立了自己的堆叠上下文,这个元素的 <code>z-index</code> 就被"锁"在了祖先内部,出了祖先这层"盒子"就不再算数。给一个深藏在某个堆叠上下文里的子元素设 <code>z-index: 9999</code>,如果它的祖先本身就排在别的元素下面,这个 9999 照样翻不上去——这正是很多人调 <code>z-index</code> 调到很大的数字还是没用的真正原因,该查的是祖先的堆叠顺序,不是继续加大子元素的数字。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>打开你之前写过的任意一个项目,搜一下全局 CSS 里有没有 <code>* { box-sizing: border-box; }</code>——如果没有,想清楚原因再决定要不要补上;再找一处用了 <code>float</code> 布局或者 <code>overflow: hidden</code> 清除浮动的地方,对着第四节 BFC 的四条触发条件,确认自己当时是真的理解它为什么生效,还是只是"蒙对了"。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>这九道题背后其实就一件事——盒子怎么算尺寸(box-sizing)、怎么脱离或留在文档流(position/float)、脱离文档流之后怎么被父元素重新"看见"(BFC)、重叠时谁盖住谁(堆叠上下文),是四个各自独立又互相牵连的机制,分开记、想清楚各自的触发条件,别混在一起囫囵吞下去。</p>
+</div>
+
+<h2>自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于 <code>box-sizing: border-box</code>,下面哪个说法准确? (A) width 和 height 只包含内容区域,padding 和 border 需要另外加到总尺寸上 (B) width 和 height 包含内容、padding 和 border(但不包含 margin),所以设置的 width 就是元素在页面上实际占用的宽度 (C) width 和 height 包含内容、padding、border 和 margin 的总和</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。border-box 把 padding 和 border 都算进 width/height 里,所以写的 width 数字就是页面上实际占的宽度。(A) 描述的其实是默认的 content-box 行为,不是 border-box;(C) 错在把 margin 也算了进去——不管哪种 box-sizing,margin 从来不参与 width/height 的计算,它只影响盒子外部占用的空间。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:元素 A 建立了自己的堆叠上下文,A 的子元素 C 的 <code>z-index</code> 设成了 9999;A 的兄弟元素 B 视觉上正好压在 A 上面。下面哪个说法符合堆叠上下文的规则? (A) 不管 C 的 z-index 设多大,只要 A 整体已经排在 B 下面,C 就不可能显示在 B 之上 (B) 只要把 C 的 z-index 设置得比 B 大,C 就会显示在 B 上面 (C) z-index 只在同一个 HTML 标签层级之间比较,和父子关系完全没关系</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。C 的 z-index 只在 A 这个堆叠上下文内部有意义,一旦 A 整体在父级堆叠顺序里排在 B 下面,C 再高的 z-index 也翻不出 A 这层"盒子"。(B) 正是最常见的误区——把局部比较误当成全局比较;(C) 说反了机制,z-index 的比较范围恰恰是由父子的堆叠上下文关系决定的,不是什么"同一层级"的说法,而且父子关系正是这道题成立的关键原因。</p>
+</div>
+</details>
+</div>
+
+<h2>主推资源</h2>
+
+<p>本节内容对应 h5bp 经典问答题各自附带的参考链接,挑了 4 条覆盖面最广的延伸阅读:</p>
+<ul>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Learn/CSS/Building_blocks/The_box_model#the_standard_css_box_model">盒子模型 | MDN</a> —— 盒模型的标准讲解,配图比文字更直观。</li>
+<li><a href="https://css-tricks.com/box-sizing/">Box Sizing | CSS-Tricks</a> —— box-sizing 两种模式的对比与实践建议。</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_display/Block_formatting_context#Make_float_content_and_alongside_content_the_same_height">Block formatting context | MDN</a> —— 用 BFC 让浮动内容和旁边内容一样高的具体做法。</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_positioned_layout/Stacking_context#The_stacking_context">Stacking context | MDN</a> —— 哪些条件会创建堆叠上下文的完整规则清单。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>这节课只覆盖了 CSS trivia 里"盒子与布局"这一半;下一课接着讲级联、选择器和代码质量方面的高频问答。如果某个装置(比如堆叠上下文那道自测题)没有一次看懂,回到会话里让 AI 老师用 ELI5 讲一遍,或者直接打开 DevTools 现场演示给你看。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0005-dsa-for-front-end.html"><span class="dir">← 上一课</span>数据结构与算法面试:前端要刷题到什么程度</a>
+  <a class="next" href="0007-css-trivia-cascade-selectors.html"><span class="dir">下一课 →</span>CSS 高频问答 II:级联、选择器与代码质量</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

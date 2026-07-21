@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0045 · 字典树 Trie:前缀即路径</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0045 课 · 更多结构与文本 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>字典树 Trie:前缀即路径</h1>
+
+<p class="lede">哈希表能 O(1) 判断「某个词在不在」,却答不出「有哪些词以 <code>ca</code> 开头」——因为它把键打散成了没有结构的指纹。<strong>字典树(Trie)</strong>反其道而行:让每个字符成为一层分叉,一个单词就是一条从根往下的路径。于是「前缀查询」变成「沿路径走几步」,这正是自动补全、拼写检查的底层引擎。</p>
+
+<div class="recall">
+<p>先回忆两件事。<a href="0018-trees-and-traversal.html">树</a>那节:节点带若干孩子,从根到某节点的路径编码了一段信息。<a href="0012-hash-table-intro.html">哈希表</a>那节:平均 O(1) 存取,但键之间彼此无关。先想一个问题:如果要「找出所有以某前缀开头的单词」,哈希表能高效做到吗?为什么不能?</p>
+</div>
+
+<h2>一、直觉:把字母摊在路径上</h2>
+
+<p>Trie 的每个节点代表「走到这里为止拼出的前缀」。从根出发,每条边对应一个字符;顺着 <code>c → a → t</code> 走三步,就拼出了 <code>cat</code>。共享前缀的单词<strong>共享前半段路径</strong>:<code>cat</code> 和 <code>car</code> 一起走到 <code>ca</code>,再分岔。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 460 258" role="img" aria-label="存有 cat、car、dog 三个词的字典树">
+  <!-- edges -->
+  <line class="dgm-edge" x1="230" y1="32" x2="140" y2="100"/>
+  <line class="dgm-edge" x1="230" y1="32" x2="330" y2="100"/>
+  <line class="dgm-edge" x1="140" y1="100" x2="140" y2="166"/>
+  <line class="dgm-edge" x1="330" y1="100" x2="330" y2="166"/>
+  <line class="dgm-edge" x1="140" y1="166" x2="100" y2="232"/>
+  <line class="dgm-edge" x1="140" y1="166" x2="180" y2="232"/>
+  <line class="dgm-edge" x1="330" y1="166" x2="330" y2="232"/>
+  <!-- nodes -->
+  <circle class="dgm-node" cx="230" cy="32" r="17"/>
+  <text class="dgm-muted" x="230" y="37" text-anchor="middle" font-size="12">root</text>
+  <circle class="dgm-node" cx="140" cy="100" r="17"/>
+  <text class="dgm-text" x="140" y="105" text-anchor="middle" font-size="15">c</text>
+  <circle class="dgm-node" cx="330" cy="100" r="17"/>
+  <text class="dgm-text" x="330" y="105" text-anchor="middle" font-size="15">d</text>
+  <circle class="dgm-node" cx="140" cy="166" r="17"/>
+  <text class="dgm-text" x="140" y="171" text-anchor="middle" font-size="15">a</text>
+  <circle class="dgm-node" cx="330" cy="166" r="17"/>
+  <text class="dgm-text" x="330" y="171" text-anchor="middle" font-size="15">o</text>
+  <circle class="dgm-good-node" cx="100" cy="232" r="17"/>
+  <text class="dgm-good-text" x="100" y="237" text-anchor="middle" font-size="15">t</text>
+  <circle class="dgm-good-node" cx="180" cy="232" r="17"/>
+  <text class="dgm-good-text" x="180" y="237" text-anchor="middle" font-size="15">r</text>
+  <circle class="dgm-good-node" cx="330" cy="232" r="17"/>
+  <text class="dgm-good-text" x="330" y="237" text-anchor="middle" font-size="15">g</text>
+</svg>
+</div>
+<figcaption>存有 <code>cat</code>、<code>car</code>、<code>dog</code> 的 Trie。绿色节点是<strong>词尾标记</strong>——路径存在不等于单词存在,必须走到带标记的节点才算收录了这个词。<code>ca</code> 是路径上的一个内部节点,它不带标记,说明 <code>ca</code> 本身不是收录的词,但它是 <code>cat</code>/<code>car</code> 的公共前缀。</figcaption>
+</figure>
+
+<h2>二、三种操作,代价都只看串长</h2>
+
+<p>插入 <code>word</code>:从根开始,对每个字符,若对应孩子不存在就新建,然后下移;走完在末节点打上<strong>词尾标记</strong>。查找完整词:沿字符走,任一步没有对应孩子就返回「不存在」,走到头再看<strong>末节点是否有词尾标记</strong>。前缀查询:同样沿字符走,能走完前缀就说明「存在以它开头的词」——不需要词尾标记。</p>
+
+<p>关键观察:三种操作的代价都是 <strong>O(L)</strong>,<code>L</code> 是被查串的长度,<strong>与 Trie 里存了多少个词(<code>n</code>)无关</strong>。哈希表查找是 O(L)(得先算整串的哈希),Trie 也是 O(L),但 Trie <strong>额外白送</strong>了哈希表给不了的前缀能力——代价是更大的空间。</p>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>字典树(Trie)</dt>
+<dd>按字符逐层分叉的树,从根到节点的路径即一段前缀,用于字符串前缀检索。<em>避免</em>「前缀树」与「Trie」混用时不统一——本课统一叫 Trie。</dd>
+<dt>词尾标记(end-of-word flag)</dt>
+<dd>节点上的布尔位,标记「从根到此的路径正好是一个被收录的完整词」。区分「前缀存在」与「单词存在」的唯一凭据。</dd>
+<dt>字母表大小 σ(alphabet size)</dt>
+<dd>每个节点可能的分叉数(小写英文字母 σ=26)。若每节点用定长数组存孩子,空间与 σ 成正比;用哈希表/映射存孩子则省空间但常数更大。</dd>
+</dl>
+
+<h2>四、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>时间</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td class="op">插入 <code>insert(word)</code></td><td class="best">O(L)</td><td>L=词长,与词数 n 无关</td></tr>
+<tr><td class="op">查完整词 <code>search(word)</code></td><td class="best">O(L)</td><td>走完后需查词尾标记</td></tr>
+<tr><td class="op">前缀查询 <code>startsWith(pre)</code></td><td class="best">O(L)</td><td>能走完前缀即存在,不看标记</td></tr>
+<tr><td class="op">空间(定长数组孩子)</td><td class="warn">O(N·σ)</td><td>N=所有词总字符数,σ=字母表大小</td></tr>
+</tbody>
+</table>
+<p>时间栏全绿,是 Trie 的卖点:查询代价只跟当前串长挂钩,存一百万个词也不会让单次查询变慢。但空间栏是红的:稀疏数据下大量节点只有一两个孩子,却各占一个 σ 大小的数组,浪费惊人——这是 Trie 的主要代价,也是面试易错点。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>听到这些关键词就该条件反射想到 Trie:</p>
+<ul>
+<li><strong>「自动补全 / 前缀匹配 / 输入联想」</strong>:走到前缀节点,再对其子树做一次 DFS 收集所有词。哈希表做不了这件事。</li>
+<li><strong>「实现 Trie」</strong>(LeetCode 208 经典题):要求写 <code>insert</code>/<code>search</code>/<code>startsWith</code>,考点就是「search 要查词尾标记、startsWith 不查」。</li>
+<li><strong>「单词搜索 II / 单词游戏」</strong>:把词典建成 Trie,再在字母网格上 <strong>DFS + Trie 同步下移</strong>,一次遍历同时匹配大量单词——这是 Trie + 回溯的高频组合。</li>
+<li>其它经典应用:拼写检查、IP 路由最长前缀匹配、词频统计。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>最常见错误一:查完整词只看「路径能走通」。</strong>在存了 <code>cat</code> 的 Trie 里查 <code>ca</code>,路径能走通,但 <code>ca</code> 节点没有词尾标记,应返回「不存在」。<code>search</code> 必查标记,<code>startsWith</code> 才不查——把这两者答反是最典型的丢分点。</p>
+<p><strong>最常见错误二:低估空间。</strong>Trie 用空间换时间,稀疏或字母表大(如 Unicode)时空间开销可能非常大。别脱口而出「Trie 比哈希表好」——它在前缀查询上强,在纯粹的存在性判断上,哈希表往往更省内存。工程里常用压缩前缀树(Radix/Patricia Trie)来缓解。</p>
+</div>
+
+<div class="implement">
+<p>动手清单(对应 LeetCode 208):</p>
+<p>1. 定义节点:<code>children</code>(长度 26 的数组或哈希表)+ <code>isEnd</code> 布尔位。</p>
+<p>2. 实现 <code>insert(word)</code> / <code>search(word)</code> / <code>startsWith(prefix)</code>,务必让 <code>search</code> 收尾时检查 <code>isEnd</code>。</p>
+<p>3. 加一个 <code>collect(prefix)</code>:走到前缀节点后 DFS 子树,返回所有以它开头的词——这就是自动补全的核心。</p>
+<p>4. 存入一小份词典,分别用哈希表和 Trie 实现「前缀有多少个词」,对比代码复杂度。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>Trie 把「前缀」变成「路径」,让前缀查询降到 O(串长)、与词数无关;它用空间换来了哈希表给不了的前缀能力。查完整词别忘了检查词尾标记。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一个 Trie 里存了 <code>{apple, app}</code>。调用 <code>search("app")</code> 和 <code>startsWith("app")</code> 分别返回什么?</summary>
+<div class="answer">
+<p><code>search("app")</code> 返回 <strong>true</strong>,<code>startsWith("app")</code> 也返回 <strong>true</strong>。因为 <code>app</code> 本身被收录了(它的末节点有词尾标记),两者都成立。但如果 Trie 里只存了 <code>apple</code>(没存 <code>app</code>),那么 <code>search("app")</code> 应返回 <strong>false</strong>(路径走得通但无词尾标记),而 <code>startsWith("app")</code> 仍返回 <strong>true</strong>。这道题就是在逼你说清「查词要看标记、查前缀不看」。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:在一个存了 n 个单词、被查串长为 L 的 Trie 上,单次 <code>search</code> 的时间复杂度是?</summary>
+<div class="answer">
+<p><strong>O(L)</strong>,只跟被查串的长度有关,与已存单词数 n <strong>无关</strong>。这正是 Trie 相对「遍历词典逐个比较(O(n·L))」的优势。干扰项 O(n·L)、O(log n)、O(n) 都错把词数 n 塞进了复杂度——Trie 的查询代价只由「走几步」决定。空间才是随词数增长的那一维。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲「字典树(Tries)」小节。大纲提示「先读代码、理解各类变体」。推荐:</p>
+<ul>
+<li><a href="https://www.coursera.org/learn/data-structures-optimizing-performance/lecture/08Xyf/core-introduction-to-tries">对字典树的介绍(视频)</a> —— 建立最初的结构直觉。</li>
+<li><a href="https://www.toptal.com/java/the-trie-a-neglected-data-structure">字典树:一个被忽略的数据结构(文章)</a> —— 讲清应用场景与实现细节。</li>
+<li><a href="https://www.youtube.com/watch?v=TJ8SkcUSdbU">标准教程:现实中的用例(视频)</a> 与 <a href="http://www.cs.yale.edu/homes/aspnes/classes/223/notes.html#Tries">耶鲁数据结构笔记 · Tries 一节</a>。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师带你在纸上把 <code>{apple, app, apricot}</code> 一步步插进 Trie,再演示 <code>search("app")</code> 和 <code>startsWith("ap")</code> 各走到哪。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0044-string-search.html"><span class="dir">← 上一课</span>字符串搜索:朴素到 KMP</a>
+  <a class="next" href="0046-union-find.html"><span class="dir">下一课 →</span>并查集:近乎 O(1) 的连通性</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

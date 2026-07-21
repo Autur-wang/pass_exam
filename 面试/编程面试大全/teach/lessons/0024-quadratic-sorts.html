@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0024 · O(n²) 三兄弟:冒泡、选择、插入</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0024 课 · 排序 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>O(n²) 三兄弟:冒泡、选择、插入</h1>
+
+<p class="lede">冒泡、选择、插入是三个「慢」排序——平均都是 O(n²),数据一大就现原形。但面试考它们不是让你在生产里用,而是考三件事:<strong>你能不能手写正确、说清各自的稳定性、并说出插入排序为什么至今仍活在标准库里</strong>。这最后一点是本节的钩子:一个 O(n²) 的算法,怎么会被最先进的排序库当成「秘密武器」?</p>
+
+<div class="recall">
+<p>回忆<a href="0023-sorting-overview.html">上一课</a>的三根正交轴:时间复杂度、稳定性、原地性。这三兄弟在时间轴上都站在 O(n²) 这一档、在空间轴上都是原地;但在稳定性这根轴上<strong>它们并不一致</strong>——先猜猜谁不稳定,读完对照。</p>
+</div>
+
+<h2>一、冒泡排序:相邻交换,大的往后冒</h2>
+
+<p>冒泡的机制最直白:从头到尾扫一遍,<strong>相邻两个逆序就交换</strong>。一趟扫完,最大的元素像气泡一样浮到最右端固定住;下一趟只需管剩下的部分。n 个元素最多扫 n-1 趟。</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell hi">5</div>
+  <div class="cell hi">3</div>
+  <div class="cell on">8</div>
+  <div class="cell on">1</div>
+</div>
+<div class="down" style="text-align:center;color:var(--muted)">↓ 比较 5&gt;3,交换</div>
+<div class="cells">
+  <div class="cell on">3</div>
+  <div class="cell hi">5</div>
+  <div class="cell hi">8</div>
+  <div class="cell on">1</div>
+</div>
+<div class="down" style="text-align:center;color:var(--muted)">↓ 5&lt;8 不换,再比 8&gt;1 交换 …… 一趟后 8 到最右</div>
+<div class="cells">
+  <div class="cell on">3</div>
+  <div class="cell on">5</div>
+  <div class="cell on">1</div>
+  <div class="cell hi">8</div>
+</div>
+<figcaption>一趟冒泡:相邻逆序对被逐个交换,当前最大值 <code>8</code> 沉到末尾固定。红格是正在比较的一对。</figcaption>
+</figure>
+
+<p>冒泡可以加一个<strong>提前退出</strong>优化:某一趟一次交换都没发生,说明已全有序,直接结束。这让「已经有序」的输入变成 O(n)——但这只改善<strong>最好情况</strong>,对随机或逆序输入的 O(n²) 最坏情况毫无帮助。冒泡<strong>稳定</strong>:只交换相邻的逆序对,相等元素永远不会互相跨越。</p>
+
+<h2>二、选择排序:每趟挑最小,放到前面</h2>
+
+<p>选择排序换个思路:每一趟从<strong>未排序区</strong>里找出最小值,和未排序区的第一个位置<strong>交换</strong>。n 趟后全部就位。它的交换次数很少(每趟最多一次),但比较次数固定是 O(n²)——不管输入多有序都得全扫,所以它<strong>没有「最好情况」优势</strong>,最好、平均、最坏都是 O(n²)。</p>
+
+<p>关键坑:选择排序<strong>不稳定</strong>。因为「把最小值交换到前面」这个动作可能让某个元素跨过一个和它相等的元素。例如 <code>[5a, 5b, 2]</code>:第一趟把 2 和 5a 交换,变成 <code>[2, 5b, 5a]</code>,两个 5 的相对顺序被颠倒了。</p>
+
+<h2>三、插入排序:像整理扑克牌</h2>
+
+<p>插入排序模拟你摸扑克牌:左手已排好的牌是有序区,每摸一张新牌,就<strong>从右往左比,插到合适的位置</strong>,后面的牌顺势右移。它<strong>稳定</strong>(相等时不越过,插在后面),而且有一个决定命运的性质——<strong>对近乎有序的数组极快</strong>。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node"><span class="n-title">已排序区</span><span class="n-sub">[3, 7]</span></div>
+  <div class="arrow">←</div>
+  <div class="node bad"><span class="n-title">摸到 5</span><span class="n-sub">从右往左找位置</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">插入</span><span class="n-sub">[3, 5, 7]</span></div>
+</div>
+<figcaption>每张新牌只需和有序区里比它大的元素比较、右移。若数组已近乎有序,每张牌平均只挪一两步——这就是它「近有序 O(n)」的来源。</figcaption>
+</figure>
+
+<p>为什么近有序会快?若每个元素离它的最终位置都不远(只错开常数格),那么每次插入的内层移动次数是常数,总代价降到 O(n)。完全有序时更是每张牌比一次就到位,纯 O(n)。这个性质让插入排序成了大排序算法的「收尾工具」——见下面的面试要点。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>稳定性(Stability)</dt>
+<dd>相等元素排序后相对顺序不变。冒泡、插入<em>稳定</em>;选择<em>不稳定</em>(交换可能越过相等元素)。</dd>
+<dt>原地(In-place)</dt>
+<dd>只用 O(1) 额外空间。三兄弟全部原地——它们只在原数组上交换/移动,不开新数组。</dd>
+<dt>最好情况(Best Case)</dt>
+<dd>对特定输入(如已有序)的运行时间。插入与带提前退出的冒泡最好 O(n);选择<em>没有</em>最好情况优势,恒 O(n²)。</dd>
+</dl>
+
+<h2>五、复杂度对照</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">排序</th><th>最好</th><th>平均</th><th>最坏</th><th>空间</th><th>稳定?</th></tr></thead>
+<tbody>
+<tr><td class="op">冒泡 Bubble</td><td class="best">O(n) <small>(有序+提前退出)</small></td><td class="warn">O(n²)</td><td class="warn">O(n²)</td><td class="best">O(1)</td><td class="best">稳定</td></tr>
+<tr><td class="op">选择 Selection</td><td class="warn">O(n²)</td><td class="warn">O(n²)</td><td class="warn">O(n²)</td><td class="best">O(1)</td><td class="warn">不稳定</td></tr>
+<tr><td class="op">插入 Insertion</td><td class="best">O(n) <small>(近有序)</small></td><td class="warn">O(n²)</td><td class="warn">O(n²)</td><td class="best">O(1)</td><td class="best">稳定</td></tr>
+</tbody>
+</table>
+<p>注意选择排序那一整行的最好情况也是 O(n²)——这是它相比另两个最尴尬的地方:又不稳定、又没有近有序加速,唯一的优点是交换次数少(数据搬运昂贵时偶有价值)。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>这三个很少作为主考题,但常作为「暖场」和陷阱题:</p>
+<ul>
+<li><strong>「插入排序为什么被标准库用作小数组兜底?」</strong>——这是高频题。快排/归并这类分治排序递归到<strong>小区间</strong>(常见阈值约 10~16 个元素)时,分治的递归调用和常数开销反而拖累性能;此时切换成插入排序,因为它<strong>常数因子极小、且小数组通常近乎有序</strong>,实测更快。C++ 的 introsort、许多语言的 TimSort 都这么做。</li>
+<li><strong>「数据近乎有序,用哪个排序?」</strong>——插入排序,O(n) 级别,常数还小,往往比 O(n log n) 的通用排序更快。</li>
+<li><strong>让你手写并说清稳定性</strong>——能当场答出「选择排序不稳定,因为跨距离交换会越过相等元素」并举反例 <code>[5a,5b,2]</code>,就赢了。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「选择排序也是稳定的吧?」——错,它不稳定。</strong>选择排序把最小值交换到前面,这个交换可能让某元素跨过与它相等的元素,颠倒相对顺序(<code>[5a,5b,2]→[2,5b,5a]</code>)。三兄弟里只有它不稳定,恰恰最容易背反。</p>
+<p><strong>冒泡的提前退出优化,只改善最好情况,不改最坏。</strong>对已有序输入它能一趟识别并退出(O(n)),但对逆序或随机输入仍是 O(n²)——优化改的是 best case,不是 worst case。别把「加了优化的冒泡」说成 O(n)。</p>
+</div>
+
+<div class="implement">
+<p>用同一份原始数组,分别实现三个排序,都做到<strong>原地</strong>(只交换/移动,不开新数组):</p>
+<p><code>bubble_sort</code>(带 <code>swapped</code> 标志实现提前退出)· <code>selection_sort</code> · <code>insertion_sort</code>。</p>
+<p>实验:构造三种输入——已有序、完全逆序、随机——各跑一遍,打印比较次数与交换次数。你会亲眼看到:插入排序在「已有序」上比较次数骤降到约 n-1,而选择排序纹丝不动仍是 n(n-1)/2。再用 <code>[5a, 5b, 2]</code>(给相等元素标上来源标签)验证哪个排序打乱了 5a/5b 的顺序。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:三兄弟中哪一个的最好、平均、最坏情况时间复杂度<strong>全部</strong>是 O(n²),没有任何输入能让它更快?</summary>
+<div class="answer">
+<p><strong>选择排序</strong>。它每一趟都必须扫完整个未排序区来找最小值,不管数据是否已有序,比较次数恒为 n(n-1)/2。相比之下,插入排序和带提前退出的冒泡对「已有序/近有序」输入能降到 O(n)。这也让选择排序在实践中几乎没有使用理由——除非数据搬运代价极高、需要最少交换次数的场景。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:高性能排序库(如 introsort、TimSort)在递归到很小的子区间时,往往切换成插入排序。为什么是插入排序,而不是干脆一路用快排/归并到底?</summary>
+<div class="answer">
+<p>因为在<strong>小区间</strong>上,插入排序的<strong>常数因子</strong>远小于分治排序。快排/归并每层递归都有函数调用、指针/边界维护、(归并还有)辅助数组分配等固定开销;区间小到十来个元素时,这些开销主导了运行时间,渐进优势 n log n 反而跑不过 O(n²) 的插入排序。加之小区间常常已近乎有序,插入排序此时接近 O(n)。所以库设一个阈值(常见 10~16),区间小于它就交给插入排序收尾。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:数组 <code>[2a, 2b, 1]</code>(两个相等的 2 标注来源)。用<strong>选择排序</strong>升序排完,两个 2 的相对顺序是什么?</summary>
+<div class="answer">
+<p>会变成 <strong>2b 在 2a 之前</strong>——顺序被颠倒。第一趟找到最小值 1,把它与位置 0 的 2a 交换,数组变成 <code>[1, 2b, 2a]</code>;后续两个 2 已就位不再动。于是原本 2a 在前,排完却 2b 在前——这就是选择排序<strong>不稳定</strong>的具体证据。换成插入或冒泡排序,则会保持 2a 在 2b 前。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题对应仓库「排序」小节里的冒泡/选择/插入视频。抽出的一手来源:</p>
+<ul>
+<li><a href="https://youtu.be/JU767SDMDvA">Insertion sort in 2 minutes(视频)</a> —— README 收录的两分钟插入排序动画,看它「摸牌插入」的直觉。</li>
+<li><a href="https://youtu.be/g-PGLbMth_g">Selection sort in 3 minutes(视频)</a> —— 直观看到「每趟挑最小往前放」,理解它为何不稳定。</li>
+<li><a href="https://youtu.be/xli_FI7CuzA">Bubble sort in 2 minutes(视频)</a> —— 相邻交换、大值上浮的动画。</li>
+<li><a href="https://www.youtube.com/watch?v=P00xJgWzz2c&index=1&list=PL89B61F78B552C1AB">冒泡排序(视频,完整讲解)</a> —— README 的冒泡完整讲解版。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师陪你在纸上把 <code>[5a,5b,2]</code> 用三个排序各跑一遍,亲眼定位谁打乱了相等元素。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0023-sorting-overview.html"><span class="dir">← 上一课</span>排序全景:稳定性、原地、下界</a>
+  <a class="next" href="0025-merge-sort.html"><span class="dir">下一课 →</span>归并排序:分治与稳定的代价</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

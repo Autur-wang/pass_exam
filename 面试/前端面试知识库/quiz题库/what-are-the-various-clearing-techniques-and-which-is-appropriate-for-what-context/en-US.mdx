@@ -1,0 +1,11 @@
+---
+title: What are the various clearing techniques and which is appropriate for what context?
+---
+
+- Empty `div` method: `<div style="clear:both;"></div>`.
+- Clearfix method: refer to the [`.clearfix` class](/questions/quiz/describe-floats-and-how-they-work).
+- `overflow: auto` or `overflow: hidden` method: the parent will establish a new block formatting context and expand to contain its floated children.
+
+> [!TIP] Prefer `.clearfix` in larger projects
+>
+> In large projects, having a utility `.clearfix` class is very helpful. `overflow: hidden` might clip children if they are taller than the parent, which is not ideal.

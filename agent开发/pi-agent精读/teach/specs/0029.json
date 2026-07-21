@@ -1,0 +1,88 @@
+{
+ "num": "0029",
+ "slug": "structured-summary-and-rebuild",
+ "title": "怎么压与如何生效：结构化摘要 + 上下文重建",
+ "narrowTopic": "只讲切掉的部分怎么变成结构化摘要（6 section + 增量更新 + 文件跟踪），以及压缩结果如何通过 CompactionEntry 在下一轮被重建生效——并埋钩子引向 Session Tree。",
+ "analogySeed": "让 LLM『随便写段总结』就像让人凭记忆写会议纪要——它容易被某个有趣的技术细节吸引，写了一大段却忘了记用户最核心的需求。Pi 的做法是给它一张固定表格（Goal/约束/进度/决策/下一步/关键上下文），像填病历一样每一栏都必须填——把『易遗漏』变成『必须填』。",
+ "keyPoints": [
+  "摘要不是自由文本，是填表：SUMMARIZATION_PROMPT 强制 LLM 填 6 个固定 section——Goal / Constraints & Preferences / Progress(含 Done/In Progress/Blocked) / Key Decisions / Next Steps / Critical Context。",
+  "为什么结构化：自由文本的失败模式是 LLM 被有趣细节吸引、漏记核心需求；固定 section 强制它每个维度都扫一遍。其中 Blocked 子项专记『卡住的事』，新一轮可优先解锁。",
+  "生成流程：把被压缩的 AgentMessage[] 序列化成文本（[User]/[Assistant tool calls]/[Tool result]...），再调一次 LLM 用摘要 prompt 生成结构化摘要。",
+  "增量更新：多次压缩时传入上一次的 previousSummary，让 LLM 做『更新而非重写』——已有 Goal/Constraints 保留、新 Progress 追加，避免每次从零写导致的摘要漂移累积误差。",
+  "文件跟踪：extractFileOperations 从『上次压缩的 readFiles/modifiedFiles』+『本次消息里工具调用涉及的文件』两处累积，用 <read-files>/<modified-files> 标签附到摘要末尾，跨压缩累积。",
+  "压缩结果的物理形态：CompactionEntry（type:'compaction'，含 summary、tokensBefore、firstKeptEntryId、details.readFiles/modifiedFiles），存在 Session Tree 上。",
+  "如何生效：下一轮 buildSessionContext() 依据 CompactionEntry 重建上下文——CompactionSummaryMessage 替代旧消息，convertToLlm 把它翻译成 <summary> 包裹的 UserMessage 发给 LLM。",
+  "集成点与事件：自动压缩嵌在 AgentSession 的 agent_end 处理中；过程发出 compaction_start(manual/threshold/overflow) 和 compaction_end 两种事件供 UI 显示进度。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "6 个 section 的摘要格式清单：## Goal / ## Constraints & Preferences / ## Progress / ## Key Decisions / ## Next Steps / ## Critical Context 及各自的中文注释（第四节『摘要的格式』代码块）",
+   "cite": "教程 §四 / SUMMARIZATION_PROMPT"
+  },
+  {
+   "desc": "CompactionEntry 的对象结构：type:'compaction'、summary、tokensBefore:185000、firstKeptEntryId:'e30'、details.readFiles/modifiedFiles 等字段（第六节『CompactionEntry』的 TypeScript 代码块）",
+   "cite": "教程 §六 / session-manager.ts:CompactionEntry"
+  },
+  {
+   "desc": "文件跟踪标签格式：<read-files>...</read-files> 与 <modified-files>...</modified-files> 两段标签及其内容（第四节『文件跟踪』代码块）",
+   "cite": "教程 §四 / formatFileOperations"
+  },
+  {
+   "desc": "上下文重建结构图：CompactionSummaryMessage(role:'compactionSummary') + 保留的原始消息(entry 30 之后) 的树状 ASCII 图（第六节『上下文重建』）",
+   "cite": "教程 §六 / buildSessionContext"
+  }
+ ],
+ "designRationale": [
+  "为什么用 6 section 结构化模板而非『请总结对话』：自由文本有失败模式——LLM 易被有趣细节吸引、漏记核心需求。固定 section 把『易遗漏』变成『必须填』，是用 prompt 设计对抗 LLM 认知偏差的范例。",
+  "为什么做增量更新（previousSummary）而非每次重写：多次压缩若每次从零写，摘要会一点点漂移、累积误差；在旧摘要基础上更新能让 Goal/Constraints 稳定保留、新信息追加。",
+  "为什么单独跟踪文件（领域知识嵌入通用机制）：对编码 Agent 而言『改过哪些文件』比『讨论过什么』更精确可验证；压缩算法本身通用，通过 details 字段承载领域特定信息，避免重复读/覆盖改动。",
+  "为什么用 CompactionEntry 存进 Session Tree 而非直接替换消息数组：压缩发生在两轮之间，结果需要一个能被下一轮 buildSessionContext 读取重建的持久物；这也自然引出下一章的 Session Tree——历史为何是树而非线性数组。"
+ ],
+ "quiz": [
+  {
+   "stem": "Pi 让 LLM 填 6 个固定 section（Goal/Constraints/Progress/...），而不是简单说『请总结这段对话』。这个设计主要对抗 LLM 的什么问题？",
+   "options": [
+    "LLM 生成速度太慢",
+    "LLM 无法输出 Markdown 格式",
+    "LLM 摘要的 token 数不可控",
+    "自由文本时 LLM 容易被有趣的技术细节吸引，花大篇幅描述细节却漏记用户的核心需求"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对，固定 section 把『易遗漏』变成『必须填』。延伸：Progress 里专门的 Blocked 子项就是这个思路的极致——强制 LLM 记下卡住的事，新一轮可优先解锁。",
+   "noMsg": "想想让人凭记忆写会议纪要会漏掉什么。第八节把这称为对抗 LLM『认知偏差』——它容易被什么吸引而忘了记什么？"
+  },
+  {
+   "stem": "一个长对话被压缩多次时，第二次压缩会把上一次的摘要作为 previousSummary 传进去做增量更新。为什么不每次都从原始消息从零重写摘要？",
+   "options": [
+    "因为原始消息在第一次压缩后就被删除了，无法重读",
+    "因为从零重写会让摘要每次漂移一点、累积误差；增量更新让 Goal/Constraints 稳定保留、新信息追加",
+    "因为增量更新消耗的 token 更少",
+    "因为 LLM 一次只能处理 30 轮对话"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对，增量更新是『更新而非重写』，避免累积漂移。延伸：文件跟踪列表也是同样逻辑——跨压缩累积，previousSummary 里的文件列表会被合并进新摘要。",
+   "noMsg": "第四节『增量更新』说这让 LLM 做的是『更新而非重写』。反复从零重写同一批信息，最担心的是稳定性还是速度？"
+  },
+  {
+   "stem": "压缩摘要末尾除了 6 section 文字，还用 <read-files>/<modified-files> 标签单独维护一份文件列表。为什么要给编码 Agent 单独做这件事？",
+   "options": [
+    "因为『改过哪些文件』比『讨论过什么』更精确、可验证，能让 Agent 避免重复读、避免覆盖改动",
+    "因为文件路径无法放进 6 个 section 里",
+    "因为 API 要求摘要必须包含文件列表",
+    "因为文件列表比摘要文字占用更少 token"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对，这是把领域特定知识嵌入通用压缩机制——算法通用，details 字段承载领域信息。延伸：这份列表跨压缩累积，即使经过多轮压缩 Agent 仍知道整个会话读过/改过哪些文件。",
+   "noMsg": "对编码 Agent 来说，哪种信息更可靠：自然语言里『讨论过 auth』，还是一份明确的『修改过 src/auth.ts』清单？第八节称这是『领域知识嵌入通用机制』。"
+  }
+ ],
+ "_chapter": "第9章-上下文压缩",
+ "_chapterCN": "上下文压缩：当对话太长怎么办",
+ "prevFile": "0028-cut-point-selection.html",
+ "prevNum": "0028",
+ "nextFile": "0030-session-tree-two-dimensions-and-append-only.html",
+ "nextNum": "0030",
+ "crumbLabel": "第 9 章 · 上下文压缩",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第9章-上下文压缩-当对话太长怎么办.md",
+ "filename": "0029-structured-summary-and-rebuild.html"
+}

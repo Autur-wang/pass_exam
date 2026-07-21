@@ -1,0 +1,28 @@
+---
+title: What is progressive rendering?
+---
+
+Progressive rendering is the name given to techniques used to improve the performance of a webpage (in particular, improve perceived load time) to render content for display as quickly as possible.
+
+It used to be much more prevalent in the days before broadband internet, but it is still used in modern development as mobile data connections have become increasingly common (and remain unreliable).
+
+## Lazy loading of images
+
+Images on the page are not loaded all at once. An image is only loaded when the user scrolls into or near the part of the page that displays it.
+
+- `<img loading="lazy">` is a modern way to instruct the browser to defer loading of images that are outside the screen until the user scrolls near them.
+- Use JavaScript to watch the scroll position and load the image when it is about to come on screen (by comparing the coordinates of the image with the scroll position).
+
+## Prioritizing visible content (or above-the-fold rendering)
+
+Include only the minimum CSS, content, and scripts necessary to display the portion of the page visible in the user's browser as quickly as possible. You can then use deferred scripts or listen for the `DOMContentLoaded`/`load` event to load in other resources and content.
+
+## Async HTML fragments
+
+Flushing parts of the HTML to the browser as the page is constructed on the back end. More details on the technique can be found in [this article](https://innovation.ebayinc.com/stories/async-fragments-rediscovering-progressive-html-rendering-with-marko/).
+
+## Other modern techniques
+
+- [Progressive hydration](https://www.patterns.dev/posts/progressive-hydration/)
+- [Streaming server-side rendering](https://www.patterns.dev/posts/server-side-rendering/)
+- [Selective hydration](https://www.patterns.dev/posts/react-selective-hydration/)

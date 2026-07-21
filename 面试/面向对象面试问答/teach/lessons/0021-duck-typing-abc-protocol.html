@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>鸭子类型 · ABC · Protocol · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第六部分 · Python 机制与跨语言 · 第 0021 节</p>
+<h1>鸭子类型、ABC 与 Protocol</h1>
+<p class="lede">"Python 里怎么定义接口?"这是一道能瞬间分层的题。只会答"用 interface"的人当场出局;能讲清鸭子类型 / ABC / Protocol 这三条路以及各自的取舍,才算真懂 Python 的多态。这一节就把这三条路一次讲透。</p>
+
+<div class="recall">
+<p>先回忆两件事:第一,0005 讲"抽象类 vs 接口"时,接口的本质是什么?(一份"你必须能做这些操作"的契约。)第二,你要写一个函数 <code>dump(x)</code>,它想调用 <code>x.read()</code>。你会先检查"<code>x</code> 是不是 <code>File</code> 类型"再调用,还是根本不管类型、直接调?先给个答案,再往下看——这正是三条路的分岔口。</p>
+</div>
+
+<h2>一、直觉:走起来像鸭子,就当它是鸭子</h2>
+
+<p>有句老话:"如果它走起来像鸭子、叫起来像鸭子,那它就是鸭子。"(If it walks like a duck and quacks like a duck, it is a duck.)这就是<strong>鸭子类型(Duck Typing)</strong>——判断一个对象"能不能当某种东西用",不看它的<strong>类型标签</strong>,只看它<strong>有没有那个能力</strong>。</p>
+
+<p>放到代码里:一个函数要 <code>x.read()</code>,它<strong>不问 <code>x</code> 是不是 <code>File</code></strong>,只要 <code>x</code> 身上有个能调用的 <code>read()</code>,就当文件用。这是 Python 默认的多态方式——同一个函数,喂进毫无继承关系的不同对象,只要它们"能做这个操作",就都跑得通。</p>
+
+<p>Python 表达"接口 / 多态"其实有<strong>三条路</strong>,它们回答的是同一个问题的不同版本——"怎么算'是'这种类型":</p>
+
+<div class="trio">
+  <div class="cell">
+    <div class="role">① 运行时 · 结构</div>
+    <div class="head">鸭子类型</div>
+    <div class="sub">有这个方法就行,不问出身</div>
+  </div>
+  <div class="cell">
+    <div class="role">② 名义 · 要继承</div>
+    <div class="head">ABC</div>
+    <div class="sub">显式继承/注册才算"是"</div>
+  </div>
+  <div class="cell">
+    <div class="role">③ 静态 · 结构</div>
+    <div class="head">Protocol</div>
+    <div class="sub">形状对得上就算,事后契约</div>
+  </div>
+</div>
+
+<div class="keydef">
+<dl>
+<dt>鸭子类型 (Duck Typing)</dt>
+<dd>不检查对象类型,只依赖它是否具备所需的方法 / 属性。是 Python 默认的多态方式,判定发生在<strong>运行时</strong>。</dd>
+<dt>EAFP vs LBYL</dt>
+<dd><strong>EAFP</strong>(Easier to Ask Forgiveness than Permission,请求原谅比请求许可容易):先动手,出错用 <code>try/except</code> 兜底。<strong>LBYL</strong>(Look Before You Leap,三思而后行):先用 <code>if</code>/<code>hasattr</code> 检查,再动手。Python 社区惯例<strong>偏向 EAFP</strong>,它和鸭子类型是天生一对。</dd>
+<dt>抽象基类 ABC (Abstract Base Class)</dt>
+<dd><code>abc.ABC</code> + <code>@abstractmethod</code>。<strong>名义子类型(nominal)</strong>:必须<strong>显式继承</strong>(或用 <code>register()</code> 注册)才被认作"是"这个类型;有未实现的抽象方法就<strong>不能实例化</strong>;可配合 <code>isinstance</code> 检查。</dd>
+<dt>Protocol (typing.Protocol)</dt>
+<dd><strong>结构子类型(structural)</strong>,也叫"静态鸭子类型"。只要一个类<strong>具备</strong> Protocol 声明的方法 / 属性,类型检查器就认它符合,<strong>无需显式继承</strong>——一种事后追认、非侵入的契约。</dd>
+</dl>
+</div>
+
+<h2>二、鸭子类型:默认多态,配 EAFP</h2>
+
+<p>看它有多"不问出身":</p>
+
+<pre><code># 鸭子类型:dump 只关心"你有没有 read()",不关心你是谁
+def dump(source):
+    return source.read()
+
+class RealFile:
+    def read(self): return "来自磁盘"
+
+class MemoryBuffer:
+    def read(self): return "来自内存"
+
+print(dump(RealFile()))       # OK
+print(dump(MemoryBuffer()))   # OK —— 两个类毫无继承关系,却都能当"可读物"用
+</code></pre>
+
+<p>那"要不要先检查类型"呢?这就引出两种风格。鸭子类型天然搭配 <strong>EAFP</strong>——别先验身份,直接用,不行再兜底:</p>
+
+<pre><code># LBYL:先看后跳 —— 先检查再动手(有竞态风险:检查完到使用前状态可能变)
+if hasattr(source, "read"):
+    data = source.read()
+else:
+    data = None
+
+# EAFP:先做,错了原谅 —— Python 更偏这种,也更契合鸭子类型
+try:
+    data = source.read()
+except AttributeError:
+    data = None
+</code></pre>
+
+<p>为什么 Python 偏爱 EAFP?因为鸭子类型的世界里,"能做某操作"的对象千奇百怪,你很难用一串 <code>if</code> 把所有合法情况都枚举干净;直接尝试、按异常兜底,代码更短、也避免了"检查"和"使用"之间的竞态窗口。</p>
+
+<h2>三、ABC vs Protocol:名义 vs 结构</h2>
+
+<p>鸭子类型很灵活,但有个代价(后面易错点细说):契约只存在于程序员脑子里,写错要到运行时才炸。于是 Python 给了两个"把契约写下来"的工具,分别代表两种哲学——</p>
+
+<pre><code>from abc import ABC, abstractmethod
+from typing import Protocol
+
+# ① ABC:名义子类型 —— 必须"报出身",显式继承才算数
+class CloseableABC(ABC):
+    @abstractmethod
+    def close(self) -&gt; None: ...
+
+class Door(CloseableABC):            # 必须写出这层继承
+    def close(self) -&gt; None:
+        print("门关上了")
+
+# 有抽象方法没实现,就连实例都造不出来:
+# class Broken(CloseableABC): ...    # 忘了实现 close
+# Broken()   -&gt; TypeError: Can't instantiate abstract class Broken ...
+
+# ② Protocol:结构子类型 —— 不用继承,"形状"对得上就算
+class Closeable(Protocol):
+    def close(self) -&gt; None: ...
+
+class Valve:                         # 注意:没有继承 Closeable
+    def close(self) -&gt; None:
+        print("阀门关闭")
+
+def shut(x: Closeable) -&gt; None:
+    x.close()
+
+shut(Valve())    # 静态类型检查器(如 mypy)认可:Valve 结构上满足 Closeable
+</code></pre>
+
+<p>两者的分水岭就一句话:<strong>ABC 问"你继承了吗"(名义),Protocol 问"你长得对吗"(结构)。</strong>ABC 是<em>侵入式</em>的——你得在定义类时就写上继承,契约是"事先声明"的;Protocol 是<em>非侵入式</em>的——契约可以在别处、甚至在你无法修改的第三方类之后追认,只要它碰巧有 <code>close()</code>,就自动符合。</p>
+
+<p>补一个准确细节:Protocol <strong>默认只在静态检查时生效</strong>(给 mypy / Pyright 看)。若想在运行时用 <code>isinstance(obj, Closeable)</code>,要给 Protocol 加 <code>@runtime_checkable</code> 装饰器;而且这种运行时检查<strong>只核对方法名是否存在,不核对参数签名</strong>。ABC 则天生支持 <code>isinstance</code>。</p>
+
+<div class="interview">
+<p><strong>高频追问链(这一簇几乎是 Python OOP 的必考区):</strong></p>
+<ul>
+<li>"Python 里怎么定义接口?" → 先纠正前提:<strong>Python 没有 <code>interface</code> 关键字</strong>。有三条路:鸭子类型(运行时结构)、ABC(名义、要继承)、Protocol(静态结构、不用继承)。</li>
+<li>"ABC 和 Protocol 有什么区别?"(进阶分水岭) → 名义 vs 结构;ABC 要显式继承、Protocol 不用;ABC 侵入式(定义时声明)、Protocol 非侵入式(可事后追认第三方类)。</li>
+<li>"什么是 EAFP?为什么 Python 偏爱它?" → 先做后兜底 vs 先检查后做;EAFP 代码更短、避免检查—使用之间的竞态,也更契合鸭子类型的"不问出身"。</li>
+<li>"鸭子类型有什么缺点?怎么补?" → 契约不显式,错误<strong>延迟到运行时</strong>才暴露;补法:类型注解 + Protocol + 静态检查器,灵活与安全兼得。</li>
+<li>"<code>abc</code> 的 <code>register()</code> 是干嘛的?" → 把一个<strong>不继承</strong> ABC 的类注册成它的"虚拟子类",让 <code>isinstance</code> 返回 <code>True</code>——但它<strong>不会</strong>继承 ABC 里的任何实现,也不强制它实现抽象方法。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>翻车点一:回答"Python 用 <code>interface</code> 关键字定义接口"。</strong>Python 根本没有这个关键字。这是把 Java/C# 的肌肉记忆套到 Python 上,面试官一听就知道你没写过 Python 的接口。</p>
+<p><strong>翻车点二:把 ABC 和 Protocol 说反或说混。</strong>记死:<strong>ABC = 名义 = 要继承</strong>(不继承就不算);<strong>Protocol = 结构 = 不用继承</strong>(有对的方法就算)。这条区别是区分"背过"和"用过"的进阶考点。</p>
+<p><strong>翻车点三:忽视鸭子类型的代价。</strong>它把类型错误<strong>推迟到运行时</strong>——喂进一个没有 <code>read()</code> 的对象,程序跑到那一行才 <code>AttributeError</code>,而不是编码时就报错。别把"灵活"讲成没有代价;正确的收尾是:用<strong>类型注解 + Protocol + 静态检查器(mypy/Pyright)</strong>,既保留鸭子类型的灵活,又把错误提前到检查阶段。</p>
+<p><strong>翻车点四(易被反问):</strong>"Protocol 能不能用 <code>isinstance</code>?"——默认不能,要加 <code>@runtime_checkable</code>,且它只查方法名、不查签名。拿不准就如实说这一层限制,别拍胸脯保证。</p>
+</div>
+
+<div class="crosslang">
+<p>"这门语言怎么表达接口 / 多态?"是必问的跨语言题。核心轴是<strong>名义(要显式声明) vs 结构(形状对就行)</strong>:</p>
+<table>
+<tr><th>语言</th><th>接口机制</th><th>名义 or 结构</th><th>要不要显式声明"我实现了它"</th></tr>
+<tr><td><strong>Java / C#</strong></td><td>显式 <code>interface</code> + <code>implements</code></td><td>名义(nominal)</td><td>要——必须写出 <code>implements X</code> 才算</td></tr>
+<tr><td><strong>Go</strong></td><td>接口<strong>隐式满足</strong>(有对应方法即自动满足)</td><td>结构(structural)</td><td>不要——像 Python 的 Protocol</td></tr>
+<tr><td><strong>Python</strong></td><td>鸭子类型 / ABC / Protocol</td><td>三者兼有</td><td>看你选哪条路:ABC 要;Protocol、鸭子类型不要</td></tr>
+</table>
+<p>一句话记忆:<strong>Java/C# 要你"报出身"(名义),Go 只看你"长什么样"(结构),Python 三种都给你——鸭子类型是运行时结构,Protocol 是静态结构,ABC 是名义。</strong></p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写一遍——用两条路各实现一次同一个契约"可迭代地关闭资源":</p>
+<ul>
+<li>先用 <strong>Protocol</strong> 定义 <code>Closeable</code>(有一个 <code>close(self) -&gt; None</code>),再写一个<strong>不继承它</strong>的类 <code>TempFile</code>,只要有 <code>close()</code> 就应被 <code>def cleanup(x: Closeable)</code> 接受。用 mypy 跑一遍看是否通过。</li>
+<li>再用 <strong>ABC</strong> 定义 <code>CloseableABC</code>(<code>@abstractmethod def close</code>),故意写一个<strong>忘了实现 <code>close</code></strong> 的子类,尝试实例化它——观察抛出的 <code>TypeError</code>,体会"名义 + 强制实现"的手感。</li>
+<li>自测:把一个没有 <code>close()</code> 的对象传进 <code>cleanup()</code>。鸭子类型下它会在<strong>哪一刻</strong>报错?(运行到 <code>x.close()</code> 那一行时。)这正说明为什么要加静态检查。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:你有一个第三方库的类 <code>ThirdPartyLogger</code>,它自带 <code>close()</code> 方法,但你<strong>无法修改它的源码</strong>去加继承。你想让类型检查器认可它"是可关闭的"。用 ABC 还是 Protocol?为什么?</summary>
+<div class="answer">
+<p><strong>答案:用 Protocol。</strong></p>
+<p>ABC 是<strong>名义</strong>子类型,要求目标类<strong>显式继承</strong>(或你手动 <code>register()</code>)——但你改不了第三方源码,继承这条路走不通。Protocol 是<strong>结构</strong>子类型、非侵入式:你只需在自己这边定义 <code>class Closeable(Protocol): def close(self) -&gt; None: ...</code>,由于 <code>ThirdPartyLogger</code> 碰巧有 <code>close()</code>,它就<strong>自动满足</strong> <code>Closeable</code>,无需碰它一行代码。这正是 Protocol"事后追认、非侵入"的杀手级场景。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:下面说法哪个最准确?"在 Python 里,鸭子类型相比 Protocol 的关键差异是……"</summary>
+<div class="answer">
+<p><strong>答案:鸭子类型的检查发生在运行时(错了才炸),Protocol 让同样的"结构契约"能在编写时被静态检查器提前发现。</strong></p>
+<p>两者<strong>都是结构式</strong>的——都只看"有没有那个方法",都不要求继承。区别在<strong>什么时候校验</strong>:鸭子类型是纯运行时,喂错对象要跑到那一行才 <code>AttributeError</code>;Protocol 把这份契约写成类型注解,mypy/Pyright 能在你运行之前就报错。所以常见的正确收尾是:"Protocol = 给鸭子类型加了一层静态安全网",而不是"Protocol 取代了鸭子类型"。</p>
+<p>常见错误答案:"鸭子类型要继承、Protocol 不要"——错,鸭子类型恰恰也不要继承。要继承的是 ABC。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>Python 没有 <code>interface</code> 关键字,它用三条路表达接口——<strong>鸭子类型</strong>(运行时结构,配 EAFP,灵活但错误延迟到运行时)、<strong>ABC</strong>(名义,要显式继承,可强制实现 + <code>isinstance</code>)、<strong>Protocol</strong>(静态结构,不用继承,可事后追认第三方类)。想兼得灵活与安全:类型注解 + Protocol + 静态检查器。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层(如实标注):</p>
+<ul>
+<li><strong>canon(权威锚定,本节主干):</strong>
+  <a href="https://docs.python.org/3/library/abc.html">Python 官方 <code>abc</code> 文档</a>(ABC / <code>@abstractmethod</code> / <code>register()</code>)、
+  <a href="https://docs.python.org/3/library/typing.html#typing.Protocol"><code>typing.Protocol</code> 文档</a> 与
+  <a href="https://peps.python.org/pep-0544/">PEP 544《Protocols: Structural subtyping (static duck typing)》</a>(结构子类型、<code>@runtime_checkable</code>)、
+  <a href="https://docs.python.org/3/glossary.html#term-EAFP">Python 术语表 EAFP</a> 与 <a href="https://docs.python.org/3/glossary.html#term-LBYL">LBYL</a> 条目。</li>
+<li><strong>跨语言对照(权威锚定):</strong><a href="https://go.dev/ref/spec#Interface_types">Go 语言规范 · Interface types</a>(隐式满足 = 结构类型)、<a href="https://docs.oracle.com/javase/tutorial/java/IandI/createinterface.html">Oracle Java Tutorial · Interfaces</a>(名义 + 显式 <code>implements</code>)。</li>
+<li><strong>课内衔接:</strong>本节呼应第 0005 节"抽象 / 抽象类 vs 接口"里的"接口即契约"框架;此处未引用任何 README 源题,概念主干均来自上列 Python 官方文档与 PEP,而非某道源题原文。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"名义 vs 结构"、或把你写的 <code>Closeable</code>/<code>CloseableABC</code> 代码拿来评、又或者演示一次 mypy 如何抓出鸭子类型漏掉的错误,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节转到另一组每天都在用、却极少答透的 Python 机制——对象的相等与哈希:<code>__eq__</code> 与 <code>__hash__</code> 为什么必须成对出现。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0020-overloading-in-python.html"><span class="dir">← 上一课</span>0020 · Python 里的"重载":为什么没有真正的方法重载</a>
+<a class="next" href="0022-equality-and-hashing.html"><span class="dir">下一课 →</span>0022 · 相等与哈希:__eq__ 与 __hash__ 的契约</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

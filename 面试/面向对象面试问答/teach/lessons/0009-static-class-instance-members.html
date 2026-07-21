@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实例、类与静态成员 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第二部分 · 类的机制 · 第 0009 节</p>
+<h1>实例、类与静态成员:方法与变量,到底"归谁所有"</h1>
+<p class="lede">同一个类里,有的方法带 <code>self</code>、有的带 <code>cls</code>、有的两个都不带;有的变量每个对象各一份、有的全体共享一份。这一节把"归属"这条主线理清:一段代码里的每个成员,它到底挂在<strong>实例</strong>上、还是挂在<strong>类</strong>上。</p>
+
+<div class="recall">
+<p>先想一段代码:<code>class Dog: tricks = []</code>,然后 <code>d1 = Dog(); d2 = Dog(); d1.tricks.append("坐下")</code>。现在打印 <code>d2.tricks</code> 会输出什么?是空列表,还是 <code>['坐下']</code>?先给个答案再往下看——这一题几乎是本节全部要点的缩影。</p>
+</div>
+
+<h2>一、直觉:成员挂在"个体"上,还是挂在"物种"上?</h2>
+
+<p>把类想成一个<strong>物种(Dog)</strong>,把实例想成<strong>一条具体的狗(旺财、来福)</strong>。有些属性属于个体——旺财叫"旺财"、来福叫"来福",这是<strong>实例变量</strong>,每条狗各存一份。有些属性属于整个物种——"全世界一共有几条狗",这个数不该记在某一条狗身上,而应记在"物种"这个层级,所有狗共享同一个计数,这就是<strong>类变量</strong>。</p>
+
+<p>方法也一样分层。<strong>实例方法</strong>操作某条具体的狗(旺财现在几岁);<strong>类方法</strong>操作整个物种的账本(总数是多少),或者充当"造一条狗"的命名工厂;<strong>静态方法</strong>则既不碰具体的狗、也不碰物种账本,它只是一个<em>逻辑上归这个类管、顺手放进类命名空间</em>的普通函数(比如"检查一个名字合不合法")。</p>
+
+<p>为什么要分这么细?因为面试官想看的不是你会不会写 <code>@staticmethod</code>,而是你能不能<strong>判断一个行为的"归属层级"</strong>——放错层级会直接埋 bug(比如把共享计数写进实例、把该独立的列表写成共享),这正是下面易错点的核心。</p>
+
+<div class="keydef">
+<dl>
+<dt>实例方法 (instance method)</dt>
+<dd>第一个参数是 <code>self</code>,通过它读写<strong>实例状态</strong>。最常见的一种,占你写的方法九成以上。</dd>
+<dt>类方法 (@classmethod)</dt>
+<dd>第一个参数是 <code>cls</code>(指向类本身)。用来读写<strong>类级状态</strong>,或做<strong>命名构造器</strong>(返回 <code>cls(...)</code>)。</dd>
+<dt>静态方法 (@staticmethod)</dt>
+<dd>既无 <code>self</code> 也无 <code>cls</code>。就是一个<strong>逻辑上属于该类、被放进类命名空间的普通函数</strong>,不访问实例或类的状态。</dd>
+<dt>实例变量 (instance variable)</dt>
+<dd><code>self.x = ...</code> 定义,存在每个对象各自的 <code>__dict__</code> 里,<strong>各存一份</strong>。</dd>
+<dt>类变量 (class variable)</dt>
+<dd>直接写在类体里(<code>count = 0</code>),存在类对象上,<strong>所有实例共享同一份</strong>。</dd>
+</dl>
+</div>
+
+<h2>二、一段代码看全五种成员</h2>
+
+<p>用一个 <code>Counter</code> 类把上面五个概念一次演示完:类变量统计实例总数、类方法读总数、静态方法做一个与任何实例都无关的工具函数。</p>
+
+<pre><code>class Counter:
+    count = 0                          # 类变量:所有实例共享一份
+
+    def __init__(self, name):
+        self.name = name               # 实例变量:每个对象各一份
+        Counter.count += 1             # 改类级状态:用类名限定,不用 self(见易错点)
+
+    def describe(self):                # 实例方法:第一参数 self,读实例状态
+        return f"我是 {self.name}"
+
+    @classmethod
+    def total(cls):                    # 类方法:第一参数 cls,读类级状态
+        return cls.count
+
+    @classmethod
+    def anonymous(cls):                # 命名构造器:返回 cls(...),继承友好
+        return cls("匿名")
+
+    @staticmethod
+    def is_valid_name(name):           # 静态方法:无 self/cls,纯工具函数
+        return isinstance(name, str) and len(name) &gt; 0
+</code></pre>
+
+<p>现在看它们的<strong>存储差异</strong>——这是理解"归属"的关键证据:</p>
+
+<pre><code>a = Counter("旺财")
+b = Counter("来福")
+
+print(a.name, b.name)        # 旺财 来福 —— 实例变量各存一份
+print(Counter.total())       # 2       —— 类方法读到的是共享计数
+
+print(a.__dict__)            # {'name': '旺财'} —— 实例只存自己的实例变量
+print(b.__dict__)            # {'name': '来福'} —— count 根本不在这里
+print(Counter.count)         # 2       —— count 挂在类对象上,被两个实例共享
+
+print(Counter.is_valid_name(""))   # False —— 工具函数,不需要任何实例
+</code></pre>
+
+<p>注意 <code>a.__dict__</code> 里<strong>没有 count</strong>。当你写 <code>a.count</code> 时,Python 先在实例 <code>__dict__</code> 里找,没找到就沿着类(以及 MRO)往上找——于是读到了类变量。这套"实例优先、类兜底"的查找规则,正是下面第 2 条易错点的根源。</p>
+
+<div class="interview">
+<p><strong>高频追问链(问了方法种类,追问几乎必来):</strong></p>
+<ul>
+<li><strong>"<code>@classmethod</code> 和 <code>@staticmethod</code> 到底怎么选?"</strong> → 需要<strong>访问或返回类</strong>(读类级状态、写命名构造器、希望子类调用时拿到子类)就用 <code>classmethod</code>;<strong>完全不碰类也不碰实例</strong>、只是逻辑上归这个类的工具函数,就用 <code>staticmethod</code>。判据是"这段逻辑需不需要 <code>cls</code>"。</li>
+<li><strong>"类变量和实例变量在内存里怎么存?"</strong> → 类变量存在<strong>类对象</strong>上(所有实例共享);实例变量存在<strong>各自的 <code>self.__dict__</code></strong> 里。读属性时先查实例、再沿类查找(实例优先)。</li>
+<li><strong>"为什么计数要写 <code>Counter.count += 1</code>,不能写 <code>self.count += 1</code>?"</strong> → <code>self.count += 1</code> 会被展开成 <code>self.count = self.count + 1</code>:右边读到类变量(比如 2),左边却在<strong>实例上新建</strong>一个 <code>count</code> 属性(值 3),类变量原地不动。结果每个实例各记各的,共享计数失效。要改共享状态得用 <code>Counter.count</code>(或 <code>type(self).count</code>)。</li>
+<li><strong>"静态方法和直接写在类外面的普通函数有啥区别?"</strong> → 功能上几乎没区别;区别在<strong>命名空间归属与可发现性</strong>——它逻辑上属于这个类,通过 <code>Counter.is_valid_name</code> 调用,读代码的人一眼知道它和谁相关。所以要不要用 <code>staticmethod</code>,更多是组织代码的取舍。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点 ①:可变类变量的共享陷阱(本节开场那题的答案)。</strong>写 <code>class Dog: tricks = []</code> 时,这个 <code>list</code> 是<strong>类变量,所有实例共享同一个对象</strong>。<code>d1.tricks.append("坐下")</code> 是在<em>原地修改</em>那唯一的一份,于是 <code>d2.tricks</code> 也变成 <code>['坐下']</code>。想让每个实例各有一份独立列表,必须在 <code>__init__</code> 里写 <code>self.tricks = []</code>——每次构造都新建一个。类变量适合放<strong>不可变的、真正共享的</strong>东西(常量、计数器),别放会被逐个实例修改的可变容器。</p>
+<p><strong>易错点 ②:实例属性遮蔽(shadow)类属性。</strong><code>c.x = 5</code> 是<strong>赋值</strong>,它总是在<em>实例</em>上新建/覆盖属性,遮住同名的类变量;但它<strong>不会改动类变量本身</strong>。所以 <code>c.x</code> 读到 5(实例优先),<code>C.x</code> 仍是原值。这正是上面 <code>self.count += 1</code> 出 bug 的机制:自增里的赋值把你带进了"新建实例属性"这条岔路。读用类兜底、写只落实例——记住这条不对称。</p>
+<p><strong>易错点 ③:<code>classmethod</code> / <code>staticmethod</code> 选错。</strong>常见错误是"反正不用 <code>self</code> 就都写成 <code>staticmethod</code>"。可一旦你要写<strong>命名构造器</strong>(如 <code>from_json</code>),就必须用 <code>classmethod</code>:因为子类调用 <code>Sub.from_json(...)</code> 时 <code>cls</code> 会是 <code>Sub</code>,返回的是正确的子类实例;写死成 <code>staticmethod</code> 里 <code>return Base(...)</code> 就丢了这个继承友好性。</p>
+</div>
+
+<div class="crosslang">
+<p>"这套东西在别的语言长什么样?"——Java 对照(面试常拿来考你对概念本质的理解):</p>
+<table>
+<tr><th>概念</th><th>Python</th><th>Java</th></tr>
+<tr><td>类级变量(全体共享)</td><td>类体里 <code>count = 0</code></td><td><code>static</code> 字段</td></tr>
+<tr><td>归属类、不碰实例/类状态的方法</td><td><code>@staticmethod</code></td><td><code>static</code> 方法(无 <code>this</code>)</td></tr>
+<tr><td>带类上下文(拿得到/返得回类)的方法</td><td><code>@classmethod</code>(参数 <code>cls</code>)</td><td>无直接等价物</td></tr>
+<tr><td>实例方法</td><td>第一参数 <code>self</code></td><td>普通方法(隐式 <code>this</code>)</td></tr>
+</table>
+<p>一句话:<strong>Python 的 <code>@staticmethod</code> 大致对应 Java 的 <code>static</code> 方法,类变量对应 Java 的 <code>static</code> 字段;但 Python 多出 <code>@classmethod</code>(带 <code>cls</code>)这一层,Java 没有直接等价物</strong>——想在 Java 里拿到"当前实际的类"通常得靠反射或传参绕。这多出来的一层,正是 Python 命名构造器优雅又继承友好的原因。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,给一个 <code>User</code> 类补齐三种成员:</p>
+<ul>
+<li>类变量 <code>registry = []</code> 的想法先<strong>忍住</strong>——想想易错点①,注册表该放类级还是实例级?(答案:全站唯一的注册表<em>确实</em>是共享的,放类级合理;但要小心别在里面塞可变的每实例数据。)</li>
+<li>实例变量 <code>self.name</code>;类变量 <code>_count = 0</code>,每次 <code>__init__</code> 用 <code>User._count += 1</code> 递增。</li>
+<li><code>@classmethod how_many(cls)</code> 返回 <code>cls._count</code>;<code>@classmethod from_email(cls, email)</code> 取 <code>@</code> 前缀当 name、返回 <code>cls(...)</code>(命名构造器)。</li>
+<li><code>@staticmethod is_valid_email(s)</code>:检查含 <code>@</code>,不碰任何实例。</li>
+</ul>
+<p>写完自测:故意写一次 <code>self._count += 1</code> 替换掉 <code>User._count += 1</code>,再 <code>print(User.how_many())</code>,看计数是不是"坏"了——亲手复现易错点②的 bug,比背十遍都记得牢。</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:<code>class Dog: tricks = []</code> 后,<code>d1 = Dog(); d2 = Dog(); d1.tricks.append("坐下"); print(d2.tricks)</code> 输出什么?为什么?怎么改才能各自独立?</summary>
+<div class="answer">
+<p><strong>输出 <code>['坐下']</code>。</strong> <code>tricks</code> 是类变量,两个实例共享同一个 <code>list</code> 对象;<code>d1.tricks.append(...)</code> 原地修改了那唯一一份,所以 <code>d2</code> 也看得到。</p>
+<p><strong>改法:</strong>在 <code>__init__</code> 里写 <code>self.tricks = []</code>,让每次构造都新建一个独立列表。<br>
+<em>补一个细节:</em>如果写的是 <code>d1.tricks = ["坐下"]</code>(赋值而非 <code>append</code>),那是在 <code>d1</code> 上新建实例属性、遮蔽类变量,<code>d2.tricks</code> 反而<strong>不受影响</strong>——因为赋值只落实例。共享陷阱只在"原地修改可变对象"时发作。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2(选择题):你要给 <code>Shape</code> 加一个从字典构造对象的方法 <code>from_dict(data)</code>,并且希望 <code>Circle.from_dict(...)</code> 能返回 <code>Circle</code> 实例。应该用哪一种?A) 实例方法  B) <code>@staticmethod</code> 里 <code>return Shape(...)</code>  C) <code>@classmethod</code> 里 <code>return cls(...)</code>  D) 类外的普通函数</summary>
+<div class="answer">
+<p><strong>答案:C。</strong> 命名构造器要写成 <code>@classmethod</code>,用 <code>cls</code> 来构造:子类调用 <code>Circle.from_dict(...)</code> 时 <code>cls</code> 就是 <code>Circle</code>,返回正确的子类实例——这就是 <code>classmethod</code> 的"继承友好"。</p>
+<p>为什么其它不行:B 把类写死成 <code>Shape</code>,子类拿不到自己的类型,丢了继承友好;A 需要先有实例才能调用,而"构造"恰恰发生在还没有实例的时候,自相矛盾;D 脱离了类命名空间,可发现性差,也同样拿不到 <code>cls</code>。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>先问"这个成员归谁"——归<strong>实例</strong>就用 <code>self</code>(实例方法 / <code>self.x</code>),归<strong>类</strong>就用 <code>cls</code> 或类名(<code>@classmethod</code> / 类体里的类变量),两者都不归、只是逻辑归属就用 <code>@staticmethod</code>。两条铁律配套记:可变类变量全体共享(要独立请进 <code>__init__</code>),而属性<strong>读用类兜底、写只落实例</strong>——想改共享状态必须走类名,别走 <code>self</code>。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层(诚实标注):</p>
+<ul>
+<li><strong>canon(本节主来源):</strong>本主题<strong>不在</strong>源仓库《52 OOP Interview Questions》已答的 15 题(Q1–Q15)之列,故不引源题原文,全部锚定 Python 官方文档。方法与变量的绑定规则见 <a href="https://docs.python.org/3/reference/datamodel.html#instance-methods">Python Data Model — Instance methods</a>;<code>classmethod</code> 与 <code>staticmethod</code> 的定义见 <a href="https://docs.python.org/3/library/functions.html#classmethod"><code>classmethod</code></a> 与 <a href="https://docs.python.org/3/library/functions.html#staticmethod"><code>staticmethod</code></a>;类变量共享与可变默认的陷阱见 <a href="https://docs.python.org/3/tutorial/classes.html#class-and-instance-variables">Python Tutorial — Class and Instance Variables</a>。</li>
+<li><strong>canon(跨语言对照):</strong><a href="https://docs.oracle.com/javase/tutorial/java/javaOO/classvars.html">Oracle Java Tutorial — Understanding Class Members</a>,用于 Java <code>static</code> 字段/方法与"无 <code>classmethod</code> 等价物"的准确说法。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"读用类兜底、写只落实例",或者拿你写的 <code>User</code> 代码来评、当场复现那个计数 bug,都可以开口。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>理清了成员的"归属层级",下一节转向类之间的关系:什么时候该用组合(has-a)、什么时候该用继承(is-a)。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0008-destructors-resource-management.html"><span class="dir">← 上一课</span>0008 · 析构与资源管理</a>
+<a class="next" href="0010-composition-vs-inheritance.html"><span class="dir">下一课 →</span>0010 · 组合 vs 继承</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

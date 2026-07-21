@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0004 · 前端编码面试全景:DOM/算法/工具函数怎么区分</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0004 课 · 2 JavaScript 与编码面试基础 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>前端编码面试全景:DOM/算法/工具函数怎么区分</h1>
+
+<p class="lede">上一课钻进了 JavaScript 编码题内部,这一课退一步看全景:前端编码面试到底能分成哪几大类题目、各类分别常用什么环境来考,以及"JavaScript 编码"这一大类内部,为什么还要把"重写内置方法/DOM 方法"和"实现工具函数"分开看待。</p>
+
+<div class="recall">
+<p>开课前先回忆一下上一课:JavaScript 编码题和算法编码题的核心区别是什么?上一课给出的两个子类别——"实现 JavaScript 语言/DOM 内置的类或方法"和"实现常用库里的实用函数"——你还记得各自举的例子吗?先在心里过一遍,这节课会把它们放进一张更大的地图里,和"算法编码""用户界面编码"并排摆在一起讲。</p>
+</div>
+
+<h2>一、编码面试的三张入场券</h2>
+
+<p>综合面试手册在《前端编码面试》这一篇里说得很直接:前端编码面试可能出现在多轮、多阶段里,但总体上只有三种题型:</p>
+
+<div class="trio">
+  <div class="cell"><span class="role">类型一</span><span class="head">算法编码</span><span class="sub">数据结构、算法、时间复杂度</span></div>
+  <div class="cell"><span class="role">类型二</span><span class="head">JavaScript 编码</span><span class="sub">前端领域常用的函数/数据结构</span></div>
+  <div class="cell"><span class="role">类型三</span><span class="head">用户界面编码</span><span class="sub">HTML/CSS/JS 构建组件/应用</span></div>
+</div>
+
+<p>算法编码解决的是"棘手的算法问题",考察你对数据结构、算法和时间复杂度的理解;JavaScript 编码要求你用 JavaScript 实现"与前端领域相关、并在前端开发中常用的函数或数据结构";用户界面编码则要求你用 HTML、CSS、JavaScript(有时还加框架)搭出一个真正能跑起来的组件、小部件或应用。三者的边界不是题目难度,而是<strong>考察的对象不一样</strong>——算法编码考的是通用的问题分解能力,后两类都绑定在前端领域里。</p>
+
+<h2>二、拆开"JavaScript 编码":DOM 操作类 vs JS 工具函数类</h2>
+
+<p>"JavaScript 编码"这一大类,源材料里进一步说它"往往具有实践性,可以分为以下一个或多个类别":</p>
+
+<div class="flow">
+  <div class="step decision">JavaScript 编码题</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">分支 A</div>
+      <div class="step">DOM 操作类<br><span style="color:var(--muted);font-size:.9em;">重写语言/DOM 已内置的方法</span></div>
+    </div>
+    <div class="branch">
+      <div class="label">分支 B</div>
+      <div class="step">JS 工具函数类<br><span style="color:var(--muted);font-size:.9em;">实现流行库里的实用函数</span></div>
+    </div>
+  </div>
+</div>
+
+<p>这两个分支各自的典型例子,源材料举得很具体:</p>
+
+<table>
+<tr><th>子类别</th><th>典型例子</th><th>为什么要考</th></tr>
+<tr><td>DOM 操作类</td><td><code>Array.prototype.map</code>/<code>reduce</code>/<code>filter</code>、<code>Promise.all</code>/<code>any</code>、<code>document.getElementsByClassName</code></td><td>老浏览器不一致、语言 API 曾缺失,催生了 polyfill;能实现原生方法说明你懂前端基础</td></tr>
+<tr><td>JS 工具函数类</td><td>Lodash/Underscore 的 <code>debounce</code>/<code>throttle</code>/<code>curry</code>/<code>flatten</code>/<code>cloneDeep</code>,jQuery 的 <code>css</code>/<code>toggleClass</code>,以及 <code>classnames</code>、<code>Emitter</code> 之类</td><td>构建软件时常需要,但(目前)不在语言标准里</td></tr>
+</table>
+
+<p>换句话说,"DOM 操作类"考的是你对语言/浏览器规范细节的理解有多深(比如 <code>Array.prototype.map</code> 其实会给回调传 4 个参数、会保留稀疏数组的"空洞");"JS 工具函数类"考的是你能不能补上语言标准没提供、但流行库里天天在用的能力(比如 <code>debounce</code> 要不要支持立即触发)。两者都属于"JavaScript 编码",但面试官关注的细节不是同一套。</p>
+
+<h2>三、三种编码环境,谁能做什么</h2>
+
+<p>题型之外,源材料还给了一张环境对照表——决定了你在考场上能不能预览效果、能不能跑代码、能不能装第三方依赖:</p>
+
+<table>
+<tr><th>环境</th><th>预览</th><th>执行代码</th><th>添加第三方依赖</th></tr>
+<tr><td>在线基本代码编辑器(如 CoderPad)</td><td>否</td><td>视情况而定</td><td>通常没有</td></tr>
+<tr><td>IDE(本地或在线)</td><td>是</td><td>是</td><td>是</td></tr>
+<tr><td>白板</td><td>否</td><td>否</td><td>否</td></tr>
+</table>
+
+<p>把两张表拼在一起看:算法编码和 JavaScript 编码通常不需要肉眼看渲染效果,所以常安排在"在线基本代码编辑器"甚至白板上;用户界面编码几乎离不开"能不能看到组件长什么样",所以几乎总会安排在 IDE 里——源材料明确建议,"如果可以选择,请始终选择使用 IDE",因为它最贴近真实开发方式,预览、控制台调试、语法高亮、第三方依赖都齐全。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>在线基本代码编辑器</dt>
+<dd>浏览器内的单窗格协作编辑器(比如 CoderPad),通常不支持多文件切换,能否执行代码要看具体平台。<em>避免</em>把它和 IDE 划等号——它离真实开发方式最远,考察的是你能不能不靠运行结果就把代码写对。</dd>
+<dt>DOM 操作类 JS 编码题</dt>
+<dd>要求你重新实现 JavaScript 语言或 DOM 本身已经内置的方法(比如自己写一个 <code>getElementsByClassName</code>),考察对底层规范细节的理解。<em>避免</em>把它和"用户界面编码"混为一谈——它通常不需要呈现可交互界面,考的是实现的正确性,不是布局。</dd>
+<dt>JS 工具函数类编码题</dt>
+<dd>要求你实现语言标准里没有、但常见于 Lodash/jQuery 等流行库的实用函数(比如 <code>debounce</code>、<code>curry</code>),考察对边界情况的处理。<em>避免</em>以为背熟函数名和大致效果就够——面试官通常会追问参数细节、<code>this</code> 指向这类容易漏掉的地方。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>收到面试安排后,主动确认(或从描述里找线索)这一轮大概是哪一类题、会用什么环境:如果是白板轮或在线基本编辑器,提前练习不依赖运行结果、靠脑内推演去验证代码是否正确;如果确定是 IDE(比如后面主推资源里的几个),就可以放心把预览、控制台调试当成日常开发习惯的一部分带进考场——但源材料也提醒,不要太依赖代码的预览和执行去反复试错,这会让面试官觉得你对自己写的东西没底。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:以为"白板编码"只和算法题有关,和 JS/UI 编码没关系。</strong>源材料里明确提到,像谷歌、Meta 这样的大厂现场轮,确实会让你直接在白板上手写 HTML 和 CSS——完全没法预览渲染效果,原文形容这"对候选人来说是一场噩梦"。这种组合对"用户界面编码"的杀伤力反而最大,因为 UI 类题目本来就高度依赖能不能看到实际渲染结果去调整;算法题相对还好些,毕竟本来就该靠逻辑推导,不是靠跑一遍看输出。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的事:</strong>打开一个在线 IDE(比如 <a href="https://codesandbox.io/">CodeSandbox</a> 或 <a href="https://jsfiddle.net/">JSFiddle</a>),新建一个空项目,故意写一行会报错的代码,确认自己能熟练打开浏览器控制台、读懂报错信息、定位到具体哪一行。如果面试当天分配的正是 IDE 环境,这是你被允许使用、也应该用熟的能力,别等到考场上才第一次摸控制台。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>前端编码面试不是一类题,是三张入场券——算法编码、JavaScript 编码、用户界面编码;JavaScript 编码内部还能再拆成"重写内置方法"的 DOM 操作类和"实现库函数"的工具函数类;而白板、在线基本编辑器、IDE 三种环境对不同类别的杀伤力并不一样。先分清楚你即将面对的是哪一种组合,才知道该往哪个方向准备。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:下面哪一项属于"DOM 操作类" JS 编码题的例子? (A) 实现 debounce (B) 实现 document.getElementsByClassName (C) 构建一个可折叠的手风琴组件</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。<code>getElementsByClassName</code> 是重新实现语言/DOM 已内置的方法,属于 DOM 操作类。(A) 错在 <code>debounce</code> 来自 Lodash 这类流行库,不是标准内置 API,属于 JS 工具函数类而不是 DOM 操作类;(C) 错在构建手风琴组件涉及可交互的界面渲染,属于"用户界面编码"这一整个大类,不是"JavaScript 编码"内部的子类。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于三种编码环境的说法,下面哪个最准确? (A) 白板能执行代码,但不能预览 UI (B) 在线基本代码编辑器一定不能执行代码 (C) IDE 通常能预览 UI、执行代码、并允许添加第三方依赖,是三者中最贴近真实开发方式的环境</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>,对应源材料里的环境对照表,也是源材料建议"如果可以选择,请始终选择使用 IDE"的原因。(A) 错在白板在"预览"和"执行代码"两项上都是"否",不是能执行只是不能预览;(B) 错在在线基本代码编辑器能否执行代码是"视情况而定",不是绝对不能。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本节对应源材料"编码环境"一节里举的具体例子,建议实际打开感受一下"预览/执行/依赖"这三项能力的差异:</p>
+<ul>
+<li><a href="https://coderpad.io/">CoderPad</a> —— 源材料里举的"在线基本代码编辑器"典型例子,单窗格、支持实时协作,常见于算法/JavaScript 编码轮。</li>
+<li><a href="https://jsfiddle.net/">JSFiddle</a> —— 源材料举的 IDE 类例子之一,能同时写 HTML/CSS/JS 并实时预览,适合用户界面编码轮。</li>
+<li><a href="https://codesandbox.io/">CodeSandbox</a> —— 另一个 IDE 类例子,支持多文件、可安装第三方依赖,是三种环境里最贴近真实开发方式的一种。</li>
+<li><a href="https://stackblitz.com/">StackBlitz</a> —— 同属 IDE 类,常被用来考察需要引入框架/依赖的用户界面编码题。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用具体例子讲清"DOM 操作类"和"用户界面编码"到底怎么区分,也可以让老师帮你判断,你即将面对的那一轮面试大概是哪一种组合。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0003-javascript-coding-interviews.html"><span class="dir">← 上一课</span>JavaScript 编码面试怎么考</a>
+  <a class="next" href="0005-dsa-for-front-end.html"><span class="dir">下一课 →</span>数据结构与算法面试:前端要刷题到什么程度</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

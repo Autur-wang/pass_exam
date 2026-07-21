@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 0004 · 页表:为什么「地址 0 不打架」,读懂 walk()</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --paper:#fdfcf8; --muted:#6b6b5f; --rule:#d8d4c5;
+    --accent:#7a3b2e; --accent2:#2e5a6b; --good:#2f6b3a; --bad:#a23a2e;
+    --code-bg:#272b33; --code-fg:#e6e3d8;
+  }
+  *{box-sizing:border-box}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Songti SC",serif;
+    line-height:1.62; margin:0; padding:3rem 1.5rem 5rem; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:46rem; margin:0 auto}
+  .crumbs{font-size:.78rem; letter-spacing:.06em; color:var(--muted); margin-bottom:1.4rem}
+  .crumbs a{color:var(--accent2); text-decoration:none}
+  .kicker{font-size:.78rem; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); margin:0 0 .4rem}
+  h1{font-size:1.9rem; line-height:1.2; margin:.1rem 0 .5rem; font-weight:600; letter-spacing:-.01em}
+  .mission{font-size:.9rem; color:var(--muted); border-left:3px solid var(--accent); padding:.5rem .9rem; background:#f4f1e6; border-radius:0 6px 6px 0; margin:1.2rem 0 2rem}
+  h2{font-size:1.18rem; margin:2.6rem 0 .7rem; padding-bottom:.25rem; border-bottom:1px solid var(--rule)}
+  p{margin:.8rem 0}
+  .win{background:#eef3ee; border:1px solid #c3dcc3; border-radius:8px; padding:1rem 1.2rem; margin:1.4rem 0}
+  .win strong{color:var(--good)}
+  .recall{background:#f4f1e6; border:1px dashed var(--accent); border-radius:8px; padding:.8rem 1.1rem; margin:1.4rem 0; font-size:.92rem}
+  .analogy{background:#eef2f4; border:1px solid #c3d2dc; border-left:3px solid var(--accent2); border-radius:8px; padding:1rem 1.2rem; margin:1.4rem 0; font-size:.93rem}
+  .analogy b{color:var(--accent2)}
+  .term{background:#f4f1e6; border:1px solid var(--rule); border-radius:6px; padding:.6rem .9rem; margin:1rem 0; font-size:.88rem}
+  .term b{color:var(--accent)}
+  pre{background:var(--code-bg); color:var(--code-fg); border-radius:8px; padding:1.1rem 1.2rem; overflow-x:auto; font-size:.84rem; line-height:1.6; margin:1.2rem 0;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  pre .ln{color:#6f7681; user-select:none; display:inline-block; width:1.8em; text-align:right; margin-right:1em}
+  pre .sys{color:#e0a45e; font-weight:600}
+  pre .key{color:#7fb3c9}
+  pre .cm{color:#7d8590; font-style:italic}
+  pre .dim{color:#6f7681}
+  pre .hl{background:#3a3f4a; display:inline-block; width:calc(100% - 0px); border-radius:3px}
+  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.85em; background:#eeeadb; padding:.08em .35em; border-radius:3px}
+  .sys-pill{color:var(--accent); font-weight:600}
+  table.bd{width:100%; border-collapse:collapse; font-size:.9rem; margin:1rem 0}
+  table.bd th,table.bd td{text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--rule); vertical-align:top}
+  table.bd th{font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  table.bd td:first-child{font-weight:600; color:var(--accent2); white-space:nowrap}
+  cite{font-size:.82rem; color:var(--muted); font-style:normal}
+  cite a{color:var(--accent2)}
+  .diagram{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.8rem; line-height:1.5; background:#f7f4ea; border:1px solid var(--rule); border-radius:8px; padding:1.1rem 1.2rem; white-space:pre; overflow-x:auto; color:#333}
+  .quiz{background:#f7f4ea; border:1px solid var(--rule); border-radius:10px; padding:1.2rem 1.3rem; margin:1.3rem 0}
+  .q{margin:0 0 1.5rem} .q:last-child{margin-bottom:0}
+  .q p.stem{font-weight:600; margin:.2rem 0 .7rem}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:.92rem; background:#fff; border:1px solid var(--rule);
+    border-radius:6px; padding:.55rem .8rem; margin:.4rem 0; cursor:pointer; transition:all .12s}
+  .opt:hover{border-color:var(--accent2)}
+  .opt.correct{background:#e7f1e7; border-color:var(--good); color:var(--good)}
+  .opt.wrong{background:#f6e7e4; border-color:var(--bad); color:var(--bad)}
+  .fb{font-size:.86rem; margin:.5rem 0 0; min-height:1.2em}
+  .fb.ok{color:var(--good)} .fb.no{color:var(--bad)}
+  .ask{background:#272b33; color:#e6e3d8; border-radius:10px; padding:1.1rem 1.3rem; margin:2.4rem 0 0; font-size:.92rem}
+  .ask b{color:#e0a45e}
+  .next{font-size:.92rem}
+  footer{margin-top:2.6rem; padding-top:1rem; border-top:1px solid var(--rule); font-size:.82rem; color:var(--muted)}
+  @media print{ body{padding:0;background:#fff} pre{background:#f0eee4;color:#222} .opt{border:1px solid #999} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 3 章 · 页表 / 虚拟内存 ›
+  <a href="./0003-first-process-userinit.html">Lesson 0003</a> ›
+  <strong>Lesson 0004</strong>
+</div>
+
+<p class="kicker">Lesson 0004 · 第 3 章 页表 / 虚拟内存</p>
+<h1>为什么「地址 0 不打架」<br>—— 读懂 walk():地址翻译的心脏</h1>
+
+<div class="mission">
+  🎯 <strong>对应使命</strong>:进入<strong>第 3 章</strong>。0003 结尾埋了个钩子——
+  <code>userinit</code> 把第一个进程装在虚拟地址 <code>0</code>,可系统里几十个进程<em>都</em>从地址 0 开始,
+  内存条只有一份,凭什么不互相踩踏?这一课回答它,并带你读懂 <code>vm.c</code> 里最核心的那个函数 <code>walk</code>。
+</div>
+
+<div class="recall">
+  🔁 <strong>先回忆(别往回翻 0003)</strong>:<code>userinit</code> 里那句
+  <code>uvmfirst(p->pagetable, …)</code>,把第一个进程的代码放到了哪个地址?……对,<strong>虚拟地址 0</strong>。
+  今天的主角,正是那个当时被我们跳过的参数——<code>p->pagetable</code>,进程的<strong>页表</strong>。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 打开 <code>vm.c</code>,读懂 <span class="sys-pill">walk()</span> 那 19 行——
+  讲清楚一个虚拟地址怎样被切成三段、如何<strong>逐级下钻</strong>三层页表,最后找到它对应的物理页。
+</div>
+
+<div class="analogy">
+  🗺️ <b>贯穿全课的类比:小区门牌 vs 地球经纬度。</b>
+  虚拟地址就像收件人写的「XX 小区 1 号楼 101 室」——好写好记,而且<em>每个小区都能有</em>「1 号楼 101」。
+  但内存条上的真实位置是全地球唯一的「经纬度」(<b>物理地址</b>)。
+  <b>页表</b>就是每个小区门口那本专属<b>地址簿</b>,负责把「1 号楼 101」翻译成真实经纬度。
+  于是不同小区(不同进程)都能有「1 号楼 101」却永不冲突——因为<em>各查各的地址簿</em>。
+  而 <code>walk()</code> 就是「查簿」这个动作:地址簿分三层(省册 → 市册 → 街道册),门牌里三段编号各查一层,
+  最后查出「那一行登记」——<em>翻译就差最后一步拼接了(那一步 <code>walk</code> 不做,留给用它的人)。</em>
+</div>
+
+<h2>1 · 为什么要有页表:让「地址 0 不打架」</h2>
+<p>
+  先看 0003 里被跳过的那句(<code>../xv6-riscv-20230207/kernel/vm.c</code> 第 210–221 行的 <code>uvmfirst</code>):
+</p>
+<pre><span class="ln">217</span>  mem = <span class="sys">kalloc</span>();                         <span class="cm">// 要一页真实物理内存</span>
+<span class="hl"><span class="ln">219</span>  <span class="sys">mappages</span>(pagetable, <span style="color:#e0a45e;font-weight:600">0</span>, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_X|PTE_U); <span class="cm">// ← 映射到虚拟地址 0</span></span>
+<span class="ln">220</span>  <span class="sys">memmove</span>(mem, src, sz);              <span class="cm">// 把 initcode 拷进这页</span>
+</pre>
+<p>
+  第 219 行第二个参数就是 <strong>0</strong>——把物理页 <code>mem</code> 映射到<strong>虚拟</strong>地址 0。
+  关键在:每个进程都有<em>自己</em>的一张页表(<code>p->pagetable</code>)。所以进程 A 的「虚拟地址 0」和进程 B 的「虚拟地址 0」,
+  经过<em>各自不同</em>的页表,会被翻译到<strong>两块不同的物理内存</strong>上。
+  它们不打架,不是因为代码里有什么 <code>if</code> 拦着,而是因为这个机制:<strong>同名门牌,各查各的地址簿</strong>。
+  这就是页表存在的<strong>头号理由——隔离</strong>。
+</p>
+<p class="next" style="color:var(--muted);font-size:.88rem">
+  (第 219 行末尾那个 <code>PTE_U</code> 标志表示「用户态可访问」——它是另一条隔离轴,内核页不带 U,用户碰了就出错;细节留到后续课。)
+</p>
+<cite>🔎 本地对照:<code>../xv6-riscv-20230207/kernel/vm.c</code> 第 210–221 行(uvmfirst)、<code>kernel/riscv.h</code> 第 341–345 行(PTE 标志位)。</cite>
+
+<h2>2 · 一个虚拟地址长什么样:三段索引 + 一段偏移</h2>
+<p>
+  要看懂翻译,先看懂<em>被翻译的东西</em>。<code>vm.c</code> 第 80–84 行的注释,直接画出了 RISC-V
+  <strong>Sv39</strong> 的虚拟地址结构(Sv39 = RISC-V 这套 39 位虚拟地址分页方案的名字):
+</p>
+<pre><span class="cm"><span class="ln">80</span>//   39..63 -- must be zero.</span>
+<span class="cm"><span class="ln">81</span>//   30..38 -- 9 bits of level-2 index.   ← 第 1 段:查「省册」</span>
+<span class="cm"><span class="ln">82</span>//   21..29 -- 9 bits of level-1 index.   ← 第 2 段:查「市册」</span>
+<span class="cm"><span class="ln">83</span>//   12..20 -- 9 bits of level-0 index.   ← 第 3 段:查「街道册」</span>
+<span class="cm"><span class="ln">84</span>//    0..11 -- 12 bits of byte offset.    ← 页内偏移:不翻译</span>
+</pre>
+
+<div class="term">
+  <b>什么是 PTE?</b> PTE(Page Table Entry,<strong>页表项</strong>)= 页表这一页里的<strong>一格</strong>,8 字节,
+  存着「下一级页表(或最终数据页)的物理页号」外加几个标志位(如 <code>PTE_V</code> 有效位)。
+  一张页表正好是一页 = 4096 字节 = 512 个 PTE(<code>riscv.h</code> 第 331 行:<code>pagetable_t</code> 是指向 512 个 <code>pte_t</code> 的指针)。
+</div>
+
+<p>为什么是「三段各 9 位 + 12 位偏移」?两个数字算一下就懂:</p>
+<table class="bd">
+  <thead><tr><th>数字</th><th>来自</th><th>为什么</th></tr></thead>
+  <tbody>
+    <tr><td>低 12 位<br>不翻译</td><td><code>PGSIZE=4096=2<sup>12</sup></code></td><td>一页 4096 字节,低 12 位刚好表示「这一页里的第几个字节」。翻译只负责找到<strong>是哪一页</strong>,页内偏移原样保留</td></tr>
+    <tr><td>每段 9 位</td><td>一页装 <code>512=2<sup>9</sup></code> 个 PTE</td><td>9 位索引(<code>0..511</code>)刚好点到 512 个 PTE 里的一个,一段索引对应一级页表</td></tr>
+    <tr><td>共 3 段</td><td><code>9×3 + 12 = 39</code></td><td>三段 9 位管高 27 位 + 12 位偏移 = 39 位虚拟地址,正是 Sv39 的「39」</td></tr>
+  </tbody>
+</table>
+<p>
+  <code>riscv.h</code> 里那个 <code>PX(level, va)</code> 宏,就是「从 <code>va</code> 里抠出第 <code>level</code> 段那 9 位」的工具:
+</p>
+<pre><span class="ln">335</span><span class="key">#define</span> PGSIZE 4096   <span class="cm">// bytes per page</span>
+<span class="ln">336</span><span class="key">#define</span> PGSHIFT 12    <span class="cm">// bits of offset within a page</span>
+<span class="ln">355</span><span class="key">#define</span> PXMASK 0x1FF  <span class="cm">// 9 个 1,用来只留最低 9 位</span>
+<span class="ln">356</span><span class="key">#define</span> PXSHIFT(level) (PGSHIFT+(9*(level)))   <span class="cm">// level2→30, level1→21, level0→12</span>
+<span class="ln">357</span><span class="key">#define</span> PX(level, va) ((((uint64)(va)) >> PXSHIFT(level)) &amp; PXMASK)
+</pre>
+<p>翻成人话:<code>PX</code> 把 <code>va</code> 右移到该级的位置,再和 <code>0x1FF</code> 做与运算,<strong>只留下那 9 位</strong>,得到这一级在页表里的下标。</p>
+<cite>🔎 本地对照:<code>../xv6-riscv-20230207/kernel/vm.c</code> 第 80–84 行、<code>kernel/riscv.h</code> 第 330–336、355–357 行。</cite>
+
+<h2>3 · walk():软件版 MMU 的那 19 行</h2>
+<p>
+  正常情况下,「切地址、逐级查表」是 CPU 里一个叫 <strong>MMU</strong>(Memory Management Unit,内存管理单元)的<em>硬件</em>自动做的。
+  而 <code>walk()</code> 是它的<strong>软件复刻</strong>——内核有时需要自己走一遍页表,就用 C 把 MMU 干的活写了出来。读懂这 19 行,你就读懂了地址翻译的心脏。
+</p>
+<div class="term">
+  <b>先建立「树」的画面:</b> 三级页表是一棵<strong>树</strong>。前两级(level 2、level 1)的 PTE 指向<em>下一级页表页</em>(树枝);
+  最后一级(level 0)的 PTE 才指向<em>真正的数据页</em>(树叶)——所以它叫<strong>叶子 PTE</strong>。查表就是从树根往下走到某片叶子。
+</div>
+
+<pre><span class="ln">85</span><span class="key">pte_t</span> *
+<span class="ln">86</span>walk(<span class="key">pagetable_t</span> pagetable, uint64 va, <span class="key">int</span> alloc)
+<span class="ln">87</span>{
+<span class="ln">88</span>  <span class="key">if</span>(va >= MAXVA) <span class="sys">panic</span>(<span style="color:#9ece6a">"walk"</span>);   <span class="cm">// 地址越界直接崩</span>
+<span class="ln">89</span>
+<span class="hl"><span class="ln">91</span>  <span class="key">for</span>(<span class="key">int</span> level = 2; level > 0; level--) {   <span class="cm">// ← 只跑 level 2、1 两圈</span></span>
+<span class="hl"><span class="ln">92</span>    <span class="key">pte_t</span> *pte = &amp;pagetable[<span class="sys">PX</span>(level, va)];  <span class="cm">// 抠出本级 9 位索引,定位一个 PTE</span></span>
+<span class="ln">93</span>    <span class="key">if</span>(*pte &amp; PTE_V) {                     <span class="cm">// 这一格有效?(指向下一级页表)</span>
+<span class="hl"><span class="ln">94</span>      pagetable = (<span class="key">pagetable_t</span>)<span class="sys">PTE2PA</span>(*pte); <span class="cm">// 顺着它下探一层</span></span>
+<span class="ln">95</span>    } <span class="key">else</span> {
+<span class="dim"><span class="ln">96</span>      <span class="cm">// —— alloc=1 时在这里现建一页新页表 —— 本课跳过,留给 0005 ——</span></span>
+<span class="dim"><span class="ln">97</span>      <span class="key">if</span>(!alloc || (pagetable = (pde_t*)<span class="sys">kalloc</span>()) == 0) <span class="key">return</span> 0;</span>
+<span class="dim"><span class="ln">99</span>      *pte = <span class="sys">PA2PTE</span>(pagetable) | PTE_V;</span>
+<span class="ln">100</span>    }
+<span class="ln">101</span>  }
+<span class="hl"><span class="ln">102</span>  <span class="key">return</span> &amp;pagetable[<span class="sys">PX</span>(0, va)];   <span class="cm">// ← 第 3 段(level0)索引在这里才用上!</span></span>
+<span class="ln">103</span>}
+</pre>
+
+<p><strong>逐句读:</strong></p>
+<table class="bd">
+  <thead><tr><th>行</th><th>在干嘛</th></tr></thead>
+  <tbody>
+    <tr><td>91</td><td><code>for(level=2; level>0; level--)</code> —— 只跑 <strong>两圈</strong>(level 2、level 1),下钻两级树枝</td></tr>
+    <tr><td>92</td><td><code>&pagetable[PX(level,va)]</code> —— 用本级 9 位索引,在当前页表页里<strong>定位一个 PTE</strong>。这就是「查地址簿这一层」的本体</td></tr>
+    <tr><td>94</td><td><code>PTE2PA(*pte)</code> —— 把 PTE 里存的物理页号还原成<strong>下一级页表的地址</strong>,顺指针下探一层</td></tr>
+    <tr><td>102</td><td>循环结束后 <code>pagetable</code> 已指向最底层(level0)页表页;<code>return &pagetable[PX(0,va)]</code> 才用上<strong>第 3 段</strong>索引,取出<strong>叶子 PTE 的地址</strong></td></tr>
+  </tbody>
+</table>
+<div class="win" style="background:#f4f1e6;border-color:var(--accent)">
+  ⚠️ <strong>最容易数错的地方:</strong> 虚拟地址明明有 <strong>三段</strong>索引,循环却只跑 <strong>两次</strong>。
+  别慌——<strong>三段 = 两次循环(level 2、1) + 一次 return(level 0)</strong>。第三段不是丢了,是在最后 <code>return</code> 那行用的。
+</div>
+
+<p>
+  还有个关键点常被忽略:<code>walk</code> 返回的是<strong>「叶子 PTE 的地址」这个指针</strong>,它<em>并没有</em>算出最终的物理地址。
+  「从 PTE 里读出物理页号、再拼上低 12 位偏移」是<strong>调用者</strong>的事。看 <code>walkaddr</code>(第 108–126 行)怎么接手:
+</p>
+<pre><span class="ln">117</span>  pte = <span class="sys">walk</span>(pagetable, va, 0);   <span class="cm">// 复用 walk(alloc=0:只查不建),拿到叶子 PTE 指针</span>
+<span class="ln">...</span>  <span class="cm">// (检查有效位 / 用户位 …)</span>
+<span class="hl"><span class="ln">124</span>  pa = <span class="sys">PTE2PA</span>(*pte);            <span class="cm">// ← 这一步才把 PTE 读成物理页基址</span></span>
+<span class="ln">125</span>  <span class="key">return</span> pa;                     <span class="cm">// (调用者再拼上低 12 位偏移,就是最终物理地址)</span>
+</pre>
+<p>
+  对回类比:<code>walk</code> 把你送到「街道册里的<strong>那一行登记</strong>」;从登记里读出「楼栋经纬度」(<code>PTE2PA</code>)、
+  再贴上「室号」(低 12 位),是 <code>walkaddr</code> 这类用它的人做的。<strong>分工清楚,才不会把两个函数的活记混。</strong>
+</p>
+
+<div class="diagram">虚拟地址 va（Sv39，39 位）
+┌───────┬───────┬───────┬────────────┐
+│ 段①9位│ 段②9位│ 段③9位│  偏移 12 位 │
+└───┬───┴───┬───┴───┬───┴─────┬──────┘
+    │       │       │         │
+ PX(2,va) PX(1,va) PX(0,va)   └─ 不翻译，最后拼上去
+    │       │       │
+    ▼       ▼       ▼
+ [根页表]→[中间页表]→[叶子页表]
+  循环①   循环②    return 那行
+                      │
+                取出「叶子 PTE 的地址」← walk() 到此为止
+                      │
+         walkaddr: PTE2PA(*pte) 读出物理页基址 + 偏移 = 物理地址</div>
+
+<h2>4 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的内容焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 系统里几十个进程都把代码放在虚拟地址 0,为什么<strong>不互相踩踏</strong>?</p>
+    <button class="opt">操作系统禁止两个进程同时在内存里</button>
+    <button class="opt">每个进程有自己的页表,同一个虚拟地址 0 被各自翻译到不同的物理页</button>
+    <button class="opt">地址 0 是只读的,谁也改不了</button>
+    <button class="opt">第二个进程会被自动挪到地址 4096</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② <code>walk()</code> 的循环写成 <code>for(level=2; level>0; level--)</code>,为什么正好这么走?</p>
+    <button class="opt">因为机器上有 2 个 CPU 核</button>
+    <button class="opt">因为一页是 4096 字节</button>
+    <button class="opt">因为 Sv39 把虚拟地址高 27 位切成三段各 9 位的索引,需要逐级下钻</button>
+    <button class="opt">只是随手定的一个常数</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">③ 虚拟地址的低 12 位(页内偏移),在<strong>地址翻译</strong>里起什么作用?</p>
+    <button class="opt">它不参与查页表;找到物理页基址后,直接把它拼上去定位页内具体字节</button>
+    <button class="opt">它是第四级页表的索引</button>
+    <button class="opt">它决定这一页的读/写/执行权限</button>
+    <button class="opt">它必须永远为 0</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>第 96–99 行 <code>alloc=1</code> 的分支到底在干嘛?</em>」「<em><code>kalloc()</code> 是从哪儿变出一页物理内存的?</em>」
+  「<em>PTE 里除了物理页号,那几个标志位分别管什么?</em>」「<em>每次访存都要走三层,不是很慢吗?(TLB?)</em>」
+  第二个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>5 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一段(强烈推荐):</strong>
+  <a href="https://pdos.csail.mit.edu/6.1810/2023/xv6/book-riscv-rev3.pdf">xv6 book (rev3)</a> 第 3 章
+  <em>Page tables</em> 的 3.1–3.2 节——书里那张"三级页表翻译一个虚拟地址"的图,和你刚读的 <code>walk</code> 循环逐级对应。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0005):</strong> 回到 <code>walk</code> 里我们<em>跳过</em>的第 96–99 行——当路上某一级页表页还不存在时,
+  <code>alloc=1</code> 会现场 <code>kalloc()</code> 一页物理内存来新建它。可 <code>kalloc</code> 到底<em>从哪儿</em>变出一页内存?
+  我们钻进 <code>kernel/kalloc.c</code>:一条把空闲物理页<strong>自己</strong>串起来的链表,看 <code>kalloc</code>/<code>kfree</code> 如何 O(1) 发货与回收——这就是整个页表系统脚下的地基。
+</p>
+
+<footer>
+  Lesson 0004 · 第 3 章 页表 / 虚拟内存 ·
+  上一课:<a href="./0003-first-process-userinit.html">0003 手搓第一个进程</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a> ·
+  真实代码:<code>kernel/vm.c</code> · <code>kernel/riscv.h</code><br>
+  本课遵循 <code>MISSION.md</code>:按章节讲解 xv6 代码,起点为零基础。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。每个进程有自己的一张页表（p->pagetable），同一个虚拟地址 0 经各自的页表被翻译到不同的物理页——各查各的地址簿，天然隔离。',
+               '✓ 对。Sv39 把虚拟地址高 27 位切成三段各 9 位的索引，逐级下钻。注意：循环只跑 level 2→1 两次，第三段（level0）索引是在最后 return &pagetable[PX(0,va)] 那行用的——三段 = 两次循环 + 一次 return。',
+               '✓ 对。低 12 位是页内偏移（4096=2¹²），不参与查页表；翻译找到物理页基址后，直接把这 12 位拼上去定位页内具体字节。（拼接这一步 walk 本身不做，是 walkaddr 等调用者干的。）'];
+  var msgNo = ['想想「小区门牌」类比：凭什么两个小区都能有「1 号楼 101」却不冲突？靠的是各自那本地址簿。',
+               '数一下：虚拟地址被切成几段索引？循环从 level=2 走到 level>0——它对应地址的哪几段？',
+               '页大小是 4096=2¹² 字节，那低 12 位刚好表示「这一页里的第几个字节」。它需要去查页表吗？'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

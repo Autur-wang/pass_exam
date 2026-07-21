@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0034 · React 设计模式</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0034 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>React 设计模式</h1>
+
+<p class="lede">React 鼓励把 UI 拆成一个个组件,但组件一多,同一段逻辑——鉴权检查、鼠标位置追踪、从 API 取数据——很容易在好几个组件里各写一遍。这节课要回答的问题是:面试官问"你知道哪些 React 设计模式"时,他们实际想听到的是哪几种、每种解决什么问题,以及为什么其中两种现在已经不是首选答案,但依然值得知道。</p>
+
+<div class="recall">
+<p>回忆一下上一课处理表单校验错误时,那段"判断哪个字段出错、该显示什么提示"的逻辑,你把它写在了组件内部,还是想办法抽出来,让别的表单也能直接复用?先给自己一个诚实答案——这节课要讲的三种模式,正是 React 社区在"逻辑要不要抽、抽出来该长什么形状"这个问题上给出的几种经典答案。</p>
+</div>
+
+<h2>一、三种常被问到的模式,解决的是同一类问题</h2>
+
+<p>随着应用规模变大,维护干净、可复用、可扩展的代码变得至关重要。下面三种模式,回答的都是"某段逻辑怎么在多个组件之间共享"这同一个问题,只是给出的形状不一样:</p>
+
+<div class="trio">
+  <div class="cell"><span class="role">模式一</span><span class="head">高阶组件 HOC</span><span class="sub">函数接组件,吐出加强版组件</span></div>
+  <div class="cell"><span class="role">模式二</span><span class="head">渲染道具</span><span class="sub">把"怎么画"当 prop 传进去</span></div>
+  <div class="cell"><span class="role">模式三</span><span class="head">容器/展示分离</span><span class="sub">数据来源和 UI 渲染各管一段</span></div>
+</div>
+
+<h2>二、高阶组件(HOC):函数接组件,吐出加强版组件</h2>
+
+<p>高阶组件是一个接受组件、返回一个增强组件的函数,这个增强组件带着额外的 props 或逻辑。它促进了跨多个组件的代码重用。</p>
+
+<pre><code>function withAuth(Component) {
+  return function WrappedComponent(props) {
+    const isAuthenticated = localStorage.getItem('token'); // 检查身份验证状态
+    return isAuthenticated ? &lt;Component {...props} /&gt; : &lt;p&gt;访问被拒绝&lt;/p&gt;;
+  };
+}
+
+function Dashboard() {
+  return &lt;h1&gt;Dashboard&lt;/h1&gt;;
+}
+
+const ProtectedDashboard = withAuth(Dashboard);</code></pre>
+
+<p>HOC 适用于:</p>
+<ul>
+<li>在多个组件之间重用逻辑(例如身份验证、分析、日志记录、获取数据)</li>
+<li>在不修改原始组件的情况下添加行为</li>
+<li>无法使用钩子的情况,例如类组件</li>
+</ul>
+
+<p>HOC 在 pre-hooks 时代对于给组件添加功能格外有用。现在有了 React 钩子、也能自己创建自定义钩子,HOC 已经不再那么常见——但这不等于它消失了,遇到还在用类组件的老代码库,它依然是一个合理选项。</p>
+
+<h2>三、渲染道具:把"怎么画"当 prop 传进去</h2>
+
+<p>渲染道具(render props)是把一个"渲染元素的函数"作为 prop 传给组件,组件用某些参数(通常是自己的内部状态)去调用这个 prop。这样一来,组件的父级可以按组件状态来渲染,同时仍然能从外部自定义具体的行为和外观。</p>
+
+<pre><code>function MouseTracker({ render }) {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleMouseMove = (event) => {
+      setPosition({ x: event.clientX, y: event.clientY });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  return render(position);
+}
+
+function App() {
+  return (
+    &lt;MouseTracker
+      render={(position) => (
+        &lt;p&gt;
+          Mouse: {position.x}, {position.y}
+        &lt;/p&gt;
+      )}
+    /&gt;
+  );
+}</code></pre>
+
+<p>渲染道具适用于:</p>
+<ul>
+<li>在组件之间共享逻辑,同时保持 UI 灵活性</li>
+<li>无法使用钩子的情况,例如类组件</li>
+<li>提供逻辑和行为的无头组件,同时允许自定义外观</li>
+</ul>
+
+<h2>四、容器/展示模式:数据从哪来,和怎么画出来,拆成两半</h2>
+
+<p>容器/展示模式用来把状态管理(逻辑)和 UI 渲染(展示)分开,确保关注点明确分离,从而让组件更可重用、可维护、可测试。在客户端,数据可能来自用户输入、API、<code>localStorage</code>、WebSocket 等——不假设数据从哪里来,是构建这类组件的好方法:</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">数据源</span><span class="n-sub">用户输入 / API / localStorage / WebSocket…</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">容器组件</span><span class="n-sub">管理 state、拉取数据、业务逻辑</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">展示组件</span><span class="n-sub">只认 props,渲染 UI</span></div>
+</div>
+
+<div class="codecompare">
+  <div class="side">
+    <div class="label">展示组件 UserList</div>
+    <pre><code>function UserList({ users }) {
+  return (
+    &lt;ul&gt;
+      {users.map((user) => (
+        &lt;li key={user.id}&gt;
+          {user.name} - {user.email}
+        &lt;/li&gt;
+      ))}
+    &lt;/ul&gt;
+  );
+}</code></pre>
+  </div>
+  <div class="side">
+    <div class="label">容器组件 UserListContainer</div>
+    <pre><code>function UserListContainer() {
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    fetch('https://jsonplaceholder.typicode.com/users')
+      .then((res) => res.json())
+      .then((data) => setUsers(data));
+  }, []);
+
+  return &lt;UserList users={users} /&gt;;
+}</code></pre>
+  </div>
+</div>
+
+<p>展示组件只专注于渲染 UI,不包含状态(除了本地 UI 状态,如切换开关),所有数据都通过 props 接收、通过 <code>onClick</code>、<code>onChange</code> 之类的事件处理程序往外传,因此独立于业务逻辑,重用和测试都更容易。容器组件则管理状态、API 调用和业务逻辑,把数据和函数作为 props 传给展示组件,自己几乎不写 UI 代码。这样拆开之后,同一个展示组件可以换上不同的数据源重用,UI 和状态逻辑之间的边界也更清楚。</p>
+
+<p>这种显式的容器组件写法不是唯一答案,常见的替代方法有两种:用自定义钩子(比如一个专门取用户数据的 <code>useUser</code>)承担同样的逻辑复用,这是更现代的做法;或者干脆交给状态管理库(Redux、Zustand)去单独处理全局状态,不再需要一个专门的容器组件。</p>
+
+<h2>五、面试官通常想听到的两句话</h2>
+
+<p>源材料里"面试需要了解的内容"这部分,其实只强调了两个要点,比记住模式名字更重要:</p>
+
+<ul>
+<li><strong>先说 hooks,再说 HOC/render props 仍有价值的场景。</strong>HOC 和渲染道具曾经是 React 里代码重用的流行模式,现在已经被钩子取代——但这不是"完全没用了",在仅靠钩子不够用或用不了的场景(比如还在用类组件的老代码库),它们依然合理。</li>
+<li><strong>容器/展示的分离思想,超出前端范围。</strong>把展示和数据源拆开,是一个足够通用的想法:后端系统从别的服务取数据、从数据库加载数据、从文件系统读取数据之后,同样可以用这种分离方式,让代码更容易重用和测试。</li>
+</ul>
+
+<dl class="keydef">
+<dt>高阶组件(HOC)</dt>
+<dd>接受一个组件、返回一个增强组件的函数,用来在不改动原组件的前提下,让多个组件复用同一段逻辑,比如鉴权、埋点。<em>避免</em>把"返回新组件的函数"和"返回 JSX 元素的普通函数组件"混为一谈——HOC 的输出本身还是一个组件,不是渲染结果。</dd>
+<dt>渲染道具(render props)</dt>
+<dd>把"要渲染成什么样"作为一个函数 prop 传给组件,组件执行这个函数、把自己的内部状态喂给它。<em>避免</em>以为它专指某个叫 <code>render</code> 的 prop 名字——重点是"用函数作为 prop 传递渲染逻辑"这个做法,prop 叫什么名字都可以。</dd>
+<dt>容器/展示模式</dt>
+<dd>把"状态从哪来、怎么变化"(容器)和"数据长什么样、怎么画出来"(展示)拆成两个组件,让展示组件不用关心数据来源。<em>避免</em>理解成"展示组件绝对不能有任何 state"——它仍然可以有本地 UI 状态,比如一个开关的开合,只是不该管业务数据从哪来。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>面试被问"你怎么提升组件的可复用性/可测试性"时,可以按场景挑例子:老代码库里给一批类组件统一加权限校验,提 HOC;要做一个只提供行为、外观完全交给调用方决定的"无头组件",提渲染道具;想让一个列表组件既能测试又能换数据源,提容器/展示分离,并补一句"现在这层容器更常见的写法是自定义 hook"。先说现代做法(hooks),再补充"我知道 HOC/render props 是什么、什么时候还会用到",比只会背模式定义更有说服力。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"现在很少手写容器组件了",理解成"容器/展示分离这个思想过时了"。</strong>源材料里明确把自定义 hook 和状态管理库列成容器组件的<strong>替代实现方式</strong>,不是替代这个思想本身——"把数据来源和 UI 渲染分开"这件事,不管背后是显式的容器组件、一个 <code>useUser</code> hook,还是 Redux,都依然成立,而且这个思想在前端之外(后端从数据库/其他服务取数据)同样有用。面试时如果只答"现在都用 hooks 了,不需要拆",等于漏掉了源材料真正想强调的那半句话。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>挑一个你写过的、把 <code>fetch</code> 或 <code>localStorage</code> 读取和 JSX 渲染混在一起的组件,试着按容器/展示模式拆成两个;拆完之后检查一下,展示组件是否能不改一行代码,就把数据源换成一份写死的本地假数据。如果能换,说明这次拆分是有效的;如果换不动,说明展示组件里还藏着对数据来源的隐性假设。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>HOC、渲染道具、容器/展示分离,解决的都是"某段逻辑怎么在多个组件之间复用"这同一个问题——前两种是 hooks 之前的答案,现在更常被自定义 hook 取代;但容器/展示背后"分离数据来源与 UI 渲染"的思想,不会因为 hooks 出现而过时,面试时讲清楚"为什么要拆",比背模式名字更重要。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于高阶组件(HOC)和渲染道具在当下 React 面试语境里的地位,下面哪个说法最准确? (A) 已经被 hooks 完全取代,现在任何代码里都不应该再出现它们 (B) 在多数场景下已被 hooks(尤其是自定义 hook)取代,但在类组件等无法使用 hooks 的场景仍有价值 (C) 只在类组件出现之前的极早期 React 版本里用过,现在的类组件也早就不再用它们</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。源材料明确说 HOC/render props 已经不那么普遍,但"在某些情况下仍然有用,例如仅靠钩子不够用或不可用、还在使用类组件的旧代码库"。(A) 把"不那么常见"绝对化成了"任何地方都不该用";(C) 时间线本身就错——HOC 恰恰是为了给包括类组件添加行为而存在的,现在的类组件也完全可以继续用它,不存在"早就不再用"的说法。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:容器组件和展示组件拆开之后,下面哪个说法符合源材料"面试需要了解的内容"这部分强调的重点? (A) 展示组件必须彻底禁止任何内部 state,包括切换开关之类的本地 UI 状态 (B) 这种拆分的核心价值只局限于前端 UI 组件,后端代码没有类似的可复用价值 (C) 分离"数据从哪来"和"怎么渲染"这个思想具有通用性,后端从数据库、文件系统、其他服务取数据后,同样可以用这种分离方式让代码更易复用和测试</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。源材料原话是这个分离思想"在前端工程之外也很有用",并具体举了后端从数据库、文件系统、其他服务取数据的例子。(A) 错在展示组件的定义本身留了口子——"不包含状态(除了本地 UI 状态,如切换)",不是彻底禁止;(B) 恰恰说反了源材料想强调的"超出前端范围"这一点。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>下面三条是源文件里给出的官方参考链接,分别对应今天讲的三种模式,建议挑你面试前最没底的那一种点进去精读:</p>
+<ul>
+<li><a href="https://www.patterns.dev/react/hoc-pattern/">patterns.dev · HOC Pattern</a> —— 高阶组件的完整讲解与更多示例。</li>
+<li><a href="https://www.patterns.dev/react/render-props-pattern/">patterns.dev · Render Props Pattern</a> —— 渲染道具的完整讲解与更多示例。</li>
+<li><a href="https://www.patterns.dev/react/presentational-container-pattern">patterns.dev · Presentational and Container Pattern</a> —— 容器/展示模式的完整讲解与更多示例。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"容器/展示分离到底在分离什么",也可以拿你自己写过的一个组件,让老师帮你判断该用哪种模式拆、拆完是不是真的达到了目的。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0033-react-form-validation-error-handling.html"><span class="dir">← 上一课</span>表单错误处理与校验策略</a>
+  <a class="next" href="0035-react-data-fetching.html"><span class="dir">下一课 →</span>React 数据获取</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

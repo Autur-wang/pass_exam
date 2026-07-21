@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Pi-Agent 教程 章节 → 微课 映射表</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .status{font-size:.72rem; padding:.12em .55em; border-radius:999px; white-space:nowrap; display:inline-block}
+  .s-now{background:#e7f0e7; color:#2f6b3a; border:1px solid #b8d4b8}
+  .s-todo{background:#efece0; color:#6b6b5f; border:1px solid #d8d4c5}
+  .s-core{background:#f6e7e4; color:#a23a2e; border:1px solid #e3b8b0; font-weight:600}
+  table.bd td:nth-child(3){white-space:normal}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="crumbs"><strong>章节地图</strong> · Pi-Agent SDK 深度精读</div>
+<p class="kicker">参考文档 · 脊椎</p>
+<h1>教程 10 章 → 微课 映射表</h1>
+<p class="lead">怎么用:这是本课的骨架——每节微课都挂在某一章下。复习时按章节号顺序走一遍,就是「按章拆解一个 Agent SDK」。
+全部 32 节已建成(✅)。前 6 章(0001–0020)是核心地基,建议顺序通读;第 7 章起可按需跳读。</p>
+
+<h2>内核子系统全景(10 章 · 32 节)</h2>
+<table class="bd">
+  <thead><tr><th>章</th><th>主题</th><th>核心问题</th><th>微课</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>开篇总览<br><span style="color:#6b6b5f;font-size:.82em">三重身份 · 四包架构 · 减法哲学</span></td>
+      <td>Pi 是什么?为什么值得逐行读?</td>
+      <td><span class="status s-now">✅ <a href="../lessons/0001-why-pi-three-identities.html">0001</a> <a href="../lessons/0002-four-packages-three-layer-stack.html">0002</a> <a href="../lessons/0003-run-modes-and-models-json.html">0003</a></span></td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>三层架构<br><span style="color:#6b6b5f;font-size:.82em">项目的骨骼 · 类型演进</span></td>
+      <td>四个包怎么分工?为什么这样分层?</td>
+      <td><span class="status s-now">✅ <a href="../lessons/0004-five-packages-project-skeleton.html">0004</a> <a href="../lessons/0005-type-progression-across-layers.html">0005</a> <a href="../lessons/0006-dependency-direction-and-layer-boundaries.html">0006</a></span></td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>Agent Loop<br><span style="color:#6b6b5f;font-size:.82em">让模型转动起来的引擎</span></td>
+      <td>怎么让 LLM 反复思考和行动?</td>
+      <td><span class="status s-core">★核心</span> <span class="status s-now">✅ <a href="../lessons/0007-why-loop-trace-and-turn.html">0007</a> <a href="../lessons/0008-stopreason-the-only-signal.html">0008</a> <a href="../lessons/0009-kernel-onion-and-streaming-replace.html">0009</a> <a href="../lessons/0010-steering-vs-followup-and-hooks.html">0010</a></span></td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>模型调用<br><span style="color:#6b6b5f;font-size:.82em">一行代码驾驭多模型</span></td>
+      <td>怎么用一套代码调 30+ 家模型?</td>
+      <td><span class="status s-core">★核心</span> <span class="status s-now">✅ <a href="../lessons/0011-translation-company-unified-entry.html">0011</a> <a href="../lessons/0012-translator-five-steps-and-event-protocol.html">0012</a> <a href="../lessons/0013-thinking-levels-enum-and-map.html">0013</a></span></td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>工具系统<br><span style="color:#6b6b5f;font-size:.82em">Agent 的手脚如何被管住</span></td>
+      <td>工具怎么定义、验证、执行?</td>
+      <td><span class="status s-core">★核心</span> <span class="status s-now">✅ <a href="../lessons/0014-three-layer-tool-types.html">0014</a> <a href="../lessons/0015-five-step-tool-pipeline.html">0015</a> <a href="../lessons/0016-parallel-vs-sequential-scheduling.html">0016</a> <a href="../lessons/0017-errors-are-messages.html">0017</a></span></td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>消息系统<br><span style="color:#6b6b5f;font-size:.82em">Agent 的记忆如何组织传递</span></td>
+      <td>对话历史怎么表示和传递?</td>
+      <td><span class="status s-core">★核心</span> <span class="status s-now">✅ <a href="../lessons/0018-three-standard-llm-messages.html">0018</a> <a href="../lessons/0019-agent-message-two-layers.html">0019</a> <a href="../lessons/0020-convert-to-llm-and-visibility.html">0020</a></span></td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>事件驱动<br><span style="color:#6b6b5f;font-size:.82em">Agent 的神经系统</span></td>
+      <td>为什么需要事件?</td>
+      <td><span class="status s-now">✅ <a href="../lessons/0021-why-events-and-sync-barrier.html">0021</a> <a href="../lessons/0022-event-nesting-and-two-layers.html">0022</a> <a href="../lessons/0023-text-delta-journey.html">0023</a></span></td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>上下文工程<br><span style="color:#6b6b5f;font-size:.82em">让有限窗口装下无限对话</span></td>
+      <td>怎么让有限窗口装下无限对话?</td>
+      <td><span class="status s-now">✅ <a href="../lessons/0024-context-engineering-overview.html">0024</a> <a href="../lessons/0025-system-prompt-assembly-and-pipeline.html">0025</a> <a href="../lessons/0026-tool-output-truncation.html">0026</a></span></td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td>上下文压缩<br><span style="color:#6b6b5f;font-size:.82em">当对话太长怎么办</span></td>
+      <td>对话超出窗口怎么办?</td>
+      <td><span class="status s-now">✅ <a href="../lessons/0027-why-compact-and-when-to-trigger.html">0027</a> <a href="../lessons/0028-cut-point-selection.html">0028</a> <a href="../lessons/0029-structured-summary-and-rebuild.html">0029</a></span></td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td>会话管理<br><span style="color:#6b6b5f;font-size:.82em">对话的存储恢复与分叉</span></td>
+      <td>会话怎么存、恢复、分叉?</td>
+      <td><span class="status s-now">✅ <a href="../lessons/0030-session-tree-two-dimensions-and-append-only.html">0030</a> <a href="../lessons/0031-entry-anatomy-and-three-core-operations.html">0031</a> <a href="../lessons/0032-build-session-context-and-jsonl-persistence.html">0032</a></span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>四个核心包(贯穿全书)</h2>
+<table class="bd">
+  <thead><tr><th>包</th><th>管什么</th><th>依赖</th></tr></thead>
+  <tbody>
+    <tr><td><code>pi-ai</code></td><td>只管调模型:统一 30+ 供应商、流式、成本追踪</td><td>不依赖任何 Agent 概念(最底层)</td></tr>
+    <tr><td><code>pi-agent-core</code></td><td>只管跑循环:Agent Loop + 工具 + 事件</td><td>依赖 pi-ai</td></tr>
+    <tr><td><code>pi-coding-agent</code></td><td>完整 CLI 产品 + SDK 接口</td><td>依赖上面两层</td></tr>
+    <tr><td><code>pi-tui</code></td><td>终端 UI 库(差分渲染/组件)</td><td><b>正交</b>:与 Agent 体系解耦,可单独复用</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  主源:冬瓜《Pi-Agent SDK 深度教程》(<code>../../原始资料/dg-ai-notes/</code>)· 根源:<a href="https://github.com/earendil-works/pi">earendil-works/pi</a>(v0.80.2)<br>
+  这是参考文档,随课程推进更新章节状态。课程文件见 <code>../lessons/</code>。
+</footer>
+</div>
+</body>
+</html>

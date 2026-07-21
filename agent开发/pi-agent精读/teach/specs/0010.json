@@ -1,0 +1,82 @@
+{
+ "num": "0010",
+ "slug": "steering-vs-followup-and-hooks",
+ "title": "两种干预:steering vs followUp 与 Turn 钩子",
+ "narrowTopic": "只讲一件事:coding-agent 的两种外部消息注入机制(steering 紧急插队 vs followUp 排队等叫号)的时机与语义差异,以及 turn_end 之后的两个扩展钩子 prepareNextTurn(动态切模型/上下文)与 shouldStopAfterTurn(安全阀)。",
+ "analogySeed": "steering 是你正在开会,有人敲门递张纸条说'紧急,先看这个'——它在会议进行的间隙插队;followUp 是开完会翻信箱,'不急,但需要处理'——等当前任务全部完成后才叫号。而 prepareNextTurn 像每讲完一段就问一句'下一段要不要换个更资深的人来讲',shouldStopAfterTurn 像会议室的安全阀'时间/空间快满了,该收尾了'。",
+ "keyPoints": [
+  "steering(叠加1):检查时机是 runLoop 开始前 + 内层循环每圈结尾;语义是'紧急插队',在工具执行间隙插入;典型场景是用户在 Agent 工作时又输入了新指令。",
+  "首次 steering 检查为何在进入内层循环之前:用户在等 LLM 首次响应时可能又输入了内容,消息已从外部排队但循环还没开始,不提前取出就会漏掉。",
+  "followUp(叠加2):检查时机是内层循环全部结束后;语义是'排队等叫号',等当前任务全部完成;典型场景是系统在 Agent 完成后追加'顺便跑个测试'。",
+  "followUp 的续命机制:有追加任务就塞进 pendingMessages 并 continue 回外层循环顶部,在同一个 Trace 内继续跑(同一 newMessages、同一事件序列),比重启新 runAgentLoop 更连续。",
+  "prepareNextTurn:在每个 turn_end 之后、下一轮开始前调用,可覆盖 context/model/thinkingLevel 三者之一;例子:简单问题用 Haiku,发现任务变复杂就返回 {model:opus} 自动切换;返回 undefined 表示按原配置继续。",
+  "shouldStopAfterTurn:产品层安全阀,由外部判断上下文窗口是否快满(快满就停下触发压缩)或是否达到最大 Turn 数;返回 true 就 emit agent_end 并 return,最简 Loop 不需要它。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "§4.10 'steering vs followUp'对比表(维度=检查时机/语义/典型场景,两列 steering(叠加1) 与 followUp(叠加2)),连同其后'开会递纸条 vs 翻信箱'的生活类比",
+   "cite": "教程 §4.10 / steering vs followUp 对比表"
+  },
+  {
+   "desc": "§4.7 turn_end 后收尾四步的代码块(① emit turn_end、② prepareNextTurn 覆盖 context/model、③ shouldStopAfterTurn 返回 true 则 emit agent_end 并 return、④ 再次 getSteeringMessages 检查)",
+   "cite": "教程 §4.7 / agent-loop.ts:218-253 turn_end+钩子"
+  },
+  {
+   "desc": "§4.9 外层循环 followUp 续命的代码块(getFollowUpMessages、若长度>0 则 pendingMessages=followUpMessages 后 continue、否则 break)",
+   "cite": "教程 §4.9 / 外层 followUp 循环"
+  }
+ ],
+ "designRationale": [
+  "为什么 steering 要在每圈内层循环开头都检查、而 followUp 只在内层全部结束后检查:两者语义不同——steering 是'紧急插队'必须尽快在工具执行间隙生效,followUp 是'排队等叫号'不急、要等当前任务干净收尾,时机差异直接对应语义差异。",
+  "为什么首次 steering 检查放在进入内层循环之前:用户在等首次 LLM 响应时可能已经排队了新消息,循环还没开始就得先把这批取出来,否则第一圈就把它们漏掉。",
+  "为什么 followUp 用外层循环续命而不是重启新 runAgentLoop:连续性——复用同一个 newMessages 数组和同一条事件序列,在同一个 Trace 内继续,不需要额外合并两次运行的结果。",
+  "为什么把 prepareNextTurn/shouldStopAfterTurn 做成可选钩子(函数而非数据):Loop 在运行时调用它们'拉取'最新状态与决策,把切模型、压缩、限流等产品策略与 Loop 内核彻底解耦——简单 Agent 不传这些钩子即可,内核不受影响。"
+ ],
+ "quiz": [
+  {
+   "stem": "用户在 Agent 正读文件、分析代码时突然补了一句'也检查一下测试文件',希望立刻插队。这应该走哪种机制?它在何时被检查?",
+   "options": [
+    "followUp;在内层循环全部结束后检查",
+    "steering;在 runLoop 开始前 + 内层循环每圈结尾检查",
+    "prepareNextTurn;在每个 turn_end 之后检查",
+    "shouldStopAfterTurn;在每轮结束判断是否该停时检查"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。'紧急插队'是 steering,在开始前和每圈结尾都检查,能在工具执行间隙生效。延伸:对照 followUp 是'排队等叫号',等当前任务全部完成后才处理——像开完会翻信箱。",
+   "noMsg": "回看§4.10 对比表:'紧急插队'和'排队等叫号'分别是哪个?再看检查时机——是'每圈结尾'还是'内层全部结束后'?"
+  },
+  {
+   "stem": "Turn 1 用便宜的 Haiku 开始,turn_end 时系统发现'要改的文件很多、任务变复杂了',想让下一轮换成更强的 Opus。应该用哪个扩展点?",
+   "options": [
+    "shouldStopAfterTurn,返回 true",
+    "steering,注入一条切换模型的消息",
+    "prepareNextTurn,返回 {model: opus}",
+    "followUp,追加一个换模型的任务"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。prepareNextTurn 在 turn_end 之后、下一轮开始前调用,可覆盖 model/context/thinkingLevel。延伸:返回 undefined 就表示'什么都不换,按原配置继续'。",
+   "noMsg": "回看§4.7:'动态切换下一轮配置'的钩子是哪个?shouldStopAfterTurn 管的是'停不停',不是'换什么'——别选错职责。"
+  },
+  {
+   "stem": "内层循环全部结束、没有工具也没有紧急消息了,但 getFollowUpMessages() 返回了一条'顺便跑个测试'。相比重新启动一个新的 runAgentLoop(),用外层循环续命的主要好处是?",
+   "options": [
+    "能节省一次网络请求",
+    "连续性:复用同一个 newMessages 数组和同一条事件序列,在同一个 Trace 内继续,不需额外合并",
+    "能让模型自动升级到更强的模型",
+    "可以跳过 stopReason 检查,直接执行工具"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。外层 continue 回顶部让内层重开,在同一 Trace 内延续同一 newMessages 与事件序列。延伸:这就是为什么 followUp 被称作'续命'而不是'重启'——省去了合并两次独立运行的麻烦。",
+   "noMsg": "回看§4.9:followUp 是塞进 pendingMessages 后 continue 回外层顶部,还是新起一个 runAgentLoop?好处关键词是'同一个 Trace'的连续性。"
+  }
+ ],
+ "_chapter": "3",
+ "_chapterCN": "Agent Loop —— 让模型转动起来的引擎",
+ "prevFile": "0009-kernel-onion-and-streaming-replace.html",
+ "prevNum": "0009",
+ "nextFile": "0011-translation-company-unified-entry.html",
+ "nextNum": "0011",
+ "crumbLabel": "第 3 章 · Agent Loop",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第3章-Agent-Loop-让模型转动起来的引擎.md",
+ "filename": "0010-steering-vs-followup-and-hooks.html"
+}

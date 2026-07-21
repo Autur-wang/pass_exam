@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>值/引用语义与默认参数坑 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第七部分 · 进阶工程 · 第 0023 节</p>
+<h1>值/引用语义、可变性与那个默认参数坑</h1>
+<p class="lede">"Python 是传值还是传引用?"——这道经典陷阱题的正确答案是"都不是"。这一节把名字绑定、可变性、拷贝和那个几乎人人踩过的可变默认参数坑一次讲透,让你在面试里能当场演示,而不是背半个答案。</p>
+
+<div class="recall">
+<p>不查文档,先在心里预测两段代码的输出:</p>
+<p>① <code>def f(acc=[]): acc.append(1); return acc</code>——连着调 <code>f()</code> 三次,分别返回什么?<br>
+② <code>def g(lst): lst.append(9)</code> 和 <code>def h(lst): lst = [9]</code>,分别传同一个外部 list 进去,外部会不会变?</p>
+<p>先给出你的答案,再往下看。这两个正是本节的核心。</p>
+</div>
+
+<h2>一、直觉:变量是"贴在对象上的便利贴"</h2>
+
+<p>很多语言里,变量像一个"盒子",赋值是把值搬进盒子。Python 不是这样。在 Python 里,<strong>变量是名字(name),对象漂在内存里,赋值只是把名字这张便利贴贴到某个对象上</strong>。</p>
+
+<p><code>x = [1, 2]</code> 做了两件事:先造出一个 list 对象,再把名字 <code>x</code> 贴上去。<code>y = x</code> 不拷贝任何东西——它只是又拿一张写着 <code>y</code> 的便利贴,贴到<strong>同一个对象</strong>上。于是 <code>x</code> 和 <code>y</code> 指向同一份数据,通过任一个名字改动它,另一个都"看得见"。</p>
+
+<p>理解了这一点,"传值还是传引用"这道题就迎刃而解了:调用函数时,Python 把实参对象的<strong>引用</strong>交给形参这个名字——形参是又一张贴在同一对象上的便利贴。这套机制的学名叫 <strong>call by object reference</strong>(也叫 call by sharing / 按共享传递)。它既不是纯粹的"传值"(没有拷贝对象),也不是 C++ 那种"传引用"(你无法在函数里替换掉调用方的变量本身)。</p>
+
+<h2>二、关键推论:同一个对象改得动,换个对象换不掉</h2>
+
+<p>"按共享传递"会分裂出两种截然不同的后果,取决于你在函数里做的是<strong>就地修改</strong>还是<strong>重新绑定</strong>:</p>
+
+<pre><code>def append_item(lst):
+    lst.append(99)          # 就地修改:动的是同一个对象,外部看得见
+    print("函数内(修改后):", lst)
+
+def rebind(lst):
+    lst = [1, 2, 3]         # 重新绑定:名字改贴到新对象,外部那张便利贴没动
+    print("函数内(重绑定):", lst)
+
+data = [1, 2]
+append_item(data)
+print("外部(被就地修改):", data)   # [1, 2, 99]  —— 变了!
+
+data2 = [1, 2]
+rebind(data2)
+print("外部(重绑定不影响):", data2) # [1, 2]     —— 没变
+</code></pre>
+
+<p>为什么会这样?<code>lst.append(99)</code> 是在<strong>调用方和函数共享的那个对象上</strong>动手,自然双方都看到变化;而 <code>lst = [1, 2, 3]</code> 只是把函数内的 <code>lst</code> 这张便利贴撕下来贴到一个<strong>新对象</strong>上,调用方 <code>data2</code> 的便利贴还牢牢贴在老对象上,毫发无伤。</p>
+
+<p>这也解释了为什么 <code>x = 5; y = x; y += 1</code> 之后 <code>x</code> 仍是 <code>5</code>:<code>int</code> 不可变,<code>y += 1</code> 无法就地改 <code>5</code>,只能造出新对象 <code>6</code> 再让 <code>y</code> 改贴过去——这本质上就是"重新绑定"。可变与不可变,决定了你能不能"就地"动一个对象。</p>
+
+<table>
+<tr><th>可变 (Mutable) —— 能就地改</th><th>不可变 (Immutable) —— 只能造新的</th></tr>
+<tr><td><code>list</code>、<code>dict</code>、<code>set</code>、大多数自定义对象</td><td><code>int</code>、<code>float</code>、<code>str</code>、<code>tuple</code>、<code>frozenset</code>、<code>bool</code></td></tr>
+</table>
+
+<p>小验证工具:<code>id(obj)</code> 给你对象的身份编号,<code>a is b</code> 判断两个名字是不是贴在同一对象上。想在面试里证明"没拷贝",当场打印 <code>id()</code> 前后一致即可。</p>
+
+<div class="keydef">
+<dl>
+<dt>名字绑定 (Name Binding)</dt>
+<dd>Python 变量是<strong>名字</strong>,赋值 <code>=</code> 把名字绑定到一个对象,<strong>不拷贝对象</strong>。多个名字可绑定到同一对象。</dd>
+<dt>按共享传递 (Call by Object Reference / Call by Sharing)</dt>
+<dd>传参传的是<strong>对象引用</strong>(便利贴的复制,不是对象的复制)。就地修改可变对象 → 外部可见;重新绑定形参名 → 外部不受影响。</dd>
+<dt>可变 vs 不可变 (Mutable vs Immutable)</dt>
+<dd>可变对象能被就地改状态;不可变对象一旦创建就不能变,任何"修改"都会产生新对象。</dd>
+<dt>浅拷贝 vs 深拷贝 (Shallow vs Deep Copy)</dt>
+<dd><code>copy.copy</code> 只新建最外层容器,内部元素仍与原对象共享;<code>copy.deepcopy</code> 递归复制,内外都是全新对象。</dd>
+</dl>
+</div>
+
+<h2>三、拷贝:= 根本不拷贝,浅拷贝只拷一层</h2>
+
+<p>既然 <code>=</code> 只复制便利贴,那真想要一份独立数据怎么办?这就引出三个层级——理解它们的差别几乎是可变性话题的必考延伸:</p>
+
+<pre><code>import copy
+
+original = [[1, 2], [3, 4]]         # 一个嵌套 list:外层 + 两个内层子 list
+
+alias   = original                  # 只是别名:同一个对象,连外层都共享
+shallow = copy.copy(original)       # 浅拷贝:外层是新 list,内层子 list 仍共享
+deep    = copy.deepcopy(original)   # 深拷贝:递归复制,内外都是全新对象
+
+original[0].append(999)             # 改动最里层的那个子 list
+
+print("original:", original)   # [[1, 2, 999], [3, 4]]
+print("alias   :", alias)      # [[1, 2, 999], [3, 4]]  —— 本就是同一个
+print("shallow :", shallow)    # [[1, 2, 999], [3, 4]]  —— 被连累!内层是共享的
+print("deep    :", deep)       # [[1, 2], [3, 4]]       —— 独立,安全
+</code></pre>
+
+<p>浅拷贝之所以"被连累",是因为它只新建了外层这只"篮子",篮子里装的还是<strong>原来那几个子 list 的引用</strong>。改动子 list 时,原对象和浅拷贝都指向它,自然一起变。深拷贝则把篮子和篮子里的每个东西都递归造了一份新的,彻底切断关联——代价是更慢、更耗内存,所以别无脑 <code>deepcopy</code>,只在确实需要嵌套独立时才用。</p>
+
+<h2>四、面试最爱的一道坑:可变默认参数</h2>
+
+<p>下面这段代码,几乎每个 Python 面试官都会拿它试探你踩没踩过:</p>
+
+<pre><code># ❌ 坑:默认值 [] 在函数「定义时」只创建一次,之后所有调用共享同一个 list
+def add_task(task, acc=[]):
+    acc.append(task)
+    return acc
+
+print(add_task("a"))   # ['a']
+print(add_task("b"))   # ['a', 'b']       —— 竟然记住了上一次!
+print(add_task("c"))   # ['a', 'b', 'c']  —— 跨调用不断累积
+</code></pre>
+
+<p>病根在于:<strong>默认参数的值对象,是在函数 <code>def</code> 执行(定义)那一刻创建的,只创建一次,之后被绑到函数对象上反复复用</strong>。它不是"每次调用都新建一个空 list"。于是这个 list 变成了一块跨调用的"隐形记忆",谁调用谁往里塞,越滚越大。你甚至能通过 <code>add_task.__defaults__</code> 亲眼看到它被改。</p>
+
+<p>标准修法:用 <code>None</code> 当哨兵值(sentinel),把"新建空容器"这件事挪进函数体——函数体是每次调用都会执行的:</p>
+
+<pre><code># ✅ 修法:默认值用不可变的 None,进函数体再按需新建
+def add_task_fixed(task, acc=None):
+    if acc is None:
+        acc = []           # 每次调用都是全新的 list
+    acc.append(task)
+    return acc
+
+print(add_task_fixed("a"))   # ['a']
+print(add_task_fixed("b"))   # ['b']   —— 各次调用互不干扰
+</code></pre>
+
+<p>反过来说,如果默认值是<strong>不可变</strong>对象(<code>None</code>、数字、字符串、tuple),就没有这个坑——因为你根本无法就地改它,不存在"被上次调用污染"的可能。这正是"不可变即安全"的一个具体体现。</p>
+
+<h2>五、为什么不可变对象是"好东西"</h2>
+
+<p>可变性不只是陷阱源,理解它另一面同样重要:不可变对象天生带三项红利。</p>
+
+<ul>
+<li><strong>可哈希、能当 dict 键 / set 元素</strong>:哈希值在对象生命周期内必须稳定,可变对象改一下哈希就乱了,所以 list 不能当 dict 键,而 tuple / frozenset 可以。</li>
+<li><strong>天然线程安全</strong>:没人能改它,多线程共享读就不用加锁,省掉一大类竞态。</li>
+<li><strong>可安全缓存与共享</strong>:既然内容永不变,放心地缓存、复用、到处传,不怕被谁悄悄改坏(小整数、短字符串驻留就是靠这个)。</li>
+</ul>
+
+<p>想让自己的类也享受这些红利?常用手段:用 <code>tuple</code> / <code>frozenset</code> 存数据、<code>collections.namedtuple</code>、或 <code>@dataclass(frozen=True)</code> 把一个类冻结成不可变值对象。这也是"值/引用语义"和上一节"相等与哈希"衔接的地方——可哈希对象的相等与哈希必须一致且稳定。</p>
+
+<div class="interview">
+<p><strong>高频追问链(这一簇几乎必被连环追问):</strong></p>
+<ul>
+<li>"Python 是传值还是传引用?" → 都不是,是<strong>按共享传递(call by object reference)</strong>。传的是对象引用的副本:就地改可变对象外部可见,重新绑定形参名外部不受影响。别只答半句。</li>
+<li>"那为什么 <code>x=5; y=x; y+=1</code> 后 <code>x</code> 还是 5,list 就不一样?" → 因为 <code>int</code> 不可变,<code>y+=1</code> 造新对象再重绑;list 可变,<code>append</code> 是就地改同一对象。差别在<strong>可变性</strong>,不在传参方式。</li>
+<li>"可变默认参数你踩过吗?为什么会这样、怎么修?" → 默认值定义时只建一次被复用;修法是默认写 <code>None</code>,函数体内 <code>if x is None: x = []</code>。</li>
+<li>"浅拷贝和深拷贝差在哪?什么时候一定要 deepcopy?" → 浅拷贝只新建最外层、内层共享;数据是<strong>嵌套</strong>且你要改内层又不想影响原件时,才需要 deepcopy。</li>
+<li>"怎么当场证明两个变量指向同一对象?" → <code>a is b</code> 或比较 <code>id(a) == id(b)</code>。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:张口就答"Python 传引用"(或"传值")。</strong>两个都是错的半答案。准确说法是<strong>按共享传递 / 传对象引用</strong>——传的是引用的副本。你无法像 C++ 引用那样在函数里替换掉调用方的变量本身(重绑定不影响外部),但你能改它指向的可变对象(就地修改外部可见)。把这两句话都说全,才算答对。</p>
+<p><strong>坑二:可变默认参数。</strong><code>def f(acc=[])</code> 的 <code>[]</code> 只在定义时创建一次、被所有调用共享,导致状态跨调用累积。这是面试官最爱的"你踩过吗"。修法固定:默认 <code>None</code> + 函数体内新建。</p>
+<p><strong>坑三:以为浅拷贝就"拷了一份"。</strong>浅拷贝只新建最外层容器,嵌套的子对象仍与原件共享;改子对象时原件和拷贝一起变,造成意外共享。数据有嵌套且要独立修改时,得用 <code>copy.deepcopy</code>。</p>
+</div>
+
+<div class="crosslang">
+<p>"这门语言参数是怎么传的?"是跨语言必问题。三种语言的模型对照:</p>
+<table>
+<tr><th>语言</th><th>参数传递模型</th><th>"改对象内容"影响外部?</th><th>"让形参指向新对象"影响外部?</th></tr>
+<tr><td><strong>Python</strong></td><td>统一按共享传递(传对象引用副本)</td><td>可变对象:会</td><td>否(只是重绑本地名字)</td></tr>
+<tr><td><strong>Java</strong></td><td>一律传值:基本类型传值副本,对象传"引用的副本"</td><td>会(通过引用副本改对象字段)</td><td>否(改的是引用副本)</td></tr>
+<tr><td><strong>C++</strong></td><td>显式区分:值传递 / 引用传递 <code>&amp;</code> / 指针</td><td>值传递:否;引用/指针:会</td><td>引用传递:会(能替换调用方变量本身)</td></tr>
+</table>
+<p>一句话记忆:<strong>Python 和 Java 都"传引用的副本"(所以能改对象、不能换对象)</strong>;C++ 是唯一能靠引用参数在函数里<strong>连调用方变量本身都替换掉</strong>的。理解这一层,跨语言的参数传递题就都能答稳。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写三小段验证一下,别只看:</p>
+<ul>
+<li>写 <code>grow(lst)</code> 里 <code>lst.append(0)</code>,再写 <code>replace(lst)</code> 里 <code>lst = []</code>;各传一个外部 list 进去,<strong>预测再打印</strong>外部值,看看哪个变了。</li>
+<li>把可变默认参数坑<strong>亲手复现</strong>一遍(连调三次看累积),再用 <code>None</code> 哨兵修好。顺便打印 <code>你的函数名.__defaults__</code> 看那个被污染的 list。</li>
+<li>造一个嵌套 list,分别做 <code>copy.copy</code> 和 <code>copy.deepcopy</code>,改内层子 list,验证只有深拷贝真正独立。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:预测下面这段的三行输出,并说明原因。</summary>
+<div class="answer">
+<pre><code>def collect(x, bucket=[]):
+    bucket.append(x)
+    return bucket
+
+print(collect(1))
+print(collect(2))
+print(collect(3))</code></pre>
+<p><strong>输出:</strong><code>[1]</code> → <code>[1, 2]</code> → <code>[1, 2, 3]</code>。</p>
+<p><strong>原因:</strong>默认值 <code>[]</code> 在函数<strong>定义时只创建一次</strong>,三次调用共享同一个 list,所以 <code>append</code> 不断往里累积。想让每次独立,改成 <code>bucket=None</code>,函数体里 <code>if bucket is None: bucket = []</code>。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:下面哪句最准确地回答"Python 是传值还是传引用"?</summary>
+<div class="answer">
+<p><strong>准确答案:都不是——Python 是"按共享传递 / 传对象引用"。</strong>传给函数的是对象引用的副本:在函数内<strong>就地修改</strong>可变对象(如 <code>lst.append(x)</code>),外部看得见;在函数内<strong>重新绑定</strong>形参名(如 <code>lst = new</code>),外部不受影响。</p>
+<p>典型错误:只答"传引用"(那会让人以为能在函数里替换掉调用方的变量,Python 不能)或只答"传值"(那会让人以为对象被拷贝了,其实没有)。两个半句合起来才对。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 3:<code>a = [[1], [2]]; b = copy.copy(a); a[0].append(99)</code> 之后,<code>b</code> 是什么?换成 <code>deepcopy</code> 呢?</summary>
+<div class="answer">
+<p><strong>浅拷贝:</strong><code>b == [[1, 99], [2]]</code>。因为 <code>copy.copy</code> 只新建了最外层 list,里面两个子 list 仍与 <code>a</code> 共享;改 <code>a[0]</code> 这个子 list,<code>b[0]</code> 是同一个对象,跟着变。</p>
+<p><strong>深拷贝:</strong><code>b == [[1], [2]]</code>。<code>deepcopy</code> 递归复制了每一层,<code>b</code> 完全独立,不受 <code>a</code> 改动影响。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>Python 变量是名字、赋值不拷贝对象,传参是"按共享传递"——就地改可变对象外部可见,重绑形参名外部不变。由此派生三件必答:可变默认参数(默认 <code>None</code> + 体内新建)、浅拷贝只拷一层(嵌套要独立就 <code>deepcopy</code>)、不可变对象因永不变而可哈希、线程安全、可安全缓存。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>canon(权威锚定,本节主体):</strong>本课无对应的 README 源题,内容锚定 Python 官方文档——
+<a href="https://docs.python.org/3/faq/programming.html#how-do-i-write-a-function-with-output-parameters-call-by-reference">官方 FAQ:call by reference / 按共享传递</a>、
+<a href="https://docs.python.org/3/faq/programming.html#why-are-default-values-shared-between-objects">官方 FAQ:为什么默认值会在多次调用间共享</a>、
+<a href="https://docs.python.org/3/library/copy.html">copy 模块文档(浅拷贝 vs 深拷贝)</a>、
+<a href="https://docs.python.org/3/reference/datamodel.html">Python Data Model(对象、身份与可变性)</a>。</li>
+<li><strong>canon(跨语言对照):</strong><a href="https://docs.oracle.com/javase/tutorial/java/javaOO/arguments.html">Oracle Java Tutorial · Passing Information to a Method or a Constructor</a> —— Java "一律传值"模型的官方口径。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"便利贴"模型、拿你复现的可变默认参数坑代码来评、或者深入聊聊小整数/字符串驻留为什么能靠不可变来做,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节从"语言机制"转向"工具":现代 Python 用 <code>@dataclass</code>、<code>__slots__</code> 等把写类这件事变轻——包括如何一键得到不可变值对象。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0022-equality-and-hashing.html"><span class="dir">← 上一课</span>0022 · 相等与哈希:__eq__ 与 __hash__</a>
+<a class="next" href="0024-modern-python-class-tools.html"><span class="dir">下一课 →</span>0024 · 现代 Python 写类工具:dataclass 与 __slots__</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

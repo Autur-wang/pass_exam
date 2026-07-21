@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>速查表 · 生成式 AI / AI 工程师面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+<style>
+  .cs-grid { display: grid; grid-template-columns: 1fr; gap: 0; }
+  .cs-block { border: 1px solid var(--border); border-radius: 8px; padding: .7em 1em; margin: .8rem 0; background: var(--code-bg); break-inside: avoid; }
+  .cs-block h3 { margin: .1em 0 .5em; font-size: 1rem; color: var(--accent); }
+  .cs-block ul { margin: .3em 0; padding-left: 1.2em; }
+  .cs-block li { margin: .2em 0; font-size: .92em; }
+  .cs-block table { margin: .5em 0; font-size: .85em; }
+  .tag { font-family: "SF Mono", Menlo, monospace; font-size: .82em; color: var(--link); }
+  @media print { body { font-size: 9.5pt; } .cs-block { background: #fff; } }
+</style>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 打印速查表</p>
+<h1>速查表 · 生成式 AI / AI 工程师面试冲刺</h1>
+<p class="lede">面试前 10 分钟扫一遍。每块对应课程一个主题;要展开看对应微课。</p>
+
+<div class="cs-grid">
+
+<div class="cs-block">
+<h3>① 注意力(0002-0005)</h3>
+<div>$$\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V$$</div>
+<ul>
+<li>Q/K/V = 同一输入乘三套<strong>可学习</strong>权重;「自」= 全来自同一序列。</li>
+<li>除 $\sqrt{d_k}$:防点积随维度增大把 softmax 推入饱和区 → 梯度消失。除的是<strong>单头</strong> $d_k=d_{\text{model}}/h$。</li>
+<li>Q、K 用<strong>不同</strong>权重:否则注意力对称退化、只盯自己。</li>
+<li>多头 = 多视角并行、总计算量<strong>同量级</strong>(非更省)。复杂度 $O(n^2 d)$ → 长上下文贵的根因。</li>
+<li>长上下文救法:FlashAttention、MQA/GQA、RoPE/ALiBi、位置插值、稀疏注意力。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>② 模型类型 & 解码(0004-0005)</h3>
+<ul>
+<li><strong>base</strong>=只预测下一 token / <strong>instruct</strong>=听指令(产品默认)/ <strong>reasoning</strong>=答前花 test-time compute。</li>
+<li>GPT=解码器·自回归·擅生成;BERT=编码器·双向·MLM+NSP·擅理解。</li>
+<li>temperature 缩放分布(抽取/工具调用用低温);top-p 只在累计概率 p 内采样。只调一个。</li>
+<li>KV cache → prefill(算力密集,主导 TTFT)+ decode(访存密集,逐 token 便宜)。</li>
+<li>相同调用<strong>不</strong>保证相同输出(浮点非结合、MoE 路由、静默更新)→ pin 版本 + 回归 eval。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>③ Embedding & 向量检索(0006-0007)</h3>
+<ul>
+<li>embedding=稠密低维、语义近则向量近。triplet loss:$\max(0,\,d(a,p)-d(a,n)+\text{margin})$。</li>
+<li>索引:<span class="tag">flat</span> 精确不 scale · <span class="tag">HNSW</span> 图·低延迟高召回·内存大 · <span class="tag">IVF</span> 聚类·省内存·需调参。</li>
+<li>ANN 家族:LSH / 树 / 图(HNSW)。量化 float32→int8 省内存。</li>
+<li>选 embedding 模型:在<strong>自己数据</strong>上评检索,别信 leaderboard。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>④ Prompting & 上下文工程(0008-0010)</h3>
+<ul>
+<li>zero-shot 默认 → few-shot 定格式(每例都是每次的成本)→ CoT(推理模型别再强加)。</li>
+<li>结构化输出:provider schema + 代码校验 + 失败重试,别用正则抠散文。</li>
+<li><strong>context rot</strong>:输入越长准确率越降(窗口没满也降)。<strong>lost-in-the-middle</strong>:首尾利用最好。</li>
+<li>缩上下文三法:clear(裁剪·无损)/ compact(摘要·有损)/ offload(存外部)。</li>
+<li>可信指令与不可信数据(检索/工具/网页)用<strong>角色分离</strong> → 防注入第一道防线。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>⑤ 微调 & 对齐(0011-0012)</h3>
+<ul>
+<li>四选一:<strong>prompting</strong>(可指定行为)→ <strong>RAG</strong>(新鲜/私有/需引用知识)→ <strong>微调</strong>(稳定行为/格式,非易变事实)→ <strong>agent</strong>(确需多步动态动作)。</li>
+<li>PEFT:LoRA($\Delta W=BA$ 低秩)/ QLoRA(量化基座+LoRA)/ Adapter / Prompt Tuning。</li>
+<li>对齐:<strong>RLHF</strong>(奖励模型+PPO,经典三段)/ <strong>DPO</strong>(去奖励模型直接优化)/ <strong>GRPO</strong>(组内相对+可验证奖励)。</li>
+<li>灾难性遗忘 → gradual unfreezing、分层差异学习率、领域继续预训练。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>⑥ RAG(0013-0017)</h3>
+<div class="pipeline" style="font-size:.76rem">
+  <div class="node">分块</div><div class="arrow">→</div>
+  <div class="node">embedding</div><div class="arrow">→</div>
+  <div class="node">检索<br>dense+sparse</div><div class="arrow">→</div>
+  <div class="node">rerank</div><div class="arrow">→</div>
+  <div class="node good">生成+引用</div>
+</div>
+<ul>
+<li>检索:dense(语义)/ sparse(BM25 词面)/ <strong>hybrid</strong>(RRF 融合,生产最优)。reranker(cross-encoder)= 多召回后精排。</li>
+<li>进阶:contextual retrieval(块前置定位描述)/ late chunking(整篇编码再池化)/ HyDE(先草拟假答案再嵌)/ metadata 过滤 / query routing。</li>
+<li><strong>RAG triad</strong>:context relevance(检索)· faithfulness(生成忠实)· answer relevance(答到点)→ 定位失败在哪环。</li>
+<li>覆盖不到 → <strong>优雅拒答</strong>(阈值+"只据上下文答"),别幻觉。企业级:权限过滤+增量索引先设计。</li>
+<li>带检索反更差:坏检索比不检索还糟 → 单独评检索阶段。百万上下文≠RAG 过时(仍需选切片/权限/引用)。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>⑦ Agents(0018-0021)</h3>
+<ul>
+<li>agent = model + harness(工具+记忆+循环+门控)。能用 <strong>workflow</strong>(固定步骤)就别用 agent。</li>
+<li><strong>ReAct</strong>(Yao et al.):思考→行动→观察→循环。function calling:模型发结构化请求、你的代码执行喂回。</li>
+<li>tool design = token design:少而好、search-first、错误可行动、告诉它何时别调。</li>
+<li>MCP=一次接入处处复用(纵向连工具);A2A=agent 间协作(横向)。</li>
+<li>记忆:短期=当前上下文 / 长期=外部存储按需检索。orchestrator-worker:子 agent 传<strong>短结构化结果</strong>非原始轨迹。</li>
+<li><strong>误差累积</strong>:$0.95^{20}\approx36\%$ → 测端到端 & <strong>pass^k</strong>(k 次全成),不看平均。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>⑧ 推理模型(0022)</h3>
+<ul>
+<li>答前花 test-time compute(隐藏思维链)→ 数学/代码/多步更强,更慢更贵。</li>
+<li>难题用推理模型、常规用标准模型 → <strong>路由</strong>:便宜走常路、难例升级。</li>
+<li><strong>thinking budget</strong> 按难度调;<strong>过度思考</strong>(inverse scaling):某些题更多推理反更差。</li>
+<li>可见思维链<strong>未必忠于</strong>真实计算 → 别当审计轨迹。self-consistency=多路径取多数。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>⑨ 评估(0023-0024)</h3>
+<ul>
+<li><strong>LLM-as-judge</strong> 偏差:位置 / 冗长 / 自我偏好 / 不一致 → 随机顺序 + <strong>对人工校准</strong>(目标 85~90% 一致)再门禁。</li>
+<li>pointwise(绝对分,CI 门禁)vs pairwise(比优劣,选型)。</li>
+<li><strong>error analysis</strong>=读失败、打标、聚类 → 最高杠杆,直指该修哪。</li>
+<li>offline(固定集·门禁发布)+ online(真实流量·抓 drift)都要。<strong>eval-driven CI</strong>:回归阻断合并。</li>
+<li>公榜:污染(泄进训练)+ 饱和(齐聚天花板)→ 信自己数据的私有 eval。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>⑩ 成本延迟 & 部署(0025-0026)</h3>
+<ul>
+<li><strong>三角</strong>:latency / throughput / cost 不可兼得,先定绑定约束。</li>
+<li><strong>TTFT</strong>(prefill·随输入长)vs <strong>inter-token</strong>(decode·随模型)→ 修法不同。</li>
+<li>缓存:prompt/KV(共享前缀折扣)· 语义(相似即返回,免调用但有近似命中风险)。稳定部分放前。</li>
+<li>投机解码(小模型草稿+大模型校验)· 连续批处理(token 级调度提吞吐)· model routing。</li>
+<li>fallback:超时+退避+断路器+降级;成本按功能/租户归因监控。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>⑪ 幻觉 & 安全(0027-0028)</h3>
+<ul>
+<li>幻觉不可根除,只能 <strong>reduce</strong>(grounding)+ <strong>detect</strong>(faithfulness/引用核验)+ <strong>contain</strong>(显来源/拒答/转人)。</li>
+<li>检测:Seq-Logprob · SelfCheckGPT · G-EVAL · NLI 蕴含。perplexity 局限:忽略连贯/事实。</li>
+<li><strong>prompt injection</strong>:direct(用户)vs <strong>indirect</strong>(藏在检索/工具/网页,更糟)。jailbreak≠injection(前者攻模型护栏,后者攻你的应用)。</li>
+<li><strong>tool poisoning</strong>(恶意 MCP 元数据)· <strong>excessive agency</strong>(权限超需)→ 最小权限、人审高危、爆炸半径。</li>
+<li>护栏 = 模型外确定性校验(输入+输出)。<strong>OWASP LLM Top 10</strong> 当威胁建模检查表。</li>
+</ul>
+</div>
+
+<div class="cs-block">
+<h3>⑫ 多模态 & 系统设计(0029-0031)</h3>
+<ul>
+<li>VLM:图像→视觉 token→投影到文本嵌入空间→一起注意力。图像耗大量 token。</li>
+<li>MM-LLM 五部件:编码器→输入投影→LLM→输出投影→生成器。CLIP=对比对齐 / DALL-E=文生图。</li>
+<li>系统设计骨架:<strong>需求</strong>(准确/延迟/成本/合规)→ 检索 grounding + 最小权限工具 + 低置信转人 → 评估+可观测+护栏 → fallback 灰度 + 人在环。每步点取舍。</li>
+<li>工程判断:何时<strong>别用 LLM</strong>(确定性规则更优)· build vs buy · 每次交互成本 · prototype→prod 鸿沟在评估与可靠性。</li>
+</ul>
+</div>
+
+</div>
+
+<footer class="lesson-footer">
+<p>一句话:<strong>面试冲刺 = 懂原理 + 讲清为什么 + 落到工程取舍 + 答得住追问。</strong>回门户逐节展开:<a href="../index.html">index.html</a>。</p>
+</footer>
+</main>
+</body>
+</html>

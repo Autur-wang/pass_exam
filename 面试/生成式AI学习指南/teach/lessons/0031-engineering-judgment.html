@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0031 · 工程判断:四选一、何时别用 LLM、build vs buy、技术债</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第十部分 多模态与系统设计 · 第 0031 课</p>
+<h1>工程判断:四选一、何时别用 LLM、build vs buy、技术债</h1>
+<p class="lede">这节课把 AI 工程师题库里最「资深」的一组判断题一次答清——它们几乎不问模型内部,专问<strong>取舍</strong>:<strong>prompting / RAG / 微调 / agent 怎么选(Q135)、什么时候干脆别用 LLM(Q136)、build 还是 buy(Q140)、只押一家 provider 的风险(Q138)、怎么证明功能真交付了价值(Q137)、为什么原型上不了生产又如何 de-risk(Q141)、human-in-loop 放哪(Q142)、LLM 系统独有的技术债(Q145)、以及如何设计才能受益于模型变强变便宜而非被套牢(Q143)</strong>。(源:AI 工程师题库。)贯穿全课的隐线只有一个词:<strong>eval</strong>——选型靠它验、价值靠它证、de-risk 靠它、还债靠它、吃到模型红利也靠它。</p>
+
+<div class="recall">
+<p>上一课(第 0030 课)你学会了把一个 AI 功能拆成检索、编排、护栏、评估几层去设计系统。<strong>先别往下看:同一个需求,如果一段 prompt 就能过线,你还会上 RAG 或微调吗?再有——你打算怎么向老板证明这功能「值得做」,是给他看模型跑分,还是看别的?</strong></p>
+</div>
+
+<h2>一、四选一:从最简单能过线的方案起(Q135 / Q136)</h2>
+<p>面试官最想听到的不是「agent 最强所以上 agent」,而是一句<strong>匹配工具与需求</strong>的克制原则:从最简单、能过线的方案起,每往上加一级,就要<em>用一份真实需求</em>去换它带来的成本、延迟和新的失败模式——而不是凭直觉往上堆。四种手段各自解决的问题不同:</p>
+
+<dl class="keydef">
+<dt>prompting + 上下文</dt>
+<dd>当想要的行为<strong>可以直接说清楚</strong>时:把指令和必要上下文写进提示词即可。最便宜、当天能改口。</dd>
+<dt>RAG</dt>
+<dd>当需要<strong>要引用的新鲜或私有知识</strong>时:推理时检索注入,保鲜、可审计,免重训。</dd>
+<dt>微调</dt>
+<dd>当需要<strong>规模化的稳定行为、格式、风格</strong>时:把模式写进权重。<strong>别拿它装易变事实</strong>——那会陈旧、难溯源。</dd>
+<dt>agent</dt>
+<dd>当<strong>确实需要多步、动态决定动作</strong>时才上:能力最全,但失败面也最大。</dd>
+</dl>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision"><strong>先问:最便宜、能过线的方案是什么?</strong></div>
+  <div class="down">↓</div>
+  <div class="step"><strong>① prompting + 上下文</strong><br>行为能直接说清 → 先停在这一层</div>
+  <div class="down">↓ 不够:要引用的新鲜 / 私有知识</div>
+  <div class="step"><strong>② + RAG</strong><br>推理时检索注入,保鲜、可审计</div>
+  <div class="down">↓ 不够:要规模化的稳定行为 / 格式 / 风格</div>
+  <div class="step"><strong>③ + 微调</strong><br>把模式写进权重(不装易变事实)</div>
+  <div class="down">↓ 不够:确需多步、动态决定动作</div>
+  <div class="step terminal"><strong>④ + agent</strong><br>每升一级都加成本 / 延迟 / 失败模式,且每一级都要在<strong>自己的数据</strong>上用 eval 验证够不够</div>
+</div>
+<figcaption>不是选「最强的」,而是选「能过线的最简单那一档」;想升级,拿需求换复杂度。</figcaption>
+</figure>
+
+<p>更资深的一步,是敢在合适的时候说「<strong>这里根本不该用 LLM</strong>」(Q136)。四种典型情形:</p>
+<ul>
+<li><strong>确定性规则 / 查表 / 正则 / 经典 ML 更便宜可靠</strong>时——能用一张表或一条正则解决的事,没必要请一个概率模型来猜。</li>
+<li>任务需要 LLM <strong>给不了的保证</strong>(精确算术、法律正确、完美一致),且你又不肯为它加重脚手架时。</li>
+<li><strong>延迟 / 成本预算吃不下</strong>一次模型调用时。</li>
+<li>失败<strong>代价很高、又无法安排人在环</strong>兜底时。</li>
+</ul>
+<p>知道 AI <em>不该</em>用在哪,是资深工程师的强信号——它说明你在为结果负责,而不是为技术时髦买单。</p>
+
+<h2>二、build vs buy 与 provider 依赖(Q140 / Q138)</h2>
+<p>「自建还是买平台?」——差的答案凭热情(「我们想练团队 / 想全掌控」),好的答案凭<strong>权衡</strong>:专有数据、差异化、上市速度、总拥有成本(TCO)、风险。</p>
+
+<div class="trio">
+  <div class="cell"><strong>买(Buy)</strong><br><em>该能力不是你的核心差异化、你要快、或厂商的 TCO 更优时</em></div>
+  <div class="cell"><strong>建(Build)</strong><br><em>它是持久竞争优势、你的专有数据 / 工作流能创造厂商拿不到的价值、或合规迫使你掌控时</em></div>
+  <div class="cell"><strong>混合(Hybrid)</strong><br><em>多数企业 AI 的现实:买平台,再用你自己的数据、流程、人工审核去定制</em></div>
+</div>
+
+<p>关键是:<strong>build vs buy 不是整机二选一,而是逐组件的选择</strong>——检索层可以自建、基础模型可以外购、评估和人审留在自己手里。用 <strong>ROI 与切换成本</strong>来表述这个决定,并且因为市场和价格变得很快,要把它当作<strong>定期重估</strong>的事,而非一锤定音。</p>
+
+<p>顺着买这条路,面试官一定追问 <strong>provider 依赖(Q138)</strong>:只押一家供应商是<strong>真实的业务风险</strong>——它的定价、可用性、模型行为、条款都可能变,而且一次<em>静默的模型更新</em>就可能让你原本调好的功能悄悄回归(regress)。缓解不靠恐慌,靠几手常规工程:</p>
+<ul>
+<li>把 provider <strong>抽象在一个内部接口后面</strong>,让切换成本尽量低。</li>
+<li><strong>pin 住模型版本</strong>,并留一套回归 eval,新版本一上就能抓到行为漂移。</li>
+<li>定期<strong>在你自己的任务上评测替代品</strong>——包括可自托管的开源权重,让「换得动」这件事始终成立。</li>
+</ul>
+<p>注意分寸:不必从第一天就并联多个 provider(那是过早的复杂度),但要<strong>保留选项、并清楚知道切换成本有多大</strong>。</p>
+
+<h2>三、证明价值 · 原型到生产的鸿沟 · human-in-loop(Q137 / Q141 / Q142)</h2>
+
+<h3>怎么证明 AI 功能真交付了价值(Q137)</h3>
+<p>把指标<strong>绑到用户 / 业务结果</strong>,而不是模型跑分:任务成功率 / 解决率、deflection(自助分流)、省下的时间、转化、减少的人工;再配上一层技术健康度——eval 质量、幻觉 / 错误率、延迟、<strong>每次交互的成本</strong>。两个动作让证明变硬:<strong>对比上线前的基线</strong>,以及<strong>紧盯人工 override / 升级率</strong>(它是「用户到底信不信」的真信号)。逻辑很直白——连不到有人在意的结果,你就无法为成本辩护;而一旦规模化,每次交互的成本都是真金白银。</p>
+
+<h3>为什么很多原型上不了生产,如何 de-risk(Q141)</h3>
+<p>demo 展示的是<strong>少数精选输入的快乐路径</strong>;生产要面对完整而杂乱的真实分布、对抗性输入、规模、延迟与成本预算、权限,以及「长期持续证明质量」这件苦差。所以鸿沟通常<strong>不在核心能力</strong>,而在<strong>评估、可靠性,和那些不体面的边角</strong>——答不了的问题、工具调错、prompt 注入、模型更新后的回归。</p>
+<div class="pipeline">
+  <div class="node"><span class="n-title">Demo</span><span class="n-sub">精选输入<br>快乐路径</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">真实分布</span><span class="n-sub">杂乱 / 对抗<br>规模 / 权限</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">鸿沟</span><span class="n-sub">评估 · 可靠性<br>不体面的边角</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">能上线</span><span class="n-sub">eval + 监控<br>+ 人在环</span></div>
+</div>
+<p>de-risk 的做法很具体:<strong>早早建立 eval 集与失败处理</strong>、<strong>在真实数据而非 demo 输入上测</strong>、<strong>首发就把范围收窄</strong>并配上监控与人在环。能真正上线的团队,把「让它可靠并证明它可靠」当成正经的活,而不是收尾时的点缀。</p>
+
+<h3>human-in-loop 放哪、如何随时间变(Q142)</h3>
+<p>人不是到处兜一层的通用保险,而是<strong>绑着风险的刻意设计</strong>:把人放在<strong>错误代价高、且模型在这类样本上的可靠性还没被证明</strong>的地方——批准不可逆 / 高价值动作、处理低置信度输出、给边界样本打标注(这些标注反过来喂 eval 和改进循环)。低风险路径给<strong>抽样审计</strong>就够,不必逐条人审。</p>
+<p>它还会<strong>随时间移动</strong>:当 eval 和监控证明模型在某个范围内已经可靠,就把人从「逐条审」挪到「抽查 + 异常处理」;而 override 率本身,就是一张「系统哪里还弱」的地图。</p>
+
+<h2>四、LLM 独有的技术债 · 设计以受益于模型进步(Q145 / Q143)</h2>
+<p>除了常规代码债,LLM 系统还背着几笔<strong>独有的债</strong>:</p>
+<ul>
+<li><strong>prompt 债</strong>:一堆无文档、无测试、没人敢碰的 prompt 微调。</li>
+<li><strong>eval 债</strong>:eval 集陈旧或干脆没有——于是你<em>不能安全地改任何东西</em>。</li>
+<li><strong>上下文与记忆臃肿</strong>:越塞越多,又贵又慢还稀释信号。</li>
+<li><strong>脆弱脚手架</strong>:为绕开旧模型局限写的一堆补丁。</li>
+<li><strong>版本隐藏耦合</strong>:整套行为悄悄绑死在某个模型版本上。</li>
+</ul>
+<p>管理它们的手段互相咬合:<strong>版本化 prompt 与 eval</strong>、把 eval 集当作<strong>活的基础设施</strong>持续维护、<strong>定期剪掉</strong>那些新模型已经让它多余的绕行、保持 provider 抽象干净好让升级便宜。</p>
+
+<div class="keydef">
+<dt>最危险的一种形态</dt>
+<dd><strong>没有 eval 的系统</strong>——那样每一次改动都是一场赌博,债务隐形,直到生产环境里爆掉才被看见。所以顺序是固定的:<strong>先让质量可测,再谈还债</strong>。</dd>
+</div>
+
+<p>把这条思路正着用,就是 <strong>Q143:如何设计才能吃到「模型变强、变便宜」的红利,而不是被今天的模型套牢</strong>——</p>
+<ul>
+<li>把 provider / 模型<strong>抽象在接口后</strong>。</li>
+<li><strong>prompt 与 eval 版本化</strong>,让「一下午就能在新模型上重测一遍」成为可能。</li>
+<li>别硬编码那些只为补今日模型弱点的脚手架(明天它就是负债)。</li>
+<li>维护<strong>任务特定的 eval</strong>,好让更好 / 更便宜的模型来时,你能<em>客观量化</em>升级值不值。</li>
+<li>把「用哪个模型」当成<strong>定期决策</strong>,而不是一次性选型。</li>
+</ul>
+<p>目标只有一句:让「换新模型」变成<strong>一次 config 改动 + 重跑一遍 eval</strong>,而不是一次重写。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「prompting / RAG / 微调 / agent 怎么选?」——匹配需求、从最简单能过线的起、每升一级拿需求换复杂度,并在自己数据上用 eval 验。</li>
+<li>「那什么时候干脆别用 LLM?」——确定性规则 / 经典 ML 更划算、要 LLM 给不了的保证、预算吃不下、失败代价高又无法人在环;知道不该用在哪是资深信号。</li>
+<li>「build 还是 buy?」——按差异化 / 专有数据 / 上市速度 / TCO / 风险,而非热情;多数是混合,且逐组件决定。</li>
+<li>「只依赖一家 provider 有什么风险、怎么缓解?」——定价 / 条款 / 静默更新会回归你的功能;抽象在接口后、pin 版本 + 回归 eval、定期评替代(含开源权重)。</li>
+<li>「怎么证明这功能真交付了价值?」——绑业务 / 用户结果、对基线、盯 override / 升级率;别拿模型分交差。</li>
+<li>「为什么原型上不了生产?」——demo 是快乐路径,鸿沟在评估 / 可靠性 / 边角;de-risk 靠早建 eval + 真实数据测 + 窄范围首发。</li>
+<li>「human-in-loop 放哪、以后怎么变?」——放高代价且可靠性未证处;可靠后从逐条审移到抽查与异常处理。</li>
+<li>「LLM 系统有什么独有技术债、怎么设计才能受益于模型进步?」——prompt 债 / eval 债 / 脆弱脚手架 / 版本耦合;版本化 + 干净抽象,让换模型只是 config 改动 + 重跑 eval。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(凡遇绝对化说法,先找反例):</strong></p>
+<ul>
+<li>别说「能用 LLM 就用 LLM」——确定性规则、查表、经典 ML 常更便宜更可靠,能说清「哪不该用」才加分。</li>
+<li>别说「核心能力就一定要自建」——build / buy 是按差异化与专有数据权衡的,多数企业 AI 是混合,不同组件可以不同选择。</li>
+<li>别说「多 provider 必须从第一天就上」——过早并联是复杂度成本;关键是抽象干净、保留选项、知道切换成本,而非一开始就并接多家。</li>
+<li>别拿 benchmark 分当价值证明——分高不等于用户 / 业务结果变好,要对基线、看 override 与升级率。</li>
+<li>别把 human-in-loop 当「哪儿都兜一层」的万能保险——它是绑风险的刻意设计,低风险路径逐条人审反而是浪费。</li>
+<li>「没有 eval 也能慢慢改」是错的——没 eval 时每次改动都是赌,债隐形直到生产爆;先让质量可测,再还债。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>面对一个新需求,在 prompting / RAG / 微调 / agent 之间,哪种取法最稳妥?</p>
+<details><summary>A. 直接上 agent,能力最全、一步到位,省得以后返工重做</summary>反了。agent 失败面最大、成本延迟最高;能力过剩不是优点,是负债。</details>
+<details><summary>B. 从最简单能过线的方案起,每加一级都拿真实需求换复杂度,并在自己数据上用 eval 验证 ✅</summary>正确。匹配工具与需求、用需求换复杂度、eval 兜底,是这道题的标准答法。</details>
+<details><summary>C. 凡涉及私有知识就一律微调,把知识焊进权重最稳最可靠可控</summary>错。易变私有知识走 RAG(保鲜、可审计);微调装事实会陈旧、难溯源。</details>
+<details><summary>D. 按团队最熟悉的技术栈来选,降低学习成本才是第一考量</summary>熟悉度不是选型依据;脱离需求选型,过线与否全靠运气。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>下列哪种 LLM 系统的技术债<strong>最危险</strong>?</p>
+<details><summary>A. prompt 堆积、无文档也没人敢动,但功能目前还能正常跑起来</summary>是债,但功能可观测;真正致命的是连「有没有变坏」都看不见。</details>
+<details><summary>B. 上下文与记忆逐渐臃肿,拖慢了响应也抬高了每次调用成本</summary>确是债,可度量、可优化;不至于让你「不敢改」。</details>
+<details><summary>C. 系统完全没有 eval,任何改动都是一场赌,债务隐形直到生产环境爆掉 ✅</summary>正确。没有 eval = 质量不可测,是最危险的形态;先让质量可测,再谈还债。</details>
+<details><summary>D. 为绕开旧模型局限写的一堆脚手架,新模型出来后一直没删</summary>是该定期修剪的债,但它可见、可评估,风险远低于「根本没有 eval」。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与延伸(都可直接检索到):</p>
+<ul>
+<li><strong>Anthropic Engineering,「Building Effective Agents」</strong>——「从最简单方案起、按需才加复杂度」以及「何时该 / 不该用 agent」的官方论述,正对本课的四选一原则。</li>
+<li><strong>《AI Engineering》(Chip Huyen, O'Reilly)</strong>——系统覆盖评估(eval)、build vs buy、以及原型到生产的工程化,是本课判断题的成书参考。</li>
+<li><strong>OWASP Top 10 for LLM Applications</strong>——把生产「不体面的边角」(prompt 注入等)列成清单,对应 de-risk 与 human-in-loop 该防什么。</li>
+<li><strong>Lewis et al., 2020(RAG 原论文)</strong>——四选一里 RAG 分支的一手来源;想弄清「什么时候该检索而非微调」可回到此。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>选型从最简单能过线的起、拿需求换复杂度;build/buy 看差异化与专有数据、留住 provider 切换选项;价值绑业务结果而非跑分;原型到生产的鸿沟在评估与可靠性——而 eval 是选型、证价值、de-risk、还债、吃模型红利这一切共同的底座。</strong></p>
+<nav class="lesson-nav">
+<a href="0030-system-design.html">← 上一课:系统设计方法论与案例</a>
+<span class="none"></span>
+</nav>
+</footer>
+</main>
+</body>
+</html>

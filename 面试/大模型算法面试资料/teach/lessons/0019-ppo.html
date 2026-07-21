@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0019 · PPO:近端策略优化</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第五部分 对齐与强化学习 · 第 0019 课</p>
+<h1>PPO:近端策略优化</h1>
+<p class="lede">RLHF 那条「SFT → 奖励模型 → 强化学习」流水线里,最后一步的默认优化器就是 PPO。面试问对齐几乎必落到它,而且爱追三连问:为什么要 <strong>clip</strong>、$\epsilon$ 到底在管什么、它和 TRPO 是什么关系。这节课把 PPO 拆成 actor-critic、重要性采样、clip 目标、KL 惩罚四块,让你既画得出流程,也答得出每一块「为什么非要它不可」。</p>
+
+<div class="recall">
+<p>上节课(强化学习基础)我们说清了框架:agent 在环境里根据策略 $\pi$ 采取 action、拿到 reward,目标是最大化累积回报;还分了 value-based 与 policy-based 两条路。policy gradient 直接对策略参数求梯度往上爬。<strong>先别往下看,想一个问题:如果每一步梯度都放开了走,策略一次更新迈太大、直接跳到一个很差的分布,会发生什么?为什么这在语言模型上格外危险?</strong></p>
+</div>
+
+<h2>一、先把问题摆正:policy gradient 的「步子」很难控</h2>
+<p>朴素的策略梯度目标是:</p>
+$$L^{PG}(\theta)=\mathbb{E}_t\big[\log \pi_\theta(a_t\mid s_t)\,\hat{A}_t\big]$$
+<p class="formula-note">在语言模型里,状态 $s_t$ 是「prompt + 已生成的 token」,动作 $a_t$ 是「下一个 token」,$\hat{A}_t$ 是这一步好不好的度量(优势)。</p>
+<p>问题出在:这个目标对同一批采样数据只该走「一小步」。走大了,新策略离采样时的策略太远,采到的数据对新策略已经不再有代表性,估计出的梯度方向就不可信——一次坏更新可能让策略崩掉,而且没法回退。RL 训练本来方差就大,语言模型动辄上百亿参数、一条轨迹几百个 token,崩一次代价极高。</p>
+<p>怎么办?两个思路:TRPO 用一个<strong>硬约束</strong>把每步的 KL 变化摁在一个信任域里(要解带约束的二阶优化,又贵又难实现);PPO 则说——别搞那么重,我用一个<strong>便宜的一阶技巧</strong>把「步子别迈太大」这件事近似做出来。这个技巧就是 clip。</p>
+
+<h2>二、Actor-Critic:一个演,一个评</h2>
+<p>PPO 是 actor-critic 架构,同时维护两张网络:</p>
+<div class="trio">
+  <div class="cell"><strong>Actor(策略网络 $\pi_\theta$)</strong><br>负责「演」<br><em>给定状态输出动作分布,即下一个 token 的概率</em></div>
+  <div class="cell"><strong>Critic(价值网络 $V_\phi$)</strong><br>负责「评」<br><em>估计从当前状态出发的期望回报,当基线</em></div>
+  <div class="cell"><strong>优势 $\hat{A}_t$</strong><br>两者之差<br><em>这一步比「平均水平」好多少</em></div>
+</div>
+<p>为什么要 critic?因为直接用回报 $R_t$ 当权重,方差太大。减掉一个基线 $V_\phi(s_t)$——「这个状态本来大概能拿多少分」——只保留「超出预期的部分」,梯度就稳得多:</p>
+$$\hat{A}_t = R_t - V_\phi(s_t)$$
+<p class="formula-note">这是最简形式;实践里常用 GAE(Generalized Advantage Estimation)在偏差和方差之间取平衡。优势为正 → 这步动作比平均好,该提高它的概率;为负 → 该压低。</p>
+
+<h2>三、重要性采样:让一批数据能多学几步</h2>
+<p>PPO 是 on-policy 的,但为了样本效率,它会拿同一批 rollout 反复更新几轮。问题是:第一次梯度一走,当前策略 $\pi_\theta$ 就不再等于采样时的旧策略 $\pi_{\theta_{\text{old}}}$ 了。用旧策略采的数据去更新新策略,得做<strong>重要性采样</strong>校正,乘上一个比值:</p>
+$$r_t(\theta)=\frac{\pi_\theta(a_t\mid s_t)}{\pi_{\theta_{\text{old}}}(a_t\mid s_t)}$$
+<p class="formula-note">$r_t=1$ 表示新旧策略在这个动作上概率一样;$r_t&gt;1$ 表示新策略更爱这个动作,$r_t&lt;1$ 表示更不爱。目标随之写成 $\mathbb{E}_t[r_t(\theta)\,\hat{A}_t]$。</p>
+<p>但只有这个比值还不够:如果某步优势为正,目标会一味鼓励把 $r_t$ 推到无穷大——一步就把这个 token 的概率拉爆,正是我们最怕的「步子太大」。于是有了 clip。</p>
+
+<h2>四、PPO 的核心:clip 目标</h2>
+<dl class="keydef">
+<dt>Clipped Surrogate Objective(截断代理目标)</dt>
+<dd>$$L^{CLIP}(\theta)=\mathbb{E}_t\Big[\min\big(r_t(\theta)\,\hat{A}_t,\ \operatorname{clip}(r_t(\theta),\,1-\epsilon,\,1+\epsilon)\,\hat{A}_t\big)\Big]$$</dd>
+<dd><em>$\operatorname{clip}(x,1-\epsilon,1+\epsilon)$ 把 $r_t$ 夹在 $[1-\epsilon,\,1+\epsilon]$ 里(常取 $\epsilon=0.1\sim0.2$)。外层 $\min$ 在「原始项」和「截断项」里取更小(更保守)的那个。</em></dd>
+</dl>
+<p>关键在于 <strong>clip 和 min 的配合</strong>。分两种情况想:</p>
+<ul>
+<li><strong>优势为正($\hat{A}_t&gt;0$,好动作)</strong>:想提高概率。可一旦 $r_t$ 超过 $1+\epsilon$,截断项被钉在 $(1+\epsilon)\hat{A}_t$ 不再增长,$\min$ 选中它,梯度归零——<em>再想往上推也没有奖励了</em>,步子被卡住。</li>
+<li><strong>优势为负($\hat{A}_t&lt;0$,坏动作)</strong>:想压低概率。一旦 $r_t$ 掉到 $1-\epsilon$ 以下,同理被 $\min$ 卡住,不再继续压。</li>
+</ul>
+<p>而如果策略是往「错误方向」跑偏(比如好动作的概率反被压到远低于旧策略),$\min$ 会选中未截断项,让梯度继续把它拉回来。一句话:<strong>clip 只封住「朝优势方向过度前进」的收益,却不挡「往回修正」</strong>。这就把每步更新限制在旧策略附近的一个「近端(proximal)」区域里——名字由此而来。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">Prompt</div>
+  <div class="node">Actor $\pi_\theta$<br>生成 response</div>
+  <div class="node">RM 打分<br>+ KL(vs $\pi_{\text{ref}}$)</div>
+  <div class="node">Critic $V_\phi$<br>→ 优势 $\hat{A}_t$</div>
+  <div class="node good">PPO clip<br>更新 $\pi_\theta$</div>
+</div>
+<figcaption>RLHF 里 PPO 的一轮闭环:策略生成 → 奖励模型打分并减去 KL 惩罚 → critic 估优势 → clip 目标小步更新策略。</figcaption>
+</figure>
+
+<h2>五、KL 惩罚:别把话说得面目全非</h2>
+<p>clip 管的是「相对上一批的步子」,但整个 RL 过程跑久了,策略可能一路飘到一个能骗高 RM 分、却语无伦次的分布上——这就是 reward hacking(奖励作弊)。为此再加一道 KL 惩罚,把策略锚在<strong>冻结的参考模型</strong> $\pi_{\text{ref}}$(通常就是 SFT 后的初始模型)附近:</p>
+$$r_t = r_{\text{RM}} - \beta\big(\log\pi_\theta(a_t\mid s_t)-\log\pi_{\text{ref}}(a_t\mid s_t)\big)$$
+<p class="formula-note">这是 RLHF 常见做法:把 $\mathrm{KL}(\pi_\theta\Vert\pi_{\text{ref}})$ 的逐 token 估计从奖励里扣掉;$\beta$(常见量级约 0.01)是惩罚强度。$\beta$ 越大越保守、越贴近原模型;越小越敢改、但越容易跑偏或作弊。</p>
+<p><strong>务必分清两个「参照」</strong>:重要性采样比 $r_t$ 的分母是 $\pi_{\theta_{\text{old}}}$(采样时那一批的旧策略,会周期性更新);KL 惩罚锚定的是 $\pi_{\text{ref}}$(全程冻结的 SFT 模型)。它们是两个不同的东西,面试最爱在这儿设坑。</p>
+
+<h2>六、它在 RLHF 里干的活</h2>
+<p>把整条线串起来:先 SFT 得到基础模型;再用人类偏好数据训一个奖励模型 RM 给回答打分;最后 PPO 出场——<strong>它要做的,就是调策略参数 $\theta$,让模型生成的回答拿到尽可能高的 RM 分,同时被 KL 拴住别偏离 SFT 模型太远</strong>。奖励信号来自 RM(而非可微的标签),这正是「为什么要用 RL 而不是继续 SFT」的答案:SFT 只能模仿固定示范,RL 能直接优化一个不可微、整体性的偏好奖励,并在示范之外探索更好的回答。</p>
+
+<div class="implement">
+<p>把 clip 目标翻译成代码,自己敲一遍(注意 <code>logp_old</code> 采样时就固定、不带梯度):</p>
+<pre><code>import torch
+import torch.nn.functional as F
+
+def ppo_clip_loss(logp_new, logp_old, logp_ref, advantages,
+                  V_pred, returns, epsilon=0.2, c1=0.5, beta=0.01):
+    # logp_new: 当前策略对已采样动作的 log 概率(带梯度)
+    # logp_old: 采样时旧策略的 log 概率(no_grad,固定)—— 用于重要性采样
+    # logp_ref: 冻结参考模型的 log 概率(no_grad)—— 用于 KL 惩罚
+    ratio = torch.exp(logp_new - logp_old)                 # r_t = π_new / π_old
+    surr1 = ratio * advantages
+    surr2 = torch.clamp(ratio, 1 - epsilon, 1 + epsilon) * advantages
+    policy_loss = -torch.min(surr1, surr2).mean()          # 负号:最大化目标 = 最小化 loss
+
+    value_loss = F.mse_loss(V_pred, returns)               # critic 回归到实际回报
+    approx_kl  = (logp_new - logp_ref).mean()              # KL(π_θ ‖ π_ref) 的估计
+
+    return policy_loss + c1 * value_loss + beta * approx_kl</code></pre>
+<p>三个 <code>logp</code> 来自三个不同模型:当前策略(带梯度)、旧策略快照、冻结参考。分不清它们,就是分不清 PPO。</p>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「PPO 为什么要 clip?」——防止一次更新迈太大导致策略崩;用便宜的一阶截断,把步子限制在旧策略的近端区域,不需要 TRPO 那样解二阶约束。</li>
+<li>「$\epsilon$ 是干嘛的,调大调小什么影响?」——它是信任域宽度。大($\to$0.3+)步子大、收敛可能快但不稳;小($\to$0.1)更保守更稳但慢。常用 0.1~0.2。</li>
+<li>「PPO 和 TRPO 什么关系?」——一句话:TRPO 用带约束的二阶优化把每步 KL 硬摁在信任域里,PPO 用一阶 clip 廉价地近似同一个「小步」思想,工程上简单太多。</li>
+<li>「actor 和 critic 各是什么?为什么要 critic?」——actor 是策略网络出动作,critic 是价值网络当基线,减基线是为了降方差、让优势估计更稳。</li>
+<li>「KL 惩罚锚的是哪个模型?」——冻结的参考(SFT)模型 $\pi_{\text{ref}}$,不是重要性采样比里的旧策略 $\pi_{\theta_{\text{old}}}$。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把 $\pi_{\theta_{\text{old}}}$(重要性采样比的分母,周期性更新)和 $\pi_{\text{ref}}$(KL 惩罚锚点,全程冻结)混为一谈——这是两个不同模型。</li>
+<li>以为 clip 是硬约束。它只是启发式的一阶近似,并<strong>不</strong>保证 KL 被严格限死;必要时还得靠 KL 惩罚项或 early-stop 兜底。</li>
+<li>只 clip 不用 $\min$ 是不行的:没有 $\min$ 取保守项,单纯截断挡不住往错误方向的更新,也拿不到「过度前进给零梯度」的效果。</li>
+<li>把 PPO 当成能任意复用旧数据的 off-policy 方法——它偏 on-policy,重要性采样比只在离旧策略不远时才可信,一批数据别重复更新太多轮。</li>
+<li>忘了给优势做标准化 / 忘了基线,梯度方差会大到训练难以推进。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>PPO 的 clip 目标里那个外层 $\min(\cdot)$ 起什么作用?</p>
+<details><summary>A. 把两个代理项相加以增大梯度</summary>不对。是取二者的最小值,而不是相加。</details>
+<details><summary>B. 保证优势估计 $\hat{A}_t$ 恒为非负</summary>不对。优势有正有负,$\min$ 不改变它的符号。</details>
+<details><summary>C. 取更保守的一项,让「朝优势方向的过度前进」被封顶、一步更新不越出信任域 ✅</summary>正确。优势为正且 $r_t$ 超过 $1+\epsilon$ 时,截断项被 $\min$ 选中,梯度归零,不再继续推;但往回修正仍被允许。</details>
+<details><summary>D. 把 $r_t$ 归一化到 $[1-\epsilon,1+\epsilon]$ 区间</summary>不对。夹范围是 <code>clip</code> 干的,$\min$ 的职责是「取保守项」。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 PPO 里的两个「参照」策略,下面哪个说法正确?</p>
+<details><summary>A. $\pi_{\theta_{\text{old}}}$ 和 $\pi_{\text{ref}}$ 是同一个模型,叫法不同而已</summary>不对。它们分工不同、更新节奏也不同。</details>
+<details><summary>B. 重要性采样比 $r_t=\pi_\theta/\pi_{\theta_{\text{old}}}$ 用采样时的旧策略;KL 惩罚锚定的是冻结的参考(SFT)模型,二者不是一回事 ✅</summary>正确。$\pi_{\theta_{\text{old}}}$ 会随训练周期性刷新,$\pi_{\text{ref}}$ 全程冻结。</details>
+<details><summary>C. PPO 训练中根本不需要任何参考模型</summary>不对。RLHF 里的 KL 惩罚正是靠冻结参考模型来防跑偏。</details>
+<details><summary>D. $\pi_{\text{ref}}$ 每一步都跟着当前策略更新</summary>不对。参考模型全程冻结,才能当稳定的锚点。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Proximal Policy Optimization Algorithms</strong>(Schulman et al., 2017)——PPO 原始论文,clip 目标 $L^{CLIP}$ 即出自此。</li>
+<li><strong>Trust Region Policy Optimization</strong>(Schulman et al., 2015)——TRPO,理解 PPO「近端」思想的前身。</li>
+<li><strong>High-Dimensional Continuous Control Using GAE</strong>(Schulman et al., 2016)——优势估计 $\hat{A}_t$ 的 GAE 出处。</li>
+<li><strong>Training language models to follow instructions with human feedback</strong>(Ouyang et al., 2022,InstructGPT)——PPO 用于 RLHF 的完整流水线。</li>
+<li>下一步:去掉 critic、用组内相对优势的 GRPO,以及绕开 RL 循环的 DPO(第 0020 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>PPO = actor-critic + 重要性采样比 $r_t$,用 clip 把每步更新摁在旧策略近端、再加 KL 惩罚锚住参考模型,目标是最大化 RM 分而不跑偏。</strong></p>
+<nav class="lesson-nav">
+<a href="0018-rl-basics.html">← 上一课:强化学习基础</a>
+<a href="0020-dpo-grpo-gspo.html">下一课:DPO / GRPO / GSPO →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

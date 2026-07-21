@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0044 · 字符串搜索:朴素到 KMP</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0044 课 · 更多结构与文本 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>字符串搜索:朴素到 KMP</h1>
+
+<p class="lede">「在文本 <code>T</code> 里找模式串 <code>P</code> 第一次出现的位置」——这是 <code>strStr</code> / <code>indexOf</code> 背后的问题。朴素法一眼就会写,但它把主串指针反复往回拉,做了大量重复比较。这节课讲清朴素法浪费在哪,以及 <strong>KMP 凭什么能让主串指针「只进不退」</strong>,把最坏 O(nm) 压到 O(n+m)。</p>
+
+<div class="recall">
+<p>先回忆<a href="0012-hash-table-intro.html">哈希表</a>那节:哈希函数把任意数据压成一个整数指纹,让「相等判断」变得极快。等下你会看到,同一个想法可以用来做子串匹配——把一个窗口的字符串滚成一个哈希值,这就是 Rabin-Karp。先想想:如果两个窗口哈希值相等,能直接断定字符串相等吗?</p>
+</div>
+
+<h2>一、问题:子串匹配到底在算什么</h2>
+
+<p>给定长度为 <code>n</code> 的文本 <code>T</code> 和长度为 <code>m</code> 的模式 <code>P</code>(通常 <code>m ≤ n</code>),要找出 <code>P</code> 在 <code>T</code> 里出现的位置。朴素做法:把 <code>P</code> 对齐到 <code>T</code> 的每一个起点,逐字符比对;一处不匹配,就把 <code>P</code> 整体右移一格,<strong>从头再比</strong>。</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell on">A</div>
+  <div class="cell on">B</div>
+  <div class="cell on">A</div>
+  <div class="cell on">B</div>
+  <div class="cell hi">A</div>
+  <div class="cell">B</div>
+  <div class="cell">C</div>
+  <div class="cell">A</div>
+</div>
+<div class="cells">
+  <div class="cell on">A</div>
+  <div class="cell on">B</div>
+  <div class="cell on">A</div>
+  <div class="cell on">B</div>
+  <div class="cell hi">C</div>
+</div>
+<figcaption>文本(上)与模式 <code>ABABC</code>(下)对齐。前 4 位都配上了(绿),第 5 位 <code>A</code>≠<code>C</code> 失配(红)。朴素法此时把模式右移一格,主串指针回退到起点 +1 重新比——刚刚确认过的 <code>ABAB</code> 白比了。</figcaption>
+</figure>
+
+<p>失配处的信息其实被浪费了:我们<strong>已经知道</strong>文本这一段是 <code>ABAB</code>。朴素法却装作没见过,退回去逐格重比。当文本和模式充满重复前缀时(如 <code>AAAA…A</code> 找 <code>AAAB</code>),这种重比在每个起点都发生,总代价逼近 <strong>O(nm)</strong>。</p>
+
+<h2>二、KMP:主串指针只进不退</h2>
+
+<p>KMP(Knuth-Morris-Pratt)的洞察是:失配时,不该把主串指针 <code>i</code> 往回拉,而该<strong>只挪动模式指针 <code>j</code></strong>。挪到哪?挪到「已匹配的那段前缀里,最长的、既是前缀又是后缀的那部分」的末尾——这个长度由预先算好的 <strong>next 数组</strong>(也叫失配函数 / LPS,最长公共前后缀)给出。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node good"><span class="n-title">匹配中</span><span class="n-sub">i,j 同步前进</span></div>
+  <div class="arrow">→</div>
+  <div class="node bad"><span class="n-title">失配</span><span class="n-sub">P[j]≠T[i]</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">查 next[j]</span><span class="n-sub">j 跳到 next[j]</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">i 原地不动</span><span class="n-sub">继续比 T[i]</span></div>
+</div>
+<figcaption>关键:失配时 <code>i</code>(主串指针)<strong>从不后退</strong>,只把 <code>j</code> 按 next 数组回跳。因为 next[j] 记住了「已匹配前缀里能复用的那段」,那段一定和文本当前位置之前的字符对上,不必重比。</figcaption>
+</figure>
+
+<p>为什么 <code>i</code> 可以不退?因为失配前那段文本我们完全掌握——它等于模式的前 <code>j</code> 个字符。模式右移后要重新对齐的部分,答案早就藏在「前缀=后缀」的重叠里。next 数组把这个重叠预计算出来,查表就能跳,<strong>不用回头再看文本</strong>。主串每个字符至多被「命中前进」一次、被「回跳触发比较」常数次,于是匹配阶段是 O(n),加上构建 next 的 O(m),合计 <strong>O(n+m)</strong>。</p>
+
+<p>顺带认识两个亲戚:<strong>Rabin-Karp</strong> 用滚动哈希,把每个长度 <code>m</code> 的窗口 O(1) 更新出哈希值,哈希相等再逐字符确认,平均 O(n+m),擅长<strong>多模式匹配</strong>和「最长重复子串」;<strong>Boyer-Moore</strong> 从模式尾部往前比、失配时能一次跳过很多字符,实际文本里常常<strong>亚线性</strong>,是 grep 等工具的底子。</p>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>模式 / 文本(pattern / text)</dt>
+<dd>要找的短串叫模式 <code>P</code>(长 <code>m</code>),被搜索的长串叫文本 <code>T</code>(长 <code>n</code>)。子串匹配即求 <code>P</code> 在 <code>T</code> 中的出现位置。</dd>
+<dt>next 数组 / 失配函数(LPS)</dt>
+<dd>对模式的每个前缀,预计算「最长的、既是它真前缀又是它真后缀的子串」的长度。失配时模式指针据此回跳,是 KMP 免于回退主串的核心。<em>避免</em>把它和「跳表」「后缀数组」混为一谈。</dd>
+<dt>滚动哈希(rolling hash)</dt>
+<dd>把定长窗口的字符串映射成整数,窗口右移一位时用 O(1) 增量更新,而非重算整段。Rabin-Karp 用它做候选筛选。</dd>
+</dl>
+
+<h2>四、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">算法</th><th>预处理</th><th>匹配 平均</th><th>匹配 最坏</th></tr></thead>
+<tbody>
+<tr><td class="op">朴素法(brute force)</td><td class="best">无</td><td>O(n+m)~O(nm)</td><td class="warn">O(nm)</td></tr>
+<tr><td class="op">KMP</td><td>O(m)</td><td class="best">O(n)</td><td class="best">O(n) <small>(+m 预处理)</small></td></tr>
+<tr><td class="op">Rabin-Karp</td><td>O(m)</td><td class="best">O(n+m)</td><td class="warn">O(nm) <small>(哈希全冲突)</small></td></tr>
+<tr><td class="op">Boyer-Moore</td><td>O(m+σ)</td><td class="best">亚线性(常见)</td><td class="warn">O(nm) <small>(经典版)</small></td></tr>
+</tbody>
+</table>
+<p>空间上 KMP 需要 O(m) 存 next 数组。注意最坏栏:朴素法与 Rabin-Karp 在极端输入下都会退化到 O(nm),别把它们当成稳定 O(n)。KMP 是唯一在最坏情况也保证线性的常见算法。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>直接考「手写 <code>strStr</code>/<code>indexOf</code>」的机会其实不多,但相关套路很密集:</p>
+<ul>
+<li><strong>让你实现子串查找</strong>:先写朴素法讲清 O(nm),再说「可以用 KMP 优化到 O(n+m)」——能讲出「主串指针不回退」这一句,就赢过大多数只会背名字的人。</li>
+<li><strong>滚动哈希题</strong>:「最长重复子串」「判断字符串旋转」「多模式匹配」常用 Rabin-Karp;哈希相等后<strong>必须逐字符复核</strong>以排除碰撞,这是加分点。</li>
+<li><strong>被追问原理</strong>:面试官爱问「KMP 为什么快」。答:朴素法丢掉了已匹配信息,KMP 用 next 数组把这段信息复用,使主串每个字符只被扫常数次。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「朴素法是 O(n)」——错。</strong>它最坏是 O(nm),典型触发输入是大量重复字符(如 <code>T=</code>"AAAA…A"、<code>P=</code>"AAA…B")。面试里说朴素法复杂度时务必带上「最坏 O(nm)」。</p>
+<p><strong>next 数组构建极易写错。</strong>它本质是「模式自己和自己做一次 KMP」:边界(<code>next[0]</code> 通常记 0 或 -1,取决于约定)、回跳条件、下标是「已匹配长度」还是「当前位置」——这些细节一处不一致就死循环或漏匹配。写之前先把约定钉死,再在纸上跑 <code>ABABC</code> 验证。</p>
+</div>
+
+<div class="implement">
+<p>动手清单:</p>
+<p>1. 写朴素 <code>strStr(T, P)</code>,返回首次出现下标或 -1。用 <code>T="mississippi"</code>、<code>P="issip"</code> 验证,并打印总比较次数。</p>
+<p>2. 写 <code>buildNext(P)</code> 生成 next 数组,对 <code>P="ababc"</code> 手算一遍再和程序对照。</p>
+<p>3. 用 next 数组写完整 KMP,喂它一个「全 A + 尾部一个 B」的对抗输入,对比朴素法的比较次数——亲眼看 O(nm) 塌成 O(n)。</p>
+<p>4. 选做:写 Rabin-Karp,记得哈希命中后逐字符复核。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>字符串匹配的一切加速,本质都在「不重复扫已经看过的文本」。KMP 用 next 数组记住已匹配前缀,让主串指针只进不退,于是 O(nm) → O(n+m)。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:KMP 相比朴素法,把复杂度从 O(nm) 降到 O(n+m),最核心的原因是下面哪一个?</summary>
+<div class="answer">
+<p><strong>失配时主串指针 <code>i</code> 从不回退,只回跳模式指针 <code>j</code>。</strong>朴素法每次失配都把 <code>i</code> 拉回起点附近重扫,浪费了「已匹配前缀」这一信息;KMP 用预计算的 next 数组把这段信息复用,使文本每个字符只被扫常数次。干扰项「因为用了哈希」说的是 Rabin-Karp;「因为从尾部比」说的是 Boyer-Moore——都不是 KMP 的机制。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:用 Rabin-Karp 做子串查找,某个窗口的滚动哈希和模式的哈希相等。下一步应该?</summary>
+<div class="answer">
+<p><strong>逐字符复核这个窗口是否真的等于模式。</strong>哈希相等只说明「可能相等」,不同字符串可能碰撞到同一哈希(假阳性)。不复核就直接报命中,遇到碰撞会给出错误答案;正因为存在碰撞,Rabin-Karp 最坏可退化到 O(nm)。这与后面布隆过滤器「可能存在需复核、一定不存在可信」的思路同源。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲「字符串搜索和操作」小节。Sedgewick 的 Coursera《算法 II》把四种算法讲得最系统,建议按顺序看:</p>
+<ul>
+<li><a href="https://www.coursera.org/learn/algorithms-part2/lecture/2Kn5i/brute-force-substring-search">子字符串搜寻──暴力法(视频)</a> —— 先建立朴素法的直觉。</li>
+<li><a href="https://www.coursera.org/learn/algorithms-part2/lecture/TAtDr/knuth-morris-pratt">KMP 算法(视频)</a> —— 本课重点,看它怎么讲 next 数组。</li>
+<li><a href="https://www.coursera.org/learn/algorithms-part2/lecture/3KiqT/rabin-karp">Rabin-Karp 算法(视频)</a> 与 <a href="https://www.coursera.org/learn/algorithms-part2/lecture/CYxOT/boyer-moore">Boyer-Moore 算法(视频)</a> —— 认识两个亲戚。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「为什么主串指针能不回退」,或带你在纸上把 <code>ababc</code> 的 next 数组一格一格推出来。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0043-concurrency-primitives.html"><span class="dir">← 上一课</span>并发原语:锁、信号量与竞态</a>
+  <a class="next" href="0045-trie.html"><span class="dir">下一课 →</span>字典树 Trie:前缀即路径</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

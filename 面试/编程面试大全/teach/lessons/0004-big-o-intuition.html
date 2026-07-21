@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0004 · 大 O 记号:只看增长率</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0004 课 · 复杂度基石 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>大 O 记号:只看增长率</h1>
+
+<p class="lede">从这一课起，我们练的是贯穿整套面试的第一样通用基本功：<strong>估算一段代码有多贵</strong>。大 O 不是让你数「跑了几毫秒」，而是回答一个更本质、也更可迁移的问题——<strong>当输入规模 n 翻倍、翻十倍时，工作量会怎么涨？</strong>这节课把这条「只看增长率」的思维方式讲透，它是后面每一节算法课的通用语言。</p>
+
+<div class="recall">
+<p>先回忆：开课这几节聊的都是「进面试前准备什么」——<a href="0003-choosing-a-language.html">上一课</a>刚定下你要用哪门语言刷题。现在换个方向：不管用什么语言，面试官都会盯着你的解法问「这个复杂度是多少」。先自己想一句：为什么他们不问「你这段代码跑几秒」，偏要问那个字母 O？</p>
+</div>
+
+<h2>一、为什么用 Big-O，而不用「秒」</h2>
+
+<p>用秒数衡量算法，有三个致命毛病：<strong>换台机器就变</strong>（新 CPU 快一倍）、<strong>换个语言就变</strong>（C 比 Python 快几十倍）、<strong>换组数据就变</strong>（同一段代码喂 10 个数和喂 1000 万个数完全两回事）。这些都是环境噪声，掩盖了算法本身的好坏。</p>
+
+<p>大 O 把噪声全部抹掉，只留下一件跟机器无关的事实：<strong>工作量随 n 增长的速度</strong>。它做两步简化——<strong>忽略常数系数</strong>（3n 和 100n 都算 O(n)），<strong>忽略低阶项</strong>（n² + n + 5 只看 n²）。因为当 n 足够大时，涨得最快的那一项会碾压其余一切。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 600 300" role="img" aria-label="不同复杂度类随输入规模增长的相对陡峭程度">
+  <line x1="55" y1="255" x2="460" y2="255" class="dgm-edge" stroke-width="1.5"/>
+  <line x1="55" y1="255" x2="55" y2="30" class="dgm-edge" stroke-width="1.5"/>
+  <text x="250" y="288" class="dgm-muted" font-size="12" text-anchor="middle">输入规模 n →</text>
+  <text x="24" y="145" class="dgm-muted" font-size="12" text-anchor="middle" transform="rotate(-90 24 145)">工作量 →</text>
+  <path d="M55,246 L460,242" fill="none" stroke-width="2.4" style="stroke:var(--muted)"/>
+  <path d="M55,250 Q180,222 460,206" fill="none" stroke-width="2.4" style="stroke:var(--good)"/>
+  <path d="M55,252 L460,150" fill="none" stroke-width="2.4" style="stroke:var(--link)"/>
+  <path d="M55,252 Q260,150 460,95" fill="none" stroke-width="2.4" style="stroke:var(--warm)"/>
+  <path d="M55,253 Q345,230 445,34" fill="none" stroke-width="2.4" style="stroke:var(--accent)"/>
+  <path d="M55,253 Q120,242 158,34" fill="none" stroke-width="2.4" stroke-dasharray="5 3" style="stroke:var(--accent)"/>
+  <text x="464" y="245" class="dgm-text" font-size="12" style="fill:var(--muted)">O(1)</text>
+  <text x="464" y="209" class="dgm-text" font-size="12" style="fill:var(--good)">O(log n)</text>
+  <text x="464" y="153" class="dgm-text" font-size="12" style="fill:var(--link)">O(n)</text>
+  <text x="464" y="98" class="dgm-text" font-size="12" style="fill:var(--warm)">O(n log n)</text>
+  <text x="452" y="28" class="dgm-text" font-size="12" style="fill:var(--accent)">O(n²)</text>
+  <text x="120" y="24" class="dgm-text" font-size="12" style="fill:var(--accent)">O(2ⁿ)</text>
+</svg>
+</div>
+<figcaption>同一张图上六条曲线的<strong>相对陡峭程度</strong>就是全部重点。O(2ⁿ) 几乎立刻冲顶，O(n²) 随后，而 O(log n) 和 O(1) 几乎贴着地面——这就是为什么面试官只关心你落在哪条曲线上，而不在乎系数。</figcaption>
+</figure>
+
+<h2>二、增长率的直觉:n 翻倍时会发生什么</h2>
+
+<p>判断一段代码属于哪一类，有个不用背公式的土办法：<strong>想象 n 变成 2 倍，工作量变成几倍？</strong></p>
+
+<ul>
+<li><strong>O(1)</strong>：n 翻倍，工作量不变——比如按下标取数组第 i 个元素。</li>
+<li><strong>O(log n)</strong>：n 翻倍，工作量只多做「一步」——二分查找每次砍一半。</li>
+<li><strong>O(n)</strong>：n 翻倍，工作量也翻倍——扫一遍数组。</li>
+<li><strong>O(n²)</strong>：n 翻倍，工作量变 4 倍——嵌套双重循环。</li>
+<li><strong>O(2ⁿ)</strong>：n 只加 1，工作量就翻倍——枚举所有子集。这类叫指数级，n 稍大就彻底跑不动。</li>
+</ul>
+
+<p>这个「翻倍测试」比任何定义都好用。面试现场你不必推导极限，只要在脑子里把输入放大一档，看代价怎么跟着跳。</p>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>大 O(Big-O)</dt>
+<dd>描述算法在<strong>最坏情况</strong>下运行时间或空间随 n 增长的<strong>增长率</strong>，忽略常数与低阶项。<em>避免</em>说「跑了多少秒」或「大 O 就是平均情况」。</dd>
+<dt>增长率(渐进行为)</dt>
+<dd>只关心 n 趋大时的走势，不关心小 n 或具体系数。O(n) 和 O(100n) 增长率相同，都写作 O(n)。</dd>
+<dt>Θ 与 Ω(一句话版)</dt>
+<dd>O 是<strong>上界</strong>（不会更差），Ω 是<strong>下界</strong>（至少这么贵），Θ 是<strong>上下都卡死</strong>的紧确界。面试里通常口头说「O」，但心里指的往往是 Θ（增长率恰好是这个）。</dd>
+</dl>
+
+<h2>四、n 增长时的实际代价</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">复杂度</th><th>n = 10</th><th>n = 100</th><th>n = 1000</th></tr></thead>
+<tbody>
+<tr><td class="op">O(1)</td><td class="best">1</td><td class="best">1</td><td class="best">1</td></tr>
+<tr><td class="op">O(log n)</td><td class="best">≈3</td><td class="best">≈7</td><td class="best">≈10</td></tr>
+<tr><td class="op">O(n)</td><td>10</td><td>100</td><td>1000</td></tr>
+<tr><td class="op">O(n log n)</td><td>≈33</td><td>≈664</td><td>≈9966</td></tr>
+<tr><td class="op">O(n²)</td><td class="warn">100</td><td class="warn">10 000</td><td class="warn">1 000 000</td></tr>
+<tr><td class="op">O(2ⁿ)</td><td class="warn">1024</td><td class="warn">≈10³⁰</td><td class="warn">天文数字</td></tr>
+</tbody>
+</table>
+<p>盯住最后一列：n 只从 10 涨到 1000（100 倍），O(n²) 却从 100 涨到一百万（1 万倍），而 O(2ⁿ) 在 n=100 就已经超过宇宙里的原子数。这张表说明了一件事——<strong>系数和低阶项完全无关紧要，决定生死的只有那条增长曲线。</strong></p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>大 O 几乎不单独出题，但它是每道题的「开场白」和「收尾语」，占分极重：</p>
+<ul>
+<li><strong>先说复杂度，再写码</strong>：好的做法是开口先给暴力解的复杂度（如「朴素双循环是 O(n²)」），再说目标（「我想优化到 O(n)」），最后才动手。这让面试官看到你在<strong>用复杂度指导设计</strong>，而不是瞎写。</li>
+<li><strong>写完必被追问「这段是几阶」</strong>：要能对自己刚写的代码逐段估：几层循环、每层跑几次、循环里调的函数又是几阶。</li>
+<li><strong>时间和空间都要报</strong>：很多人只说时间复杂度，忘了空间。「我这个哈希表换来了 O(n) 时间，代价是 O(n) 额外空间」——把取舍说出来才完整。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:「大 O 是平均情况」——错。</strong>大 O 默认刻画的是<strong>最坏情况的上界</strong>。平均情况有它专门的分析（比如快排平均 O(n log n)、最坏 O(n²)），别把两者混为一谈。你说「快排是 O(n log n)」严格讲说的是平均；它的大 O（最坏）其实是 O(n²)。</p>
+<p><strong>坑二:把 O(2n) 当成比 O(n) 差。</strong>O(2n)、O(n+5)、O(100n) 全都等于 O(n)——常数在大 O 里一律抹掉，它们是<strong>同一类</strong>。真正的降级是从 O(n) 掉到 O(n log n) 再到 O(n²)，那是量级之差，不是系数之差。</p>
+</div>
+
+<div class="implement">
+<p>动手核对（不用写代码，拿纸笔或口述给自己听）：找 3 段你写过的循环代码，对每一段做这套流程——① 数清有几层循环、每层随 n 跑多少次；② 写出总操作数的表达式（如 n² + 2n + 1）；③ 只保留最高阶、抹掉系数，报出大 O；④ 做一次「翻倍测试」验证：n 变 2 倍，你报的复杂度预测代价变几倍，和表达式算出来的对不对得上。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条：</strong>大 O 只回答一个问题——「n 变大时代价涨多快」。忽略常数、忽略低阶、默认最坏。面试全程用它做通用语言：先估复杂度，再谈解法。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一段代码的精确操作数是 <code>5n² + 100n + 3000</code>。它的大 O 是下面哪个?</summary>
+<div class="answer">
+<p>正确答案是 <strong>O(n²)</strong>。规则是「只留最高阶项、抹掉系数」：5n² 的系数 5 丢掉，100n 和 3000 是低阶/常数项，n 大了它们相对 n² 可忽略。<br>干扰点：有人看到 <code>3000</code> 这个大常数就慌，觉得「n 小的时候明明是常数占主导」——但大 O 只管 n 趋大时的走势，n=100 时 5n² 已经 5 万、远超 3000。也别写成 O(5n²)，系数在大 O 里没有意义。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:面试官说「这个问题的输入 n 最多到 20」。这句话在暗示你什么?</summary>
+<div class="answer">
+<p>暗示<strong>指数级解法（O(2ⁿ) 或 O(n!)）在这题里是可以接受的</strong>。n=20 时 2²⁰ ≈ 100 万，跑得动；很多组合/子集/排列类问题本身就没有多项式解，n 给得这么小正是在放行暴力枚举。<br>反过来记这个信号更有用：<strong>看到输入规模就能反推期望复杂度</strong>——n≤20 放行指数级，n≤1000 大约允许 O(n²)，n≥10⁵ 就必须做到 O(n log n) 以内。这条反推法下一课会展开。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:「O(n) 一定比 O(n²) 快」这句话对吗?</summary>
+<div class="answer">
+<p>不完全对——准确说是<strong>「当 n 足够大时」O(n) 才一定更快</strong>。大 O 描述的是<strong>渐进</strong>行为；在 n 很小时，一个系数巨大的 O(n)（比如 <code>1000n</code>）可能反而慢过系数很小的 O(n²)（比如 <code>n²</code>，n&lt;1000 时更小）。<br>但面试和工程都关心 n 变大后的可扩展性，所以默认按大 O 排序选算法是对的——只是要清楚这个「默认」建立在「n 大」的前提上，这也是为什么大 O 叫「渐进」分析。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲的「算法复杂度 / Big-O / 渐进分析法」小节。这几条一手视频最值得先看:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=iOq5kSKqeR4">哈佛大学 CS50 - 渐进符号(视频)</a> —— 从最朴素的例子建立「为什么忽略常数」的直觉。</li>
+<li><a href="https://www.youtube.com/watch?v=V6mKVRU1evU">大 O 符号(通用快速教程)(视频)</a> —— 十几分钟过一遍最常用的几类。</li>
+<li><a href="https://www.youtube.com/watch?v=ei-A_wy5Yxw&index=2&list=PL1BaGV1cIH4UhkL8a9bJGG356covJ76qN">大 O 符号(以及 Ω 和 Θ)- 最佳数学解释(视频)</a> —— 想把 O / Ω / Θ 的区别彻底弄清就看这条。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的，回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「为什么忽略常数」，或随手给你一段代码让你现场估复杂度。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0003-choosing-a-language.html"><span class="dir">← 上一课</span>选一门刷题语言</a>
+  <a class="next" href="0005-complexity-classes.html"><span class="dir">下一课 →</span>常见复杂度类:从 O(1) 到 O(2ⁿ)</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

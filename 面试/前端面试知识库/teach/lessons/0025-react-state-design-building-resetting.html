@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0025 · 状态怎么构建 + 何时重置</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0025 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>状态怎么构建 + 何时重置</h1>
+
+<p class="lede">上一课讲的是"给定状态,UI 该长什么样"这套声明式心智模型;这节课往前问一句更具体的问题——那个"状态"本身该怎么设计?面试限定的 UI 编码题字段不多,但正因为字段少,state 分成几份、怎么分,反而是面试官一眼就能看出你功底的地方。这节课讲手册里构建状态的四条具体原则,以及另一件容易被忽略的事:什么时候"整体换新"比"逐个清空"更可靠。</p>
+
+<div class="recall">
+<p>先回忆一下上一课:声明式思考的第三步是"设计一个最小结构来表示状态",当时举的例子是别同时维护 <code>tasks</code>、<code>completedTasks</code>、<code>incompleteTasks</code> 三份数组,已完成任务应该从 <code>tasks</code> 派生出来,而不是单独存一份。这节课要把"怎么设计最小状态结构"这件事讲得更具体——手册给出的不只是"别重复存"这一条,还有另外三条同样具体的原则,以及配套的"该整体重置的时候该怎么做"。</p>
+</div>
+
+<h2>一、为什么状态结构本身是一道设计题</h2>
+
+<p>状态是 React 应用的支柱,决定组件随时间的行为和渲染方式。和写死的静态数据不同,状态支持动态更新、用户交互和实时变化,不需要整页重新加载。结构良好的状态能提高代码可维护性、增强性能、减少不必要的重新渲染;结构糟糕的状态管理则容易导致出错的代码、运行变慢、行为不可预测。</p>
+
+<p>创建一个有状态组件时,你要做两个决定:用几个状态变量,以及怎么组织它们的数据结构。次优的设计仍然能跑出一个功能正常的应用,但面试限定的时间和字段数量,让"structure 得好不好"这件事被放大了——手册给出四条具体、可以直接套用的原则。</p>
+
+<h2>二、构建状态的四条原则</h2>
+
+<h3>1. 状态尽可能本地化</h3>
+
+<p>当某个状态只有一个组件在用,不要因为"以后可能要往上提"就提前把它放到父组件、再通过 props 一层层往下传。父组件的状态一变,所有依赖它的子组件都要跟着重新渲染;状态留在真正用到它的组件内部,变化时只需要重渲染这一小块。比如一个只在自己内部使用的计数按钮,<code>count</code> 就该待在按钮组件里,不必先提到 <code>App</code> 再传 <code>count</code>/<code>setCount</code> 两个 props 下去。</p>
+
+<h3>2. 把相关状态组合在一起</h3>
+
+<p>如果两个值本来就是共同描述"一件事",分开用两个 <code>useState</code> 管理会让更新变得麻烦、也容易漏改一个。</p>
+
+<div class="codecompare">
+  <div class="side bad">
+    <p class="label">❌ x、y 分开管理</p>
+    <pre><code>const [x, setX] = useState(0);
+const [y, setY] = useState(0);
+
+function handlePointerMove(e) {
+  setX(e.clientX);
+  setY(e.clientY);
+}</code></pre>
+  </div>
+  <div class="side good">
+    <p class="label">✅ 合并成一个 point 对象</p>
+    <pre><code>const [point, setPoint] = useState({ x: 0, y: 0 });
+
+function handlePointerMove(e) {
+  setPoint({ x: e.clientX, y: e.clientY });
+}</code></pre>
+  </div>
+</div>
+
+<p><code>x</code> 和 <code>y</code> 共同定义的是同一个点,理应作为一个单元一起管理和更新。</p>
+
+<h3>3. 避免状态中可能出现的矛盾</h3>
+
+<p>一个更容易被忽略的信号是:几个各自独立的布尔状态,组合起来能拼出一种逻辑上根本不该存在的情况。</p>
+
+<div class="codecompare">
+  <div class="side bad">
+    <p class="label">❌ 三个独立布尔值</p>
+    <pre><code>const [isSubmitting, setIsSubmitting] = useState(false);
+const [isSubmitted, setIsSubmitted] = useState(false);
+const [isError, setIsError] = useState(false);
+
+// 如果不小心写出:
+// setIsSubmitting(true); setIsSubmitted(true);
+// 组件就会同时"在提交"又"已提交"</code></pre>
+  </div>
+  <div class="side good">
+    <p class="label">✅ 合并成一个 status 字段</p>
+    <pre><code>const [status, setStatus] = useState('idle');
+// 'idle' | 'submitting' | 'success' | 'error'
+// 任意时刻只可能处于其中一种取值</code></pre>
+  </div>
+</div>
+
+<p>三个独立布尔值理论上能组合出 8 种状态,但表单实际只有 4 种合理阶段——多出来的组合就是"矛盾状态"的来源。用一个 <code>status</code> 字段替代之后,UI 一次只能处于一种状态,错误处理也更干净:请求失败时只需要把 <code>status</code> 设成 <code>'error'</code>,不会有哪个布尔值忘了改回去、让 UI 同时显示"提交成功"和"提交失败"。</p>
+
+<h3>4. 派生状态而不是存储冗余值</h3>
+
+<p>如果一个值能从别的状态直接算出来,就不要专门为它开一个新的 <code>useState</code>——那样会多出一份需要手动保持同步的"事实来源"。</p>
+
+<pre><code>const [todos, setTodos] = useState(['任务 1', '任务 2']);
+
+const count = todos.length; // 不需要单独存,也不需要 useEffect 去同步</code></pre>
+
+<p>手册里还给出<a href="https://react.dev/learn/choosing-the-state-structure#principles-for-structuring-state">其他几条构建状态的原则</a>,比如<a href="https://react.dev/learn/choosing-the-state-structure#avoid-duplication-in-state">避免状态中的重复</a>和<a href="https://react.dev/learn/choosing-the-state-structure#avoid-deeply-nested-state">避免深度嵌套状态</a>——按手册原文的说法,这几条和面试关系不大,这节课不展开,想深挖的话可以直接点链接去读原文。</p>
+
+<h2>三、重置状态:什么时候该整体换新,而不是逐项复原</h2>
+
+<p>重置状态最直接的办法,是把每个字段用 setter 设回它的初始值。但当状态字段有好几个时,手动挨个调用 setter 很容易漏掉某一个——这也是为什么前面"把相关状态组合在一起"、以及给每种可能的操作单独写一个函数会重要:字段合并得越干净,需要记住的 setter 就越少。</p>
+
+<p>还有另一种更彻底的做法:改变要重置的组件的 <code>key</code> 属性。<code>key</code> 变化时,React 会认为这个位置上出现了一个"不同的元素",于是把旧实例整个卸载、再重新创建一个全新实例——不需要你一个个列出该清空哪些字段。<code>key</code> 不只在渲染列表时有用,单个组件上一样适用。</p>
+
+<div class="flow">
+  <div class="step">用户点击"重置表单"按钮</div>
+  <div class="down">↓</div>
+  <div class="step"><code>setKey(prev =&gt; prev + 1)</code> —— key 的值变了</div>
+  <div class="down">↓</div>
+  <div class="step decision">React 发现同一位置元素的 key 不一样了,判定这是"不同的元素"</div>
+  <div class="down">↓</div>
+  <div class="step terminal">卸载旧的 Form 实例,重新创建一个全新实例——内部所有 state 回到初始值</div>
+</div>
+
+<pre><code>function Form() {
+  return (
+    &lt;form&gt;
+      &lt;input type="text" placeholder="John Doe" /&gt;
+      &lt;button&gt;提交&lt;/button&gt;
+    &lt;/form&gt;
+  );
+}
+
+function App() {
+  const [key, setKey] = useState(0);
+
+  return (
+    &lt;div&gt;
+      &lt;Form key={key} /&gt;
+      &lt;button onClick={() =&gt; setKey((prev) =&gt; prev + 1)}&gt;重置表单&lt;/button&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+<p>这里发生了两件事:改变 <code>key</code> 会强制 React <strong>卸载并重新挂载</strong> <code>Form</code> 组件;原生 <code>&lt;form&gt;</code> 元素本身有内置的重置方式(比如 <code>formElement.reset()</code>),但 <code>key</code> 这种做法适用于任何组件,不限于表单。更完整的讨论,<a href="https://react.dev/learn/preserving-and-resetting-state">在 react.dev 上有专门一篇讲保留和重置状态</a>,这节课只挑了面试里最常被追问的"整体重置"这一种场景。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>派生状态(derived state)</dt>
+<dd>能够从已有的 state 或 props 直接计算出来的值,不需要单独用 <code>useState</code> 存一份、也不需要额外的 <code>useEffect</code> 去同步它。<em>避免</em>把"读取方便"当理由,专门开一个 state 字段去缓存一个本来能算出来的值——那样反而多了一份要手动保持同步的"事实来源"。</dd>
+<dt>矛盾状态(不可能状态)</dt>
+<dd>几个各自独立的 state 字段组合在一起,能拼出一种逻辑上根本不该存在的情况,比如同时"在提交"又"已提交"。<em>避免</em>看到某个流程有三种以上互斥的阶段,还继续用几个独立布尔值分别表示——该考虑合并成一个 status 字段。</dd>
+<dt>用 key 强制重挂载</dt>
+<dd>给组件设置一个会变化的 <code>key</code>;<code>key</code> 一变,React 就把这个位置上的旧实例整个卸载、重新创建一个全新实例,内部所有 state 自然回到初始值。<em>避免</em>把"重置状态"直接等同于"逐个调用 setter 把每个字段设回初始值"——字段一多,很容易漏掉某一个。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>面试限定的 UI 编码题字段通常不多,但正因为字段少,状态到底怎么分反而更容易被面试官一眼看穿。写状态之前先问自己三句话:这份数据是不是只有某个子组件专用,可以不往上提?哪几个字段其实描述的是"同一件事",该合成一个对象或一个 status?有没有哪个字段其实能从别的字段算出来,不需要单独存。想清楚这三句话,比写完代码之后再回头重构省事得多。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"重置状态"想成必须逐个手动清空每个字段。</strong>字段一多,<code>setName(''); setEmail(''); setAgree(false);</code> 这种逐条重置的写法很容易漏掉某一个——表单看起来"重置"了,实际还留着某个字段的旧值。当需要重置的是一整棵子树,而不是一两个字段时,改变外层传给它的 <code>key</code> 往往比一条条数清楚该重置哪些字段更可靠。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>找一个你最近写过、字段有三个以上 <code>useState</code> 的组件,逐个检查:有没有哪两个字段其实描述的是同一件事(该合并)?有没有哪个字段其实能从别的字段算出来(该删掉,改成派生)?写下你发现的至少一处可以合并或删掉的字段。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>好的状态结构不是"字段越细越安全",而是每一份事实只存一处、互斥的几种情况合并成一个字段;当需要的是"整体换新"而不是"逐项复原"时,改一次 <code>key</code> 比记住该调用哪几个 setter 更不容易出错。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于"避免状态中可能出现的矛盾",下面哪个说法最准确? (A) 只要分别用 isSubmitting、isSubmitted、isError 三个独立的 useState,读写都很方便,不需要额外处理矛盾问题 (B) 把互斥的几种情况合并成一个 status 字段(比如 "idle"/"submitting"/"success"/"error"),让状态本身就排除掉不合法的组合 (C) 矛盾状态只是理论上的担心,实际渲染时 React 会自动忽略互相冲突的判断分支</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。表单例子里,如果新代码不小心同时执行了 <code>setIsSubmitting(true)</code> 和 <code>setIsSubmitted(true)</code>,组件会同时"在提交"又"已提交",这种没有意义的组合正是三个独立布尔值带来的风险;合并成一个 <code>status</code> 字段之后,组件在任意时刻只能处于其中一种取值。(A) 低估了这种矛盾的真实后果——它不只是"不方便",而是会让 UI 呈现出逻辑上说不通的状态;(C) 不成立,React 不会对你写的判断条件做任何"自动排除冲突"的检查,该怎么渲染完全由你写的 JSX 条件决定,矛盾的分支该显示还是会显示。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于用改变 key 属性来重置组件状态,下面哪个描述最准确? (A) key 变化时 React 会保留组件实例,只是清空它内部的 state 字段,效果和逐个调用 setter 完全一致 (B) key 只在渲染列表(map)时才有意义,给单个组件设置 key 不会产生任何效果 (C) key 变化时 React 会认为这是一个不同的元素,从而卸载旧实例并重新创建一个全新实例,内部 state 因此回到初始值</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。<code>key</code> 变化会让 React 判定"这是位置上的一个新元素",于是走卸载旧实例、创建新实例的路径,新实例的 state 从初始值重新开始,不需要手动列出该清空哪些字段。(A) 说反了机制——React 走的不是"保留实例、清空字段"这条路,而是彻底卸载重建,这也是它能保证不漏掉任何字段的原因;(B) 说错了适用范围——给单个组件设置 <code>key</code>、需要重置时改变这个值,正是手册里用来"对组件做完全重置"的通用手法,不是列表渲染的专属技巧。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>这两节内容分别对应手册里"如何构建状态"和"重置状态"两部分,官方文档给出了更完整的版本:</p>
+<ul>
+<li><a href="https://react.dev/learn/choosing-the-state-structure#principles-for-structuring-state">react.dev · Principles for structuring state</a> —— 构建状态的原则总览,手册这节课挑的四条正是从这里来的。</li>
+<li><a href="https://react.dev/learn/choosing-the-state-structure#avoid-duplication-in-state">react.dev · Avoid duplication in state</a> —— 手册提到"和面试关系不大"但仍值得了解的一条:避免状态中的重复。</li>
+<li><a href="https://react.dev/learn/choosing-the-state-structure#avoid-deeply-nested-state">react.dev · Avoid deeply nested state</a> —— 同样"和面试关系不大"的一条:避免深度嵌套状态。</li>
+<li><a href="https://react.dev/learn/preserving-and-resetting-state">react.dev · Preserving and resetting state</a> —— key 强制重挂载的完整原理,这节课只讲了面试最常追问的"整体重置"这一种用法。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"为什么三个布尔值会打架,合并成一个字符串就不会",也可以让老师给你出一道新的表单题,现场判断该合并哪些字段、要不要用 key 来重置。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0024-thinking-declaratively-in-react.html"><span class="dir">← 上一课</span>用声明式思维回答 React 问题</a>
+  <a class="next" href="0026-react-controlled-context-reducer.html"><span class="dir">下一课 →</span>受控组件、Context、Reducer 怎么选</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

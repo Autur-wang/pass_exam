@@ -1,0 +1,82 @@
+{
+ "num": "0018",
+ "slug": "three-standard-llm-messages",
+ "title": "第一层:LLM 只认三种消息",
+ "narrowTopic": "只讲 LLM 标准格式 Message 联合类型——它只有 User/Assistant/ToolResult 三种成员,以及每种的数据结构。",
+ "analogySeed": "上一章末尾工具产出了一条 ToolResultMessage。可我们五章都在说\"消息\",却从没拆开看过它长什么样。就像你天天寄信,却没看过信封到底有几种规格——LLM 这个\"收件方\"其实只认三种信封。",
+ "keyPoints": [
+  "LLM 能理解的消息格式在 Pi 里叫 Message 类型,定义在最底层的 packages/ai/src/types.ts,只有三个成员:UserMessage、AssistantMessage、ToolResultMessage。",
+  "UserMessage 最简单:content 可以是纯字符串,也可以是 (TextContent|ImageContent)[] 内容块数组——所以用户消息既能发文字也能发图片。",
+  "AssistantMessage 字段最多:content 不是字符串而是内容块数组,可含 TextContent(普通文本)、ThinkingContent(思考过程)、ToolCall(工具调用)三种块。",
+  "一条助手消息可同时包含文本和工具调用——LLM 一边说\"让我看看这个文件\"一边发出 Read 调用,两者放在同一个 content 数组里(第3章的\"回复中包含 ToolCall\")。",
+  "ToolResultMessage 通过 toolCallId 字段精准关联回 AssistantMessage 里的 ToolCall;isError 是第5章\"永不抛出\"的产物;details 携带结构化详情给 UI,LLM 通常不看。",
+  "把三种消息串成完整对话:stopReason=\"toolUse\" 表示调了工具循环继续,stopReason=\"stop\" 表示没调工具循环结束。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "UserMessage / AssistantMessage / ToolResultMessage 三个 TypeScript 接口的字段定义(role、content、timestamp、以及 AssistantMessage 的 api/provider/model/usage/stopReason,ToolResultMessage 的 toolCallId/isError/details)",
+   "cite": "教程 §二「第一层:LLM 认识的消息只有三种」/ packages/ai/src/types.ts:322-408"
+  },
+  {
+   "desc": "AssistantMessage 的 content 内容块树状图:TextContent / ThinkingContent / ToolCall 三种块及其 { type: ... } 形态",
+   "cite": "教程 §二 内容块树状图"
+  },
+  {
+   "desc": "一个完整对话示例:messages 数组 [0]UserMessage→[1]AssistantMessage(含 text+toolCall,stopReason toolUse)→[2]ToolResultMessage(toolCallId 对应)→[3]AssistantMessage(stopReason stop)",
+   "cite": "教程 §二「一个完整的对话示例」"
+  }
+ ],
+ "designRationale": [
+  "为什么 AssistantMessage 的 content 是数组而不是一个字符串?因为一次回复要同时容纳普通文本、思考过程、工具调用三类内容,数组才能让它们共存于一条消息里。",
+  "为什么 ToolResultMessage 要带 toolCallId?因为一轮回复可能发出多个工具调用,结果必须精准关联回是哪一个 ToolCall——靠这个 id 对应。",
+  "为什么 details 字段 LLM 通常不看?它是给 UI 渲染用的结构化详情,LLM 只需要 content 里的文本,职责分离。",
+  "为什么内容块里还有 *Signature 字段?那是 OpenAI/Google 等 Provider 要求原样回传的不透明签名 ID,是\"Provider 之间的上下文连续性机制\",日常理解不必深究。"
+ ],
+ "quiz": [
+  {
+   "stem": "LLM 能理解的 Message 联合类型,一共有几种成员?",
+   "options": [
+    "七种,包括 BashExecution、CompactionSummary 等自定义消息",
+    "两种:User 和 Assistant,工具结果并进 Assistant",
+    "三种:UserMessage、AssistantMessage、ToolResultMessage",
+    "不固定,应用可以随时往里加"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。Message 是封闭的三成员联合,定义在 packages/ai/src/types.ts。延伸一点:正因为它\"封闭\",下一节那些自定义消息才必须活在另一层。",
+   "noMsg": "回到 §二开头看 Message 联合类型的树状图——注意区分\"LLM 认识的\"和\"Agent 内部用的\",后者是下一节的内容。"
+  },
+  {
+   "stem": "为什么 AssistantMessage 的 content 设计成内容块数组,而不是一个字符串?",
+   "options": [
+    "因为一条回复要同时容纳文本、思考过程(Thinking)、工具调用(ToolCall)三类内容",
+    "因为字符串在 TypeScript 里性能太差",
+    "因为 LLM API 强制要求所有字段都用数组",
+    "因为要兼容图片,和 UserMessage 保持一致"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。数组让 text+thinking+toolCall 共存于一条消息——这正是第3章\"回复中包含 ToolCall\"的底层结构。延伸:UserMessage 的 content 也能是数组,但那是为了发图片。",
+   "noMsg": "看 §二 AssistantMessage content 的内容块树状图,数一数它能装几种 type 的块,答案就在那三种块里。"
+  },
+  {
+   "stem": "ToolResultMessage 靠哪个字段,把自己精准关联回是哪一次工具调用?",
+   "options": [
+    "toolName,靠工具名匹配",
+    "toolCallId,和 AssistantMessage 里 ToolCall 的 id 对应",
+    "timestamp,靠时间先后顺序推断",
+    "role,role 相同就算同一次调用"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。这就是第3章说的\"工具结果必须精准关联回调用请求\"。延伸:一轮可能发多个工具调用,只有 id 能一一对上,靠 toolName 或时间都会错乱。",
+   "noMsg": "看 §二 ToolResultMessage 结构里哪个字段的注释写着\"对应哪个 ToolCall\",再看完整对话示例里 tc_001 是怎么被引用的。"
+  }
+ ],
+ "_chapter": "第6章",
+ "_chapterCN": "消息系统——Agent的记忆如何组织与传递",
+ "prevFile": "0017-errors-are-messages.html",
+ "prevNum": "0017",
+ "nextFile": "0019-agent-message-two-layers.html",
+ "nextNum": "0019",
+ "crumbLabel": "第 6 章 · 消息系统",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第6章-消息系统-Agent的记忆如何组织与传递.md",
+ "filename": "0018-three-standard-llm-messages.html"
+}

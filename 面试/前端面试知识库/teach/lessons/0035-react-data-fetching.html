@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0035 · React 数据获取</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0035 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>React 数据获取</h1>
+
+<p class="lede">几乎每个 React 组件迟早要面对同一件事:从 API、数据库或别的来源把数据拿进来,再渲染到屏幕上。这节课要回答的问题很具体:最朴素的 <code>useEffect</code> + <code>fetch</code> 写法看起来能用,但真的拿来做一个"实时搜索"之类的动态场景,会暴露出哪些问题;这些问题有哪些修复方向;查询库(TanStack Query、SWR、Apollo)又是靠什么把这些问题一次性解决掉的。</p>
+
+<div class="recall">
+<p>上一课讲的是 React 设计模式——高阶组件(HOC)、渲染 props 这些用来在多个组件之间复用逻辑的写法。这节课换一个角度:不是"组件之间怎么共享逻辑",而是组件内部最常见、也最容易在面试里被追问细节的一类副作用——请求数据——单独拿出来看。可以先想一想:如果用上一课的 HOC 包一层"自动请求数据"的逻辑,这个 HOC 内部要不要处理组件被卸载之后请求才回来的情况?带着这个问题往下看。</p>
+</div>
+
+<h2>一、客户端数据获取的默认写法:useEffect + fetch</h2>
+
+<p>内置的 <code>fetch</code> 是在 JavaScript 里发 HTTP 请求最直接的方式。在 React 里,最常见的做法是用 <code>useEffect</code> 在组件挂载时发起请求,再用 <code>useState</code> 管理三种状态:数据本身、是否在加载、是否出错。</p>
+
+<pre><code>function Page() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetch('https://api.example.com/posts')
+      .then((res) => {
+        if (!res.ok) throw new Error('Error response');
+        return res.json();
+      })
+      .then((data) => {
+        if (isMounted) {
+          setData(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(err);
+          setLoading(false);
+        }
+      });
+
+    return () => { isMounted = false; };
+  }, []);
+
+  if (loading) return &lt;p&gt;Loading...&lt;/p&gt;;
+  if (error) return &lt;p&gt;Error: {error.message}&lt;/p&gt;;
+  return (
+    &lt;ul&gt;
+      {data.map((post) => &lt;li key={post.id}&gt;{post.title}&lt;/li&gt;)}
+    &lt;/ul&gt;
+  );
+}</code></pre>
+
+<p>这里有三处值得记住的细节:依赖数组写成 <code>[]</code> 表示只在挂载时拿一次;<code>loading</code>/<code>error</code> 两个状态分支分别负责用户体验里"正在等"和"出错了"这两种反馈;而 <code>return () => { isMounted = false; }</code> 这个清理函数,是为了避免组件已经卸载之后,迟到的响应还试图调用 <code>setData</code>——如果用户已经离开这个页面,响应才回来,不做这层保护 React 会报"无法在未挂载的组件上执行状态更新"的警告。</p>
+
+<h2>二、动态查询暴露的四个问题</h2>
+
+<p>只在挂载时拿一次数据是最简单的情况。但更常见的场景是"实时搜索":依赖数组变成 <code>[query]</code>,用户每敲一个字,就要按新的搜索词重新拿一次数据。把上面的写法直接套过去,表面上能跑,细看会暴露出四个问题。</p>
+
+<table>
+<tr><th>问题</th><th>具体表现</th><th>常见修复方向</th></tr>
+<tr><td>每次按键都发请求</td><td>输入 "tomato" 六个字母,就发出六次请求——用户大概率只关心最终结果,前面几次都是浪费</td><td>防抖(debounce):只在用户停止输入一段时间后才真正发请求</td></tr>
+<tr><td>竞态条件</td><td>多个请求同时在途,服务器返回顺序不确定;更早发出、词更短的请求(比如 "toma")可能比后发出的 "tomato" 慢返回,结果覆盖掉了当前搜索词对应的正确结果</td><td>用 <code>AbortController</code> 取消上一个还没完成的请求;或者在渲染前判断响应是否对应当前查询词,不对应就丢弃</td></tr>
+<tr><td>卸载后 setState</td><td>用户已经导航离开页面,之前发的请求才返回,代码仍尝试更新已经不存在的组件状态</td><td>用 <code>isMounted</code> 标志或 <code>AbortController</code>,在 <code>useEffect</code> 的清理函数里终止</td></tr>
+<tr><td>冗余的重复请求</td><td>用户输入 "tomato"、删掉、再输入一次 "tomato",结果已经存在却又发了一次请求</td><td>用类似 <code>Map&lt;query, results&gt;</code> 的缓存,发请求前先查缓存里有没有</td></tr>
+</table>
+
+<p>竞态条件这一条值得多说一句:防抖能降低出现竞态条件的概率,但不是万无一失的方法——如果某一次请求的实际延迟长于防抖设的等待时间,慢请求依然可能在快请求之后才返回,照样覆盖掉正确结果。这也是为什么"取消旧请求"和"丢弃过时响应"经常被当成比防抖更彻底的修法。</p>
+
+<h2>三、数据变动与乐观更新</h2>
+
+<p>数据获取不只是"查"(query),也包括"改"(mutation)——通过 API 在数据库里创建、更新或删除记录。一次变动的标准流程是:发请求 → 显示加载状态 → 等服务器响应 → 成功就更新 UI、失败就处理错误。这个流程的问题是慢:用户必须等到服务器响应才能看到变化。</p>
+
+<p><strong>乐观更新</strong>反过来做:先假设这次变动会成功,立刻把 UI 改成"成功之后应该有的样子",再在后台真正发请求;如果失败了,再把 UI 回滚到之前的状态并提示错误。</p>
+
+<div class="flow">
+<div class="step">用户点击"点赞"</div>
+<div class="down">↓</div>
+<div class="step decision">乐观更新:不等服务器,立刻把计数 +1</div>
+<div class="down">↓</div>
+<div class="step">后台发送 POST /api/posts/4/like</div>
+<div class="down">↓</div>
+<div class="branches">
+<div class="branch"><p class="label">请求成功</p><div class="step terminal">UI 保持不变,乐观更新被验证是对的</div></div>
+<div class="branch"><p class="label">请求失败</p><div class="step terminal">把计数 -1 回滚,并提示错误</div></div>
+</div>
+</div>
+
+<pre><code>const handleLike = async () => {
+  setLike((count) => count + 1); // 乐观地更新 UI
+
+  try {
+    await fetch('/api/posts/4/like', {
+      method: 'POST',
+    });
+  } catch (error) {
+    setLike((count) => count - 1); // 失败时回滚
+  }
+};</code></pre>
+
+<p>乐观更新适合事先大致知道会成功的场景,比如点赞、把商品加入购物车、编辑评论——不适合结果高度不确定的操作。另外,如果界面依赖的是缓存数据,变动之后还要处理缓存失效:重新拿一次数据,或者把变动的响应直接合并进已有的缓存里(有些变动没法这样合并)。</p>
+
+<h2>四、查询库来救场:TanStack Query / SWR / Apollo</h2>
+
+<p>把上面两节的问题——缓存、竞态、清理、去重、乐观更新回滚——全部手写一遍,工作量并不小。查询库就是专门用来处理这一整套问题的工具,常见的例子是 TanStack Query、SWR,以及专为 GraphQL 设计的 Apollo Client。用 TanStack Query 改写第一节的例子:</p>
+
+<pre><code>import { useQuery } from '@tanstack/react-query';
+
+function DataFetchingComponent() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['posts'],
+    queryFn: async () => {
+      const res = await fetch('/api/posts');
+      return res.json();
+    },
+    staleTime: 5000, // 缓存数据 5 秒
+  });
+
+  if (isLoading) return &lt;p&gt;加载中...&lt;/p&gt;;
+  if (error) return &lt;p&gt;错误: {error.message}&lt;/p&gt;;
+  return (
+    &lt;ul&gt;
+      {data.map((post) => &lt;li key={post.id}&gt;{post.title}&lt;/li&gt;)}
+    &lt;/ul&gt;
+  );
+}</code></pre>
+
+<p>声明式地写一个 <code>queryKey</code> 和一个 <code>queryFn</code>,缓存、去重、后台更新这些第二节里要手写的逻辑,库已经内置好了:</p>
+
+<table class="compare">
+<tr><th>能力</th><th>useEffect + fetch</th><th>查询库(TanStack Query 等)</th></tr>
+<tr><td>缓存</td><td class="warn">无缓存,每次都重新拿</td><td class="good">自动缓存</td></tr>
+<tr><td>错误处理</td><td class="warn">需要自己写 try/catch</td><td class="good">内置重试</td></tr>
+<tr><td>乐观更新</td><td class="warn">需要手动回滚</td><td class="good">失败时自动回滚</td></tr>
+<tr><td>分页</td><td class="warn">需要额外写逻辑</td><td class="good">内置支持</td></tr>
+<tr><td>后台更新</td><td class="warn">需要手动轮询</td><td class="good">在后台自动处理</td></tr>
+<tr><td>重新获取</td><td class="warn">手动触发</td><td class="good">自动</td></tr>
+</table>
+
+<h2>五、服务器端数据获取与 SSR:留给系统设计轮的话题</h2>
+
+<p>以上都是客户端数据获取:组件先挂载、再发请求、等结果回来才渲染出真实内容。服务器端数据获取是另一条路——在服务器把页面渲染成 HTML(SSR)之前,就先在服务器上把数据取好,浏览器拿到的就是已经填好数据的完整页面,不需要再经历一轮"加载中"。Next.js 这类元框架用 <code>getServerSideProps</code> 或服务器组件之类的机制,让这套流程在把 HTML 发给浏览器之前就在服务器上跑完。这对性能敏感、SEO 敏感、个性化仪表盘,或者依赖请求特定信息(比如身份验证、地理位置)的场景特别有用。</p>
+
+<p>除了带回家的作业题之外,大多数 React 编码面试用的是客户端数据获取,而不是服务器端数据获取——所以第一到第四节的内容才是编码轮的重点。但 CSR 和 SSR 的取舍,是系统设计轮里常被拿出来讨论的话题,你应该能说清楚各自的优点、以及分别适合什么场景。</p>
+
+<h2>六、关键定义</h2>
+
+<dl class="keydef">
+<dt>竞态条件(race condition)</dt>
+<dd>多个异步请求同时在途、且服务器返回顺序不确定时,后发出的请求结果被更早到达的过时响应覆盖。<em>避免</em>把"加了防抖"当成竞态条件已经被彻底解决——防抖只是降低概率,如果实际请求延迟长于防抖等待时间,慢请求仍可能在快请求之后返回。</dd>
+<dt>乐观更新(optimistic update)</dt>
+<dd>在服务器还没返回响应之前,先假设变动会成功、立刻更新 UI,失败时再把 UI 回滚到之前的状态。<em>避免</em>只写"立刻更新 UI"这一半,却不配失败分支——没有回滚逻辑的乐观更新,只是把 bug 的暴露时间往后延了。</dd>
+<dt>查询库(query library)</dt>
+<dd>专门处理数据获取、缓存、失效与重新拿取的一类工具,例如 TanStack Query、SWR、Apollo Client,内置了缓存、去重、乐观更新回滚等能力。<em>避免</em>把"用了查询库"直接等同于"我懂数据获取"——面试官更想听到的是你清楚查询库具体解决了第二节里那几个问题,而不只是能说出库的名字。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>大多数 React 编码面试考的是"手写 useEffect + fetch"这条路:面试官更想看到你主动处理 loading/error 状态、写依赖数组、加清理函数——不太会要求你在面试现场把防抖、取消请求、缓存这些优化全部实现出来,但应该能在被问到"这段代码有什么问题"时,主动指出第二节的那四类问题以及大致的修复方向。到了系统设计轮,话题会换成 CSR 还是 SSR、要不要引入查询库这类更宏观的取舍,而不是具体的 Hook 写法。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:</strong>以为背熟"useEffect + fetch"这一个模板就等于掌握了数据获取。真正区分候选人的往往是那道"实时搜索"式追问——面试官给一段看起来能跑的代码,问"你看出什么问题了吗",在等你主动说出竞态条件、卸载后 setState 这类边界情况,而不是重复一遍代码本身在干什么。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>把第一节的 <code>Page</code> 组件改成"实时搜索"版本(依赖数组换成 <code>[query]</code>),然后在代码旁边用注释逐条标出第二节的四个问题分别会在哪一行出现、你打算用哪种修复方向——不需要真的把每个修复都写出来,先能准确指出问题所在,就已经超过大多数只会背模板的候选人。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong><code>useEffect</code> + <code>fetch</code> 是编码面试里默认要会手写的基本功,重点是主动处理好加载/错误状态和卸载清理;一旦场景变成动态查询,竞态条件、重复请求这些问题就会冒出来,查询库(TanStack Query/SWR/Apollo)的价值正是把这些问题内置解决掉,而不是"听起来更高级"。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:实时搜索场景里,为什么"防抖(debounce)"不能彻底解决竞态条件问题? (A) 防抖只能减少请求数量,和竞态条件完全无关 (B) 如果某次请求的实际延迟长于防抖设置的等待时间,慢请求仍可能在快请求之后才返回、覆盖掉正确结果,防抖只是降低概率而不是彻底杜绝 (C) 防抖会让浏览器把所有正在进行的请求全部取消,反而更容易触发竞态条件</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。防抖延后了发请求的时机,减少了触发竞态条件的次数,但一旦某次请求本身延迟够长,还是可能被后续请求反超,所以不是万无一失的方法。(A) 错在防抖恰恰是靠减少请求数量间接降低竞态概率,并非"完全无关";(C) 是编造的因果关系——防抖不会主动取消已经发出的请求,取消请求要靠 <code>AbortController</code> 之类的机制,和防抖是两件事。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于手写 <code>useEffect</code> + <code>fetch</code> 和使用查询库(如 TanStack Query)的差异,下面哪个说法最准确? (A) 两者在错误处理上完全一样,都需要自己写 try/catch,查询库没有额外提供什么 (B) <code>useEffect</code> + <code>fetch</code> 自带自动缓存和后台自动更新,查询库反而需要手动实现这些能力 (C) 查询库内置了缓存、重试,以及变动失败时的自动回滚,而手写 <code>useEffect</code> + <code>fetch</code> 这些都要自己实现</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。对照表里查询库在缓存、错误重试、乐观更新回滚、分页、后台更新、重新获取这几项上都是内置支持,手写版本这些全部要自己写。(A) 忽略了查询库"内置重试"这一项,并不是完全一样;(B) 把两者的能力说反了——自动缓存和后台自动更新恰恰是查询库的优势,手写 <code>useEffect</code> + <code>fetch</code> 默认没有缓存。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本节对应源材料"查询库"一节里点名的三个常见例子,建议先看官方文档,再决定要不要在下一个练习项目里换掉手写的 <code>useEffect</code> + <code>fetch</code>:</p>
+<ul>
+<li><a href="https://tanstack.com/query/latest">TanStack Query</a> —— 源材料里用来演示"声明式获取数据"的查询库,本课的查询库示例就是照它改写的。</li>
+<li><a href="https://swr.vercel.app/">SWR</a> —— 源材料并列提到的另一个常见查询库,同样内置缓存与重新验证。</li>
+<li><a href="https://www.apollographql.com/">Apollo Client</a> —— 源材料点名的 GraphQL 专属查询库,处理的问题类似,但接口围绕 GraphQL 设计。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"竞态条件"到底是怎么发生的,也可以让老师带你把第二节的实时搜索例子逐行过一遍,找出四个问题分别藏在哪一行。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0034-react-design-patterns.html"><span class="dir">← 上一课</span>React 设计模式</a>
+  <a class="next" href="0036-react-signup-form-worked-example.html"><span class="dir">下一课 →</span>案例实战:从头写一个注册表单</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

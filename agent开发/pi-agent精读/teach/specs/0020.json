@@ -1,0 +1,82 @@
+{
+ "num": "0020",
+ "slug": "convert-to-llm-and-visibility",
+ "title": "转换边界:convertToLlm 与可见性",
+ "narrowTopic": "只讲 LLM 边界的翻译——convertToLlm 把所有自定义消息变成 User、两阶段管道为何拆开、以及 excludeFromContext 的可见性过滤。",
+ "analogySeed": "跟着开头那条 BashExecutionMessage 走完最后一程:它从 role:\"bashExecution\" 出发,在调用 LLM 前的最后一道关卡被\"翻译\"成一条普通的 user 消息——就像出海关时,各国护照最终都要盖上同一种通行章,LLM 才放行。",
+ "keyPoints": [
+  "翻译发生在 streamAssistantResponse 里、调用 LLM 之前的最后一刻,由 convertToLlm 完成:AgentMessage[] → Message[]。",
+  "管道有严格顺序:先 transformContext(同层变换,AgentMessage[]→AgentMessage[],裁剪/注入/压缩),再 convertToLlm(跨层翻译,类型改变)。",
+  "转换规则是按 role 分派的 switch:user/assistant/toolResult 直接透传;bashExecution/custom/branchSummary/compactionSummary 全部转换成 UserMessage(摘要类还加 XML 标签包裹)。",
+  "为什么都变成 user?因为 LLM API 要求角色 user→assistant→user 交替,不能连续两个 assistant;自定义消息本质是\"系统注入的信息\",放 user 角色最安全。",
+  "两阶段分开是为职责分离:换上下文管理策略只改 transformContext,换应用类型只改 convertToLlm,换 LLM 提供商两者都不用动(Provider 协议翻译是 pi-ai 层的独立工作)。",
+  "excludeFromContext=true 的消息在 convertToLlm 里返回 undefined 被 filter 掉,但仍存在于 context.messages——UI 照常看得到,只对 LLM 隐身;由此得出三种可见性级别:全可见 / LLM 不可见 / 仅持久化。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "convertToLlm 的转换规则对照表:role(user/assistant/toolResult/bashExecution/custom/branchSummary/compactionSummary)→ 怎么处理(透传 / 过滤 / 转成 UserMessage)",
+   "cite": "教程 §五「转换规则」表格 / packages/coding-agent/src/core/messages.ts:82-195"
+  },
+  {
+   "desc": "BashExecutionMessage 转换的 Before/After 代码:Before 是 role:\"bashExecution\" 带 command/output/exitCode 等字段;After 是 role:\"user\"、content 为 \"Ran `ls -la`\\n```\\n...\\n```\" 的文本块",
+   "cite": "教程 §五「具体例子:BashExecutionMessage 的转换」"
+  },
+  {
+   "desc": "excludeFromContext 过滤的 case 代码片段(case \"bashExecution\": if (m.excludeFromContext) return undefined;),以及三种消息可见性级别对照表(全可见/LLM 不可见/仅持久化)",
+   "cite": "教程 §七 / packages/coding-agent/src/core/messages.ts:38-39"
+  }
+ ],
+ "designRationale": [
+  "为什么所有自定义消息统一翻译成 user 角色?因为 LLM API 强制角色交替、不能连续 assistant,而自定义消息都是\"系统注入的信息\",落在 user 角色最安全。",
+  "为什么把 transformContext 和 convertToLlm 拆成两步而不一步到位?职责分离:一个管\"如何裁剪/压缩\"(同层),一个管\"如何翻译成标准消息\"(跨层),可以只替换其中一个互不影响。",
+  "为什么换 LLM 提供商(Claude→GPT)不用动 convertToLlm?因为它的输出已是统一的 Message[],再往下把 Message 翻成各家私有格式是 pi-ai 层的活;\"消息类型翻译\"和\"Provider 协议翻译\"是两层独立抽象。",
+  "为什么 excludeFromContext 用过滤而不是删除数据?这样数据仍在 context.messages 中,UI 照常渲染,只在翻译边界让它对 LLM 隐身——实现\"UI 能看、LLM 不能看\"而不损失持久化。"
+ ],
+ "quiz": [
+  {
+   "stem": "convertToLlm 处理 bashExecution、custom、branchSummary、compactionSummary 这些自定义消息时,把它们统一转换成哪种角色的消息?",
+   "options": [
+    "user 角色的 UserMessage",
+    "toolResult 角色,当成工具结果处理",
+    "assistant 角色,当成 AI 的补充说明",
+    "保留各自原来的 role,不改角色"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。都变成 user。延伸:因为 LLM 要求 user→assistant 交替、不能连续 assistant,而自定义消息本质是\"系统注入的信息\",放 user 最安全。",
+   "noMsg": "看 §五 的转换规则表格最后四行,以及\"关键洞察\"那句话——它点明了所有自定义消息最终落到哪个角色。"
+  },
+  {
+   "stem": "把 coding-agent 底层的 LLM 从 Claude 换成 GPT,需要改 convertToLlm 吗?",
+   "options": [
+    "需要,因为 GPT 的消息格式和 Claude 不同",
+    "需要,换 Provider 必须重写整条转换管道",
+    "不需要,convertToLlm 只输出统一的 Message[],把 Message 翻成各家私有格式是 pi-ai 层的独立工作",
+    "不需要,因为 convertToLlm 会自动识别 Provider 类型"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。\"消息类型翻译\"(convertToLlm)和\"Provider 协议翻译\"(pi-ai 层)是两层独立抽象。延伸:换应用类型才需要改 convertToLlm,换上下文策略才改 transformContext。",
+   "noMsg": "回到 §六 那段专门强调\"换 LLM 提供商 convertToLlm 不需要动\"的解释——注意 Message→私有格式这一步是哪一层负责的。"
+  },
+  {
+   "stem": "用 !! 前缀执行命令后,那条 BashExecutionMessage 会怎样?",
+   "options": [
+    "被彻底从 context.messages 删除,UI 和 LLM 都看不到",
+    "转换成 UserMessage 正常发给 LLM,只是 UI 不渲染",
+    "被存进单独的 session 文件,当前会话完全不加载",
+    "仍留在 context.messages(UI 照常渲染),但 convertToLlm 里返回 undefined 被过滤,LLM 看不到"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。excludeFromContext=true 只在翻译边界过滤,数据不删除——这就是\"UI 能看、LLM 不能看\"。延伸:再进一步\"UI 也不看\"就是第三级可见性\"仅持久化\"(如 Web UI 的 ArtifactMessage)。",
+   "noMsg": "看 §七 excludeFromContext 那段的关键提醒——它特意强调这条消息\"仍然存在于 context.messages 中\",区分\"过滤\"和\"删除\"。"
+  }
+ ],
+ "_chapter": "第6章",
+ "_chapterCN": "消息系统——Agent的记忆如何组织与传递",
+ "prevFile": "0019-agent-message-two-layers.html",
+ "prevNum": "0019",
+ "nextFile": "0021-why-events-and-sync-barrier.html",
+ "nextNum": "0021",
+ "crumbLabel": "第 6 章 · 消息系统",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第6章-消息系统-Agent的记忆如何组织与传递.md",
+ "filename": "0020-convert-to-llm-and-visibility.html"
+}

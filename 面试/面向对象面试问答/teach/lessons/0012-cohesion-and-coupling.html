@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>内聚与耦合 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第三部分 · 关系与耦合 · 第 0012 节</p>
+<h1>内聚与耦合:高内聚、低耦合</h1>
+<p class="lede">"高内聚、低耦合"是每个人都会背的六个字,但面试真正想听的是:内聚衡量什么?耦合又衡量什么?它俩是不是一回事?这一节把这两个词拆到能当场举例、能说出级别、能连到 SOLID 的程度。</p>
+
+<div class="recall">
+<p>先想个画面:一个叫 <code>FileUtility</code> 的类,里面既能读写文件,又能存数据库,还能清缓存、解析 JSON。你打开它时第一反应是"这类好方便"还是"这类好乱"?再想:如果另一个类里写着 <code>car.engine._temperature = 120</code> 直接伸手改别人的内部字段,哪天 <code>Engine</code> 重构了会发生什么?把这两种"不舒服"的感觉记住,它们正好对应本节两个词。</p>
+</div>
+
+<h2>一、直觉:一个看"里面",一个看"之间"</h2>
+
+<p>这两个词最容易被搅成一团,先用一句话把它们钉死在不同的位置上:</p>
+
+<ul>
+<li><strong>内聚(Cohesion)</strong>看的是一个类<strong>内部</strong>——它的那些方法和数据彼此有多相关。相关性越高,这个类越"专一"。</li>
+<li><strong>耦合(Coupling)</strong>看的是类<strong>之间</strong>——一个类对另一个类的依赖有多深、多脆。依赖越浅、越走正门,越"松"。</li>
+</ul>
+
+<p>换个比喻:内聚像"一个部门里的人是不是都在干同一件事";耦合像"两个部门之间靠什么协作——是各自派代表走流程(松),还是你直接冲进我办公室翻我抽屉(紧)"。目标口号就一句:<strong>高内聚 + 低耦合</strong>。一个把"每个类只干一件事"做到位,一个把"类之间只走正门"做到位。</p>
+
+<div class="keydef">
+<dl>
+<dt>内聚 (Cohesion)</dt>
+<dd>一个类<strong>内部</strong>方法与数据彼此相关的紧密程度。<strong>高内聚</strong>=类专注单一职责,更易理解、维护、更可靠;<strong>低内聚</strong>=类塞了多个常常互不相关的职责,难懂、难改。</dd>
+<dt>耦合 (Coupling)</dt>
+<dd>类 / 模块之间相互<strong>依赖</strong>的程度,直接影响灵活性、可维护性、可测试性。<strong>松耦合(loose)</strong>更受欢迎;<strong>紧耦合(tight)</strong>牵一发动全身。</dd>
+<dt>它们是两个正交维度</dt>
+<dd>内聚讲"里面",耦合讲"之间"。一个高不代表另一个就好——别混为一谈(见易错点)。</dd>
+</dl>
+</div>
+
+<h2>二、内聚:从"万能工具类"说起</h2>
+
+<p>低内聚长什么样?典型就是名字里带 <code>Util</code> / <code>Manager</code> / <code>Helper</code> 的"什么都能干"类:</p>
+
+<pre><code># ❌ 低内聚:方法之间毫无关系,只是碰巧被塞进同一个类
+class FileUtility:
+    def read_file(self, path): ...          # 读文件
+    def write_file(self, path, data): ...   # 写文件
+    def save_to_database(self, record): ... # …还管数据库?
+    def clear_cache(self): ...              # …还清缓存?
+    def parse_json(self, text): ...         # …还解析 JSON?
+</code></pre>
+
+<p>病根:这个类<strong>有好几个"变化的理由"</strong>——数据库换驱动要改它,缓存策略变了要改它,JSON 格式调整还要改它。谁都得动它,谁动都可能误伤别人。改法是按职责拆开,让每个类都<strong>只围绕一件事</strong>:</p>
+
+<pre><code># ✅ 高内聚:每个类只服务于单一、明确的任务
+class FileReader:
+    def read(self, path): ...
+    def read_lines(self, path): ...
+
+class FileWriter:
+    def write(self, path, data): ...
+    def append(self, path, data): ...
+
+class JsonParser:
+    def parse(self, text): ...
+</code></pre>
+
+<p>怎么提升内聚?两条手段:<strong>SRP(单一职责原则)</strong>——让每个类只有一个变化的理由;<strong>封装</strong>——把数据藏好,只通过一组彼此相关的方法暴露它。内聚不是"非高即低",它有一条<strong>从弱到强的七级谱</strong>,面试问"你知道内聚分几种吗"时就是考这张表:</p>
+
+<table>
+<tr><th>级别(弱 → 强)</th><th>方法凭什么被放在一起</th><th>评价</th></tr>
+<tr><td>① 偶然 Coincidental</td><td>没有任何有意义的关系,纯属凑一块</td><td>最差</td></tr>
+<tr><td>② 逻辑 Logical</td><td>按某种逻辑归类,但没有清晰主题(如"所有 IO 操作")</td><td>差</td></tr>
+<tr><td>③ 时间 Temporal</td><td>按执行时机相关(如"启动时要做的所有初始化")</td><td>偏弱</td></tr>
+<tr><td>④ 过程 Procedural</td><td>按一个特定的执行顺序组织在一起</td><td>中</td></tr>
+<tr><td>⑤ 通信 Communicational</td><td>都操作同一组数据</td><td>较好</td></tr>
+<tr><td>⑥ 顺序 Sequential</td><td>一个方法的输出正好是下一个的输入</td><td>好</td></tr>
+<tr><td>⑦ 功能 Functional</td><td>所有方法协同服务于单一、明确的任务</td><td>最理想</td></tr>
+</table>
+
+<p><strong>功能内聚</strong>是天花板,它恰好就是 SRP 在类内部的样子。记不住七个名字没关系,记住"越往下,方法之间的关系越本质、越指向同一个目的"这条趋势就够用。</p>
+
+<h2>三、耦合:从"伸手翻抽屉"说起</h2>
+
+<p>耦合最坏的样子,是一个类直接去读写另一个类的内部字段:</p>
+
+<pre><code># ❌ 内容耦合(最强/最坏):Car 直接伸手改 Engine 的内部字段
+class Engine:
+    def __init__(self):
+        self._temperature = 90        # 约定为内部状态
+
+class Car:
+    def __init__(self):
+        self.engine = Engine()
+
+    def is_overheating(self):
+        # 直接读别人的私有实现细节 —— Engine 一重构,这里就碎
+        return self.engine._temperature &gt; 100
+</code></pre>
+
+<p>为什么坏?因为 <code>Car</code> 知道了 <code>Engine</code> 内部"温度存在一个叫 <code>_temperature</code> 的字段里"这个<strong>实现细节</strong>。哪天 <code>Engine</code> 改成用摄氏/华氏两个字段、或改名,<code>Car</code> 立刻跟着坏。松耦合的写法是:只走公开的"正门"接口,再把依赖<strong>注入</strong>进来:</p>
+
+<pre><code># ✅ 消息耦合(最弱/最好):只通过公开方法通信,依赖被注入
+class Engine:
+    def __init__(self):
+        self._temperature = 90
+
+    def is_overheating(self):         # 稳定的公开接口
+        return self._temperature &gt; 100
+
+class Car:
+    def __init__(self, engine):       # 依赖注入:不自己 new,由外部传入
+        self.engine = engine
+
+    def check(self):
+        # 只发一条"消息",不碰对方任何内部字段
+        return self.engine.is_overheating()
+</code></pre>
+
+<p>现在 <code>Engine</code> 内部怎么存温度、用什么单位,<code>Car</code> 一概不知也不必知——只要 <code>is_overheating()</code> 这个约定不变,两边可以各自独立演化。耦合也有一条<strong>从强到弱的谱</strong>(强=坏,弱=好),这是面试的另一张必背表:</p>
+
+<table>
+<tr><th>级别(强 → 弱)</th><th>两个模块靠什么绑在一起</th><th>评价</th></tr>
+<tr><td>① 内容 Content</td><td>一个模块直接访问 / 修改另一个的内部数据</td><td>最坏</td></tr>
+<tr><td>② 公共 Common</td><td>多个模块共享同一份全局数据,改它牵连所有人</td><td>差</td></tr>
+<tr><td>③ 控制 Control</td><td>一个模块靠传 flag 等控制信息,去左右另一个的内部流程</td><td>偏弱</td></tr>
+<tr><td>④ 外部 External</td><td>靠外部因素(配置文件、数据 schema 等)关联</td><td>中</td></tr>
+<tr><td>⑤ 印记/数据 Stamp/Data</td><td>共享一个数据结构,但只用到其中一部分(仍需知道结构)</td><td>较好</td></tr>
+<tr><td>⑥ 消息 Message</td><td>只通过标准接口 / 方法调用 / 消息通信</td><td>最好</td></tr>
+</table>
+
+<p>顺带认一眼<strong>控制耦合</strong>的味道:调用方传个 <code>mode</code> 进来指挥被调方走哪条分支——被调方的逻辑其实被外面攥着。</p>
+
+<pre><code># ⚠ 控制耦合:调用方用 flag 遥控被调方的内部分支
+def process(data, mode):
+    if mode == "csv":
+        ...          # 走 CSV 分支
+    elif mode == "json":
+        ...          # 走 JSON 分支
+# 更松的做法:拆成 process_csv / process_json,或传入一个策略对象(消息耦合)
+</code></pre>
+
+<h2>四、为什么这两个词是"好设计"的总开关</h2>
+
+<p>把它俩放一起想:<strong>高内聚</strong>让每个类各司其职、边界清楚;<strong>低耦合</strong>让类与类之间只靠稳定接口协作。合起来的直接红利是——</p>
+<ul>
+<li><strong>可维护</strong>:改动被关在一个高内聚的类里,不会顺着紧耦合的链条炸到全项目。</li>
+<li><strong>可测试</strong>:松耦合的类能被单独拎出来测,依赖可以用 mock / 假对象替换(这正是依赖注入的价值)。</li>
+<li><strong>可复用、可并行开发</strong>:边界清楚的模块能被搬到别处用,也能让多人各改各的、少踩彼此。</li>
+</ul>
+
+<p>而降耦合的系统方法,恰好就是下一节的主角 <strong>SOLID</strong>。这里先建立映射(细节留到 0013 起讲):</p>
+
+<table>
+<tr><th>原则</th><th>怎么帮你降耦合 / 提内聚</th></tr>
+<tr><td><strong>SRP</strong> 单一职责</td><td>职责单一 → 依赖更少 → 内聚更高、耦合更低</td></tr>
+<tr><td><strong>OCP</strong> 开闭</td><td>靠接口 / 抽象来扩展,而不是改现有代码 → 减少紧耦合</td></tr>
+<tr><td><strong>LSP</strong> 里氏替换</td><td>子类可无缝替换父类 → 模块只依赖抽象,独立于具体子类</td></tr>
+<tr><td><strong>ISP</strong> 接口隔离</td><td>接口聚焦、拆小 → 不被迫依赖自己用不到的方法</td></tr>
+<tr><td><strong>DIP</strong> 依赖倒置</td><td>依赖抽象而非具体实现 → 上层与下层解耦,更模块化</td></tr>
+</table>
+
+<div class="interview">
+<p><strong>高频追问链(这一簇几乎连着问):</strong></p>
+<ul>
+<li>"内聚和耦合有什么区别?" → 内聚讲一个类<strong>内部</strong>方法/数据的相关性,耦合讲类<strong>之间</strong>的依赖程度。两个正交维度,目标是"高内聚 + 低耦合"。</li>
+<li>"给个低内聚的例子。" → 名字带 <code>Util</code>/<code>Manager</code>/<code>Helper</code> 的万能类,如又读文件又写数据库又清缓存的 <code>FileUtility</code>——多个不相关职责挤一起。改法:SRP 拆开 + 封装。</li>
+<li>"内容耦合和消息耦合差在哪?" → 内容耦合是直接读写别人的私有字段(最强/最坏);消息耦合只通过公开方法/接口通信(最弱/最好)。中间还有公共、控制、外部、印记等级别。</li>
+<li>"低耦合是不是就是没有依赖?" → 不是。对象总要协作,零依赖不现实;低耦合是"依赖稳定的抽象接口"而不是"依赖对方的内部实现"。</li>
+<li>"怎么降低耦合?" → 面向接口编程、依赖注入、遵循 SOLID(尤其 DIP/OCP)——都是把"依赖具体"换成"依赖抽象"。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>头号坑:把内聚和耦合混为一谈,或以为"高内聚自动等于低耦合"。</strong>它们是<strong>两个正交维度</strong>。完全可能出现"一个类本身很内聚(只干一件事),却又紧耦合到另一个类的内部实现"——比如上面那个只负责判断过热、逻辑很专一的 <code>Car.is_overheating()</code>,却偏要去读 <code>engine._temperature</code>。内聚高不救耦合,耦合松也不保证内聚。答题时要能分别举例。</p>
+<p><strong>第二个坑:把"低耦合"理解成"零依赖"。</strong>对象存在的意义就是协作,依赖不可能也不该消灭。低耦合的准确含义是<strong>通过稳定的接口/抽象来依赖</strong>,而不是伸手进对方内部。把"消除依赖"当目标,只会写出一堆什么都不与谁合作、却又互相偷偷读全局变量的怪类。</p>
+<p><strong>第三个(经验性)提醒:</strong><code>Util</code>/<code>Manager</code>/<code>Helper</code> 这类命名<strong>往往</strong>是低内聚的味道(并非绝对——确有职责聚焦的工具类)。看到它多问一句"这个类到底只干一件事吗"。</p>
+</div>
+
+<div class="crosslang">
+<p>内聚 / 耦合是<strong>设计层面</strong>的概念,和语言无关——七级内聚、六级耦合的分类对 Java、C++、C# 同样成立。真正随语言变的,是"降耦合"手上有哪些工具:</p>
+<table>
+<tr><th>语言</th><th>降耦合的典型手段</th></tr>
+<tr><td><strong>Python</strong></td><td>鸭子类型 + 依赖注入;抽象靠 <code>abc.ABC</code> / <code>typing.Protocol</code>(结构化子类型),不强制显式接口</td></tr>
+<tr><td><strong>Java</strong></td><td>显式 <code>interface</code> + DI 容器(如 Spring),面向接口编程是主流范式</td></tr>
+<tr><td><strong>C++</strong></td><td>抽象基类(纯虚函数)或模板(编译期多态)来隔离具体实现</td></tr>
+<tr><td><strong>C#</strong></td><td>显式 <code>interface</code> + 内建 DI(<code>Microsoft.Extensions.DependencyInjection</code>)</td></tr>
+</table>
+<p>一句话:概念全语言通用,Python 因为鸭子类型,降耦合时"不必先声明接口",更轻但也更靠约定。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,做两件小事验证你真的分得清:</p>
+<ul>
+<li>把上面那个<strong>内容耦合</strong>版的 <code>Car</code>/<code>Engine</code> 亲手改成<strong>消息耦合</strong>版:给 <code>Engine</code> 加 <code>is_overheating()</code>,把 <code>Engine</code> 通过构造函数注入 <code>Car</code>。</li>
+<li>然后回答自己:改完之后,如果 <code>Engine</code> 把温度从摄氏换成华氏,<code>Car</code> 需要动吗?(不需要——这就是低耦合买到的东西。)</li>
+<li>再挑一个你写过的 <code>XxxManager</code> 类,列出它的所有方法,判断它落在七级内聚的哪一级,想想怎么拆能提到"功能内聚"。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:A 类的方法里直接写了 <code>b._cache.clear()</code>——伸手清了 B 对象的私有字段。这属于哪一种耦合?它在耦合谱里是最强还是最弱?</summary>
+<div class="answer">
+<p><strong>答案:内容耦合(Content coupling),最强、也最坏的一种。</strong></p>
+<p>A 依赖了 B 的内部实现细节("缓存存在一个叫 <code>_cache</code> 的字段里,而且它有 <code>clear()</code>")。B 只要重构这个内部结构,A 立刻崩。修法:给 B 加一个公开方法 <code>clear_cache()</code>,让 A 只发这条"消息"——就降到了最弱的消息耦合。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:有人说"我这个类内聚很高,所以耦合肯定也低"。这句话对吗?为什么?</summary>
+<div class="answer">
+<p><strong>不对。内聚和耦合是两个正交维度,一个好不蕴含另一个好。</strong></p>
+<p>反例:一个 <code>PriceCalculator</code> 类只做"算价格"这一件事(功能内聚,很高),但它在方法里直接读取了另一个 <code>TaxService</code> 对象的私有字段 <code>_rate_table</code>——这就是紧耦合(内容耦合)。它内聚高,却依然脆:<code>TaxService</code> 一改内部结构它就坏。所以两者要<strong>分别</strong>评估、分别优化。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 3(选择题):下面四种"方法为什么被放进同一个类"的理由,哪一种内聚最强?</summary>
+<div class="answer">
+<p>选项:(A) 它们碰巧都比较短 (B) 它们都在对象初始化时被调用 (C) 一个方法的输出正好是下一个方法的输入 (D) 它们都属于"跟字符串有关的操作"</p>
+<p><strong>答案:(C) —— 顺序内聚(Sequential),在这四项里最强。</strong></p>
+<p>(A) 是偶然内聚(最弱),(B) 是时间内聚,(D) 是逻辑内聚。越往"所有方法协同完成同一个明确任务"靠拢,内聚越强;顺序内聚已经很接近理想的功能内聚了。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>内聚看"类内部方法/数据有多相关"(越高越专一,顶点是功能内聚 ≈ SRP);耦合看"类之间依赖有多深/多脆"(越松越好,顶点是只走接口的消息耦合,最坏是伸手改内部的内容耦合)。它俩是正交维度,目标"高内聚 + 低耦合";而"低耦合"不是消灭依赖,是让依赖落在稳定接口上——把这套系统化的正是下一节的 SOLID。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《OOP 面试问答》Q11(What is cohesion in OOP?)与 Q12(What is coupling in OOP?)——内聚/耦合的定义、七级内聚谱、六级耦合谱、<code>FileUtility</code> 低内聚反例、与 SOLID 的映射,均取自源题原文要旨。</li>
+<li><strong>canon(概念锚定):</strong>内聚/耦合这套分级最早来自结构化设计——Stevens, Myers &amp; Constantine《Structured Design》(IBM Systems Journal, 1974)。可读的综述见 <a href="https://en.wikipedia.org/wiki/Cohesion_(computer_science)">Wikipedia: Cohesion</a> 与 <a href="https://en.wikipedia.org/wiki/Coupling_(computer_programming)">Wikipedia: Coupling</a>(级别名称与本节一致)。SOLID 的关联出自 Robert C. Martin,见 <a href="https://en.wikipedia.org/wiki/SOLID">Wikipedia: SOLID</a> 与 <a href="https://en.wikipedia.org/wiki/Single-responsibility_principle">SRP 条目</a>。Python 侧的抽象/接口工具见官方 <a href="https://docs.python.org/3/library/abc.html"><code>abc</code> 文档</a> 与 <a href="https://docs.python.org/3/library/typing.html#typing.Protocol"><code>typing.Protocol</code></a>。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"内聚 vs 耦合为什么正交"、或者把你项目里某个 <code>Manager</code> 类拿来一起判级、动手降耦合,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节把"低耦合"从口号升级成可执行的原则——SOLID 的前两条 SRP 与 OCP。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0011-associations-aggregation-composition.html"><span class="dir">← 上一课</span>0011 · 关联、聚合与组合</a>
+<a class="next" href="0013-solid-srp-ocp.html"><span class="dir">下一课 →</span>0013 · SOLID:SRP 与 OCP</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

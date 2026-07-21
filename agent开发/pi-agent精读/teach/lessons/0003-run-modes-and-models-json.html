@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0003 · 四种运行模式与 models.json 配置</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 1 章 · 开篇总览 ›
+  <a href="./0002-four-packages-three-layer-stack.html">上一课</a> ›
+  <strong>Lesson 0003</strong>
+</div>
+
+<p class="kicker">Lesson 0003 · 第 1 章 开篇总览</p>
+<h1>四种运行模式与 <code>models.json</code> 配置</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们摊开了三层堆栈的<em>结构</em>——
+  <code>pi-ai → pi-agent-core → pi-coding-agent</code>。这一课回答一个更实际的问题:
+  这套堆栈<strong>怎么被跑起来</strong>?本课只讲两件窄事——Pi 的<strong>四种运行模式</strong>,
+  以及如何用 <code>models.json</code> 把它接到国内的第三方模型上。
+</div>
+
+<div class="recall">
+  ↩️ <b>回忆一下上一课:</b> 三层堆栈里,<code>pi-coding-agent</code> 是顶层,
+  它既组装成一个完整的 CLI 产品,也<em>暴露 SDK 接口</em>供你嵌入自己的应用。
+  这节课要展开的「四种运行模式」,其实就是这同一套堆栈的<strong>四种不同穿法</strong>——
+  同一个核心,不同的外壳。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 说清 Pi 的<span class="sys-pill">四种运行模式</span>
+  各自解决什么场景,并且能亲手写一份 <code>models.json</code>,把智谱、DeepSeek 这类国内模型接进 Pi——
+  不用再死等一个 <code>ANTHROPIC_API_KEY</code> 环境变量。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:一台既能手动开、也能装上流水线的机床</b><br>
+  把 Pi 想成一台机床。<b>交互模式</b>是你亲手扳动手柄操作它;<b>print/JSON 模式</b>
+  是把它接进自动化流水线,喂一个指令、吐一份结果就退出;<b>RPC 模式</b>是它旁边站着一个
+  不懂机床语言的机器人(比如 Python/Go 写的程序),两边靠标准化的纸条(JSON)递话;
+  <b>SDK 模式</b>是干脆把整台机床嵌进你自己的工厂产线里,变成你产品的一部分。
+  而 <code>models.json</code> 就是这台机床的<b>「刀具登记表」</b>——你得写清每把刀(模型)
+  从哪进货(<code>baseUrl</code>)、用哪种接口卡口(<code>api</code>)、叫什么型号(<code>id</code>),
+  机床才认得怎么装上去用。
+</div>
+
+<h2>1 · 四种运行模式:同一套核心,四种穿法</h2>
+<p>
+  Pi 不是只能在终端里手动敲命令的玩具——它把「跑起来」这件事拆成了四种模式,
+  覆盖从个人开发到生产系统的全部场景:
+</p>
+<table class="bd">
+  <thead><tr><th>模式</th><th>用途</th><th>示例</th></tr></thead>
+  <tbody>
+    <tr><td><b>交互模式</b></td><td>日常编程的经典 TUI</td><td><code>pi</code></td></tr>
+    <tr><td><b>print/JSON 模式</b></td><td>脚本和 CI/CD 流水线</td><td><code>pi -p "explain this code"</code></td></tr>
+    <tr><td><b>RPC 模式</b></td><td>通过 stdin/stdout 交换 JSON,集成进非 Node.js 程序</td><td>父进程写 JSON 到 stdin,读 stdout</td></tr>
+    <tr><td><b>SDK 模式</b></td><td>嵌入自己的应用</td><td><code>createAgentSession()</code></td></tr>
+  </tbody>
+</table>
+<p>先看前两种模式在命令行上长什么样,建立最直观的感受:</p>
+<pre><span class="cm"><span class="ln">1</span>// 交互模式:日常手动敲,进入 TUI 界面</span>
+<span class="ln">2</span>$ pi
+<span class="ln">3</span>
+<span class="cm"><span class="ln">4</span>// print/JSON 模式:一次性喂指令,吐结果就退出,适合塞进 CI 脚本</span>
+<span class="ln">5</span>$ pi -p <span class="str">"explain this code"</span>
+</pre>
+<div class="why">
+  <b>为什么要设计出四种模式,而不是一种「够用就行」?</b> 因为项目会长大。
+  同一套框架要能覆盖「开发者手边随手一用」到「CI 脚本里跑一次」再到「生产系统里长期驻留」的全场景——
+  这让 Pi 可以从<em>「开发者手边的工具」</em>无缝演进为<em>「生产系统中的 Agent 能力提供者」</em>,
+  项目长大后<strong>不需要中途换框架</strong>。
+</div>
+
+<h2>2 · SDK 模式实战:<code>createAgentSession()</code></h2>
+<p>
+  四种模式里,前两种(交互、print/JSON)是「用」,SDK 模式是「嵌」——把 Pi 整个 Agent 能力
+  当作一个库调用,塞进你自己的应用里。核心入口是 <code>createAgentSession()</code>:
+</p>
+<pre><span class="ln">1</span><span class="key">import</span> { <span class="fn">createAgentSession</span> } <span class="key">from</span> <span class="str">'@earendil-works/pi-coding-agent'</span>;
+<span class="ln">2</span><span class="key">import</span> { <span class="fn">getModel</span> } <span class="key">from</span> <span class="str">'@earendil-works/pi-ai/compat'</span>;
+<span class="ln">3</span>
+<span class="ln">4</span><span class="key">const</span> session = <span class="key">await</span> <span class="fn">createAgentSession</span>({
+<span class="ln">5</span>  cwd: <span class="str">'/path/to/project'</span>,
+<span class="ln">6</span>  model: <span class="fn">getModel</span>(<span class="str">'anthropic'</span>, <span class="str">'claude-sonnet-4-5'</span>), <span class="cm">// Model 对象,不是 {id, api}</span>
+<span class="ln">7</span>});
+<span class="ln">8</span>
+<span class="cm"><span class="ln">9</span>// subscribe 接收一个监听器函数,事件类型是 AgentSessionEvent 联合类型</span>
+<span class="ln">10</span>session.<span class="fn">subscribe</span>((event) =&gt; {
+<span class="ln">11</span>  <span class="key">if</span> (event.type === <span class="str">'turn_end'</span>) {
+<span class="ln">12</span>    console.<span class="fn">log</span>(<span class="str">'Agent 完成了一轮思考'</span>);
+<span class="ln">13</span>  }
+<span class="ln">14</span>});
+<span class="ln">15</span>
+<span class="ln">16</span><span class="key">await</span> session.<span class="fn">prompt</span>(<span class="str">'Read the codebase and explain the architecture.'</span>);
+</pre>
+<p>
+  注意第 4–7 行传的 <code>cwd</code> 与 <code>model</code>,以及第 10 行用 <code>subscribe</code> 订阅
+  <code>turn_end</code> 事件——这跟交互模式底下跑的是<strong>同一套引擎</strong>,只是外面不再套 TUI,
+  换成你自己的应用逻辑来接收事件、决定下一步。
+</p>
+<cite>🔎 出处:教程 §5.1 / <code>pi-coding-agent</code>(<code>createAgentSession</code>)。</cite>
+
+<h2>3 · 一个环境变量搞不定第三方模型</h2>
+<p>
+  官方教程默认让你设 <code>ANTHROPIC_API_KEY</code>,但真实项目里你大概率要接的是
+  国内的智谱、DeepSeek、Kimi、Qwen 之类。这些<strong>不可能靠一个环境变量搞定</strong>——
+  你得同时告诉 Pi:<code>baseUrl</code> 在哪、用哪种 <code>api</code> 协议、模型 <code>id</code> 叫什么、
+  上下文窗口多大。一个字符串装不下这四件事。
+</p>
+<p>
+  Pi 的解法是本地 JSON 配置文件 <code>~/.pi/agent/models.json</code>,由
+  <code>ModelRegistry.create()</code> 在启动时自动读取,不需要任何命令行参数。看一个真实例子
+  (<code>zhipu</code> 与 <code>deepseek</code> 两个 provider):
+</p>
+<pre><span class="ln">1</span>{
+<span class="ln">2</span>  <span class="str">"providers"</span>: {
+<span class="ln">3</span>    <span class="str">"zhipu"</span>: {
+<span class="ln">4</span>      <span class="str">"baseUrl"</span>: <span class="str">"https://open.bigmodel.cn/api/paas/v4"</span>,
+<span class="ln">5</span>      <span class="str">"api"</span>: <span class="str">"openai-completions"</span>,
+<span class="ln">6</span>      <span class="str">"apiKey"</span>: <span class="str">"&lt;your-zhipu-key&gt;"</span>,
+<span class="ln">7</span>      <span class="str">"models"</span>: [
+<span class="ln">8</span>        { <span class="str">"id"</span>: <span class="str">"glm-4.5-air"</span>, <span class="str">"name"</span>: <span class="str">"GLM-4.5-Air"</span> },
+<span class="ln">9</span>        { <span class="str">"id"</span>: <span class="str">"glm-4-flash"</span>, <span class="str">"name"</span>: <span class="str">"GLM-4-Flash"</span> }
+<span class="ln">10</span>      ]
+<span class="ln">11</span>    },
+<span class="ln">12</span>    <span class="str">"deepseek"</span>: {
+<span class="ln">13</span>      <span class="str">"baseUrl"</span>: <span class="str">"https://api.deepseek.com"</span>,
+<span class="ln">14</span>      <span class="str">"api"</span>: <span class="str">"openai-completions"</span>,
+<span class="ln">15</span>      <span class="str">"apiKey"</span>: <span class="str">"&lt;your-deepseek-key&gt;"</span>,
+<span class="ln">16</span>      <span class="str">"models"</span>: [
+<span class="ln">17</span>        { <span class="str">"id"</span>: <span class="str">"deepseek-v4-flash"</span>, <span class="str">"name"</span>: <span class="str">"DeepSeek V4 Flash"</span> },
+<span class="ln">18</span>        {
+<span class="ln">19</span>          <span class="str">"id"</span>: <span class="str">"deepseek-v4-pro"</span>,
+<span class="ln">20</span>          <span class="str">"name"</span>: <span class="str">"DeepSeek V4 Pro"</span>,
+<span class="ln">21</span>          <span class="str">"contextWindow"</span>: 1000000,
+<span class="ln">22</span>          <span class="str">"maxTokens"</span>: 384000
+<span class="ln">23</span>        }
+<span class="ln">24</span>      ]
+<span class="ln">25</span>    }
+<span class="ln">26</span>  }
+<span class="ln">27</span>}
+</pre>
+<div class="why">
+  <b>为什么用配置文件,而不是环境变量?</b> 接入第三方模型需要一次性告知
+  <code>baseUrl</code>、<code>api</code> 协议、模型 <code>id</code>、上下文窗口等<strong>多个维度</strong>——
+  一个环境变量根本表达不了这么多信息。文件形式还有个好处:能被 <code>ModelRegistry.create()</code>
+  在启动时<strong>自动读取</strong>,零命令行参数,配一次到处生效。
+</div>
+<cite>🔎 出处:教程 §3.7 / <code>model-registry.ts:367</code>(<code>ModelRegistry.create</code>)。</cite>
+
+<h2>4 · 拆开关键字段:每一格「刀具登记表」记的是什么</h2>
+<p>对照上面的 JSON,逐字段拆解:</p>
+<table class="bd">
+  <thead><tr><th>字段</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><code>providers</code></td><td>顶层字典,键名(<code>zhipu</code>/<code>deepseek</code>)自己起,会作为 provider 显示名</td></tr>
+    <tr><td><code>api</code></td><td>选协议:最常见 <code>openai-completions</code>(国内厂商几乎都支持),还有 <code>anthropic-messages</code>、<code>openai-responses</code>——它决定 Pi 用哪种<strong>请求格式</strong>去调</td></tr>
+    <tr><td><code>baseUrl</code></td><td>provider 的接口地址</td></tr>
+    <tr><td><code>apiKey</code></td><td>明文存放</td></tr>
+    <tr><td><code>models</code></td><td>该 provider 下的模型列表:<code>id</code> 是调 API 时传的真实模型名(机器用),<code>name</code> 是 TUI 里显示的友好名(人看)</td></tr>
+    <tr><td><code>contextWindow</code> / <code>maxTokens</code></td><td>可选,影响上下文压缩策略</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么 <code>api</code> 字段如此关键?</b> 它决定 Pi 用哪种请求格式去调这个 provider——
+  选错协议,请求格式就对不上,直接调不通。国内厂商几乎都支持 OpenAI 兼容接口,
+  所以多数场景填 <code>openai-completions</code> 就够。
+</div>
+<div class="tradeoff">
+  🔑 <b>为什么 <code>apiKey</code> 明文存放,还这样设计?</b> 这是一次<strong>显式的安全权衡</strong>:
+  用换取本地配置的简单直接,代价是你必须自己把 <code>.pi/</code> 加进 <code>.gitignore</code>——
+  否则一个 <code>git add .</code> 就把 key 提交进版本库,直接泄露。Pi 没有替你兜底这一步,
+  这是留给你的责任。
+</div>
+<p>
+  另外注意 <code>id</code> 与 <code>name</code> 的区分:<b>为什么要分开?</b> <code>id</code> 是机器调用用的真实模型名,
+  <code>name</code> 是给人看的友好显示名——职责分离,让「展示」和「调用」互不干扰,
+  改一个不用担心动到另一个。
+</p>
+
+<h2>5 · 配好之后怎么用</h2>
+<p>写完 <code>models.json</code>,有三种方式让这些模型真正派上用场:</p>
+<pre><span class="cm"><span class="ln">1</span>// 方式一:会话中临时切换 —— 按 /model 或 Ctrl+L,fuzzy 搜索选一个</span>
+<span class="ln">2</span>
+<span class="cm"><span class="ln">3</span>// 方式二:设为默认 —— 编辑 ~/.pi/agent/settings.json</span>
+<span class="ln">4</span>{
+<span class="ln">5</span>  <span class="str">"defaultProvider"</span>: <span class="str">"deepseek"</span>,
+<span class="ln">6</span>  <span class="str">"defaultModel"</span>: <span class="str">"deepseek-v4-pro"</span>
+<span class="ln">7</span>}
+<span class="ln">8</span>
+<span class="cm"><span class="ln">9</span>// 方式三:命令行查列表 —— 解析错误会打在终端顶部,方便排查</span>
+<span class="ln">10</span>$ pi models
+<span class="ln">11</span>$ pi models deepseek   <span class="cm">// fuzzy 过滤</span>
+</pre>
+
+<div class="diagram">机床类比落地图 —— 四种模式 × models.json
+
+  交互模式        print/JSON        RPC 模式          SDK 模式
+  (你亲手开)     (接自动流水线)    (递给别的机器人)  (嵌进你的工厂)
+      │                │                 │                 │
+      └────────┬───────┴────────┬────────┴────────┬────────┘
+               ▼                                   ▼
+        同一套三层堆栈                    models.json =「刀具登记表」
+   (pi-ai→agent-core→coding-agent)     baseUrl / api / id / name
+                                        (第三方模型 = 换一把刀)
+</div>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 教程为什么说接入国内的智谱/DeepSeek 不能靠一个环境变量,而要用 models.json?</p>
+    <button class="opt">因为环境变量在 Windows 上不生效</button>
+    <button class="opt">因为接入第三方模型需要同时指定 baseUrl、api 协议、模型 id、上下文窗口等多个维度,单个环境变量表达不了</button>
+    <button class="opt">因为 Pi 不支持任何环境变量</button>
+    <button class="opt">因为国内模型必须用 anthropic-messages 协议</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">② models.json 里的 api 字段(如 openai-completions)起什么作用?</p>
+    <button class="opt">它是 provider 在 TUI 里显示的友好名字</button>
+    <button class="opt">它决定 Pi 用哪种请求格式去调这个 provider,国内厂商几乎都支持 openai-completions</button>
+    <button class="opt">它是该模型的上下文窗口大小</button>
+    <button class="opt">它是 apiKey 的加密算法名</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">③ 你想把 Pi 接进 CI/CD 流水线让它解释一段代码并输出结果,应该用哪种运行模式?</p>
+    <button class="opt">print/JSON 模式,例如 pi -p "explain this code"</button>
+    <button class="opt">交互模式,直接运行 pi</button>
+    <button class="opt">RPC 模式,通过 stdin/stdout 交换 JSON</button>
+    <button class="opt">SDK 模式,调用 createAgentSession()</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>RPC 模式和 SDK 模式看起来都能被别的程序调用,它们的边界到底在哪?</em>」
+  「<em>models.json 里的 apiKey 明文存放,除了 .gitignore,还有没有更彻底的方案?</em>」
+  「<em>contextWindow / maxTokens 具体怎么影响上下文压缩策略?</em>」——
+  最后这个问题,正好指向<strong>下一课</strong>要拆的项目骨架与包依赖关系。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第1章-开篇-Pi-Agent框架总览.md">第 1 章 · 开篇总览</a>——
+  原文 §3.7 还讲了 <code>modelOverrides</code>、<code>compat</code> 字段这两种进阶用法,
+  §5 还有 <code>pi-tui</code> 正交 UI 库与扩展系统的完整介绍,值得通读一遍。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0004):</strong> 我们把「五个包」的<strong>项目骨架</strong>摊开——
+  每个包目录里到底放了什么文件、谁 import 谁——把这节课讲的「四种模式」和上节课讲的
+  「三层堆栈」,落到一份你能对照着找文件的<em>真实目录树</em>上。
+</p>
+
+<footer>
+  Lesson 0003 · 第 1 章 开篇总览 ·
+  下一课:<a href="./0004-five-packages-project-skeleton.html">0004 五包项目骨架 →</a> ·
+  上一课:<a href="./0002-four-packages-three-layer-stack.html">0002 四包三层堆栈</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。models.json 由 ModelRegistry.create() 在启动时自动读取,不需要命令行参数。延伸:apiKey 明文存放,务必把 .pi/ 加进 .gitignore,否则一个 git add . 就泄露。',
+               '✓ 对。api 常见取值有 openai-completions、anthropic-messages、openai-responses,选错协议请求格式就对不上。延伸:显示名其实由 provider 键名和每个 model 的 name 字段负责,别和 api 混了。',
+               '✓ 对。print/JSON 模式(pi -p)正是为脚本和 CI/CD 流水线设计的。延伸:四种模式让 Pi 从本地手用无缝演进到生产嵌入,项目长大不用换框架。'];
+  var msgNo = ['想想接入一个第三方模型到底要告诉 Pi 几件事:光有一把 key 够不够,它还得知道去哪调、用什么协议、模型叫什么?',
+               '重读 3.7 节对各字段的拆解:哪个字段管『用什么请求格式去调』?friendly 显示名是另一个字段的活。',
+               '回看 5.3 节四种模式表:哪一行的『用途』明确写着脚本和 CI/CD?交互模式是给人手用的。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

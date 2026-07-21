@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0024 · 上下文工程总览</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 8 章 · 上下文工程 ›
+  <a href="./0023-text-delta-journey.html">上一课</a> ›
+  <strong>Lesson 0024</strong>
+</div>
+
+<p class="kicker">Lesson 0024 · 第 8 章 上下文工程</p>
+<h1>上下文工程总览</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:这一课不深入任何单一技巧的实现细节,只回答一个更根本的问题——
+  <strong>Pi 为什么需要"上下文工程",以及它在哪几个环节布防</strong>。
+  读完你会拿到一张<strong>两层防护地图</strong>,后面 §四、§五、§六(乃至独立成章的第 9 章 Compaction)
+  都是在这张地图上填细节。
+</div>
+
+<div class="recall">
+  🔁 <strong>先回忆上一课</strong>:第 6 章讲消息系统时说过——Agent 内部用 7 种 <code>AgentMessage</code>
+  自由表达,调用 LLM 之前会经过一道 <code>convertToLlm</code> 翻译边界,收窄成 3 种标准 <code>Message</code>。
+  第 7 章讲事件驱动时又提到:<code>agent_end</code> 事件之后会触发一次"上下文检查"。
+  这两件事当时都一带而过,但它们背后其实藏着<strong>同一个核心问题</strong>——这就是本课要打开的东西。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 说清 Pi 的<span class="sys-pill">两层防护地图</span>
+  ——输入侧(工具输出截断 + 系统提示词组装)与历史侧(Compaction + 分支摘要)——
+  并说出每一层的<strong>触发频率</strong>为什么天然不同。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:行李箱与打包师</b>
+  把 LLM 的上下文窗口想象成一个<b>固定大小的行李箱</b>,而 coding-agent 每一轮对话都在往里塞新衣服——
+  系统提示词、工具输出、历史消息、项目规范——迟早塞爆。<b>上下文工程</b>就是那位"打包师"的多道整理工序:
+  该叠的叠(截断)、该压的压(摘要),该扔的先拍照存档(逃生通道),再放进去。
+  记住这个画面,后面每一层防护都能对号入座。
+</div>
+
+<h2>1 · 问题:窗口是固定的,对话是增长的</h2>
+<p>
+  把一次 coding-agent 会话送进 LLM 的"信息源"摊开来看,你会立刻意识到问题有多严重——
+  系统提示词、项目上下文文件(<code>CLAUDE.md</code> / <code>AGENTS.md</code>,可能多层嵌套)、
+  Skills 清单、工具定义、对话历史、当前轮新输入,随便挑一项都可能爆炸:
+</p>
+<pre><span class="ln">1</span>一次会话送进 LLM 的内容
+<span class="ln">2</span>├── 系统提示词(工具说明、guidelines、pi 文档路径)
+<span class="ln">3</span>├── 项目上下文文件(CLAUDE.md / AGENTS.md,可能多层嵌套)
+<span class="ln">4</span>├── Skills 列表(每个 skill 一段描述)
+<span class="ln">5</span>├── 工具定义(每个工具的 JSON schema)
+<span class="ln">6</span>├── 对话历史(每一轮 user / assistant / toolResult)
+<span class="ln">7</span>│   ├── 用户输入
+<span class="ln">8</span>│   ├── LLM 回复(含 thinking、toolCall)
+<span class="ln">9</span>│   └── 工具结果(read 文件、bash 输出、grep 命中……)
+<span class="ln">10</span>└── 当前轮的新输入</pre>
+<cite>🔎 出处:教程 §一 / 信息源树(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第8章-上下文工程-让有限窗口装下无限对话.md</code>)。</cite>
+<p>
+  这不是危言耸听。跑一次 <code>npm install</code> 的 stderr 可能十几 KB;<code>read</code> 一个 5000 行的
+  源文件,可能 80KB;<code>grep</code> 全仓库命中几百行;几十轮工具调用累积下来,轻松破 100K token。
+  而 LLM 的窗口是<strong>硬上限</strong>——超了直接报错 <code>prompt is too long</code>,对话中断,
+  不是"变慢",是"炸掉"。
+</p>
+<p>
+  <strong>上下文工程(Context Engineering)</strong>就是应对这个矛盾的工程 discipline:
+  在内容送入 LLM 之前,<strong>多层裁剪、过滤、压缩、组织</strong>,让有限的窗口装下
+  "对当前任务最有价值的信息"。Pi 在这个环节实现了 <strong>4 种互补的技巧</strong>。
+</p>
+
+<h2>2 · 地图:两层防护</h2>
+<div class="why">
+  <b>为什么先给"地图",再讲细节?</b> 因为没有任何单一机制能搞定所有上下文问题。
+  先建立这张全局漏斗的心智模型,才能避免新手"找到一招用到底"的错误——
+  比如只指望 Compaction 把一切都压下去,结果单条 80KB 的 read 结果照样能撑爆一轮对话。
+</div>
+<p>Pi 的上下文工程分布在两个环节,问题源头完全不同——所以必须分层各个击破:</p>
+<pre><span class="ln">1</span>┌──────────────────────────────────────────────────────────────┐
+<span class="ln">2</span>│                       输入侧(送进 LLM 之前)                 │
+<span class="ln">3</span>│  ① 工具输出截断 — bash/read/grep 结果按行/字节裁剪            │
+<span class="ln">4</span>│  ② 系统提示词组装 — 多层 CLAUDE.md 向上递归 + Skills 懒加载   │
+<span class="ln">5</span>└──────────────────────────────────────────────────────────────┘
+<span class="ln">6</span>                              │
+<span class="ln">7</span>                              ▼
+<span class="ln">8</span>┌──────────────────────────────────────────────────────────────┐
+<span class="ln">9</span>│                  历史侧(长对话管理)                         │
+<span class="ln">10</span>│  ③ Compaction —— 阈值触发,把旧消息变成结构化摘要             │
+<span class="ln">11</span>│  ④ 分支摘要     —— 切换会话树分支时,给"被放弃的分支"做摘要   │
+<span class="ln">12</span>└──────────────────────────────────────────────────────────────┘</pre>
+<cite>🔎 出处:教程 §二 / 两层防护对照表(同上章节文件)。</cite>
+<div class="tradeoff">
+  <b>为什么分"输入侧"和"历史侧"两层?</b> 问题源头不同——输入侧是"单次内容太大"
+  (一次 read、一次 bash 就可能撑爆),历史侧是"累积总量超窗口"(几十轮对话叠加)。
+  一个是"瞬时体积"问题,一个是"长期总量"问题,解法自然不同,分层才能各个击破。
+</div>
+<p>把四层技巧连同触发频率列出来,会看到一个规律:</p>
+<table class="bd">
+  <thead><tr><th>层</th><th>解决的问题</th><th>触发频率</th></tr></thead>
+  <tbody>
+    <tr><td>① 工具输出截断</td><td>单次工具结果太大</td><td><strong>每次工具调用</strong></td></tr>
+    <tr><td>② 系统提示词组装</td><td>项目规范要进上下文,又不能让用户每次说</td><td>每轮 prompt</td></tr>
+    <tr><td>③ Compaction</td><td>长对话累积超窗口</td><td>阈值触发</td></tr>
+    <tr><td>④ 分支摘要</td><td>会话树分支跳转,旧分支不能丢</td><td>用户切换分支时</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么要强调触发频率?</b> 频率决定了每层的<strong>实现复杂度预算</strong>。
+  工具输出截断每次工具调用都要跑——高频,必须朴素可靠而快,容不得一次 LLM 调用的延迟。
+  Compaction 是阈值触发的低频操作,可以承担"再调一次 LLM 生成摘要"这种重开销。
+  分支摘要更是只在用户切换分支这个稀有事件里才触发。<em>频率不同,该花多少工程力气,答案也不同。</em>
+</div>
+
+<h2>3 · 承接前两章:同一个问题的两次伏笔</h2>
+<p>
+  回头看第 6 章和第 7 章埋下的两个细节,现在能对上号了。第 6 章的 <code>convertToLlm</code>
+  翻译边界——把 Agent 内部 7 种表达力丰富的 <code>AgentMessage</code>,收窄翻译成 LLM 只认的 3 种
+  标准 <code>Message</code>——本质上已经是一次"为了让内容适配 LLM 的输入格式"而做的塑形。
+  第 7 章 <code>agent_end</code> 事件后触发的"上下文检查",指向的正是本课 §二地图里
+  <strong>③ Compaction</strong> 那一层的阈值判定入口。
+</p>
+<p>
+  两处伏笔都指向同一个核心问题:<strong>LLM 的上下文窗口是固定的,但 coding-agent 的对话会无限增长</strong>。
+  第 6、7 章只是各自触及了这个问题的一角,本课才第一次把它摊开成完整的地图。
+</p>
+
+<h2>4 · 元原则:没有银弹,层层兜底</h2>
+<div class="tradeoff">
+  <b>核心洞察:</b> 每一层只解决自己擅长的问题,<strong>互不替代</strong>。
+  你可以把 Compaction 调得非常激进,但单条工具输出仍然需要截断——因为一次没截断的 80KB
+  read 结果,连一轮对话都撑不过,根本轮不到 Compaction 出场。反过来,截断再彻底,
+  也挡不住几十轮对话的历史累积超窗口。<em>四层组合成一道漏斗,层层过滤,才凑成完整防线。</em>
+</div>
+<div class="diagram">上下文工程的漏斗 —— 四层互补,没有一层能单独扛下全部
+
+   输入侧                              历史侧
+   ┌───────────────┬───────────────┐  ┌───────────────┬───────────────┐
+   │ ① 工具输出截断 │ ② 系统提示词组装 │  │ ③ Compaction  │ ④ 分支摘要    │
+   │  每次工具调用  │   每轮 prompt   │  │  阈值触发     │  切换分支时   │
+   └───────────────┴───────────────┘  └───────────────┴───────────────┘
+          解决"单次内容太大"                  解决"累积总量超窗口"
+                    │                               │
+                    └───────────────┬───────────────┘
+                                    ▼
+                     送进 LLM 的,是"对当前任务最有价值的信息"
+</div>
+<p>
+  这也是为什么本课刻意不深入任何一层的实现——先把这张地图焊进脑子,
+  §四(下一课 0025)讲系统提示词组装、独立成章的第 9 章讲 Compaction 细节,
+  你才知道自己在漏斗的哪一层里挖。
+</p>
+
+<h2>5 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把地图焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 上下文工程要解决的根本矛盾是什么?</p>
+    <button class="opt">LLM 的推理速度太慢</button>
+    <button class="opt">LLM 窗口是固定硬上限,但对话内容无限增长</button>
+    <button class="opt">工具调用的出错率太高</button>
+    <button class="opt">网络带宽有限传不完数据</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② Pi 把上下文工程的防线分成哪两层?</p>
+    <button class="opt">输入侧 + 历史侧</button>
+    <button class="opt">前端 + 后端</button>
+    <button class="opt">压缩 + 加密</button>
+    <button class="opt">同步 + 异步</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ 下列哪个技巧的触发频率是"每次工具调用"?</p>
+    <button class="opt">Compaction</button>
+    <button class="opt">分支摘要</button>
+    <button class="opt">工具输出截断</button>
+    <button class="opt">系统提示词组装</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>为什么工具输出截断不能等 Compaction 来兜底,非要单独做一层?</em>」
+  「<em>如果只按"触发频率"给每层分配工程预算,那预算最紧张的是哪一层,为什么?</em>」
+  「<em>系统提示词组装既然每轮 prompt 都要跑,它是怎么在"高频"和"要塞进多层 CLAUDE.md"
+  之间找平衡的?</em>」——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>6 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第8章-上下文工程-让有限窗口装下无限对话.md">第 8 章 · 上下文工程——让有限窗口装下无限对话</a>——
+  原文 §三~§六 逐层展开了本课地图上的四种技巧的完整实现,§七还画了一张全景链路图,值得通读。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0025):</strong> 我们钻进地图的第②层——
+  系统提示词是怎么被<strong>组装</strong>出来的:多层 <code>CLAUDE.md</code> 如何向上递归合并、
+  Skills 清单如何"懒加载"、XML 包装为什么比 Markdown 更适合喂给 LLM。
+</p>
+
+<footer>
+  Lesson 0024 · 第 8 章 上下文工程 ·
+  下一课:<a href="./0025-system-prompt-assembly-and-pipeline.html">0025 系统提示词组装与全景链路 →</a> ·
+  上一课:<a href="./0023-text-delta-journey.html">0023 文本增量之旅</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对——窗口是硬上限,超了直接报 prompt is too long 导致对话中断,而 read 一个 5000 行文件就可能 80KB。延伸:正因为是硬上限而非软性能问题,才必须在"送入之前"就裁剪,而不是事后优化。',
+               '✓ 对,输入侧管"送进 LLM 之前"(工具输出截断 + 系统提示词组装),历史侧管"长对话管理"(Compaction + 分支摘要)。延伸:两层再细分成 4 个互补技巧。',
+               '✓ 对,每次 bash/read/grep 结果都要过截断这道关,所以它必须做得朴素可靠。延伸:相比之下 Compaction 是阈值触发的低频重操作,可以承担更复杂的 LLM 调用。'];
+  var msgNo = ['回看 §一"窗口是固定的,对话是增长的",想想内容超过窗口时会发生什么后果,那才是真正的痛点。',
+               '回看 §二"地图:两层防护"那张图的上下两个框,它们分别对应内容进入 LLM 的哪个环节。',
+               '回看 §二那张触发频率对照表,想想哪个操作是与"每一次工具执行"绑定的。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

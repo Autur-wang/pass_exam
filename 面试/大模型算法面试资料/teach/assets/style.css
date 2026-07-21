@@ -1,0 +1,220 @@
+/* 编程面试大学 · 精读课 共享样式表
+   —— 全课唯一样式组件。每节 lesson 只 link 这一个文件(../assets/style.css)。
+   自包含、零外部依赖、本地 file:// 打开即可正确渲染;深/浅色自动适配;为打印优化。
+   结构:① 主题变量 ② 基座排版 ③ 教学装置 ④ 图示库 ⑤ 打印。 */
+
+/* ─────────────── ① 主题变量(深浅色) ─────────────── */
+:root {
+  --ink: #1a1a2e;
+  --paper: #fdfcf8;
+  --accent: #b8452c;      /* 砖红:强调 / 面试易错点 */
+  --accent-soft: #f6e3dd;
+  --link: #1d5c8f;        /* 靛蓝:链接 / 决策 */
+  --link-soft: #e2edf5;
+  --muted: #6b6b7b;
+  --border: #e2ddd2;
+  --code-bg: #f2efe8;
+  --good: #2e6e4e;        /* 墨绿:带走这一条 */
+  --good-soft: #e2efe7;
+  --warm: #a6791f;        /* 琥珀:面试怎么考 */
+  --warm-soft: #f4ecd6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e8e6e0;
+    --paper: #16161e;
+    --accent: #e07a5f;
+    --accent-soft: #3a2620;
+    --link: #7ab3dc;
+    --link-soft: #1e2b38;
+    --muted: #9a9aaa;
+    --border: #33333f;
+    --code-bg: #24242e;
+    --good: #7fc8a0;
+    --good-soft: #1e3328;
+    --warm: #d9b45a;
+    --warm-soft: #332b18;
+  }
+}
+
+/* ─────────────── ② 基座排版 ─────────────── */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 2rem 1rem 4rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Source Han Serif SC", "Songti SC", Georgia, serif;
+  line-height: 1.75;
+  font-size: 17px;
+}
+main { max-width: 46rem; margin: 0 auto; }
+h1, h2, h3 { font-family: "PingFang SC", "Helvetica Neue", sans-serif; line-height: 1.3; }
+h1 { font-size: 1.7rem; border-bottom: 3px solid var(--accent); padding-bottom: .5rem; }
+h2 { font-size: 1.25rem; margin-top: 2.5rem; }
+h3 { font-size: 1.05rem; margin-top: 2rem; }
+a { color: var(--link); }
+code, pre {
+  font-family: "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: .88em;
+  background: var(--code-bg);
+  border-radius: 4px;
+}
+code { padding: .1em .35em; }
+pre { padding: 1em; overflow-x: auto; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: .92em; }
+th, td { border: 1px solid var(--border); padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: var(--code-bg); font-family: "PingFang SC", sans-serif; }
+.lede { font-size: 1.08em; color: var(--muted); margin-top: -.3rem; }
+.meta { font-size: .82em; color: var(--muted); font-family: "PingFang SC", sans-serif; }
+ul, ol { padding-left: 1.4em; }
+li { margin: .25em 0; }
+
+/* ─────────────── ③ 教学装置 ─────────────── */
+
+/* 关键定义 */
+.keydef { border: 1px solid var(--border); border-radius: 8px; padding: .9em 1.1em; margin: 1.2rem 0; background: var(--code-bg); }
+.keydef dt { font-weight: 700; font-family: "PingFang SC", sans-serif; }
+.keydef dd { margin: .3em 0 .8em; }
+.keydef dd:last-child { margin-bottom: 0; }
+.keydef dd em { color: var(--muted); font-style: italic; }
+
+/* 先回忆一下:检索练习开场(实现 SKILL.md 的 retrieval practice / 间隔重复) */
+.recall { border-left: 4px solid var(--muted); background: var(--code-bg); padding: .7em 1em; margin: 1.4rem 0; border-radius: 0 6px 6px 0; }
+.recall::before { content: "🔁 先回忆一下"; display: block; font-family: "PingFang SC", sans-serif; font-weight: 600; font-size: .82em; color: var(--muted); margin-bottom: .3em; }
+.recall p:first-of-type { margin-top: 0; } .recall p:last-child { margin-bottom: 0; }
+
+/* 面试怎么考:每节的「面试要点」半区(琥珀) */
+.interview { border-left: 4px solid var(--warm); background: var(--warm-soft); padding: .8em 1em; margin: 1.2rem 0; border-radius: 0 6px 6px 0; }
+.interview::before { content: "🎯 面试怎么考"; display: block; font-family: "PingFang SC", sans-serif; font-weight: 600; font-size: .85em; color: var(--warm); margin-bottom: .3em; }
+.interview p:first-of-type { margin-top: 0; } .interview p:last-child { margin-bottom: 0; }
+
+/* 面试易错点:核心纠错装置(砖红) */
+.gotcha { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: .8em 1em; margin: 1.2rem 0; border-radius: 0 6px 6px 0; }
+.gotcha::before { content: "⚠ 面试易错点"; display: block; font-family: "PingFang SC", sans-serif; font-weight: 600; font-size: .85em; color: var(--accent); margin-bottom: .3em; }
+.gotcha p:first-of-type { margin-top: 0; } .gotcha p:last-child { margin-bottom: 0; }
+
+/* 自己写一遍:动手实现清单(coding-interview-university 是实现导向) */
+.implement { border: 1px dashed var(--link); background: transparent; padding: .8em 1em; margin: 1.2rem 0; border-radius: 8px; font-size: .95em; }
+.implement::before { content: "⌨️ 自己写一遍"; display: block; font-family: "PingFang SC", sans-serif; font-weight: 600; font-size: .85em; color: var(--link); margin-bottom: .35em; }
+.implement code { font-size: .9em; }
+.implement p:first-of-type { margin-top: 0; } .implement p:last-child { margin-bottom: 0; }
+
+/* 带走这一条:本课唯一要记住的结论(墨绿) */
+.good { border-left: 4px solid var(--good); background: var(--good-soft); padding: .8em 1em; margin: 1.2rem 0; border-radius: 0 6px 6px 0; }
+.good p:first-of-type { margin-top: 0; } .good p:last-child { margin-bottom: 0; }
+
+/* 复杂度表:时间/空间 Big-O 速览(DS&A 课的专属装置) */
+table.bigo { font-family: "PingFang SC", sans-serif; font-size: .86em; }
+table.bigo th { text-align: center; }
+table.bigo td { text-align: center; font-family: "SF Mono", Menlo, monospace; }
+table.bigo td.op { text-align: left; font-family: "PingFang SC", sans-serif; }
+table.bigo td.best { color: var(--good); font-weight: 700; }
+table.bigo td.warn { color: var(--accent); font-weight: 700; }
+
+/* 自测题:details 收起答案 */
+.quiz { border: 1px solid var(--border); border-radius: 8px; padding: 1em 1.2em; margin: 1.2rem 0; }
+.quiz summary { cursor: pointer; font-family: "PingFang SC", sans-serif; font-weight: 600; color: var(--link); }
+.quiz .answer { margin-top: .8em; padding-top: .8em; border-top: 1px dashed var(--border); }
+
+/* 三栏概念网格 */
+.trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; margin: 1.5rem 0; font-family: "PingFang SC", sans-serif; }
+.trio .cell { border: 1.5px solid var(--border); border-radius: 8px; padding: .8em .7em; background: var(--code-bg); text-align: center; }
+.trio .cell .role { font-size: .78rem; color: var(--muted); }
+.trio .cell .head { font-weight: 700; font-size: 1.05rem; margin: .2em 0; }
+.trio .cell .sub { font-size: .82rem; color: var(--link); }
+@media (max-width: 34rem) { .trio { grid-template-columns: 1fr; } }
+
+/* 上一课 / 下一课 导航 */
+footer.lesson-footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: .88em; color: var(--muted); }
+.lesson-nav { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.4rem; font-family: "PingFang SC", sans-serif; font-size: .85rem; }
+.lesson-nav a { flex: 1 1 0; border: 1px solid var(--border); border-radius: 8px; padding: .6em .9em; text-decoration: none; color: var(--link); }
+.lesson-nav a.next { text-align: right; }
+.lesson-nav .dir { display: block; font-size: .72rem; color: var(--muted); margin-bottom: .15em; }
+.lesson-nav .none { flex: 1 1 0; }
+
+/* ─────────────── ④ 图示库(纯 CSS/SVG,无外部依赖) ─────────────── */
+
+/* 横向管线 / 流程 */
+.pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; margin: 1.5rem 0; font-family: "PingFang SC", sans-serif; font-size: .82rem; }
+.pipeline .node { flex: 1 1 0; min-width: 90px; border: 1.5px solid var(--border); background: var(--code-bg); border-radius: 6px; padding: .6em .5em; text-align: center; position: relative; line-height: 1.35; }
+.pipeline .node .n-title { font-weight: 700; display: block; }
+.pipeline .node .n-sub { color: var(--muted); font-size: .9em; }
+.pipeline .arrow { align-self: center; padding: 0 .2em; color: var(--muted); font-size: 1.1em; flex: 0 0 auto; }
+.pipeline .node.good { border-color: var(--good); background: var(--good-soft); }
+.pipeline .node.bad { border-color: var(--accent); background: var(--accent-soft); }
+
+/* 纵向流程 / 决策树 */
+.flow { margin: 1.5rem 0; font-family: "PingFang SC", sans-serif; font-size: .85rem; }
+.flow .step { border: 1.5px solid var(--border); border-radius: 6px; padding: .55em .8em; background: var(--code-bg); margin: 0 auto; max-width: 34rem; }
+.flow .step.decision { border-color: var(--link); background: transparent; text-align: center; }
+.flow .step.terminal { border-color: var(--good); background: var(--good-soft); }
+.flow .down { text-align: center; color: var(--muted); line-height: 1; margin: .25em 0; }
+.flow .branches { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+.flow .branch { flex: 1 1 0; min-width: 12rem; }
+.flow .branch .label { text-align: center; font-size: .78em; color: var(--muted); margin-bottom: .2em; }
+
+/* 水平柱状对比(如各算法耗时/空间) */
+.bars { margin: 1.5rem 0; font-family: "PingFang SC", sans-serif; font-size: .82rem; }
+.bars .row { display: flex; align-items: center; gap: .6rem; margin: .35rem 0; }
+.bars .row .lbl { flex: 0 0 9rem; text-align: right; color: var(--ink); }
+.bars .row .track { flex: 1 1 auto; background: var(--code-bg); border-radius: 4px; overflow: hidden; height: 1.5rem; }
+.bars .row .val { height: 100%; display: flex; align-items: center; padding: 0 .5em; color: #fff; font-size: .78em; white-space: nowrap; border-radius: 4px; }
+.bars .val.base { background: #6b6b7b; }
+.bars .val.a { background: var(--accent); }
+.bars .val.b { background: var(--good); }
+.bars .val.c { background: var(--link); }
+
+/* 数组 / 内存格子(线性结构专用) */
+.cells { display: flex; flex-wrap: wrap; margin: 1.4rem 0; font-family: "SF Mono", Menlo, monospace; font-size: .82rem; }
+.cells .cell { min-width: 2.4rem; height: 2.4rem; border: 1px solid var(--border); background: var(--code-bg); display: flex; align-items: center; justify-content: center; position: relative; }
+.cells .cell .idx { position: absolute; top: -1.2rem; font-size: .68rem; color: var(--muted); font-family: "PingFang SC", sans-serif; }
+.cells .cell.hi { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.cells .cell.on { border-color: var(--good); background: var(--good-soft); color: var(--good); }
+
+/* 图注 */
+figure.diagram { margin: 1.5rem 0; }
+figure.diagram figcaption { font-size: .8rem; color: var(--muted); font-family: "PingFang SC", sans-serif; margin-top: .5rem; text-align: center; }
+figure.diagram figcaption code { font-size: .95em; }
+
+/* 内联 SVG 容器:宽图横向滚动,不撑破页面 */
+.svg-wrap { overflow-x: auto; margin: 1.5rem 0; }
+.svg-wrap svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+/* 内联 SVG 主题类:深浅色都可读,元素带这些 class 即可 */
+.dgm-text { fill: var(--ink); font-family: "PingFang SC", sans-serif; }
+.dgm-muted { fill: var(--muted); font-family: "PingFang SC", sans-serif; }
+.dgm-edge { stroke: var(--muted); fill: none; }
+.dgm-node { fill: var(--code-bg); stroke: var(--border); }
+.dgm-hub { fill: var(--accent-soft); stroke: var(--accent); }
+.dgm-accent { fill: var(--accent); }
+.dgm-accent-node { fill: var(--accent-soft); stroke: var(--accent); }
+.dgm-good-node { fill: var(--good-soft); stroke: var(--good); }
+.dgm-link-node { fill: var(--link-soft); stroke: var(--link); }
+.dgm-accent-text { fill: var(--accent); font-family: "PingFang SC", sans-serif; }
+.dgm-good-text { fill: var(--good); font-family: "PingFang SC", sans-serif; }
+
+/* ─────────────── 数学(KaTeX)─────────────── */
+/* 各课在 <head> 里 link ../assets/katex/katex.min.css 并 defer 加载 katex.min.js + auto-render.min.js */
+.katex { font-size: 1.02em; }
+/* 关键:宽的展示公式(RoPE 旋转矩阵、PPO 目标)横向滚动,绝不撑破页面正文 */
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: .5em 0; margin: 1.1rem 0; }
+.katex-display > .katex { white-space: nowrap; }
+/* 公式下方的小注(推导要点 / 变量含义) */
+.formula-note { font-size: .84em; color: var(--muted); margin: -.4rem 0 1.1rem; font-family: "PingFang SC", sans-serif; }
+
+/* 📄 论文与延伸:本课概念的一手出处 / 想深挖读什么(取代链接农场课的「主推资源」)*/
+.paper { border-left: 4px solid var(--link); background: var(--link-soft); padding: .8em 1em; margin: 1.2rem 0; border-radius: 0 6px 6px 0; font-size: .92em; }
+.paper::before { content: "📄 论文与延伸"; display: block; font-family: "PingFang SC", sans-serif; font-weight: 600; font-size: .85em; color: var(--link); margin-bottom: .35em; }
+.paper ul { margin: .3em 0 0; padding-left: 1.2em; }
+.paper li { margin: .25em 0; }
+.paper p:first-of-type { margin-top: 0; } .paper p:last-child { margin-bottom: 0; }
+
+/* ─────────────── ⑤ 打印 ─────────────── */
+@media print {
+  body { background: #fff; color: #000; font-size: 11pt; }
+  .quiz details { open: true; }
+  .lesson-nav, .recall { display: none; }
+  .katex-display { overflow-x: visible; }
+}

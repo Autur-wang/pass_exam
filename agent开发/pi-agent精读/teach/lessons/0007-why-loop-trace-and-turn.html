@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0007 · 为什么需要循环:三种用法与 Trace/Turn 嵌套</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 3 章 · Agent Loop ›
+  <a href="./0006-dependency-direction-and-layer-boundaries.html">上一课</a> ›
+  <strong>Lesson 0007</strong>
+</div>
+
+<p class="kicker">Lesson 0007 · 第 3 章 Agent Loop</p>
+<h1>为什么需要循环<br>—— 三种用法与 Trace / Turn 嵌套</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:前面几课我们看的是分层架构——包与包之间谁依赖谁。
+  从这一课起,我们钻进「循环」本身。这是本章开篇课,只回答一个更根本的问题:
+  <strong>为什么 Agent 需要一个循环,而不是像普通调用那样一次搞定?</strong>
+  以及循环转起来时,内部到底在记录什么「节奏」。
+</div>
+
+<div class="recall">
+  📌 <strong>先回忆上一课</strong>:我们确认了依赖方向必须单向——底层包不知道上层包的存在。
+  但那只解决了「代码怎么分层」的问题。这一课要问的是另一件事:分好层之后,
+  <strong>运行时</strong>这些层之间的控制权到底怎么流转?谁来决定「下一步做什么」?
+  答案会把我们直接带到 Agent 和 Workflow 的分水岭。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 向别人讲清楚<span class="sys-pill">直接调用 / Workflow / Agent Loop</span>
+  三种用法的本质区别只在「谁是决策者」,并且能画出一次完整运行(<b>Trace</b>)
+  如何由多个轮次(<b>Turn</b>)首尾相接、层层嵌套而成。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:三种派活方式</b>
+  把大模型想成一位专家。<b>模式 1</b> 是你问一句他答一句(直接调用);
+  <b>模式 2</b> 是你当项目经理、把活拆成几步逐步派给他(Workflow);
+  <b>模式 3</b> 是你只给他工具箱和目标、由他自己决定读哪个文件、改几处代码(Agent Loop)。
+  而一次「派活到彻底交付」是一个 <b>Trace</b>,他每一次「开口 + 动手」是一个 <b>Turn</b>。
+</div>
+
+<h2>1 · 是什么:三种用法的分水岭在「决策者是谁」</h2>
+<p>
+  在聊 Agent Loop 之前,先退一步看「使用大模型」这件事本身有几种模式。
+  <b>模式 1(直接调用)</b>:你构建提示词、调一次 API、拿到结果,完事,决策权在用户手里。
+  <b>模式 2(Workflow)</b>:任务拆成几步,步骤之间由<em>你的代码</em>控制流转——你知道什么时候该进入下一步。
+  <b>模式 3(Agent Loop)</b>:你把决策权交给了模型,步骤之间的流转<strong>不再由你写死</strong>,
+  而是由模型的输出内容驱动。
+</p>
+<pre><span class="ln">1</span><span class="cm">// 模式 3:Agent Loop 的流程全景(引子部分的示意)</span>
+<span class="ln">2</span>用户输入 → 调模型 → 模型说"我需要读文件" → 执行读文件 → 模型看结果
+<span class="ln">3</span>         → 模型说"还需要搜索代码" → 执行搜索 → 模型看结果
+<span class="ln">4</span>         → 模型说"我知道了,答案是..." → 输出 → 结束
+</pre>
+<p>三种模式的差异,教程里用一张表格摊开:</p>
+<table class="bd">
+  <thead><tr><th>维度</th><th>直接调用</th><th>Workflow</th><th>Agent Loop</th></tr></thead>
+  <tbody>
+    <tr><td>决策者</td><td>用户</td><td>你的代码</td><td>模型</td></tr>
+    <tr><td>模型调用次数</td><td>1 次</td><td>N 次(由代码控制)</td><td>不确定(由模型控制)</td></tr>
+    <tr><td>核心工作</td><td>写提示词</td><td>设计流程</td><td>定义工具和循环</td></tr>
+    <tr><td>模型角色</td><td>执行者</td><td>流水线环节</td><td>自主决策者</td></tr>
+    <tr><td>典型场景</td><td>翻译、摘要</td><td>文档流水线、RAG</td><td>编程助手、自动化任务</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么把决策权交给模型?</b> 在 Agent 任务中你<strong>无法预知</strong>模型要读几个文件、
+  改几处代码——步骤数在运行前是未知的。如果硬要写死流转逻辑,代码要么覆盖不了所有分支,
+  要么退化成一个巨大的 if-else 迷宫。所以流转只能由模型输出驱动,这既是 Agent 的<em>能力来源</em>,
+  也是它与 Workflow 的<em>本质分界</em>。
+</div>
+<p>
+  那"该调什么工具、调几次"由谁定,"该什么时候停"又由谁定?这是本节最容易混淆的一点——
+  <strong>你的代码在 Agent 模式下只做两件事</strong>:① 把输入和工具结果喂给模型;
+  ② 模型输出里有工具调用就执行、没有就认为完成。调几次工具由模型定,何时停是<em>人类定义的规则</em>
+  ——不是模型在说"我完成了",而是我们在说"你没要工具,那就当你完成了"。
+</p>
+
+<h2>2 · 是什么 + 怎么做:Turn 的精确定义——一次模型调用的边界</h2>
+<p>
+  弄清了「谁决策」,接下来要弄清「循环怎么转一圈」。Pi 的代码里,一圈内层循环有精确定义:
+  <strong>Turn = 一次模型调用 + 这次调用触发的所有工具执行</strong>,由一对
+  <code>turn_start</code> / <code>turn_end</code> 事件包裹。
+</p>
+<pre><span class="ln">1</span><span class="key">while</span> (hasMoreToolCalls || ...) {
+<span class="ln">2</span>    <span class="key">if</span> (!firstTurn) <span class="fn">emit</span>(turn_start);    <span class="cm">// ← 新 Turn 开始</span>
+<span class="ln">3</span>
+<span class="ln">4</span>    处理 pendingMessages
+<span class="ln">5</span>    <span class="fn">streamAssistantResponse</span>()             <span class="cm">// ← 一次模型调用</span>
+<span class="ln">6</span>    检查 stopReason
+<span class="ln">7</span>    <span class="fn">executeToolCalls</span>()                    <span class="cm">// ← 执行这个 Turn 触发的一批工具</span>
+<span class="ln">8</span>    <span class="fn">emit</span>(turn_end);                       <span class="cm">// ← 这个 Turn 结束</span>
+<span class="ln">9</span>
+<span class="ln">10</span>    prepareNextTurn / shouldStopAfterTurn / 检查 steering
+<span class="ln">11</span>}
+</pre>
+<p>
+  关键点是<strong>一个 Turn 只有一次模型调用</strong>。如果模型在一次输出中一口气要求了
+  3 个工具(<code>read</code> + <code>grep</code> + <code>find</code>),这 3 个工具都在同一个
+  Turn 里执行——因为它们都是同一次模型调用的产物。只有把结果喂回去<em>再调一次模型</em>,
+  才算进入下一个 Turn。
+</p>
+<div class="tradeoff">
+  <b>为什么用「一次模型调用」来切分 Turn?</b> 模型每次调用是一个<em>原子的</em>「思考 + 决策」单元——
+  给定当前上下文,它一口气决定好这一步要做什么(可能是零个、一个或多个工具调用)。
+  以此为边界切分,能让 <code>turn_start</code> / <code>turn_end</code> 精确对应<strong>一次可观测的推理</strong>,
+  UI 上就能画出「模型在想 → 工具在跑」这一条清晰的时间线,trace 追踪时也不会把多次工具执行
+  错误地拆成多个「决策」。
+</div>
+
+<h2>3 · 怎么做:Trace 包着 Turn——一次运行里的心跳节奏</h2>
+<p>
+  把镜头拉远一点:一个 <strong>Trace</strong> 是从 <code>agent_start</code> 到
+  <code>agent_end</code> 的<em>整个过程</em>(一次完整运行),它包含一个或多个 Turn。
+  三种模式类比里,Trace 就是「一次派活到彻底交付」,Turn 就是「专家的每一次开口 + 动手」。
+</p>
+<pre><span class="ln">1</span>Trace(一次完整运行)
+<span class="ln">2</span>│  agent_start
+<span class="ln">3</span>│
+<span class="ln">4</span>├── Turn 1
+<span class="ln">5</span>│   │  turn_start
+<span class="ln">6</span>│   ├── 调模型 → toolUse → 执行工具(read + grep)
+<span class="ln">7</span>│   │  turn_end
+<span class="ln">8</span>│   │
+<span class="ln">9</span>├── Turn 2
+<span class="ln">10</span>│   │  turn_start
+<span class="ln">11</span>│   ├── 调模型 → toolUse → 执行工具(edit)
+<span class="ln">12</span>│   │  turn_end
+<span class="ln">13</span>│   │
+<span class="ln">14</span>├── Turn 3
+<span class="ln">15</span>│   │  turn_start
+<span class="ln">16</span>│   ├── 调模型 → stop → 没有工具
+<span class="ln">17</span>│   │  turn_end
+<span class="ln">18</span>│   │
+<span class="ln">19</span>│   agent_end
+</pre>
+<p>
+  注意 <b>Turn 3</b>:模型返回 <code>stop</code>、没有工具调用,这个 Turn 一结束就触发整个循环退出——
+  这正好呼应第 1 节讲过的「何时停是人类定义的规则」。
+</p>
+<div class="why">
+  <b>为什么首轮 <code>turn_start</code> 在入口就发、内层循环还要用 <code>firstTurn</code> 跳过?</b>
+  入口函数 <code>runAgentLoop()</code> 需要在追加用户消息、发出 <code>agent_start</code> 的同时
+  <strong>同步开启第一个 Turn</strong>(否则 Turn 1 的开始时间点就无法与 Trace 的开始对齐)。
+  但内层循环本身每一圈开头都会尝试发 <code>turn_start</code>——如果不加 <code>firstTurn</code>
+  标志跳过首圈,第一个 Turn 就会收到两次 <code>turn_start</code>,破坏了「一个 turn_start 配一个
+  turn_end」的事件配对约定,下游做 trace 可视化时会以为多了一个空 Turn。
+</div>
+
+<h2>4 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 在 Agent Loop 模式下,「该调用哪些工具、调几次」由谁决定?「何时停止循环」又由谁决定?</p>
+    <button class="opt">都由模型决定,因为模型知道任务是否完成</button>
+    <button class="opt">调什么工具由模型输出决定;何时停是人类定义的规则(模型输出里没有工具调用时)</button>
+    <button class="opt">都由你的代码决定,模型只负责生成文本</button>
+    <button class="opt">调什么工具由代码决定;何时停由模型主动声明"我完成了"</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② 模型在一次输出中同时要求了 read、grep、find 三个工具。关于它们属于哪个 Turn,正确的是?</p>
+    <button class="opt">三个工具分属三个不同的 Turn,因为有三次工具执行</button>
+    <button class="opt">read 一个 Turn,grep 和 find 合成另一个 Turn</button>
+    <button class="opt">三个工具都在同一个 Turn,因为它们是同一次模型调用的产物</button>
+    <button class="opt">取决于是并行还是串行执行</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ 关于 Trace 和 Turn 的关系,下面哪个描述准确?</p>
+    <button class="opt">一个 Trace 就是一个 Turn,两者是同义词</button>
+    <button class="opt">一个 Turn 包含多个 Trace</button>
+    <button class="opt">一个 Trace(agent_start 到 agent_end)包含一个或多个 Turn,每个 Turn 由 turn_start/turn_end 包裹</button>
+    <button class="opt">Trace 只在出错时才产生,正常运行只有 Turn</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果 Agent Loop 什么"任务完成度"都不判断,那它靠什么保证不会无限空转下去?</em>」
+  「<em>一个 Turn 里的多个工具调用,执行顺序和结果顺序会不会乱?</em>」
+  「<em>既然模型自己不知道任务做完没有,那 <code>stopReason</code> 这个字段到底是谁、在什么时候写进去的?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>5 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第3章-Agent-Loop-让模型转动起来的引擎.md">第 3 章 · Agent Loop —— 让模型转动起来的引擎</a>——
+  原文 §三、§四还完整走了一遍从入口 <code>runAgentLoop()</code> 到 <code>runLoop()</code>
+  双层循环的源码细节,以及 steering / followUp 两种「插队」机制,值得通读建立全局观。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0008):</strong> 我们把这一课留下的悬念接上——
+  <code>stopReason</code> 这一个字段到底是怎么驱动整个循环的?它的五种取值分别来自哪里、
+  又如何决定「继续转」「准备停」还是「硬停止」?这是理解 Agent Loop 唯一的信号灯。
+</p>
+
+<footer>
+  Lesson 0007 · 第 3 章 Agent Loop ·
+  下一课:<a href="./0008-stopreason-the-only-signal.html">0008 stopReason:唯一的信号灯 →</a> ·
+  上一课:<a href="./0006-dependency-direction-and-layer-boundaries.html">0006 依赖方向与分层边界</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。决策(调什么)外包给模型输出,停止(何时停)是人类工程约定。延伸:正因如此,代码不需要任何"任务完成度"判断逻辑——这是 Agent 的优雅也是它的局限。',
+               '✓ 对。Turn 的边界是"一次模型调用",不是"一次工具执行"。延伸:只有把这批工具结果喂回去再调模型的那一刻,才进入下一个 Turn。',
+               '✓ 对。Trace 是外壳(一次完整运行),Turn 是内嵌的心跳。延伸:一个 Trace 至少有一个 Turn——最后那个返回 stop 且无工具的 Turn 触发整个循环退出。'];
+  var msgNo = ['回看§一模式3与对比表:注意区分"调什么工具"和"何时停"这两件事分别由谁掌控,模型并不会真的说"我停了"。',
+               '回看 Turn 的精确定义:一个 Turn 只有几次模型调用?工具数量会改变 Turn 的划分吗?',
+               '回看§二的嵌套图:谁在外(agent_start/agent_end)、谁在内(turn_start/turn_end)?包含关系的方向别弄反。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

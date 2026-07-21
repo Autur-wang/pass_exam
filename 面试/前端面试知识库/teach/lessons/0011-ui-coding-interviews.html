@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0011 · UI 编程面试怎么考</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0011 课 · 4 UI 编程面试 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>UI 编程面试怎么考</h1>
+
+<p class="lede">前面几节讲的是能不能"说出"HTML/CSS/JS/浏览器的知识点——那是 trivia 问答的考法。这节要回答的是另一件事:当面试官要求你现场写出一个能跑起来的组件或页面时,考察的重心发生了什么变化,和你已经熟悉的纯算法编码面试相比,评分标准哪里像、哪里不像。</p>
+
+<div class="recall">
+<p>先回忆一下上一课:浏览器、Web API、可访问性这些概念,你在 trivia 问答里只需要"说得出来"——比如说清楚 ARIA 角色是什么。现在换个场景:如果面试官不是问你"什么是 ARIA 角色",而是要求你现场写一个带完整键盘支持的标签页(Tabs)组件,你觉得面试官在打分时,和只考口头问答相比,会多看哪些东西?先给自己一个答案,再往下看。</p>
+</div>
+
+<h2>一、UI 编程面试考的是什么:两类题型</h2>
+
+<p>用户界面编码面试要求候选人现场编写 HTML、CSS 和 JavaScript,做出一个能跑起来的界面——这也是越来越多公司直接要求候选人在面试中写 UI,而不是只问纯算法题的原因。要写的东西横跨两档复杂度:</p>
+
+<div class="flow">
+  <div class="step decision">面试要求你实现的是什么?</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">组件 / 小部件 / 布局</div>
+      <div class="step">手风琴、标签页、星级评分、推特卡片、图片轮播、数字/模拟时钟、注册表单、圣杯布局……</div>
+    </div>
+    <div class="branch">
+      <div class="label">应用程序 / 游戏</div>
+      <div class="step">待办事项列表、秒表、温度转换器、井字棋、打地鼠……允许的时间通常更长,半小时到一小时都算常见</div>
+    </div>
+  </div>
+</div>
+
+<p>游戏类题目大多是基于二维网格的,面试前最好确认自己能用 HTML 和 CSS 熟练搭出网格布局。</p>
+
+<h2>二、和纯算法编码面试到底哪里不一样</h2>
+
+<p>用户界面编码面试和非前端的编码面试,在流程上有很大程度的相似——都要澄清问题、写代码、测试、讨论权衡。但两者的重心不一样:</p>
+
+<table class="compare">
+<tr><th>维度</th><th>算法编码面试</th><th>UI 编程面试</th></tr>
+<tr><td>复杂性主要来自哪里</td><td>数据结构与算法本身</td><td>组件状态与 API 设计;数据结构/算法通常不复杂</td></tr>
+<tr><td>怎么验证对不对</td><td>跑现成的自动化测试用例</td><td>往往没有自动化测试用例,常常要自己在浏览器里动手测</td></tr>
+<tr><td>额外要照顾到的维度</td><td>时间/空间复杂度</td><td>可访问性、边缘情况、i18n、性能、用户体验</td></tr>
+</table>
+
+<h2>三、面试现场应该走的流程</h2>
+
+<p>手册给出的临场流程,和普通编码面试大体一致,分成几步:</p>
+
+<ol>
+<li><strong>摸清可用的环境</strong>——本地 IDE 还是在线 IDE、能不能用框架/第三方库、支持到哪个 JS 语法、能不能预览 UI、能不能提前装依赖,先问清楚再动手。</li>
+<li><strong>一分钟自我介绍</strong>,除非面试官主动要求,不要占用太多编码时间。</li>
+<li><strong>澄清问题</strong>——尤其确认能不能用最新的 JS 语法、需要支持到哪些浏览器,这决定了你能用哪些浏览器 API。</li>
+<li><strong>管理复杂性:把问题拆成相互叠加的里程碑</strong>,并把这个拆分讲给面试官听——这一步正对应上一节的核心区别:重点通常落在组件状态和 API,不是复杂数据结构。</li>
+<li><strong>边写边讲,每完成一个里程碑就在浏览器里测一次</strong>,不要攒到最后才测。</li>
+<li><strong>写完通读一遍代码</strong>,挑拼写错误、变量未初始化就使用、API 用错等基础问题。</li>
+<li><strong>列出测试用例和边缘情况,动手验证</strong>,失败就调试修复。</li>
+<li><strong>主动讲权衡</strong>——哪些情况明确没处理、时间够的话会怎么改进。</li>
+<li><strong>准备接后续问题</strong>——面试官可能就同一题继续追问,或者再给一道。</li>
+</ol>
+
+<h2>四、评估维度:五项标准,域知识权重更高</h2>
+
+<p>手册说得很直接:UI 编程面试和 JavaScript 编码面试的评分标准很接近,因为两者都是前端领域的编码题;区别在于 UI 编程题会更偏重领域专业知识和具体的前端主题。五个维度分别是:</p>
+
+<table>
+<tr><th>维度</th><th>具体考察什么</th></tr>
+<tr><td>解决问题</td><td>系统、有逻辑地理解和拆解问题;能评估不同做法及其权衡</td></tr>
+<tr><td>软件工程基础</td><td>数据结构、算法、运行时复杂度分析、设计模式的使用、抽象设计是否干净</td></tr>
+<tr><td>领域专业知识</td><td>浏览器(DOM 与 DOM API)、HTML、CSS、JavaScript、用户体验、可访问性、i18n、网络、性能——这是相比纯算法编码面试新增、权重也更高的一环</td></tr>
+<tr><td>沟通</td><td>主动提澄清问题,清楚讲出自己的方法和考虑</td></tr>
+<tr><td>验证</td><td>能想出各种测试场景(含边缘情况),诊断并修复出现的问题</td></tr>
+</table>
+
+<p>手册用手风琴组件举了个具体例子:基本版本(渲染 + 展开收起)可能已经足够让你通过面试,但补上正确的 ARIA 角色/状态/属性、再加上完整的键盘支持,才是把分数从"及格"推向"加分项"甚至"资深水平"的部分——这三层刚好对应手风琴、手风琴 II、手风琴 III 三道递进的题。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>里程碑分解(Milestone Decomposition)</dt>
+<dd>把要实现的组件/应用拆成能独立完成、逐步叠加的功能阶段,并把这个拆分方式讲给面试官听,而不是埋头写到最后才展示成果。<em>避免</em>想着一次性憋出完整方案再一次性摆出来——面试官看不到你拆解问题的过程,你自己也更容易在中途卡死。</dd>
+<dt>领域专业知识(Domain Expertise)</dt>
+<dd>UI 编程面试新增的评估维度,指对浏览器、DOM、HTML、CSS、JavaScript、可访问性、i18n、网络、性能等前端专属知识的熟悉程度。<em>避免</em>把它和"软件工程基础"混成一件事——后者考察数据结构/算法/设计模式这些通用能力,前者专指前端范畴内的具体知识。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>备考时按手册的建议分两条线走:一是练熟 Vanilla JavaScript 的 DOM 操作(创建元素、加类/属性、加子元素),如果你是 <a href="https://jquery.com/">jQuery</a> 背景出身,可以对照 <a href="https://youmightnotneedjquery.com">You Might Not Need jQuery</a> 把常见操作换成原生写法;二是把最熟悉的一个 UI 框架用熟——如果暂时不熟悉任何框架,手册的建议是学 <a href="https://react.dev/">React</a>,因为它是目前招聘前端工程师时最常被考察的库。CSS 上,练习不依赖 Sass/Less 预处理器写朴素 CSS,并采用像 <a href="https://getbem.com">BEM</a> 这样的命名约定组织类名。练习时,构建组件类题目和构建应用/游戏类题目要花大致相等的时间,不要只偏练一类。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"功能能跑起来"当成终点。</strong>手风琴的例子已经说明——基本版本可能确实能让你通过面试,但止步于此就放弃了追加可访问性、边缘情况处理的机会,而这部分恰恰是评估维度里"领域专业知识"要考察的东西,也是拉开"及格"和"资深水平"差距的地方。同样容易被忽略的是测试:UI 题没有现成的自动化测试用例,不主动在浏览器里动手测,边缘情况的漏洞可能一直藏到面试官自己发现才暴露。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>挑一道组件类 UI 编程题(比如手风琴或标签页),给自己计时,完整走一遍流程——澄清问题 → 口头拆出 2~3 个里程碑 → 边写边测 → 写完通读一遍 → 列 2~3 个边缘情况动手验证 → 最后用一两句话讲清楚你没处理什么、时间够会怎么改进。全程说出声,不要只在脑子里想。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>UI 编程面试和纯算法编码面试的流程大体相似,但重心不一样——复杂性从数据结构/算法转移到了组件状态和 API 设计,评估维度也多了一项权重更高的"领域专业知识"(浏览器、DOM、CSS、可访问性等前端专属知识)。备考时按这五个维度自查,比单纯堆刷题量更有效率。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:和纯算法编码面试相比,UI 编程面试的复杂性主要来自哪里? (A) 组件状态与 API 设计,数据结构和算法通常不复杂 (B) 时间/空间复杂度分析,和算法编码面试完全一样 (C) 只考 CSS 选择器优先级,不涉及 JavaScript 逻辑</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。手册明确说 UI 编程面试的重点通常在组件状态和 API,而不是复杂的数据结构与算法。(B) 把两种面试的重心搞反了——时间/空间复杂度分析是算法编码面试更看重的部分;(C) 忽略了 UI 编程题同样需要写 JavaScript 逻辑来管理状态和交互,不是纯 CSS 题。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于 UI 编程面试的评估维度,下面哪个说法最准确? (A) 只要功能跑起来就算拿到满分,可访问性属于可以完全忽略的细节 (B) 评估维度里新增了"领域专业知识",专门考察浏览器/DOM/CSS/可访问性等前端专属知识,这是相比纯算法编码面试的关键差异 (C) 评估维度和算法编码面试完全不重叠,两者考察的能力毫无关系</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。手册把"领域专业知识"列为五个评估维度之一,专指前端范畴的知识,是相比纯算法编码面试新增的一环。(A) 错在把可访问性说成无关的细节——手风琴的例子说明基本版本可能只够让你通过,补上可访问性和键盘支持才是往资深水平推进的部分;(C) 错在忽视了手册本身指出 UI 编程面试和 JavaScript 编码面试评分标准接近,解决问题、软件工程基础等维度是共享的,不是毫无关系。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本节内容对应综合面试手册 user-interface 一文里"如何准备"部分点名的几个外部资源,建议按下面顺序看:</p>
+<ul>
+<li><a href="https://youmightnotneedjquery.com">You Might Not Need jQuery</a> —— 如果你是 jQuery 背景出身,这个站点逐条示范怎么用现代原生 JS API 替代常见的 jQuery 操作。</li>
+<li><a href="https://jquery.com/">jQuery</a> —— 手册用它作为"如果你来自这个背景"的参照点,不要求你专门去学。</li>
+<li><a href="https://react.dev/">React</a> —— 手册对"不熟悉任何框架该学哪个"给出的建议,因为它是目前招聘前端工程师时最常被考察的库。</li>
+<li><a href="https://getbem.com">Block Element Modifier(BEM)</a> —— 手册建议的 CSS 命名约定,写朴素 CSS 时用它组织类名。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"UI 编程面试和刷算法题的区别",也可以现场找一道 UI 编程题,让老师陪你按九步流程走一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0010-browser-web-api-a11y-trivia.html"><span class="dir">← 上一课</span>浏览器、Web API 与可访问性综合问答</a>
+  <a class="next" href="0012-component-api-design-initialization.html"><span class="dir">下一课 →</span>组件 Props 怎么设计:初始化原则</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

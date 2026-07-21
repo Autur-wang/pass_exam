@@ -1,8 +1,8 @@
 # NOTES
 
 ## Workspace setup
-- 教学 workspace 根: `/Users/wangzihao/Code/pass_exam/operating_systems/teach/`
-- 父目录 `/Users/wangzihao/Code/pass_exam/operating_systems/` 是学习上下文：
+- 教学 workspace 根: `/Users/bytedance/pass_exam/operating_systems/teach/`
+- 父目录 `/Users/bytedance/pass_exam/operating_systems/` 是学习上下文：
   - `textbook/`: 主教材结构化整理 + 课件文本
   - `1_操作系统引论/ ~ 6_文件管理/`：各章节内容
   - `reference/egos-2000/`: 教学用小型 OS（清华）

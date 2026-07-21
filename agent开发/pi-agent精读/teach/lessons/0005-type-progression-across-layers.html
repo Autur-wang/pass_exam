@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0005 · 类型演进:从原子到分子到材料</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 2 章 · 三层架构 ›
+  <a href="./0004-five-packages-project-skeleton.html">上一课</a> ›
+  <strong>Lesson 0005</strong>
+</div>
+
+<p class="kicker">Lesson 0005 · 第 2 章 三层架构</p>
+<h1>类型演进:从原子到分子到材料</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们看清了五个包的依赖方向——箭头全部单向向上,coding-agent 甚至会
+  <strong>跨层直接依赖</strong> pi-ai。这节课回答遗留的问题:跨层依赖的到底是<em>什么东西</em>?
+  答案是<strong>类型</strong>——而且类型不是原地不动,它会随着层数往上<strong>递进扩展</strong>。
+</div>
+
+<div class="recall">
+  🔁 <b>回忆上一课:</b> pi-coding-agent 的 <code>package.json</code> 里同时依赖了
+  pi-agent-core <em>和</em> pi-ai——这不是打破分层,而是因为 <code>Message</code>、<code>Model</code>、
+  <code>Tool</code> 这些"原子类型"必须在一处统一定义,所有层都要引用它。这节课就来拆开:
+  原子怎么一路演进成 Agent 能用的"分子",再演进成业务能用的"材料"。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 看到任意一层的 <code>interface</code>,
+  能立刻说出它<span class="sys-pill">属于哪一层</span>、<span class="sys-pill">相比下一层多加了什么字段</span>、
+  以及<strong>为什么</strong>这些字段只该在这一层出现,而不是随手塞进底层。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:原子 → 分子 → 材料</b>
+  pi-ai 定义<b>"原子"</b>(<code>Message</code> / <code>Model</code> / <code>Tool</code> 这些最基础的类型)——
+  就像化学元素,谁都要用,但只在一处定义。pi-agent-core 把原子拼成<b>"分子"</b>
+  (<code>AgentTool</code>——多了"怎么执行"的字段)。pi-coding-agent 再把分子拼成<b>"材料"</b>
+  (<code>ToolDefinition</code>——多了"怎么显示"的字段)。<b>每往上一层,只在原有基础上添零件,
+  从不改动底层的原子。</b>
+</div>
+
+<h2>1 · 第一层:pi-ai 定义原子</h2>
+<p>
+  最底层的三个类型——<code>Message</code>、<code>Model</code>、<code>Tool</code>——就是整个 Pi
+  系统的"原子概念"。任何一个和 LLM 打交道的包,不管是 agent-core 还是 coding-agent,都必须引用它们:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// packages/ai/src/types.ts(节选)</span>
+<span class="ln">2</span><span class="cm">// 最基础的消息类型——所有 LLM 都认的格式</span>
+<span class="ln">3</span><span class="key">type</span> <span class="type">Message</span> = <span class="type">UserMessage</span> | <span class="type">AssistantMessage</span> | <span class="type">ToolResultMessage</span>
+<span class="ln">4</span>
+<span class="ln">5</span><span class="cm">// 模型定义——描述一个 LLM 的全部信息</span>
+<span class="ln">6</span><span class="key">interface</span> <span class="type">Model</span>&lt;<span class="type">TApi</span>&gt; {
+<span class="ln">7</span>    id: <span class="type">string</span>           <span class="cm">// 如 "claude-sonnet-4-6"</span>
+<span class="ln">8</span>    name: <span class="type">string</span>
+<span class="ln">9</span>    api: <span class="type">TApi</span>            <span class="cm">// 如 "anthropic-messages"</span>
+<span class="ln">10</span>    contextWindow: <span class="type">number</span> <span class="cm">// 如 200000</span>
+<span class="ln">11</span>    <span class="cm">// ... 更多字段</span>
+<span class="ln">12</span>}
+<span class="ln">13</span>
+<span class="ln">14</span><span class="cm">// 工具定义——描述一个工具的 schema</span>
+<span class="ln">15</span><span class="key">interface</span> <span class="type">Tool</span>&lt;<span class="type">TSchema</span>&gt; {
+<span class="ln">16</span>    name: <span class="type">string</span>
+<span class="ln">17</span>    description: <span class="type">string</span>
+<span class="ln">18</span>    parameters: <span class="type">TSchema</span>
+<span class="ln">19</span>}
+</pre>
+<p>
+  注意第 15–19 行的 <code>Tool</code>:它<strong>只描述工具长什么样</strong>——名字、说明、参数
+  schema。没有"怎么执行"的字段,因为 <code>Tool</code> 服务的是 LLM,而 LLM 只需要知道"有哪些工具可以调、
+  参数长什么样",不需要知道调用后台怎么跑代码。
+</p>
+<div class="why">
+  <b>为什么原子类型必须集中在 pi-ai 一处?</b> 就像化学元素一样,如果 <code>Message</code>、
+  <code>Model</code>、<code>Tool</code> 在 agent-core 和 coding-agent 里各自定义一份,
+  两份定义只要有一点点不一致,跨层传值时就会"文字对得上但类型对不上"——一处定义、所有层引用,
+  才能保证跨层传递的<strong>是同一个概念</strong>。
+</div>
+
+<h2>2 · 第二层:pi-agent-core 把原子组合成分子</h2>
+<p>
+  pi-agent-core 的 <code>types.ts</code> 顶部大量 <code>import type</code> 来自 pi-ai
+  (<code>Message</code>、<code>Model</code>、<code>Tool</code>、<code>ImageContent</code> 等),
+  在此之上做两处关键扩展:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// packages/agent/src/types.ts(节选,types.ts:371-394)</span>
+<span class="ln">2</span><span class="key">import</span> <span class="key">type</span> {
+<span class="ln">3</span>    <span class="type">Message</span>, <span class="type">Model</span>, <span class="type">Tool</span>, <span class="type">ImageContent</span>, ...
+<span class="ln">4</span>} <span class="key">from</span> <span class="str">"@earendil-works/pi-ai"</span>;
+<span class="ln">5</span>
+<span class="ln">6</span><span class="cm">// 扩展消息:除了标准 LLM 消息,还可以有自定义消息</span>
+<span class="ln">7</span><span class="key">type</span> <span class="type">AgentMessage</span> = <span class="type">Message</span> | <span class="type">CustomAgentMessages</span>[<span class="key">keyof</span> <span class="type">CustomAgentMessages</span>]
+<span class="ln">8</span>
+<span class="ln">9</span><span class="cm">// 扩展工具:除了 schema,还有参数预处理、执行函数和执行模式</span>
+<span class="hl"><span class="ln">10</span><span class="key">interface</span> <span class="type">AgentTool</span>&lt;<span class="type">TParameters</span> <span class="key">extends</span> <span class="type">TSchema</span> = <span class="type">TSchema</span>, <span class="type">TDetails</span> = <span class="type">any</span>&gt; <span class="key">extends</span> <span class="type">Tool</span>&lt;<span class="type">TParameters</span>&gt; {</span>
+<span class="ln">11</span>    label: <span class="type">string</span>                                    <span class="cm">// 显示名称</span>
+<span class="ln">12</span>    prepareArguments?: (args: <span class="type">unknown</span>) =&gt; <span class="type">Static</span>&lt;<span class="type">TParameters</span>&gt;   <span class="cm">// 参数预处理</span>
+<span class="ln">13</span>    execute: (toolCallId: <span class="type">string</span>, params, signal?: <span class="type">AbortSignal</span>, onUpdate?: <span class="type">AgentToolUpdateCallback</span>&lt;<span class="type">TDetails</span>&gt;) =&gt; <span class="type">Promise</span>&lt;<span class="type">AgentToolResult</span>&lt;<span class="type">TDetails</span>&gt;&gt;
+<span class="ln">14</span>    executionMode?: <span class="type">ToolExecutionMode</span>                 <span class="cm">// "sequential" | "parallel"</span>
+<span class="ln">15</span>}
+</pre>
+<p>
+  两件事值得盯住:第 7 行 <code>AgentMessage</code> 是 <code>Message</code> 的<strong>超集</strong>——
+  用联合类型(<code>|</code>)把自定义消息加进去,原来的 <code>Message</code> 一个字段没改。
+  第 10 行 <code>AgentTool extends Tool</code>——底层的 <code>Tool</code> 只知道"叫什么、参数是什么"
+  (LLM 需要的),这里加上了 <code>label</code>、<code>execute</code>、<code>executionMode</code>
+  (Agent 循环需要的)。
+</p>
+<div class="why">
+  <b>为什么用联合类型和 <code>extends</code> 扩展,而不是直接改底层?</b>
+  底层类型保持稳定,才能被<strong>独立发布</strong>——别人可以只引用你的原子类型
+  (比如只想调 LLM,不想要整个 Agent 框架),不必被迫吞下 <code>execute</code>、
+  <code>executionMode</code> 这些跟 Agent 循环绑死的字段。<br>
+  <b>为什么底层 <code>Tool</code> 里没有 <code>execute</code> 字段?</b>
+  因为 LLM 只需要知道工具"长什么样",不需要知道"怎么执行"——那是 Agent 循环的职责。
+  每一层只承载自己关心的信息,职责不越界。
+</div>
+
+<h2>3 · 第三层:pi-coding-agent 把分子组合成材料</h2>
+<p>
+  到了 coding-agent 层,类型变成了具体的业务定义——<code>ToolDefinition</code> 在
+  <code>AgentTool</code> 的基础上,再叠加"怎么显示"相关的属性:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// packages/coding-agent/src/core/extensions/types.ts:435-482(节选)</span>
+<span class="ln">2</span><span class="cm">// 注意:ToolDefinition 是独立 interface 重新声明,</span>
+<span class="ln">3</span><span class="cm">// 与 AgentTool 是"结构兼容"而非用 extends 继承</span>
+<span class="hl"><span class="ln">4</span><span class="key">interface</span> <span class="type">ToolDefinition</span>&lt;<span class="type">TParams</span> <span class="key">extends</span> <span class="type">TSchema</span>, <span class="type">TDetails</span> = <span class="type">unknown</span>, <span class="type">TState</span> = <span class="type">any</span>&gt; {</span>
+<span class="ln">5</span>    name: <span class="type">string</span>
+<span class="ln">6</span>    label: <span class="type">string</span>                         <span class="cm">// UI 展示名</span>
+<span class="ln">7</span>    description: <span class="type">string</span>
+<span class="ln">8</span>    promptSnippet?: <span class="type">string</span>                <span class="cm">// 自动拼到 system prompt 的工具片段</span>
+<span class="ln">9</span>    parameters: <span class="type">TParams</span>
+<span class="ln">10</span>    renderShell?: <span class="str">"default"</span> | <span class="str">"self"</span>      <span class="cm">// 渲染模式</span>
+<span class="ln">11</span>    prepareArguments?: (args: <span class="type">unknown</span>) =&gt; <span class="type">Static</span>&lt;<span class="type">TParams</span>&gt;
+<span class="ln">12</span>    executionMode?: <span class="type">ToolExecutionMode</span>
+<span class="ln">13</span>    execute: (toolCallId, params, signal, onUpdate, ctx: <span class="type">ExtensionContext</span>) =&gt; <span class="type">Promise</span>&lt;<span class="type">AgentToolResult</span>&lt;<span class="type">TDetails</span>&gt;&gt;  <span class="cm">// 比 AgentTool.execute 多 ctx 参数</span>
+<span class="ln">14</span>    renderCall?: ...                      <span class="cm">// 自定义调用渲染</span>
+<span class="ln">15</span>    <span class="cm">// ... 还有渲染器、UI 组件等业务属性</span>
+<span class="ln">16</span>}
+</pre>
+<p>
+  对比第 13 行的 <code>execute</code>:签名比 <code>AgentTool.execute</code> 多了一个
+  <code>ctx: ExtensionContext</code> 参数——这是 coding-agent 层才有的"扩展上下文"。
+  再加上 <code>promptSnippet</code>、<code>renderShell</code> 这些字段,清一色是"怎么显示、
+  怎么接入业务"的关切,跟底层的 LLM schema、中间层的执行调度完全不是一回事。
+</p>
+<div class="tradeoff">
+  🔑 <b>为什么 <code>ToolDefinition</code> 是结构兼容,而不是 <code>extends AgentTool</code>?</b>
+  coding-agent 层重新声明了一个独立 <code>interface</code>,用<strong>结构类型</strong>对齐
+  <code>AgentTool</code>——字段形状对得上就行,不需要真的写 <code>extends</code>。
+  这样既能自由加业务字段(比如 <code>execute</code> 多带一个 <code>ctx</code>),
+  又不会被继承链锁死(继承链一旦锁死,中间层的任何字段变化都会强制传导到这里,
+  灵活性反而变差)。
+</div>
+
+<div class="diagram">类型扩展的 Before → After 对照
+
+Before(pi-ai 层):Tool 只知道"长什么样"
+────────────────────────────────────────────
+interface Tool&lt;TSchema&gt; {
+    name: string
+    description: string
+    parameters: TSchema
+}
+
+         ↓ agent-core 扩展
+
+After(pi-agent-core 层):AgentTool 知道"怎么执行"
+────────────────────────────────────────────
+interface AgentTool&lt;TSchema&gt; extends Tool&lt;TSchema&gt; {
+    label: string                              ← 新增
+    execute: (...) =&gt; Promise&lt;AgentToolResult&gt; ← 新增
+    executionMode?: "sequential" | "parallel"  ← 新增
+}
+
+         ↓ coding-agent 扩展
+
+After(pi-coding-agent 层):ToolDefinition 加上"怎么显示"
+────────────────────────────────────────────
+interface ToolDefinition {
+    // 结构兼容 AgentTool 的全部字段
+    // + 渲染器、权限控制等业务属性
+}
+
+一图看清:Tool(长什么样) → AgentTool(怎么执行) → ToolDefinition(怎么显示)
+每层只加自己该关心的字段,底层从不为上层的需求买单。
+</div>
+<cite>🔎 出处:教程第 2 章 §5"类型在层间的流转:从原子到分子"及"类型扩展的 Before → After 对照"(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第2章-三层架构-Pi-Agent项目的骨骼.md</code>)。代码为教程节选,基于 pi <code>v0.80.2</code>。</cite>
+
+<h2>4 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 为什么 Message、Model、Tool 这些基础类型都定义在 pi-ai 一处,而不是各层各自定义?</p>
+    <button class="opt">因为 pi-ai 是最后才开发的包,顺手就放这儿了</button>
+    <button class="opt">它们是整个系统的"原子概念",必须在一处统一定义、所有层引用同一处,才能保证跨层传的是同一个概念</button>
+    <button class="opt">因为 TypeScript 语法强制要求类型必须集中定义在最底层包</button>
+    <button class="opt">因为 pi-agent-core 和 coding-agent 在技术上无法声明 interface</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② pi-agent-core 的 AgentTool 相比 pi-ai 的 Tool,多做了什么?</p>
+    <button class="opt">去掉了 parameters 字段,只保留 name</button>
+    <button class="opt">两者字段完全一样,只是换了个名字</button>
+    <button class="opt">通过 extends Tool,加上 label、execute、executionMode 等"怎么执行"的字段</button>
+    <button class="opt">直接加上了渲染器和 UI 组件等显示相关属性</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">③ 为什么底层 pi-ai 的 Tool 接口里没有 execute 字段?</p>
+    <button class="opt">因为 LLM 只需要知道工具"长什么样"(名字/描述/参数),不需要知道怎么执行;每层只加自己关心的事</button>
+    <button class="opt">因为 execute 逻辑太复杂,TypeScript 无法为它写类型</button>
+    <button class="opt">因为 execute 字段实际定义在 pi-tui 显示层里</button>
+    <button class="opt">因为 Tool 是一个已废弃、不再使用的接口</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果我要给工具加一个"需要用户确认"的字段,应该加在 AgentTool 还是 ToolDefinition?</em>」
+  「<em>联合类型(|)和 extends 两种扩展方式,什么时候该用哪个?</em>」
+  「<em>类型能一路递进扩展,那依赖方向的"单向向上"规则,是不是也保证了每一层可以被独立替换?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>:依赖方向和分层边界到底怎么被强制执行。
+</div>
+
+<h2>5 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第2章-三层架构-Pi-Agent项目的骨骼.md">第 2 章 · 三层架构——Pi-Agent 项目的骨骼</a>——
+  原文第 5 节完整讲了类型递进的三段式,还配了一张三列对比图,值得对照阅读。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0006):</strong> 我们把"依赖方向单向向上"这条规则摊开看——
+  为什么底层永远不能 import 上层?这条规则怎么在真实代码里被强制执行、又带来什么好处?
+  搞懂依赖方向和分层边界,才能真正回答"这一层能不能被我自己的实现替换掉"。
+</p>
+
+<footer>
+  Lesson 0005 · 第 2 章 三层架构 ·
+  下一课:<a href="./0006-dependency-direction-and-layer-boundaries.html">0006 依赖方向与分层边界 →</a> ·
+  上一课:<a href="./0004-five-packages-project-skeleton.html">0004 五个包的项目骨架</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。原子概念一处定义、处处引用,避免了同名类型在不同层漂移。延伸:正因为原子在 pi-ai,coding-agent 才会"跨层"直接依赖 pi-ai——这在下一节会揭晓不是设计失误。',
+               '✓ 对。Tool 管"长什么样",AgentTool 用 extends 叠上"怎么执行"(串行/并行、执行函数)。延伸:"怎么显示"要再上一层到 ToolDefinition 才出现。',
+               '✓ 对。底层类型从不为上层的需求买单——execute 是 Agent 循环才关心的,留给 AgentTool。延伸:这正是"类型递进扩展"能让底层独立发布的原因。'];
+  var msgNo = ['回看 §5"化学类比"和"第一层:pi-ai 定义原子",想想为什么原子不能每层复制一份。',
+               '对照 §5 的 Before→After 三段代码,看 AgentTool extends Tool 那段标了"←新增"的到底是哪几个字段,以及渲染器属于哪一层。',
+               '看 §5 结尾那句"pi-ai 的 Tool 接口里没有 execute 字段,因为 LLM 不需要知道工具怎么执行",再想想每层各自该关心什么。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

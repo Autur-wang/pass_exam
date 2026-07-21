@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0003 · 位置编码与长上下文瓶颈:RoPE、ALiBi 与 O(n²)</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第一部分 基础与 Transformer · 第 0003 课</p>
+<h1>位置编码与长上下文瓶颈:RoPE、ALiBi 与 O(n²)</h1>
+<p class="lede">这节课把四道常连在一起考的题一次串清:<strong>「位置编码为何关键、它解决自注意力的什么问题?」「为何<em>相对</em>位置在 Transformer 里更本质?」「vanilla Transformer 固定注意力跨度的挑战、为何不能简单加长上下文?」「生成时如何高效处理长上下文?」</strong>(源:60 题·LLM 第 13、4、5、6 题;60 题·训练与推理 第 3 题)。目标:让你答得出「为什么长上下文又慢又贵」,并把业界的救法排成一条答题线。</p>
+
+<div class="recall">
+<p>上节课我们把注意力写成对 $V$ 的加权求和,权重来自 $Q\cdot K$ 的相似度。这里藏着一个问题:<strong>加权求和只看内容、不看座位</strong>。先别往下看——如果把输入序列的 token 顺序完全打乱,注意力的输出会跟着乱、还是本质不变?</p>
+</div>
+
+<h2>一、根问题:自注意力「看不见」顺序</h2>
+<p>答案是<strong>本质不变</strong>:打乱输入,输出只是跟着同样地被打乱,算出来的两两关系集合一模一样。原因就在上节课那个公式——权重完全由 $Q\cdot K$ 的<strong>内容相似度</strong>决定,和「谁排第几」无关。这叫<strong>位置无关(排列等变)</strong>。</p>
+<p>可语言的意义高度依赖顺序:「狗咬人」和「人咬狗」用的词一模一样,注意力却分不出差别。所以顺序信息必须<strong>显式地喂进去</strong>——这就是位置编码存在的全部理由:它解决的正是「自注意力天生丢失位置」这个缺口。</p>
+
+<dl class="keydef">
+<dt>正弦位置编码(Sinusoidal Positional Encoding)</dt>
+<dd>原始 Transformer 的做法:为每个位置 $pos$ 造一个固定向量 $PE(pos)$(由不同频率的 $\sin/\cos$ 拼成),<strong>加到该位置的 token embedding 上</strong>,让模型能从向量里读出「我在第几个」。</dd>
+<dd><em>这是一种<strong>绝对</strong>位置编码——直接把「第几个」编码进去。它无需学习、可外推一点点,但「第几个」并不是语言里最本质的信息。</em></dd>
+</dl>
+
+<h2>二、为什么<em>相对</em>位置更本质:RoPE 与 ALiBi</h2>
+<p>绝对编码告诉模型「你是第 5 个」;但真正影响理解的,往往是<strong>「这个词在那个词前面 2 格」</strong>这类相对关系。相对位置还有一个工程好处:模型训练时只见过有限长度,面对更长序列时,绝对位置里那些「没见过的座位号」会让它发懵,而<strong>相对距离更容易泛化到更长序列</strong>。这就是为什么现代大模型多转向相对位置编码。</p>
+
+<dl class="keydef">
+<dt>RoPE(Rotary Position Embedding,旋转位置编码)</dt>
+<dd>不再往 embedding 上「加」,而是按位置把 $Q$、$K$ 向量<strong>旋转</strong>一个与位置成正比的角度。旋转后,位置 $m$ 的 query 与位置 $n$ 的 key 做点积,结果只依赖<strong>相对距离</strong> $m-n$:</dd>
+<dd>$$\langle f(q,m),\,f(k,n)\rangle = g\big(q,\,k,\,m-n\big)$$</dd>
+<dd><em>相对位置就这样「自然」进了点积,而且仍保持标准点积形式,能和高效注意力实现兼容。</em></dd>
+<dt>ALiBi(Attention with Linear Biases)</dt>
+<dd>更省事:不动 $Q/K$,直接在注意力分数上<strong>加一个与两 token 距离成正比的线性偏置</strong>——离得越远,惩罚越大。它把「就近关注」的先验直接写进分数里,也更容易外推到更长序列。</dd>
+</dl>
+
+<h2>三、长上下文的根因:O(n²) 这堵墙</h2>
+<p>vanilla Transformer 的注意力窗口在训练时是<strong>固定</strong>的:超出窗口的内容根本进不来(这就是「固定注意力跨度」的挑战)。那把窗口调大不就行了?——问题是它会直接撞上复杂度的墙。</p>
+<p>每个 token 都要和所有 token 算一次注意力,于是产生一个 $n\times n$ 的分数矩阵:计算量约 $O(n^2 d)$、显存约 $O(n^2)$。关键在那个平方——<strong>序列翻倍,计算与显存翻四倍</strong>。</p>
+
+<div class="bars">
+  <div class="row"><span class="lbl">序列 $n$(基准)</span><div class="track"><div class="val base" style="width:6%">1×</div></div></div>
+  <div class="row"><span class="lbl">序列 $2n$</span><div class="track"><div class="val a" style="width:25%">4×</div></div></div>
+  <div class="row"><span class="lbl">序列 $4n$</span><div class="track"><div class="val a" style="width:100%">16×</div></div></div>
+</div>
+<p class="formula-note">相对开销(计算与显存):长度翻倍,代价约变 4 倍;翻 4 倍,代价约 16 倍。</p>
+<p>所以「简单增大上下文长度」不可行:成本不是线性上涨,而是<strong>平方级爆炸</strong>——换更大显卡、加大 batch 只能拖一会儿,很快又撞墙。这也是为什么长上下文既慢又贵。</p>
+
+<h2>四、业界怎么救:一条答题线</h2>
+<p>面试问「生成时如何高效处理长上下文」,把下面几手按「省搬运 → 省显存 → 撑窗口 → 降复杂度」串起来讲,层次就出来了(源·训练与推理 3):</p>
+
+<div class="pipeline">
+  <div class="node">FlashAttention<br><em>分块算、省显存搬运</em></div>
+  <div class="arrow">→</div>
+  <div class="node">MQA / GQA<br><em>K/V 共享、缩 KV cache</em></div>
+  <div class="arrow">→</div>
+  <div class="node">Positional Interpolation<br><em>插值撑长窗口</em></div>
+  <div class="arrow">→</div>
+  <div class="node">RoPE / ALiBi<br><em>相对编码更好外推</em></div>
+  <div class="arrow">→</div>
+  <div class="node good">稀疏注意力<br><em>只算部分、近线性</em></div>
+</div>
+
+<ul>
+<li><strong>FlashAttention</strong>:把注意力<strong>分块(tiling)</strong>计算,不把完整的 $n\times n$ 矩阵写进显存,靠减少 GPU 显存搬运来提速省显存。注意:结果<strong>精确</strong>、复杂度仍是 $O(n^2)$——它省的是 IO,不是算力。</li>
+<li><strong>MQA(Multi-Query Attention)</strong>:让所有注意力头<strong>共享同一份 K/V</strong>,推理时 KV cache 显存大幅下降、解码更快。<strong>GQA</strong> 是「分组共享」的折中,在质量与速度间取平衡。</li>
+<li><strong>Positional Interpolation</strong>:把超出原窗口的位置索引<strong>压缩插值</strong>回已训练过的范围,配少量微调就能把上下文窗口撑长(常与 RoPE 搭配)。</li>
+<li><strong>RoPE / ALiBi</strong>:相对位置编码本身就比绝对编码更容易<strong>外推</strong>到更长序列——是「长上下文友好」的地基。</li>
+<li><strong>稀疏注意力(Sparse Attention)</strong>:每个 token 只和<strong>一部分</strong> token 算注意力(如局部窗口 + 少量全局锚点),复杂度从 $O(n^2)$ 降到<strong>近线性</strong>。</li>
+</ul>
+<p>再补一句「生成时」的关键:自回归解码会复用 <strong>KV cache</strong>,已经算过的 K/V 不重算,MQA/GQA 正是在压这块 cache 的显存。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「自注意力为什么必须要位置编码?」——因为它位置无关,打乱输入输出本质不变,分不出语序。</li>
+<li>「绝对 vs 相对位置编码差别在哪?」——相对更贴合语言、外推更好;举 RoPE、ALiBi。</li>
+<li>「RoPE 凭什么能带相对位置?」——按位置旋转 $Q/K$,旋转后点积只依赖相对距离 $m-n$。</li>
+<li>「上下文为什么不能随便加长?」——$O(n^2)$ 的计算与显存,翻倍即翻四倍。</li>
+<li>「那业界怎么支持长上下文?」——FlashAttention、MQA/GQA、Positional Interpolation、RoPE/ALiBi 外推、稀疏注意力,按省搬运/省显存/撑窗口/降复杂度分层答。</li>
+<li>「窗口变长,模型就一定用得好吗?」——不一定,有「中间信息被忽略」的现象(Lost in the Middle),扩窗 ≠ 会用。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(注意别把手段说满):</strong></p>
+<ul>
+<li>别说「FlashAttention 把复杂度从 $O(n^2)$ 降到线性」——它<strong>不改复杂度</strong>,结果精确,省的是显存搬运;真正逼近线性的是<strong>稀疏 / 线性注意力</strong>。</li>
+<li>别说「RoPE / ALiBi 能无限外推」——外推能力<strong>有限</strong>,超出太多仍会退化;Positional Interpolation 等通常还要配微调。</li>
+<li>别把位置编码说成「只能加在 embedding 上」——那是正弦编码;RoPE 作用在 $Q/K$,ALiBi 作用在分数上,落点不同。</li>
+<li>别说「MQA 共享 K/V 不损质量」——共享通常有<strong>一定</strong>质量损失,GQA 才是折中方案。绝对化措辞是面试扣分点。</li>
+<li>别说「换更大 GPU 就能任意加长上下文」——$O(n^2)$ 增长太快,硬件只能拖延、拖不掉这堵墙。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>自注意力必须外加位置编码,最根本的原因是?</p>
+<details><summary>A. 注意力权重之和必须归一化到 1</summary>那是 softmax 的职责,和位置信息无关。</details>
+<details><summary>B. token embedding 维度太高,需要位置向量来压缩</summary>位置编码不做降维,和维度压缩无关。</details>
+<details><summary>C. 自注意力位置无关,打乱输入顺序输出本质不变,分不出语序 ✅</summary>正确。权重只由内容相似度决定,不含顺序,所以必须显式补上位置信息。</details>
+<details><summary>D. softmax 在长序列上会导致梯度消失</summary>这是缩放因子处理的问题(见第 0002 课),与位置编码无关。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于长上下文,下列哪句最准确?</p>
+<details><summary>A. 上下文长度只受显存限制,换更大显卡即可任意加长</summary>不对,平方级增长很快撞墙,硬件只能拖延。</details>
+<details><summary>B. 自注意力的计算与显存随序列长度平方增长,序列翻倍则翻四倍 ✅</summary>正确。$O(n^2)$ 正是「简单加长不可行」的根因。</details>
+<details><summary>C. FlashAttention 把注意力复杂度从 $O(n^2)$ 降到了 $O(n)$</summary>不对,它省的是显存搬运、结果精确,复杂度不变。</details>
+<details><summary>D. RoPE 可以让模型无损外推到任意长度的序列</summary>不对,外推能力有限,超出太多仍会退化。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向(都是真实存在的论文/工作):</p>
+<ul>
+<li><strong>Attention Is All You Need</strong>(Vaswani et al., 2017)——正弦位置编码与 $O(n^2)$ 注意力的原始出处。</li>
+<li><strong>RoFormer: Enhanced Transformer with Rotary Position Embedding</strong>(Su et al., 2021)——RoPE 原论文,本课的旋转直觉与 $g(q,k,m-n)$ 即出自此。</li>
+<li><strong>Train Short, Test Long(ALiBi)</strong>(Press et al., 2022)——用线性距离偏置实现长度外推。</li>
+<li><strong>FlashAttention</strong>(Dao et al., 2022)——IO 感知的精确注意力,分块省显存搬运。</li>
+<li><strong>MQA</strong>(Shazeer, 2019)与 <strong>GQA</strong>(Ainslie et al., 2023)——K/V 共享与分组折中。</li>
+<li><strong>Extending Context Window via Positional Interpolation</strong>(Chen et al., 2023);<strong>Lost in the Middle</strong>(Liu et al., 2023)——扩窗方法,以及「扩窗 ≠ 会用」的实证。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>自注意力位置无关,故必须补位置编码;相对位置(RoPE 旋转 Q/K、ALiBi 加距离偏置)比绝对更本质、更好外推;长上下文的墙是 $O(n^2)$——翻倍即翻四倍,靠 FlashAttention/MQA/插值/稀疏注意力分层去救。</strong></p>
+<nav class="lesson-nav">
+<a href="0002-self-attention-and-multi-head.html">← 上一课:自注意力与多头</a>
+<a class="next" href="0004-pretraining-and-model-types.html">下一课:预训练机制与模型类型 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0024 · 用声明式思维回答 React 问题</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0024 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>用声明式思维回答 React 问题</h1>
+
+<p class="lede">面试官很少直接问你"什么是声明式编程";他们更常见的做法是甩给你一个 UI 需求(比如一个带筛选功能的待办事项列表),然后看你上手第一步想的是"我该怎么一步步改 DOM",还是"给定这些状态,UI 该长什么样"。这节课要回答的问题是:声明式 UI 和命令式 UI 到底差在哪、这个差别为什么值得面试官反复用来追问你的实现思路。</p>
+
+<div class="recall">
+<p>开课前先回忆一下:上一课整理了 React 面试里绕不开的几个基础概念——组件、props、state、JSX 大概是怎么配合起来渲染出一个界面的。这节课往前走一步:不再问"这几个概念分别是什么",而是问"当你拿到一个具体 UI 需求,该用什么思路把它们组装起来"。如果上一课的这几个词你还记不清,先别急着往下看,回头翻一下更划算。</p>
+</div>
+
+<h2>一、声明式 UI 与命令式 UI:两种思维方式的本质区别</h2>
+
+<p>命令式编程给出的是"事情应该怎么发生"的明确指令。原生 DOM API 本质上就是命令式的——选中元素、手动修改它的属性、再手动绑定事件:</p>
+
+<div class="codecompare">
+  <div class="side bad">
+    <p class="label">命令式:手动操作 DOM</p>
+    <pre><code>const button = document.createElement('button');
+button.textContent = 'Click me';
+button.style.backgroundColor = 'blue';
+document.body.appendChild(button);
+
+button.addEventListener('click', () => {
+  button.style.backgroundColor = 'red';
+  alert('Button clicked!');
+});</code></pre>
+  </div>
+  <div class="side good">
+    <p class="label">声明式:描述状态该长什么样</p>
+    <pre><code>function App() {
+  const [color, setColor] = React.useState('blue');
+  return (
+    &lt;button
+      style={{ backgroundColor: color }}
+      onClick={() => setColor('red')}&gt;
+      Click me
+    &lt;/button&gt;
+  );
+}</code></pre>
+  </div>
+</div>
+
+<p>左边这段代码里,每一步都被明确写出来:创建按钮、设置样式、挂到 DOM 上、点击时再一步步改颜色、弹提示框。右边的 React 组件没有一句话在指挥"把按钮背景色改成红色"——它只声明了"当 <code>color</code> 状态是某个值时,按钮应该长什么样",状态一变,DOM 怎么更新交给 React 自己去算。</p>
+
+<p>一个更好记的类比是煮咖啡:命令式说的是"拿一个马克杯,倒入热水,加入咖啡,搅拌,然后享用";声明式说的只是"我想要一杯咖啡"——具体怎么做,交给系统(咖啡机、咖啡师,或者这里的 React)去处理。这段对比,<a href="https://react.dev/learn/reacting-to-input-with-state#how-declarative-ui-compares-to-imperative">react.dev 官方文档里有更完整的版本</a>,值得直接去读原文。</p>
+
+<h2>二、案例升级:一个稍微复杂的待办事项列表</h2>
+
+<p>按钮例子太小,声明式的好处不明显。换成一个支持增删、标记完成、按状态筛选(全部/已完成/未完成)的待办事项列表,差别就出来了。</p>
+
+<p>用命令式方法(原生 JS + DOM API),每种用户操作都要手动串联好几步 DOM 操作:</p>
+
+<ul>
+<li><strong>添加任务</strong>:把新任务追加到列表里 → 清空输入框 → 给新任务绑定"标记完成"的事件监听器 → 把任务总数加一</li>
+<li><strong>完成任务</strong>:把这个任务的显示样式改成"已完成" → 修改已完成任务的计数</li>
+<li><strong>删除任务</strong>:把任务从列表里删掉 → 任务总数减一 → 如果它原本已完成,已完成计数也要减一</li>
+</ul>
+
+<p>问题在于,你必须自己记住"这个操作会牵动哪几处该改的地方"。功能越加越多,这份"该改哪里"的清单只会越滚越长,越难维护。</p>
+
+<p>声明式方法(React)反过来:你只描述"给定当前的任务状态,UI 该显示成什么样",增删改具体涉及哪些 DOM 操作交给 React 去算。可能存在的"当前 UI 样子"有无数种,React 靠虚拟 DOM 和协调(reconciliation)过程——比较当前 UI 表示和新的 UI 表示,生成一份必要的 DOM 操作清单——把这件事自动化了。</p>
+
+<h2>三、声明式思考的四个步骤</h2>
+
+<p>源材料把"以声明方式思考 UI"拆成了一套可以直接套用的步骤,核心是把注意力从"如何更新 UI"转移到"UI 在任何给定时刻应该是什么":</p>
+
+<div class="flow">
+  <div class="step">1. 识别组件的视觉状态<br><span style="color:var(--muted);font-size:.85em;">输入框内容、任务列表空/非空、每个任务完成与否、当前筛选项</span></div>
+  <div class="down">↓</div>
+  <div class="step">2. 确定触发状态改变的操作<br><span style="color:var(--muted);font-size:.85em;">添加任务、完成任务、删除任务、切换筛选</span></div>
+  <div class="down">↓</div>
+  <div class="step">3. 设计一个最小结构来表示状态<br><span style="color:var(--muted);font-size:.85em;">别让同一份事实存两份</span></div>
+  <div class="down">↓</div>
+  <div class="step terminal">4. 在事件处理程序中调用操作<br><span style="color:var(--muted);font-size:.85em;">事件更新状态,React 负责重新渲染</span></div>
+</div>
+
+<p>第 3 步最容易踩坑,值得多说几句。以待办事项列表为例,一种直觉写法是同时维护 <code>tasks</code>、<code>completedTasks</code>、<code>incompleteTasks</code> 三个数组——但这样任务信息被重复存了好几份,增删任务时要记得同步改好几处。改进方向是只保留 <code>tasks</code>(每个任务自带 <code>completed</code> 字段)和 <code>filter</code> 两份状态,已完成的任务通过筛选 <code>tasks</code> 派生出来,不单独存。这里也有权衡:状态合并之后,切换任务完成状态需要克隆整个 <code>tasks</code> 数组;如果改用 <code>Set</code> 单独存已完成任务的 id,这一步会更快——最小状态结构不是"数组越少越好"的教条,而是"别让同一份事实被存两遍"。</p>
+
+<p>第 4 步的关键是把状态更新逻辑收进独立的"操作函数"里,而不是散落在各个事件监听器里。原因是同一个操作可能从界面上好几个地方触发,比如视频播放器的"暂停"既可能是点按钮,也可能是按空格键——把 <code>toggleTask</code>、<code>deleteTask</code> 这类函数写成独立的操作,事件处理程序去调用它们,而不是每个监听器各写一遍更新逻辑。</p>
+
+<h2>四、面试官到底在追问什么</h2>
+
+<p>源材料对这节内容在面试里的定位说得很直接:给定一个 UI 和一组需求,你应该能够以声明式方式思考,定义出必要的组件、props、state、改变状态的操作,并把它们连接起来。这也是为什么面试官很少直接问"声明式是什么意思",而是把一道 UI 编码题(进度条、Tweet 组件、文件资源管理器一类)甩给你,观察你上手的第一步是不是先想"要改哪个 DOM 节点"——如果是,这通常说明思维习惯还停留在命令式那一套上。</p>
+
+<p>换句话说,这个视角追问的不是术语记忆,而是你有没有先把"状态该怎么设计"想清楚,再动手写渲染逻辑。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>声明式 UI</dt>
+<dd>描述 UI 在给定状态下应该呈现的样子,把"怎么把当前 DOM 变成目标样子"这件事交给框架(如 React 的协调过程)去计算,而不是像命令式编程那样一步步下达明确指令。<em>避免</em>把"声明式"理解成"不用写状态更新逻辑"——<code>setState</code>、事件处理函数照样要写,只是不用手写具体的 DOM 操作步骤。</dd>
+<dt>最小状态结构</dt>
+<dd>只保留一份"事实来源",能从这份来源推导出来的数据(比如已完成任务列表)靠派生得到,而不是另开一个状态去同步存一遍。<em>避免</em>为了"读取方便"同时维护 <code>tasks</code>、<code>completedTasks</code>、<code>incompleteTasks</code> 三份状态——每次增删都要记得同步改好几处,是常见的 bug 来源。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>面试官给你一个 UI 编码题(比如进度条、Tweet 组件、文件资源管理器)时,不要一上来就想"我该怎么改这个 DOM 节点"。先按上面四步走一遍:这个组件有哪些视觉状态、哪些操作会改变这些状态、用什么最小的状态结构表示它们、再把操作接到事件处理函数里。边说边写,面试官在评估的正是这套思考顺序,不是你的打字速度。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:以为"用了 React 就自动等于声明式思维"。</strong>如果你在 React 组件里同时维护 <code>tasks</code>、<code>completedTasks</code>、<code>incompleteTasks</code> 三份数组,并在每个事件处理函数里手动同步这三份——这本质上还是命令式思维,只是换了个框架的壳子。声明式思维的关键不是用没用 React,而是有没有把状态设计成一份最小、不用手动同步的"事实来源"。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>挑一道结构稍复杂的 UI 题(比如带筛选功能的列表),先只用文字写出它的四步分析——视觉状态、操作、最小状态结构、事件处理函数——再动手写代码。把"分析"和"编码"分成两步做,能让你在面试现场更早发现状态设计里的冗余。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>声明式思维的核心是把问题从"我该怎么一步步改 DOM"换成"给定状态,UI 该长什么样";面试官通过让你设计最小状态结构、把操作接到事件处理函数里,考察的正是这套思考顺序,而不是让你背"声明式"这个词的定义。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于命令式编程和声明式编程的区别,下面哪个说法最准确? (A) 声明式编程需要你手动选中 DOM 元素、逐步修改属性并绑定事件监听器 (B) 声明式编程描述 UI 在给定状态下应该呈现的样子,由框架(如 React)负责计算并执行具体的 DOM 更新步骤 (C) 命令式编程和声明式编程本质上是同一件事,只是写法上用了不同的 API</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。React 组件描述"状态是某个值时 UI 应该是什么样",具体怎么把 DOM 从当前样子变成目标样子,由 React 的协调过程算出来。(A) 描述的正是命令式编程本身(比如原生 DOM API 那种手动 <code>createElement</code>、<code>addEventListener</code> 的写法);(C) 忽略了两者的核心区别——一个下达明确的执行步骤,一个只描述目标结果,具体怎么做交给系统去处理。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:在待办事项列表案例中,如果同时维护 tasks、completedTasks、incompleteTasks 三个独立的状态数组,最主要的问题是什么? (A) 数据出现重复,添加或删除任务时必须记得同步修改好几个数组,否则会出现不一致 (B) React 的 useState 一个组件最多只能调用两次,写第三个会报错 (C) 数组类型的状态会让 React 无法触发重新渲染</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。一个任务的完成状态被同时存在多份数据里,任何一次增删都要记得同步好几处,这正是"非最小状态结构"容易引发 bug 的地方。(B) 是编造的限制——<code>useState</code> 可以在一个组件里调用任意次;(C) 也不成立,数组本身不影响 React 的重新渲染机制,真正的问题出在状态设计的冗余上,不是数据类型。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>源材料在讲完按钮例子之后,直接指向 react.dev 官方文档里对应的对比页面,建议照着原文链接读一遍完整版本:</p>
+<ul>
+<li><a href="https://react.dev/learn/reacting-to-input-with-state#how-declarative-ui-compares-to-imperative">react.dev · How declarative UI compares to imperative</a> —— React 官方对声明式 UI 与命令式 UI 的对比讲解,例子和这节课引用的是同一处。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"声明式到底比命令式好在哪",也可以让老师给你出一道新的 UI 需求,让你现场走一遍四步分析。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0023-react-basic-concepts-for-interviews.html"><span class="dir">← 上一课</span>React 基础概念必考点</a>
+  <a class="next" href="0025-react-state-design-building-resetting.html"><span class="dir">下一课 →</span>状态怎么构建 + 何时重置</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

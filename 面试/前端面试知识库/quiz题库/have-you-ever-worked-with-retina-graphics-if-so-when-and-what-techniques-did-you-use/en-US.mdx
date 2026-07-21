@@ -1,0 +1,32 @@
+---
+title: Have you ever worked with retina graphics?
+subtitle: If so, when and what techniques did you use?
+---
+
+_Retina_ is a marketing term used to refer to high-resolution screens with a pixel ratio greater than 1. The key thing to know is that using a pixel ratio means these displays are emulating a lower-resolution screen in order to show elements at the same size. Nowadays, we consider all mobile devices to be retina displays by default.
+
+Browsers render DOM elements according to the device resolution by default, except for images.
+
+To have crisp, good-looking graphics that make the best of retina displays, we need to use high-resolution images whenever possible. However, always using the highest-resolution images will impact performance, as more bytes will need to be sent over the wire.
+
+To overcome this problem, we can use responsive images, as specified in HTML5. This requires making different resolution files of the same image available to the browser and letting it decide which image is best, using the HTML attribute `srcset` and optionally `sizes`. For instance:
+
+```html
+<div responsive-background-image>
+  <img
+    src="/images/test-1600.jpg"
+    sizes="
+      (min-width: 768px) 50vw,
+      (min-width: 1024px) 66vw,
+      100vw"
+    srcset="
+      /images/test-400.jpg   400w,
+      /images/test-800.jpg   800w,
+      /images/test-1200.jpg 1200w
+    " />
+</div>
+```
+
+Note that browsers which don't support HTML5's `srcset` (i.e. IE11) will ignore it and use `src` instead. If we really need to support IE11 and we want to provide this feature for performance reasons, we can use a JavaScript polyfill, e.g. [Picturefill](https://scottjehl.github.io/picturefill/).
+
+For icons, use SVGs where possible, as they render crisply regardless of resolution.

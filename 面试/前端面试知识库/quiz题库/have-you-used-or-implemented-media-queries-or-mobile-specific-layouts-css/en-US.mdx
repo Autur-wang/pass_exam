@@ -1,0 +1,123 @@
+---
+title: Have you used or implemented media queries or mobile-specific layouts/CSS?
+---
+
+Media queries are a CSS feature that applies styles conditionally based on characteristics of the user's device or viewport, such as width, height, orientation, resolution, or user preferences. They are the foundation of [responsive design](/questions/quiz/can-you-explain-the-difference-between-coding-a-website-to-be-responsive-versus-using-a-mobile-first-strategy) and let a single CSS file adapt a layout across phones, tablets, and desktops.
+
+## Syntax
+
+A media query consists of a media type (e.g. `screen`, `print` — see [media types](/questions/quiz/can-you-give-an-example-of-an-media-property-other-than-screen)) and one or more expressions that evaluate to true or false. When the expressions match, the styles inside the block are applied.
+
+```css
+@media (min-width: 768px) {
+  .card {
+    display: flex;
+  }
+}
+
+@media (min-width: 768px) and (orientation: landscape) {
+  .hero {
+    height: 80vh;
+  }
+}
+```
+
+Common features queried include:
+
+- `min-width` / `max-width`: viewport width thresholds for breakpoints.
+- `orientation`: `portrait` or `landscape`.
+- `prefers-color-scheme`: `light` or `dark` for theming.
+- `prefers-reduced-motion`: whether the user has requested reduced animations.
+- `hover` and `pointer`: whether the primary input has hover capability and how precise it is (e.g. `coarse` for touch).
+
+## Mobile-first vs desktop-first
+
+There are two common approaches to structuring breakpoints:
+
+- **Mobile-first** uses `min-width` queries to layer styles on top of a mobile baseline. This is generally preferred — mobile styles are the default, and larger screens receive progressive enhancements.
+- **Desktop-first** uses `max-width` queries to scale a desktop design down. This is easier when retrofitting an existing desktop site but tends to produce more override-heavy CSS.
+
+```css
+/* Mobile-first (recommended) */
+.nav {
+  flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .nav {
+    flex-direction: row;
+  }
+}
+```
+
+See [responsive vs mobile-first](/questions/quiz/can-you-explain-the-difference-between-coding-a-website-to-be-responsive-versus-using-a-mobile-first-strategy) for the trade-offs.
+
+## Practical example
+
+Transforming a stacked pill navigation into a fixed-bottom tab bar on smaller screens:
+
+```css
+.nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    justify-content: space-around;
+    border-top: 1px solid #e5e7eb;
+    background: #fff;
+  }
+}
+```
+
+## Beyond viewport width
+
+Media queries aren't only about screen size. They also let you respect user preferences and device capabilities, which is important for accessibility and UX:
+
+```css
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111;
+    --fg: #eee;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .tooltip {
+    display: none; /* No hover on touch devices */
+  }
+}
+```
+
+> [!TIP] Pair media queries with responsive images
+>
+> Media queries handle layout, but images need their own responsive story. Use the `srcset` and `sizes` attributes (see [`srcset`](/questions/quiz/why-you-would-use-a-srcset-attribute-in-an-image-tag) and [retina graphics](/questions/quiz/have-you-ever-worked-with-retina-graphics-if-so-when-and-what-techniques-did-you-use)) so the browser picks an appropriately-sized file for the current viewport and pixel density.
+
+## Alternatives and newer features
+
+- **Container queries** (`@container`): style a component based on the size of its container rather than the viewport. This is useful for reusable components whose layout should adapt regardless of where they are placed on the page.
+- **CSS Flexbox and Grid**: often reduce the number of breakpoints needed. `flex-wrap`, `minmax()`, and `auto-fit`/`auto-fill` can produce fluid layouts that adapt without explicit media queries.
+- **Viewport units** (`vw`, `vh`, `svh`, `dvh`): scale sizing with the viewport directly.
+
+> [!NOTE] Don't design around specific devices
+>
+> Pick breakpoints based on where your content starts to break, not based on specific device widths (e.g. "iPhone width"). The device landscape changes constantly; content-driven breakpoints age much better.
+
+## References
+
+- [Using media queries | MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_media_queries/Using_media_queries)
+- [Responsive design | web.dev](https://web.dev/learn/design/)
+- [CSS container queries | MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_containment/Container_queries)

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>答题方法论 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第八部分 · 答题方法论 · 第 0026 节(收官)</p>
+<h1>OOP 面试答题法与全课复盘</h1>
+<p class="lede">前 25 节把"知道"喂给了你。这最后一节不讲新概念,只做一件事:把"我知道"翻译成"我答得住"。给你一套可复用的答题结构、一张高频追问链地图、一份全课易错点总清单,让你在面试压力下也稳。</p>
+
+<div class="recall">
+<p>先自测一下手感:如果面试官现在开口问"讲讲什么是多态",你脑子里冒出来的第一句话是什么?你会讲多久?会不会讲着讲着就滑进"重写 vs 重载"然后卡住?先在心里走一遍,再往下看——这一节就是给这段"走一遍"装上轨道。</p>
+</div>
+
+<h2>一、为什么"会"却"答不住"?</h2>
+
+<p>OOP 面试题几乎没有真正的难题——封装、继承、多态、SOLID,你在前 25 节都推过一遍。真正拉开差距的不是知识点,而是<strong>输出结构</strong>:同样一个"什么是封装",有人讲 30 秒清晰收口、顺手抛出一个深水区让面试官眼睛一亮;有人讲 3 分钟绕圈、被一句追问就露馅。</p>
+
+<p>问题的结构性根源是:<strong>课本按"知识"组织,面试按"追问"组织。</strong>你复习时是一节一节线性学的,面试官却是顺着一条追问链往深里钻的。所以答题的关键,是把线性的知识重新组织成<strong>一个能应对追问的框架</strong>——每次开口都用同一个结构,把"深度"主动端出来,而不是等着被挖。</p>
+
+<div class="keydef">
+<dl>
+<dt>OOP 概念题万能四步(背下来,逢题就用)</dt>
+<dd>面对任何一个"什么是 X / X 是什么意思"的概念题,按这四步答,<strong>顺序不要乱</strong>:</dd>
+<dt>① 一句话定义(是什么)</dt>
+<dd>先给一句能收口的定义,别铺垫。让面试官第一秒就知道你懂。</dd>
+<dt>② 为什么 / 解决什么问题(动机)</dt>
+<dd>它是为了解决什么痛点而存在的?没有它会怎样?动机讲清,才显得你不是在背书。</dd>
+<dt>③ 最小代码例(Python)</dt>
+<dd>一个 5~8 行的例子,能演示核心机制即可。会写 &gt; 会说。</dd>
+<dt>④ 取舍 / 边界 / 易错点 + 主动抛一个追问自己接住</dt>
+<dd>讲什么时候<em>不该</em>用它、有什么坑,然后主动说"这里常被追问 X,其实……"——把深度端上桌,掌控节奏。</dd>
+</dl>
+</div>
+
+<h2>二、四步法长什么样?——以"多态"为例</h2>
+
+<p>把上面的模板套到"讲讲什么是多态"上,一次完整的高分回答大致是这样(括号是步骤标注):</p>
+
+<pre><code># ① 定义:多态 = 同一个接口,不同对象给出各自的行为。
+# ② 动机:让调用方不必知道具体类型,新增类型时旧代码不用改(开闭)。
+# ③ 最小代码例:
+class Dog:
+    def speak(self): return "Woof"
+
+class Cat:
+    def speak(self): return "Meow"
+
+def greet(animal):          # 只依赖"有 speak()"这个接口
+    print(animal.speak())   # 运行时才决定调哪个 —— 这就是多态
+
+for a in (Dog(), Cat()):
+    greet(a)                # Woof / Meow
+
+# ④ 取舍 + 主动接追问:
+#   "Python 靠鸭子类型实现多态,不需要共同基类;
+#    面试常追问'重写和重载的区别'——重写(override)是运行时子类
+#    改写父类方法;重载(overload)是同名不同签名,而 Python 其实
+#    不支持方法重载(后定义的覆盖先定义),但支持运算符重载。"
+</code></pre>
+
+<p>注意第 ④ 步:你没有等面试官问"那重载呢",而是<strong>自己把这条追问链接上并答完</strong>。这一下就把对话从"他考你"变成"你在讲课"——这是高分回答和及格回答的分水岭。</p>
+
+<h2>三、白板设计题:名词找类,动词找方法</h2>
+
+<p>除了概念题,第二类高频题是<strong>开放式设计题</strong>:"设计一个停车场 / 电梯 / 图书管理系统"。这类题没有唯一答案,考的是你<em>组织</em>问题的能力。用这五步,边说边画:</p>
+
+<ol>
+<li><strong>澄清需求与约束</strong>:先别急着写类。问清楚规模、核心用例、要不要考虑并发/持久化。面试官最烦"上来就撸代码"。</li>
+<li><strong>从需求里找名词 → 候选类</strong>:"停车场有多个车位,车停进车位"——停车场、车位、车,都是候选类。</li>
+<li><strong>从需求里找动词 → 候选方法</strong>:"停车""取车""计费"——是方法,挂到合适的类上。</li>
+<li><strong>定关系</strong>:三种关系对应三种机制(见下表),按语义选,别乱用继承。</li>
+<li><strong>按需引入设计模式,边说边讲取舍</strong>:真需要再上模式(计费策略多变 → 策略模式),别硬套。每划一刀都说清"为什么这样分、哪里是变化点"。</li>
+</ol>
+
+<table>
+<tr><th>关系语义</th><th>判断话术</th><th>用什么机制</th></tr>
+<tr><td><strong>is-a</strong>(是一种)</td><td>"电动车<em>是一种</em>车"</td><td>继承(慎用,过继承前先想 LSP)</td></tr>
+<tr><td><strong>has-a</strong>(有一个)</td><td>"车<em>有一个</em>发动机"</td><td>组合 / 聚合(优先选它)</td></tr>
+<tr><td><strong>can-do</strong>(能做某事)</td><td>"它<em>能被</em>序列化 / 比较"</td><td>mixin / 接口(Protocol / ABC)</td></tr>
+</table>
+
+<div class="interview">
+<p><strong>答题模板已给你(四步法 + 五步设计法)。下面是把它们串起来的"高频追问链地图"——面试官不会问孤立的一题,而是顺着链往深挖。提前知道链条走向,你就能第 ④ 步主动接住:</strong></p>
+<table>
+<tr><th>起手概念</th><th>面试官最常见的下一问</th><th>你要接住的深水区</th></tr>
+<tr><td>封装</td><td>"和抽象有什么区别?"</td><td>封装藏细节(how)、抽象只暴露必要功能(what);再补 Python 私有真相:<code>__</code> 是 name mangling 不是安全墙(<a href="0002-encapsulation.html">0002</a> / <a href="0005-abstraction.html">0005</a>)</td></tr>
+<tr><td>继承</td><td>"什么时候<em>别</em>用继承?"</td><td>组合优于继承(has-a 别写成 is-a);试金石是 LSP——子类能否无条件替换父类(<a href="0010-composition-vs-inheritance.html">0010</a> / <a href="0014-solid-lsp.html">0014</a>)</td></tr>
+<tr><td>多态</td><td>"重写和重载的区别?"</td><td>override 运行时子类改写父类;overload 同名不同签名——而 Python <strong>不支持方法重载</strong>(后定义覆盖先定义),但<strong>支持运算符重载</strong>(<a href="0004-polymorphism.html">0004</a> / <a href="0020-overloading-in-python.html">0020</a>)</td></tr>
+<tr><td>抽象类 vs 接口</td><td>"Python 里怎么落地接口?"</td><td>ABC(名义子类型,显式继承 + <code>@abstractmethod</code>)/ <code>Protocol</code>(结构子类型)/ 鸭子类型(运行时)(<a href="0005-abstraction.html">0005</a> / <a href="0015-solid-isp-dip.html">0015</a>)</td></tr>
+<tr><td>设计题</td><td>"那你会怎么设计 X?"</td><td>先用 SOLID 定骨架,再<strong>按需</strong>引入具体模式,别硬套(<a href="0013-solid-srp-ocp.html">0013</a>–<a href="0018-design-patterns-behavioral.html">0018</a>)</td></tr>
+</table>
+</div>
+
+<div class="gotcha">
+<p><strong>全课易错点总复盘(这一份清单值得单独存下来,面试前一晚扫一遍)。这些正是各节 <code>gotcha</code> 的汇总,也是面试最爱设的坑:</strong></p>
+<ul>
+<li><strong>Python 没有真 private</strong>:<code>__x</code> 是 name mangling(改写成 <code>_ClassName__x</code>),<code>obj._ClassName__x</code> 照样能读写——不是安全边界。</li>
+<li><strong><code>is</code> vs <code>==</code></strong>:<code>is</code> 比身份(是不是同一个对象 / <code>id</code> 相同),<code>==</code> 比值(走 <code>__eq__</code>)。</li>
+<li><strong>重写 <code>__eq__</code> 必须配 <code>__hash__</code></strong>:只写 <code>__eq__</code> 不写 <code>__hash__</code>,Python 会把 <code>__hash__</code> 置为 <code>None</code>,对象就不可哈希、放不进 <code>set</code>/<code>dict</code> 键。</li>
+<li><strong>Python 不支持方法重载</strong>:同名方法后者覆盖前者;要"重载"效果用默认参 / <code>*args</code> / <code>functools.singledispatch</code>。但<strong>运算符重载</strong>(<code>__add__</code> 等)是支持的。</li>
+<li><strong><code>super()</code> 不是"父类"</strong>:它是当前 MRO 里的<strong>下一个</strong>类;在多重继承下,那个"下一个"可能是兄弟类而非父类。</li>
+<li><strong>别用 <code>__del__</code> 释放资源</strong>:调用时机不确定(依赖垃圾回收)。确定性释放用 <code>with</code> / 上下文管理器。</li>
+<li><strong>可变默认参数陷阱</strong>:<code>def f(x=[])</code> 的默认值只在定义时求值<em>一次</em>,跨调用共享。惯用法:默认写 <code>None</code>,函数体内再新建。</li>
+<li><strong>is-a 成立 ≠ LSP 成立</strong>:数学上正方形是矩形,但 <code>Square(Rectangle)</code> 违反 LSP(改宽会连带改高)。能说"是一种"不代表能安全继承。</li>
+<li><strong><code>@decorator</code> 语法 ≠ GoF 装饰器模式</strong>:前者是 Python 语言语法糖(函数包函数),后者是结构型设计模式(对象包对象、动态加职责),同名不同物。</li>
+<li><strong>组合优于继承</strong>:继承是最强的耦合(子类绑死父类实现);能用 has-a 就别用 is-a。</li>
+<li><strong>范式无高下</strong>:OOP / 函数式 / 过程式各有适用场景,别说"OOP 比 X 好",要说"这个问题用 OOP 更合适,因为……"。</li>
+</ul>
+</div>
+
+<div class="crosslang">
+<p>"这门语言怎么做 X?"是一整条独立的追问链——尤其当你说了 Python 后,面试官爱问"那 Java 呢"。同一个追问,四栏速答:</p>
+<table>
+<tr><th>追问点</th><th>Python</th><th>Java</th><th>C++</th></tr>
+<tr><td>私有</td><td><code>_x</code>/<code>__x</code> 约定(非强制)</td><td><code>private</code>(编译器强制)</td><td><code>private</code>(编译器强制)</td></tr>
+<tr><td>接口 / 抽象</td><td>ABC / <code>Protocol</code> / 鸭子类型</td><td><code>interface</code> / <code>abstract class</code></td><td>纯虚函数(pure virtual)</td></tr>
+<tr><td>方法重载</td><td>不支持(用默认参 / <code>singledispatch</code>)</td><td>支持(按签名区分)</td><td>支持(按签名区分)</td></tr>
+<tr><td>多重继承</td><td>支持 + C3 MRO</td><td>类单继承 + 多 <code>interface</code></td><td>支持 + 虚继承解 diamond</td></tr>
+</table>
+<p>一句话收口:<strong>Python 靠"约定 + 运行时",Java/C++ 靠"编译器强制"。</strong>把这条差异讲清,跨语言追问就稳了。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,给自己一道白板题,大声(真的出声)走一遍五步法:</p>
+<p><strong>题:设计一个简单的"电商购物车"。</strong></p>
+<ul>
+<li>第 ① 步:先<strong>问三个澄清问题</strong>(比如:要不要支持优惠券?要不要库存校验?)。</li>
+<li>第 ②③ 步:圈出名词(Cart、Item、Product、Coupon……)当候选类,圈出动词(add、remove、checkout、apply_coupon……)当候选方法。</li>
+<li>第 ④ 步:判关系——"Cart <em>有多个</em> Item"是 has-a(组合),"打折券"有多种算法是 can-do。用上面那张关系表逐个定。</li>
+<li>第 ⑤ 步:哪里该上模式?优惠策略多变 → 策略模式(<a href="0018-design-patterns-behavioral.html">0018</a>)。说出"为什么这里是变化点"。</li>
+</ul>
+<p>自测:你能在 3 分钟内讲完、并且每划一刀都说清"为什么"吗?讲不清的地方,就是你下一步该回炉的那一节。</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:面试官问"什么是继承",一个候选人张口就是"继承就是子类继承父类,能复用代码,比如 Dog 继承 Animal……"讲了两分钟。按四步法,他漏了最关键的哪一步?为什么这一步最重要?</summary>
+<div class="answer">
+<p><strong>漏了第 ④ 步:取舍 / 边界 + 主动抛追问。</strong>他只讲了"是什么"和一个例子,全程没提"继承的代价"(强耦合)、"什么时候该用组合代替"、"is-a 不等于 LSP"。</p>
+<p>第 ④ 步最重要,因为前三步只证明你"记得住",第 ④ 步才证明你"用得对、踩过坑"。面试官区分初级和资深,靠的就是听你会不会讲取舍。而且主动抛出"这里常被追问组合 vs 继承,其实……"能让你<strong>掌控对话节奏</strong>,把被动挨问变成主动讲深。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:下面这段"高分回答"里藏了一个全课总复盘清单里的经典错误,找出来并改对——<br>"Python 里给属性加双下划线 <code>__balance</code> 就变成真正的私有了,外部完全访问不到,这和 Java 的 <code>private</code> 是一样的。"</summary>
+<div class="answer">
+<p><strong>错误:说 <code>__</code> 是"真正的私有""完全访问不到""和 Java 一样"。</strong></p>
+<p>准确说法:<code>__balance</code> 触发的是 <strong>name mangling</strong>,解释器把它改写成 <code>_ClassName__balance</code>,主要目的是<em>避免子类命名冲突</em>,而不是安全边界——<code>obj._ClassName__balance</code> 照样能读能写。所以它<strong>不</strong>等同于 Java 编译器强制的 <code>private</code>:Java 是"墙",Python 是"礼貌"。把这点讲清,反而比错误的"一样"更显功力。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条(全课总纲):</strong>面试不奖励"知道得多",奖励"讲得清、答得住"。概念题永远走四步——定义 → 动机 → 最小代码例 → 取舍并主动接追问;设计题永远走五步——澄清 → 名词找类 → 动词找方法 → 定关系 → 按需上模式。把"深度"主动端上桌,别等着被挖。</p>
+</div>
+
+<div class="paper">
+<p>本节是收官 meta,<strong>不引入新知识点</strong>,只把前 25 节的方法与坑重新组织。来源分层如实标注:</p>
+<ul>
+<li><strong>源(直接来源):</strong>本节复盘的每一条易错点、每一条追问链,都是前面各节从 README《52 OOP Interview Questions》Q1–Q15 提炼的 <code>gotcha</code> / 追问链的<strong>汇总</strong>,非新增内容。想回看某条的完整推导,点表格里的节次链接;术语核对见本课 <a href="../GLOSSARY.md">GLOSSARY.md</a>,资源与来源分层说明见 <a href="../RESOURCES.md">RESOURCES.md</a>。</li>
+<li><strong>canon(方法论锚定):</strong>四步 / 五步答题法是<strong>本课总结的教学框架</strong>(非某本书原文),但其中的机制判断锚定权威:name mangling、<code>__eq__</code>/<code>__hash__</code>、<code>__del__</code>、可变默认参数、MRO 见 <a href="https://docs.python.org/3/reference/datamodel.html">Python 官方 Data Model</a> 与 <a href="https://docs.python.org/3/howto/mro.html">MRO How-To</a>;LSP / SOLID 见 <a href="https://en.wikipedia.org/wiki/SOLID">Robert C. Martin 的 SOLID</a>;设计模式见 <a href="https://en.wikipedia.org/wiki/Design_Patterns">GoF《Design Patterns》</a>;"名词找类、动词找方法"是面向对象分析的经典启发法(Abbott 名词短语法),非源题原创。</li>
+<li><strong>诚实提醒:</strong>本节的追问链基于通用高频题归纳,<strong>不是</strong>某公司真题库;要贴某公司风格需另配对应面经(见 RESOURCES 的"已知资源缺口")。</li>
+</ul>
+<p>课程到这里就走完了,但你的老师(我)还在。任何一节想让我用 ELI5 / ELI14 重讲、想把你写的设计题拿来当场评、想模拟一轮压力追问——随时开口。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>这是本课最后一节。你已经从"什么是 OOP"一路走到"怎么把 OOP 答得住"。剩下的,是把这套结构在真刀真枪的模拟面试里练成肌肉记忆。祝你面试顺利。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0025-oop-vs-other-paradigms.html"><span class="dir">← 上一课</span>0025 · OOP 与其他范式:面向过程、函数式的取舍</a>
+<span class="none"></span>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

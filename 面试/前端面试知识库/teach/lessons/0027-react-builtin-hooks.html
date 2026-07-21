@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0027 · 内建 Hooks 怎么考:useState/useEffect/useContext/useRef/useId</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0027 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>内建 Hooks 怎么考:useState/useEffect/useContext/useRef/useId</h1>
+
+<p class="lede">React Hooks 手册开篇就点名了五个"你可能需要在面试中用到"的内建 Hook:useState、useEffect、useContext、useRef、useId。这节课不讲"Hooks 是什么"这种概论,而是逐个拆开这五个 Hook——它们各自在解决什么问题、手册里明确标出的陷阱是什么、面试官最容易在哪一处发现你其实没搞懂。useEffect 单独占了手册最长的一段,这节课也花最多篇幅讲它。</p>
+
+<div class="recall">
+<p>上一课你已经区分过什么时候该用受控组件、什么时候该上 Context、什么时候干脆用 Reducer 收拢状态逻辑。先回忆一下:那节课里你说到 Context 比较适合共享哪一类状态?如果传给 <code>Provider</code> 的 <code>value</code> 恰好是一个对象或数组,你还记得直接把它每次渲染都重新塞进去,会带来什么后果吗?这节课会在 useContext 那一节把这个后果讲清楚——它其实和 useEffect 的一个经典陷阱是同一件事的两个变体。</p>
+</div>
+
+<h2>一、五个 Hook 摆在桌面上,是在回答三条问题</h2>
+
+<p>手册原文把话说得很直接:"熟悉常见的 Hooks：<code>useState</code>、<code>useEffect</code>、<code>useContext</code>、<code>useRef</code>、<code>useId</code>,您可能需要在面试中使用其中的一些。"这五个不是同一层次上并列的知识点,而是分别在回答三条不同的问题——这个值要不要触发重渲染?要不要跨组件共享,而不是一路手写 props?要不要跨渲染保留下来,但又不影响 UI 本身?想清楚这三条,该挑哪个 Hook 基本没什么悬念;真正有难度的,是 useEffect 那一节的依赖数组。</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">useState</span><span class="n-sub">组件私有状态</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">useEffect</span><span class="n-sub">同步外部系统</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">useContext</span><span class="n-sub">跨层级共享</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">useRef</span><span class="n-sub">跨渲染可变引用</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">useId</span><span class="n-sub">跨 SSR 唯一 ID</span></div>
+</div>
+
+<p>接下来按手册原文的顺序,一个一个拆开看。</p>
+
+<h2>二、useState:组件私有状态,别直接改</h2>
+
+<p><code>useState</code> 让函数组件在自己的组件实例里记住状态,这份状态是隔离且私有的——如果你在两个不同的地方渲染同一个组件,每个实例各自拿到自己的一份状态,互不干扰。什么时候用它?当这个状态只属于当前组件、不打算共享给兄弟或父组件时。</p>
+
+<pre><code>const [state, setState] = useState(initialState);
+
+function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    &lt;button onClick={() =&gt; setCount((prevCount) =&gt; prevCount + 1)}&gt;
+      Count: {count}
+    &lt;/button&gt;
+  );
+}</code></pre>
+
+<p><code>initialState</code> 是必需参数——如果传进去的是一个函数,React 会调用它来做延迟初始化。手册点名的第一个陷阱是<strong>直接改变状态对象</strong>,而不是走 setter:</p>
+
+<div class="codecompare">
+<div class="side bad"><p class="label">❌ 直接改变状态</p>
+<pre><code>const [user, setUser] = useState({ name: 'Alice', age: 25 });
+user.age = 26;
+setUser(user); // 同一个对象引用,React 认为状态没变</code></pre>
+</div>
+<div class="side good"><p class="label">✅ 传入新对象</p>
+<pre><code>setUser((prevUser) =&gt; ({ ...prevUser, age: 26 }));</code></pre>
+</div>
+</div>
+
+<p>第二个陷阱是在闭包里引用过时的值——如果新状态依赖旧状态,直接写 <code>setCount(count + 1)</code> 在间隔或异步函数里可能读到的已经是过期的 <code>count</code>;改成函数式版本 <code>setCount((prevCount) =&gt; prevCount + 1)</code> 能绕开这个问题,因为 React 会把最新的那份状态交给你,而不是让你自己手写的变量去猜。第三个陷阱手册说得也很干脆:如果一个值的变化根本不需要触发重渲染,别用 <code>useState</code>——去看下面 useRef 那一节。</p>
+
+<p>在 react.dev 上进一步阅读:<a href="https://react.dev/reference/react/useState">useState - React</a>。</p>
+
+<h2>三、useEffect:同步外部系统的钩子,也是面试重灾区</h2>
+
+<p><code>useEffect</code> 的定位很明确:它主要是用来<strong>把组件和外部系统同步</strong>的 Hook,而不是"生命周期钩子的万能替代品"。典型用法是获取数据、订阅事件、和 DOM 交互。</p>
+
+<pre><code>useEffect(effectFunction, dependencyArray);</code></pre>
+
+<p>第一个参数是必需的副作用函数,第二个参数——依赖数组——是可选的,但它决定了这个 effect 到底什么时候跑:</p>
+
+<table>
+<tr><th>什么时候该跑这个 effect?</th><th>依赖数组怎么写</th><th>例子</th></tr>
+<tr><td>每次渲染后都跑</td><td>不传第二个参数</td><td><code>useEffect(() =&gt; {...});</code></td></tr>
+<tr><td>只在挂载时跑一次</td><td>空数组 <code>[]</code></td><td><code>useEffect(() =&gt; {...}, []);</code></td></tr>
+<tr><td>依赖项变化时才跑</td><td>写上具体依赖 <code>[var1, var2]</code></td><td><code>useEffect(() =&gt; {...}, [var1, var2]);</code></td></tr>
+<tr><td>卸载或重跑前先清理</td><td>effect 里 <code>return</code> 一个函数</td><td><code>useEffect(() =&gt; { return () =&gt; {...}; }, []);</code></td></tr>
+</table>
+
+<p>手册特别提醒:<code>useEffect</code> 在面试题里并不常见——面试题大多是自包含的,不太需要真的去同步一个外部系统,所以 GreatFrontEnd 官方题解里也没有太多 <code>useEffect</code> 的影子。如果你发现自己的解答里用上了它,先停下来想想是不是有别的选择,再对照官方题解看看能不能去掉。</p>
+
+<p>手册点名的四个陷阱,前两个是文字描述、后两个各带一组代码。第一个是<strong>缺依赖导致陈旧闭包</strong>:</p>
+
+<div class="codecompare">
+<div class="side bad"><p class="label">❌ 依赖项漏了</p>
+<pre><code>useEffect(() =&gt; {
+  fetchData();
+}, []); // 如果 fetchData 依赖某个 prop,这个空数组里就藏着一个陈旧闭包</code></pre>
+</div>
+<div class="side good"><p class="label">✅ 补上真实依赖</p>
+<pre><code>useEffect(() =&gt; {
+  fetchData(someProp);
+}, [someProp]);</code></pre>
+</div>
+</div>
+
+<p>第二个陷阱是<strong>在 effect 内部更新状态,又没管好触发它重跑的依赖</strong>,导致效果一遍遍地把自己重新触发出一个无限循环——这也是为什么"依赖数组该写什么"从来不是随手填的小事。第三个陷阱是<strong>依赖数组里放了对象/数组,导致不必要的重跑</strong>:</p>
+
+<div class="codecompare">
+<div class="side bad"><p class="label">❌ filteredTodos 每次渲染都是新数组</p>
+<pre><code>function TodoList({ todos }) {
+  const [count, setCount] = useState(0);
+  const [status, setStatus] = useState('in_progress');
+  const filteredTodos = todos.filter((todo) =&gt; todo.status === status);
+
+  useEffect(() =&gt; {
+    console.log('filteredTodos 变了');
+  }, [filteredTodos]);
+  // 点"强制重新渲染"(只改了 count),
+  // filteredTodos 引用也变了,effect 照样重跑
+}</code></pre>
+</div>
+<div class="side good"><p class="label">✅ 用 useMemo 稳定引用</p>
+<pre><code>function TodoList({ todos }) {
+  const [count, setCount] = useState(0);
+  const [status, setStatus] = useState('in_progress');
+  const filteredTodos = useMemo(
+    () =&gt; todos.filter((todo) =&gt; todo.status === status),
+    [todos, status]
+  );
+
+  useEffect(() =&gt; {
+    console.log('filteredTodos 变了');
+  }, [filteredTodos]);
+  // 引用只在 todos 或 status 真正变化时才变
+}</code></pre>
+</div>
+</div>
+
+<p>第四个陷阱是<strong>没清理副作用</strong>,比如忘了清定时器、忘了取消订阅:</p>
+
+<div class="codecompare">
+<div class="side bad"><p class="label">❌ 没有清理</p>
+<pre><code>useEffect(() =&gt; {
+  const interval = setInterval(() =&gt; {
+    console.log('Running...');
+  }, 1000);
+}, []); // 组件卸载后,定时器还在跑</code></pre>
+</div>
+<div class="side good"><p class="label">✅ 返回清理函数</p>
+<pre><code>useEffect(() =&gt; {
+  const interval = setInterval(() =&gt; {
+    console.log('Running...');
+  }, 1000);
+  return () =&gt; clearInterval(interval);
+}, []);</code></pre>
+</div>
+</div>
+
+<p>手册对 <code>useEffect</code>、<code>useCallback</code>、<code>useMemo</code> 的依赖数组给出的建议是:老老实实把依赖填对是当下的好习惯——更长远来看,<a href="https://react.dev/learn/react-compiler">React 编译器</a>想做的是让开发者不必手写 <code>useCallback</code>/<code>useMemo</code>,但这是未来时,面试现场你仍然要能解释依赖数组本身的道理。手册也直言:<code>useEffect</code> 充满陷阱,即使经验丰富的工程师也常常用不对。如果你想真正吃透它,手册给出的阅读顺序是先看<a href="https://react.dev/learn/synchronizing-with-effects">《与 Effects 同步》</a>,再看<a href="https://react.dev/learn/you-might-not-need-an-effect">《你可能不需要 Effect》</a>,然后是<a href="https://react.dev/learn/lifecycle-of-reactive-effects">《响应式 Effects 的生命周期》</a>、<a href="https://react.dev/learn/separating-events-from-effects">《将事件与 Effects 分开》</a>,最后是<a href="https://react.dev/learn/removing-effect-dependencies">《删除 Effect 依赖项》</a>——这五篇按顺序读完,比只看这节课的摘要扎实得多。</p>
+
+<p>在 react.dev 上进一步阅读:<a href="https://react.dev/reference/react/useEffect">useEffect - React</a>。</p>
+
+<h2>四、useContext:跨层级共享,记得给对象值做记忆化</h2>
+
+<p><code>useContext</code> 提供了一种不用一路手写 props 就能在组件之间共享状态的方式,适合主题、身份验证、用户设置这类全局状态。</p>
+
+<pre><code>const ThemeContext = createContext('light');
+
+function App() {
+  const [theme, setTheme] = useState('light');
+  return (
+    &lt;ThemeContext.Provider value={theme}&gt;
+      &lt;ThemedComponent /&gt;
+    &lt;/ThemeContext.Provider&gt;
+  );
+}
+
+function ThemedComponent() {
+  const theme = useContext(ThemeContext);
+  return &lt;div&gt;主题：{theme}&lt;/div&gt;;
+}</code></pre>
+
+<p>React 19 起,Context 的 Provider 可以直接写成 <code>&lt;ThemeContext value={theme}&gt;</code>,不必再套一层 <code>.Provider</code>。不管哪种写法,行为都一样:当 Provider 收到一个不同的值,React 会自动重新渲染树里所有消费这个 context 的子组件——从这句话就能看出手册点名的第一个陷阱在哪:<strong>用对象或函数当 context 值却不做记忆化</strong>。假设 Provider 的 <code>value</code> 是一份过滤后的待办列表,而这份列表每次父组件渲染都会重新 <code>filter</code> 出一个新数组——即使内容没变,引用变了,树里所有读这个 context 的组件也会跟着重渲染。修法和 useEffect 那节的 <code>filteredTodos</code> 完全一样:用 <code>useMemo</code> 把这份计算结果的引用锁住,让它只在 <code>todos</code> 或 <code>status</code> 真正变化时才变。第二个陷阱是<strong>过度使用 <code>useContext</code></strong> 去管理本该交给状态管理库的深层嵌套状态。</p>
+
+<p>在 react.dev 上进一步阅读:<a href="https://react.dev/reference/react/useContext">useContext - React</a>。</p>
+
+<h2>五、useRef:跨渲染保留,但改了不触发渲染</h2>
+
+<p><code>useRef</code> 存的是一份在渲染之间保持不变的可变引用,典型用法有三种:引用组件实例专属的数据、存一份对 DOM 的引用、存放不影响 UI 的数据(比如定时器或 interval 的 ID)。关键区别在于——更改 ref 的值不会导致组件重新渲染。</p>
+
+<pre><code>function FocusInput() {
+  const inputRef = useRef(null);
+  return (
+    &lt;div&gt;
+      &lt;input ref={inputRef} /&gt;
+      &lt;button onClick={() =&gt; inputRef.current.focus()}&gt;Focus Input&lt;/button&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+<p>手册点名的陷阱只有一个,但很容易在面试里现形:<strong>过度使用 <code>useRef</code> 去代替本该用 <code>useState</code> 管理的状态</strong>。判断标准回到第一节的那条问题——这个值的变化要不要在 UI 上体现出来?要,就该用 <code>useState</code>;只是需要在渲染之间"记住"一份东西,又不想因为它的变化多渲染一次,才轮到 <code>useRef</code>。</p>
+
+<p>在 react.dev 上进一步阅读:<a href="https://react.dev/reference/react/useRef">useRef - React</a>。</p>
+
+<h2>六、useId:生成跨 SSR 一致的唯一 ID,不是拿来当 key 用的</h2>
+
+<p><code>useId</code> 是 React 18 引入的 Hook,用来给无障碍属性和表单元素生成唯一 ID,并且确保这份 ID 在组件树里是唯一的——即使是在服务器端渲染的场景下也一样。</p>
+
+<pre><code>function Form() {
+  const id = useId();
+  return (
+    &lt;div&gt;
+      &lt;label htmlFor={id}&gt;名称：&lt;/label&gt;
+      &lt;input id={id} type="text" /&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+<p>它主要用在三种场景:设计系统组件需要 <code>aria-labelledby</code> 之类的无障碍属性,但页面上可能同时存在这个组件的多个实例;服务端渲染的表单需要给输入框生成唯一 ID;想避免手写一个全局计数器或额外引入一个库来生成唯一 ID。手册点名的陷阱是两条:<strong>别把 <code>useId</code> 拿来当列表的 <code>key</code></strong>——列表的 key 该用数据库 ID 这类稳定的值;<code>useId</code> 生成的是静态 ID,不是用来追踪动态状态的工具。</p>
+
+<p>在 react.dev 上进一步阅读:<a href="https://react.dev/reference/react/useId">useId - React</a>。</p>
+
+<h2>七、关键定义</h2>
+
+<dl class="keydef">
+<dt>useEffect 依赖数组</dt>
+<dd><code>useEffect</code> 的第二个参数,决定 effect 什么时候重新执行:不传、传空数组、传一组变量,分别对应"每次渲染后都跑""只在挂载时跑一次""这些值变了才跑"三种不同时机。<em>避免</em>把它当成"随手塞一个 <code>[]</code> 让报错消失"的开关,却没想过数组里的对象或数组是不是每次渲染都在被重新创建,导致 effect 该跳过时没跳过、或者跑起来没个头。</dd>
+<dt>setState 的函数式更新</dt>
+<dd>把 <code>setCount((prevCount) =&gt; prevCount + 1)</code> 里的 <code>prevCount</code> 交给 React 去传,而不是自己手写的旧变量,用来避开事件处理器、定时器等场景里"读到的还是上一次渲染时的旧状态"的问题。<em>避免</em>图省事写成 <code>setCount(count + 1)</code>,在异步或高频触发的场景下这一行读到的 <code>count</code> 可能已经过期。</dd>
+<dt>Context 值的记忆化</dt>
+<dd>传进 Provider 的 <code>value</code> 如果是对象或数组,要用 <code>useMemo</code> 稳定它的引用,让它只在真正的依赖变化时才变,避免树里所有消费该 context 的组件跟着一起重渲染。<em>避免</em>以为用了 Context 就自动只在必要时更新——记忆化这一步需要自己动手写,Context 本身不会包办。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>写一道 UI 编程面试题时,把这五个 Hook 当成一张检查单来挑:这个值要不要触发重渲染、又只属于当前组件?选 <code>useState</code>。要跨组件共享、又不想一路传 props?选 <code>useContext</code>。要跨渲染保留、但不影响 UI(DOM 引用、定时器 ID)?选 <code>useRef</code>。要给无障碍属性生成跨 SSR 一致的唯一 ID?选 <code>useId</code>。至于 <code>useEffect</code>——先问自己这道题是不是真的需要连接一个外部系统,如果答案含糊,大概率可以不用它。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把 useEffect 当成万能的"生命周期钩子"来兜底所有副作用。</strong>依赖数组随手写、随手留空,或者把对象/数组直接扔进依赖数组却不做记忆化,这正是手册反复强调的"即使经验丰富的工程师也常踩"的坑。更隐蔽的一种是无限循环:在 effect 里更新状态,又没管好触发它重跑的依赖,于是这个 effect 一遍遍地把自己重新触发出来——这类 bug 往往不报错,只是页面莫名其妙地卡顿或疯狂刷新。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>找一个手头用到 <code>useEffect</code> 的组件,对着上面那张四行的依赖表逐条核对——这个 effect 到底属于"每次渲染后""仅挂载一次""依赖变化时"还是"需要清理"里的哪一类?如果答案含糊不清,大概率是这个 effect 本身该拆分,或者根本不需要它。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>五个内建 Hook 背后其实只是三条分岔——这个值要不要触发重渲染、要不要跨组件共享、要不要跨渲染保留却不影响 UI。想清楚这三条,该选哪个 Hook 基本没有悬念;真正难的是 <code>useEffect</code> 的依赖数组,那需要单独小心对待。</p>
+</div>
+
+<h2>自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一个 <code>TodoList</code> 组件里,<code>filteredTodos</code> 由 <code>todos.filter(...)</code> 在每次渲染时重新生成,<code>useEffect</code> 的依赖数组里写的正是 <code>[filteredTodos]</code>。点击一个只会改动无关状态 <code>count</code> 的"强制重新渲染"按钮,这个 effect 却又跑了一次。下面哪种做法能正确解决这个问题? (A) 把依赖数组改成空数组 <code>[]</code> (B) 用 <code>useMemo</code> 包一层 <code>filteredTodos</code>,依赖写 <code>[todos, status]</code> (C) 直接删掉这个 <code>useEffect</code>,把 <code>console.log</code> 写在组件渲染的地方</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。用 <code>useMemo</code> 记忆 <code>filteredTodos</code> 后,它的引用只在 <code>todos</code> 或 <code>status</code> 真正变化时才更新,"强制重新渲染"按钮改动的 <code>count</code> 不会波及它,effect 自然不会再多跑。(A) 把依赖清空会让这个 effect 变成"只在挂载时跑一次",以后 <code>todos</code>/<code>status</code> 真正变化时它也不会再运行,这是另一种错误,不是修好了原来的问题。(C) 把 <code>console.log</code> 挪到渲染阶段,意味着每次渲染(包括无关的 <code>count</code> 变化)都会打印一次,比原来更频繁,并没有解决"不必要触发"这件事。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:一个纯 UI 组件需要显示"点击次数"给用户看,同时还要记一个只在清理定时器时用得到、不需要显示在界面上的 ID。下面哪种 Hook 搭配最合适? (A) 点击次数用 <code>useState</code>,定时器 ID 用 <code>useRef</code> (B) 两者都用 <code>useState</code>,因为组件里所有要"记住"的值都该交给 <code>useState</code> (C) 两者都用 <code>useRef</code>,因为 <code>useRef</code> 改值不触发重渲染,性能更好</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。点击次数要显示在 UI 上,变化必须触发重渲染,所以用 <code>useState</code>;定时器 ID 只在清理时用一次,变化不需要让界面重画,所以用 <code>useRef</code>——刚好对应"要不要触发重渲染"这条分岔。(B) 会让定时器 ID 的每次变化都白白多触发一次重渲染,这正是手册点名的"过度使用 <code>useState</code>"的反面陷阱之一。(C) 会让点击次数变了却不触发重渲染,界面上的数字永远停在初始值,用户点了按钮也看不到任何变化。</p>
+</div>
+</details>
+</div>
+
+<h2>主推资源</h2>
+
+<p>本节内容全部来自《React面试手册》里的 <code>react-hooks</code> 一篇,下面几条是手册正文里引用最重的官方文档,建议按顺序看:</p>
+<ul>
+<li><a href="https://react.dev/reference/react/useEffect">useEffect - React</a> —— 手册里陷阱最多的一节对应的官方参考页,先看这个再回头对照上面的四个陷阱。</li>
+<li><a href="https://react.dev/learn/you-might-not-need-an-effect">You Might Not Need an Effect</a> —— 手册反复提醒"面试里能不用 useEffect 就不用",这篇是判断"到底需不需要"的实操指南。</li>
+<li><a href="https://react.dev/reference/react/useState">useState - React</a> —— 五个 Hook 里最基础的一个,官方参考页把 setter 的两种调用形式讲得比手册摘要更细。</li>
+<li><a href="https://react.dev/reference/react/useContext">useContext - React</a> —— 官方页面对"什么时候用 Context、什么时候该用状态管理库"给出了比手册摘要更完整的取舍讨论。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"useEffect 的依赖数组到底在管什么",也可以让老师陪你一起过一遍手头某个组件,判断里面每个 <code>useState</code>/<code>useRef</code> 用得对不对。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0026-react-controlled-context-reducer.html"><span class="dir">← 上一课</span>受控组件、Context、Reducer 怎么选</a>
+  <a class="next" href="0028-rules-of-hooks-and-custom-hooks.html"><span class="dir">下一课 →</span>Hooks 的规则 + 自定义 Hook 设计</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

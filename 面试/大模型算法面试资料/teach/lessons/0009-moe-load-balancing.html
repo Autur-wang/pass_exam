@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0009 · MoE 与专家负载均衡</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第二部分 注意力与架构进阶 · 第 0009 课</p>
+<h1>MoE 与专家负载均衡</h1>
+<p class="lede">MoE(Mixture of Experts)是当下大模型「堆参数又不堆算力」的主力手段:把一层稠密 FFN 换成一堆专家 FFN,每个 token 只激活其中几个。听起来完美,但立刻撞上一个真实又致命的工程问题——<strong>Router 会偏心</strong>,少数专家被撑爆、多数专家闲置。面试官几乎必问:「你怎么做专家的负载均衡?」这节课把 MoE 的机制和四种均衡手段一次讲透。</p>
+
+<div class="recall">
+<p>上节课(FlashAttention 与稀疏注意力)我们让<strong>注意力</strong>变稀疏来省算力——只算真正需要的那部分注意力分数。这节课换个轴:把「稀疏」的思路搬到 <strong>FFN</strong> 上。<strong>先想一下:如果一层 FFN 的参数越大效果越好,但每个 token 又用不着那么多参数,你会怎么设计,才能既有大参数量、每步又只花小算力?</strong></p>
+</div>
+
+<h2>一、直觉:请一屋子专家,但每次只叫醒几个</h2>
+<p>标准 Transformer 里,每个 token 过的那层 FFN 是<strong>稠密的</strong>——所有参数都参与计算。MoE 把这一层 FFN 复制成 $N$ 个结构相同的<strong>专家(Expert)</strong>,再在前面放一个<strong>路由器(Router / 门控网络)</strong>。Router 看一眼当前 token,只挑得分最高的 $K$ 个专家来算,其余专家这一步完全不动。</p>
+<p>打个比方:一家医院有内科、外科、骨科几十个专家门诊。病人(token)进来,分诊台(Router)不会让他挂遍所有科室,而是根据症状派他去最对口的 1~2 个科。医院总人数(总参数)可以很多,但每个病人只占用少数医生的时间(激活参数少)。训练久了,专家会<strong>自发分工</strong>——有的偏数学,有的偏代码——这不是人为指定的,是 Router 和专家在数据上协同演化出来的。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">token $x$</div>
+  <div class="node">Router<br>$\operatorname{softmax}(xW_g)$</div>
+  <div class="node">Top-$K$ 选择<br>(如 $K=2$)</div>
+  <div class="node">只激活<br>专家 $E_2,\,E_5$</div>
+  <div class="node good">按门控权重<br>加权求和 → 输出</div>
+</div>
+<figcaption>每个 token 独立路由:$N$ 个专家里只有 $K$ 个被点亮,其余零计算。这就是「稀疏激活」。</figcaption>
+</figure>
+
+<p>沿用源材料的例子:单词 "Bank" 进来,Router 认为擅长金融的专家 1、擅长地理的专家 2 最合适,给出权重 $0.7$ 和 $0.3$,最终输出是被选专家输出的加权和:</p>
+$$\text{Output} = 0.7\cdot E_1(x) + 0.3\cdot E_2(x)$$
+<p class="formula-note">权重只在<strong>被选中的</strong>那 $K$ 个专家之间归一化(它们的门控分数过一次 softmax),没被选的专家不出现在这个式子里。</p>
+
+<h2>二、为什么值得这么折腾:算力与参数解耦</h2>
+<p>这是理解 MoE 的核心一句话:<strong>MoE 把「模型有多少参数」和「每个 token 花多少算力」解耦了。</strong></p>
+<p>稠密模型里,参数量和单 token 计算量(FLOPs)是死死绑在一起的——想要更大容量,只能同步付出更多算力。MoE 打破这个绑定:总参数量随专家数 $N$ 线性增长,但单 token 激活的参数量只取决于 $K$。于是可以在<strong>推理算力基本不变</strong>的前提下,把模型的「知识容量」堆得很大。</p>
+<table>
+<thead><tr><th></th><th>稠密 FFN</th><th>MoE(Top-$K$,共 $N$ 专家)</th></tr></thead>
+<tbody>
+<tr><td>总参数量</td><td>1 份 FFN</td><td>约 $N$ 份 FFN(大)</td></tr>
+<tr><td>单 token 激活参数</td><td>1 份 FFN</td><td>约 $K$ 份 FFN(小,$K\ll N$)</td></tr>
+<tr><td>单 token 计算量</td><td>高</td><td>低(只算 $K$ 个)</td></tr>
+<tr><td>显存占用</td><td>小</td><td><strong>大</strong>(全部专家都要驻留)</td></tr>
+</tbody>
+</table>
+<p>注意最后一行——这是面试高频陷阱:<strong>MoE 省的是「激活的计算量」,不是显存。</strong>所有专家的权重都得放在显存里等着被选,总参数反而更多。MoE 换来的是「同样的推理 FLOPs 下模型更强」,代价是显存和多卡通信(专家常分布在不同设备上,需要 all-to-all 把 token 送过去)。</p>
+
+<dl class="keydef">
+<dt>MoE(Mixture of Experts)</dt>
+<dd>用一个 Router 从 $N$ 个专家 FFN 中为每个 token 选出 Top-$K$ 个来激活,输出为被选专家的门控加权和的架构。核心特征是<strong>条件计算 / 稀疏激活</strong>:激活参数 $\ll$ 总参数。</dd>
+<dt>Router(门控网络)</dt>
+<dd>通常是一个线性层 $xW_g$ 加 softmax,给出该 token 对每个专家的分数 $P_i$;取分数最高的 $K$ 个专家。它是 MoE 的「分诊台」,决定 token 流向哪里。</dd>
+<dt>负载(load)</dt>
+<dd>一段数据里被分配到专家 $i$ 的 token 比例 $f_i$。理想情况下各专家负载均匀($\approx 1/N$),这样算力才能被充分、均衡地利用。</dd>
+</dl>
+
+<h2>三、真正的难题:Router 的马太效应</h2>
+<p>Router 是学出来的,而学习有正反馈:某个专家早期偶然被多选了几次 → 它得到更多训练、变得更强 → Router 更倾向于选它 → 它被选得更多……<strong>强者恒强,弱者饿死</strong>。这就是「马太效应」。</p>
+<p>失衡的后果很硬:</p>
+<ul>
+<li><strong>算力浪费</strong>:少数专家过载排队,大批专家几乎不干活,等于花了 $N$ 份显存却只用了几份的能力。</li>
+<li><strong>专家坍缩</strong>:长期不被选的专家得不到梯度,永远学不好,模型有效容量缩水。</li>
+<li><strong>吞吐瓶颈</strong>:多卡训练时,承载热门专家的那张卡成为木桶最短板,拖慢整个 batch。</li>
+</ul>
+<p>所以「怎么做负载均衡」不是锦上添花,而是 MoE 能不能训得起来的<strong>生死问题</strong>。下面是四种主流手段。</p>
+
+<h2>四、四种负载均衡手段</h2>
+
+<h3>1. 辅助损失(Auxiliary Loss)—— 最经典</h3>
+<p>Switch Transformer、早期 DeepSeek 等的标准做法:在主损失(预测下一个词)之外,加一个惩罚失衡的项。谁太热门,就抬高它的 loss,逼 Router 把流量分出去。经典形式为:</p>
+$$L_{\text{aux}} = \alpha \cdot N \sum_{i=1}^{N} f_i \cdot P_i$$
+<p class="formula-note">$f_i$:被分配到专家 $i$ 的 token 比例(实际负载);$P_i$:Router 分给专家 $i$ 的平均概率(软意愿);$N$:专家数;$\alpha$:很小的权重系数。</p>
+<p><strong>它为什么起作用?</strong>关键在 $f_i\cdot P_i$ 这个乘积。约束下 $\sum_i f_i=1$、$\sum_i P_i=1$,当负载完全均匀($f_i=P_i=1/N$)时这个和取到最小 $1/N$,乘 $N$ 后 $L_{\text{aux}}$ 最小;越集中于少数专家,和越大、惩罚越重。最小化它就是把分布往均匀推。</p>
+<p>更妙的设计:$f_i$ 是<strong>硬计数</strong>(有多少 token 真被路由过去),不可导;$P_i$ 是<strong>软概率</strong>,可导。梯度只能经 $P_i$ 回传。于是对一个已经过载($f_i$ 大)的专家,梯度会使劲压低它的 $P_i$——「你已经很忙了,Router 别再想着选你」。这正是我们要的行为。</p>
+<p><strong>代价</strong>:它往总损失里塞了一个和语言建模无关的项,多少会<strong>干扰主任务的梯度</strong>,$\alpha$ 调大了掉点、调小了压不住失衡,是个需要小心平衡的旋钮。</p>
+
+<h3>2. 无损负载均衡(Auxiliary-Loss-Free)—— 最新趋势</h3>
+<p>DeepSeek-V3 采用的更优雅的思路:<strong>不要辅助损失,改用一个可动态调整的偏置(bias)</strong>。给每个专家配一个偏置值 $b_i$,Router 做 Top-$K$ 选择时用「原始分数 $+\,b_i$」来排名:</p>
+$$\text{选择依据} = s_i + b_i \qquad(\text{只用于选谁,不进最终加权})$$
+<p>训练中在线监控每个专家的负载:过载了就调低它的 $b_i$(让它更难被选中),负载不足就调高 $b_i$。这个调整是按负载信号<strong>直接更新 $b_i$</strong>,不通过主损失的反向传播。</p>
+<p><strong>好在哪?</strong>——面试点睛:它不往主损失里加惩罚项,<strong>不污染 language modeling 的梯度</strong>,均衡靠一个「旁路」的偏置控制器完成。既拿到了均衡,又不用牺牲主任务性能,还省掉了 $\alpha$ 这个难调的超参。特别注意:$b_i$ 只影响「选哪 $K$ 个」,不参与最终输出的加权权重(权重仍来自原始门控分数)。</p>
+
+<h3>3. 专家容量限制(Expert Capacity)</h3>
+<p>硬约束:规定每个专家在一个 batch 里最多处理 $C$ 个 token($C$ 由「容量因子」乘以平均负载得到)。名额满了,后到的 token 即使最匹配也会被<strong>丢弃(dropped)</strong>或塞给次优专家。它像给每个门诊挂号设上限,防止某个专家被瞬间挤爆导致通信/计算失衡。代价是容量设太小会真的丢 token、掉精度;设太大又浪费算力和显存。它常和辅助损失<strong>配合</strong>使用,不是二选一。</p>
+
+<h3>4. 噪声路由(Noisy Top-K Gating)</h3>
+<p>在路由分数上加一点可学习的高斯噪声再取 Top-$K$:</p>
+$$H(x)_i = (xW_g)_i + \varepsilon\cdot\operatorname{softplus}\big((xW_{\text{noise}})_i\big),\quad \varepsilon\sim\mathcal{N}(0,1)$$
+<p class="formula-note">给分数注入随机扰动,尤其在训练初期,让暂时「排名靠后」的专家也有机会被选中、拿到梯度。</p>
+<p>作用是<strong>打破马太效应的正反馈</strong>——不让早期的偶然优势滚成永久垄断,给弱专家一个热身、被看见的机会。这是最早的稀疏门控 MoE(Shazeer et al., 2017)就提出的技巧。</p>
+
+<div class="implement">
+<p>把 MoE 前向和辅助损失各写一遍,你就真的懂了。先是最小 MoE(专家类沿用源材料):</p>
+<pre><code>import torch, torch.nn as nn, torch.nn.functional as F
+
+class Expert(nn.Module):
+    def __init__(self, d_model, d_hidden):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(d_model, d_hidden), nn.ReLU(),
+            nn.Linear(d_hidden, d_model),
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class MoE(nn.Module):
+    def __init__(self, d_model, d_hidden, n_experts, k=2):
+        super().__init__()
+        self.experts = nn.ModuleList(
+            [Expert(d_model, d_hidden) for _ in range(n_experts)])
+        self.gate = nn.Linear(d_model, n_experts)      # Router
+        self.k = k
+
+    def forward(self, x):                               # x: [tokens, d_model]
+        logits = self.gate(x)                           # [tokens, n_experts]
+        topv, topi = logits.topk(self.k, dim=-1)        # 每个 token 选 Top-K
+        w = F.softmax(topv, dim=-1)                     # 只在被选专家间归一化
+        out = torch.zeros_like(x)
+        for slot in range(self.k):
+            for e in range(len(self.experts)):
+                m = topi[:, slot] == e                  # 这一路选中专家 e 的 token
+                if m.any():
+                    out[m] += w[m, slot:slot+1] * self.experts[e](x[m])
+        return out</code></pre>
+<p>再补上辅助损失——注意 <code>f</code>(负载计数)用 <code>detach</code> 般的硬统计,梯度靠 <code>P</code> 回传:</p>
+<pre><code>def load_balance_loss(logits, topi, n_experts, alpha=1e-2):
+    P = F.softmax(logits, dim=-1).mean(0)               # 平均路由概率 P_i
+    onehot = F.one_hot(topi, n_experts).float()         # 被选专家 one-hot
+    f = onehot.sum(dim=(0, 1)) / topi.numel()           # token 分配比例 f_i(硬)
+    return alpha * n_experts * torch.sum(f * P)         # L_aux</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「为什么要用 MoE?」——一句话:<strong>把参数量和单 token 算力解耦</strong>,在推理 FLOPs 基本不变时堆更大容量;别只答「更快」,要点出稀疏激活。</li>
+<li>「MoE 推理省显存吗?」——<strong>不省</strong>,省的是激活的计算量;全部专家权重都要驻留显存,总参数更大。答反了直接扣分。</li>
+<li>「负载均衡的辅助损失长什么样、怎么起作用?」——写出 $L_{\text{aux}}=\alpha N\sum f_iP_i$,讲清 $f_i$ 硬负载不可导、$P_i$ 软概率可导,梯度经 $P_i$ 惩罚过载专家。</li>
+<li>「无损负载均衡好在哪?」——不往主损失加惩罚项,不干扰语言建模梯度;用旁路 bias 调路由选择即可(DeepSeek-V3)。</li>
+<li>「Top-K 的 K 怎么选?容量因子干嘛的?」——$K$ 越大越接近稠密、越失去稀疏优势(常见 $K=2$);容量因子控制单专家上限,防挤爆但设小了会丢 token。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li><strong>把 MoE 说成「省显存」</strong>——最典型的翻车。省的是 FLOPs;显存要装下所有专家,反而更吃显存和多卡通信。</li>
+<li>辅助损失里 $f_i$ 是<strong>硬计数、不可导</strong>,梯度只从 $P_i$ 流回;别说成「对 $f_i$ 求导」。</li>
+<li>无损均衡的偏置 $b_i$ <strong>只用于 Top-K 排名(选谁)</strong>,不进入最终输出加权、也不走主损失反传;别把它讲成「又一个 aux loss」。</li>
+<li>门控权重只在<strong>被选中的 $K$ 个专家之间</strong>做 softmax 归一化,不是对全部 $N$ 个。</li>
+<li>$K$ 不是越大越好——$K\to N$ 就退化回稠密,稀疏红利消失。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>关于「MoE 相比同等激活算力的稠密模型」,下面哪句最准确?</p>
+<details><summary>A. 总参数更少,所以更省显存</summary>反了。MoE 总参数更多、更吃显存,省的是单 token 的激活计算量。</details>
+<details><summary>B. 总参数更多但每个 token 只激活其中一小部分,用相近的算力换更大容量 ✅</summary>正确。这就是「参数量与算力解耦」——MoE 的核心价值。</details>
+<details><summary>C. 每个 token 会用到全部专家,只是加了权重</summary>不对。Top-K 只激活 K 个专家,其余零计算,这正是稀疏激活。</details>
+<details><summary>D. 推理时延一定比稠密模型低</summary>不一定。专家分布在多卡时的 all-to-all 通信可能抵消计算上的节省。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>辅助损失 $L_{\text{aux}}=\alpha\cdot N\sum_{i}f_i P_i$ 中,为什么要把<em>硬负载</em> $f_i$ 和<em>软概率</em> $P_i$ 相乘,而不是只用其中一个?</p>
+<details><summary>A. 为了让损失值恰好落在 0~1 之间</summary>与取值范围无关;该损失约在 $\alpha$ 到 $\alpha N$ 之间。</details>
+<details><summary>B. 只是为了让公式对称好看</summary>不是美学,是可导性和优化行为的刻意设计。</details>
+<details><summary>C. 因为 $f_i$ 不可导,乘上可导的 $P_i$ 才能让梯度回传,并对过载专家(大 $f_i$)重点压低其 $P_i$ ✅</summary>正确。硬负载提供「谁过载」的信号,梯度经软概率把过载专家的路由概率压下去。</details>
+<details><summary>D. 因为 $f_i$ 和 $P_i$ 在数值上总是相等</summary>恰恰相反,二者相等(都等于 $1/N$)正是均衡的理想状态,平时并不相等。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer</strong>(Shazeer et al., 2017)——稀疏门控 MoE 与 Noisy Top-K Gating 的原始论文。</li>
+<li><strong>GShard</strong>(Lepikhin et al., 2020)——把 MoE 搬进 Transformer 大规模训练,引入专家容量与均衡损失。</li>
+<li><strong>Switch Transformer</strong>(Fedus et al., 2021)——简化到 Top-1 路由,本课的辅助损失 $L_{\text{aux}}=\alpha N\sum f_iP_i$ 即出自这一脉。</li>
+<li><strong>DeepSeek-V3 技术报告</strong>及其无损负载均衡(Auxiliary-Loss-Free Load Balancing)——本课「用旁路 bias 做均衡」的来源。</li>
+<li>下一步:MoE 是「架构进阶」的一支;第 0010 课换个视角看整体架构范式——GPT / BERT / T5 与 decoder-only。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>MoE 用 Router 给每个 token 只点亮 Top-K 个专家,解耦参数量与算力;代价是 Router 会偏心,靠辅助损失 $\alpha N\sum f_iP_i$、无损 bias、专家容量、噪声路由把负载拉均匀。</strong></p>
+<nav class="lesson-nav">
+<a href="0008-flash-attention-sparse.html">← 上一课:FlashAttention 与稀疏注意力</a>
+<a href="0010-gpt-bert-t5-decoder-only.html">下一课:GPT / BERT / T5 与 decoder-only →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

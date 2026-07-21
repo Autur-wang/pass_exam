@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>封装 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第一部分 · 四大支柱 · 第 0002 节</p>
+<h1>封装:信息隐藏、访问控制与 Python 的"伪私有"</h1>
+<p class="lede">封装是四大支柱里最容易"背得出定义、答不透追问"的一个。这一节的目标:让你既能一句话讲清它是什么,又能当场用 Python 演示"为什么 Python 根本没有真正的私有"。</p>
+
+<div class="recall">
+<p>开始前先想一个场景:你写了个 <code>Account</code> 类,里面有个 <code>balance</code> 属性谁都能直接 <code>a.balance = -9999</code>。这会带来什么问题?如果要"不让外面乱改",你会怎么做?先在心里给个答案,再往下看。</p>
+</div>
+
+<h2>一、直觉:药瓶的儿童安全盖</h2>
+
+<p>封装(Encapsulation)就是给对象的内部状态加一个"儿童安全盖"。药瓶里的药(数据)不是不让你吃,而是<strong>必须通过一个受控的开盖动作(方法)才能拿到</strong>——这个动作可以顺手检查"你是不是拧对了方向""剂量对不对"。</p>
+
+<p>换成代码的话:对象把<strong>数据</strong>和<strong>操作数据的方法</strong>捆在一起(bundling),把内部状态<strong>藏起来</strong>(information hiding),只留几个公开方法当"开盖口"(access control)。外面的代码想读、想改,都得走这几个口——于是你就有了插入校验、约束、日志的机会。</p>
+
+<div class="keydef">
+<dl>
+<dt>封装 (Encapsulation)</dt>
+<dd>把数据与操作它的方法捆进一个单元,<strong>隐藏内部状态</strong>,只通过受控接口暴露。<br><em>它由三件事组成,缺一不可 ↓</em></dd>
+<dt>① 捆绑 (Bundling)</dt>
+<dd>数据 + 方法住在同一个类里。</dd>
+<dt>② 信息隐藏 (Information Hiding)</dt>
+<dd>内部状态与实现细节对外不可见。</dd>
+<dt>③ 受控访问 (Access Control)</dt>
+<dd>只能通过公开方法(getter/setter/property)读写,方法里可以加约束。</dd>
+</dl>
+</div>
+
+<h2>二、为什么要封装?——从一个会出事的类说起</h2>
+
+<p>先看没有封装的版本,问题一眼可见:</p>
+
+<pre><code># ❌ 裸奔:任何人都能把 fuel 改成非法值
+class Car:
+    def __init__(self):
+        self.fuel = 100      # 公开属性
+
+c = Car()
+c.fuel = 120                 # 超过满油?没人拦
+c.fuel = -50                 # 负油量?也没人拦
+</code></pre>
+
+<p>这里的病根是:<strong>数据的合法性规则(0–100)散落在类外面,没人负责守门。</strong>项目一大,谁都可能写出把它改坏的一行。封装的解法是把"守门"这件事收回类内部:</p>
+
+<pre><code># ✅ 封装:fuel 变"私有",读写都走受控通道
+class Car:
+    def __init__(self):
+        self._fuel = 100          # 前缀下划线:约定为"内部使用"
+
+    @property
+    def fuel(self):               # getter:读
+        return self._fuel
+
+    @fuel.setter
+    def fuel(self, value):        # setter:写时校验,把非法值挡在门外
+        if 0 &lt;= value &lt;= 100:
+            self._fuel = value
+        else:
+            raise ValueError("油量必须在 0–100 之间")
+
+    def drive(self):
+        if self._fuel &gt; 0:
+            self._fuel -= 1
+            print("Vroom!")
+        else:
+            print("没油了!")
+
+c = Car()
+c.fuel = 80        # 走 setter,合法,通过
+print(c.fuel)      # 走 getter → 80
+c.fuel = 120       # 走 setter → ValueError,被挡下
+</code></pre>
+
+<p>关键收益有三条(这也正是源题给的答案):</p>
+<ul>
+<li><strong>安全性</strong>:受控访问把"数据被改坏"的风险收敛到一处。</li>
+<li><strong>简单性</strong>:外面只看到 <code>c.fuel</code> 这个简单接口,不必知道内部怎么存。</li>
+<li><strong>灵活性</strong>:哪天你想把 <code>_fuel</code> 换成"百分比 × 油箱容量"来存,只要 getter/setter 内部改,<strong>外部一行都不用动</strong>——这叫松耦合。</li>
+</ul>
+
+<div class="interview">
+<p><strong>高频追问链(封装几乎必被问):</strong></p>
+<ul>
+<li>"封装和抽象有什么区别?" → 封装是<strong>把细节藏起来</strong>(how),抽象是<strong>只暴露必要的功能</strong>(what)。封装关注"数据安全边界",抽象关注"接口简洁"。两者常配合,但不是一回事。</li>
+<li>"Python 有 private 吗?" → 这是送分题也是坑,见下面「跨语言对照」和「易错点」。</li>
+<li>"<code>@property</code> 是干嘛的?" → 把 getter/setter 伪装成属性访问,让调用方写 <code>c.fuel</code> 而不是 <code>c.get_fuel()</code>,既保留校验能力又保持 Python 式简洁。</li>
+<li>"getter/setter 是不是越多越好?" → 不是,见易错点。</li>
+</ul>
+</div>
+
+<h2>三、Python 的"私有"到底是什么?</h2>
+
+<p>Java/C++ 用关键字 <code>private</code> 从<strong>编译器层面</strong>强制阻止外部访问。Python 没有这种关键字,它用两级<strong>约定</strong>:</p>
+
+<ul>
+<li><code>_single</code>(单下划线):纯君子协定——"这是内部的,请别碰",但语言<strong>不拦</strong>你。</li>
+<li><code>__double</code>(双下划线):触发 <strong>name mangling(名称改写)</strong>——解释器把 <code>__x</code> 在类内改写成 <code>_ClassName__x</code>。看起来访问不到,其实只是换了个名字。</li>
+</ul>
+
+<pre><code>class Account:
+    def __init__(self):
+        self.__balance = 100          # 被改写为 _Account__balance
+
+a = Account()
+print(a.__balance)                    # ❌ AttributeError
+print(a._Account__balance)            # ✅ 100 —— "私有"照样能访问!
+</code></pre>
+
+<div class="gotcha">
+<p><strong>最经典的翻车点:说"Python 用 <code>__</code> 实现私有"。</strong>准确说法是:Python <strong>没有真正的私有</strong>,<code>__</code> 触发的是 name mangling,目的是<strong>避免子类意外覆盖父类的同名属性</strong>,<em>不是</em>安全边界——<code>a._Account__balance</code> 照样能读能写。面试时把这点讲清,立刻和"只会背定义"的人拉开差距。</p>
+<p>另一个坑:<strong>getter/setter 泛滥反模式。</strong>如果一个 setter 只是 <code>self._x = value</code> 什么都不做,那它相当于把属性重新变公开,只是绕了个弯——徒增样板。Python 的建议是:<strong>先直接用公开属性,等真的需要校验/计算时再用 <code>@property</code> 无痛升级</strong>(接口不变)。别一上来就给每个字段配一对空 getter/setter(那是 Java 的历史包袱,不是 Python 风格)。</p>
+</div>
+
+<div class="crosslang">
+<p>"这门语言怎么做封装 / 私有?"是跨语言必问题,记住这张对照表:</p>
+<table>
+<tr><th>语言</th><th>私有机制</th><th>是否强制</th><th>getter/setter 惯用法</th></tr>
+<tr><td><strong>Python</strong></td><td><code>_x</code> 约定 / <code>__x</code> name mangling</td><td>否(君子协定)</td><td><code>@property</code></td></tr>
+<tr><td><strong>Java</strong></td><td><code>private</code>/<code>protected</code>/<code>public</code>(默认 package-private)</td><td>是(编译器强制)</td><td>显式 <code>getX()</code>/<code>setX()</code></td></tr>
+<tr><td><strong>C++</strong></td><td><code>private</code>/<code>protected</code>/<code>public</code></td><td>是(编译器强制)</td><td>显式方法</td></tr>
+<tr><td><strong>C#</strong></td><td><code>private</code> 等修饰符</td><td>是</td><td>语言级 <code>Properties</code>(<code>{ get; set; }</code>)</td></tr>
+</table>
+<p>一句话总结:<strong>Java/C++/C# 的私有是"墙",Python 的私有是"礼貌"。</strong></p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写一个 <code>BankAccount</code>:</p>
+<ul>
+<li>余额 <code>_balance</code> 内部持有,初始为 0;外部<strong>只能读不能直接写</strong>(只给 <code>@property</code> getter,不给 setter)。</li>
+<li><code>deposit(amount)</code>:金额必须 &gt; 0,否则 <code>raise ValueError</code>。</li>
+<li><code>withdraw(amount)</code>:不能超过余额,否则 <code>raise ValueError</code>。</li>
+</ul>
+<p>写完自测:<code>a._balance = -999</code> 能不能得逞?(能——因为是单下划线约定。想想这说明了什么。)</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:下面哪种说法最准确?"在 Python 里,给属性名加双下划线前缀 <code>__x</code> 的作用是……"</summary>
+<div class="answer">
+<p><strong>答案:触发 name mangling(改写成 <code>_ClassName__x</code>),主要为避免子类命名冲突;它不是安全的私有边界。</strong></p>
+<p>常见错误答案是"让属性变成真正私有、外部无法访问"。反例:<code>obj._ClassName__x</code> 照样能访问。Python 层面没有语言强制的私有。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:一个团队新人给每个字段都配了一对 <code>get_x()</code>/<code>set_x()</code>,setter 里只有一行 <code>self._x = value</code>。这有什么问题?更 Pythonic 的做法是?</summary>
+<div class="answer">
+<p><strong>问题:</strong>空 setter 等于把私有属性重新变公开,只是多绕一层——纯样板,没有增加任何保护或功能,反而让调用方从 <code>obj.x</code> 变成 <code>obj.set_x(...)</code>,更啰嗦。</p>
+<p><strong>更 Pythonic:</strong>先直接用公开属性 <code>self.x</code>;等真的需要校验或计算时,再用 <code>@property</code> 把它升级成受控访问——<strong>调用方代码一行都不用改</strong>。这正是"封装带来灵活性"的体现:接口稳定,实现可换。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>封装 = 捆绑 + 信息隐藏 + 受控访问,目的是把"数据合法性"的守门责任收回类内部。Python 用约定(<code>_</code>/<code>__</code>)而非强制来做"私有",<code>__</code> 是 name mangling 不是安全墙;受控访问在 Python 里靠 <code>@property</code> 无痛实现,别用空 getter/setter 堆样板。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《52 OOP Interview Questions》Q3(What is encapsulation?)、Q9(access specifiers)——封装三要素、安全/简单/灵活三收益、访问修饰符,均取自源题原文。</li>
+<li><strong>canon(补充锚定):</strong><a href="https://docs.python.org/3/reference/datamodel.html">Python 官方 Data Model</a> 与 <a href="https://docs.python.org/3/library/functions.html#property"><code>property</code> 文档</a>——<code>@property</code> 与 name mangling 的准确机制;<a href="https://docs.oracle.com/javase/tutorial/java/concepts/">Oracle Java Tutorial</a> 对照 Java 访问修饰符。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想要我用 ELI5 再讲一遍 name mangling、或者拿你写的 <code>BankAccount</code> 代码来评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节把封装"藏细节"的思路推进一步——继承如何让类之间共享与复用。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0001-what-is-oop.html"><span class="dir">← 上一课</span>0001 · 什么是 OOP:对象、类与四大支柱</a>
+<a class="next" href="0003-inheritance.html"><span class="dir">下一课 →</span>0003 · 继承:is-a、继承类型与 super</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

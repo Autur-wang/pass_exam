@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0022 · 10 种事件的 4 层嵌套与两层事件</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 7 章 · 事件驱动 ›
+  <a href="./0021-why-events-and-sync-barrier.html">上一课</a> ›
+  <strong>Lesson 0022</strong>
+</div>
+
+<p class="kicker">Lesson 0022 · 第 7 章 事件驱动</p>
+<h1>10 种事件的 4 层嵌套与两层事件</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课讲清了 <code>emit</code> 为什么是「同步屏障」而不是「通知」——
+  每次发事件都 <code>await</code> 所有监听器处理完。这一课回到更基础的问题:
+  Agent 内核到底定义了<strong>哪 10 种事件</strong>?它们为什么不是一个扁平列表,
+  而是<strong>4 层嵌套</strong>的生命周期?以及,为什么内核只放 10 种,Session 层还要再扩展 7 种?
+</div>
+
+<div class="recall">
+  📌 <strong>回忆上一课:</strong> 每次 <code>emit(event)</code> 都会 <code>await</code> 所有监听器处理完才继续——
+  这保证了消费者永远看到一致的状态。但那一课没细讲:到底有<strong>哪些</strong>事件会被 emit?
+  今天就把这 10 种事件摊开看。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出 Agent→Turn→Message→Tool Execution 的 4 层嵌套图,
+  说清每层「开始→更新→结束」的配对规律,并能判断一个新事件(比如「上下文压缩开始了」)
+  <strong>该放内核层还是 Session 层</strong>。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:内核里找不到「蓝牙已连接」</b>
+  就像 Linux 内核里找不到「蓝牙已连接」这种通知——内核只管进程调度和内存管理,
+  蓝牙是上层的事,归蓝牙协议栈和桌面环境管。Agent 内核也一样:它只管<strong>生命周期</strong>的
+  10 种事件,至于上下文压缩、自动重试这些「产品级体验」,那是 Session 层的事,
+  内核压根不认识它们。
+</div>
+
+<h2>1 · 10 种事件 = 4 层嵌套的生命周期</h2>
+<p>
+  Agent 内核层定义了 10 种 <code>AgentEvent</code>。乍一看是个不算短的列表,
+  但它们不是随手列出来的——是<strong>4 层嵌套</strong>的生命周期,从外到内依次是
+  Agent → Turn → Message → Tool Execution:
+</p>
+<pre><span class="key">export</span> <span class="key">type</span> <span class="type">AgentEvent</span> =
+  <span class="cm">// 第1层:Agent 生命周期(整个运行)</span>
+  <span class="ln">1</span>| { type: <span class="str">"agent_start"</span> }
+  <span class="ln">2</span>| { type: <span class="str">"agent_end"</span>; messages: <span class="type">AgentMessage</span>[] }
+
+  <span class="cm">// 第2层:Turn 生命周期(一轮模型调用 + 工具执行)</span>
+  <span class="ln">3</span>| { type: <span class="str">"turn_start"</span> }
+  <span class="ln">4</span>| { type: <span class="str">"turn_end"</span>; message: <span class="type">AgentMessage</span>; toolResults: <span class="type">ToolResultMessage</span>[] }
+
+  <span class="cm">// 第3层:Message 生命周期(一条消息)</span>
+  <span class="ln">5</span>| { type: <span class="str">"message_start"</span>; message: <span class="type">AgentMessage</span> }
+  <span class="ln">6</span>| { type: <span class="str">"message_update"</span>; message: <span class="type">AgentMessage</span>; assistantMessageEvent: <span class="type">AssistantMessageEvent</span> }
+  <span class="ln">7</span>| { type: <span class="str">"message_end"</span>; message: <span class="type">AgentMessage</span> }
+
+  <span class="cm">// 第4层:Tool Execution 生命周期(一次工具执行)</span>
+  <span class="ln">8</span>| { type: <span class="str">"tool_execution_start"</span>; toolCallId: <span class="type">string</span>; toolName: <span class="type">string</span>; args: <span class="type">any</span> }
+  <span class="ln">9</span>| { type: <span class="str">"tool_execution_update"</span>; toolCallId: <span class="type">string</span>; toolName: <span class="type">string</span>; args: <span class="type">any</span>; partialResult: <span class="type">any</span> }
+  <span class="ln">10</span>| { type: <span class="str">"tool_execution_end"</span>; toolCallId: <span class="type">string</span>; toolName: <span class="type">string</span>; result: <span class="type">any</span>; isError: <span class="type">boolean</span> };
+</pre>
+<p>
+  数一数每层几种:第1层(Agent)2 种、第2层(Turn)2 种、第3层(Message)3 种、
+  第4层(Tool Execution)3 种,加起来正好 <strong>2+2+3+3=10</strong>。
+  规律很清楚:每层都是「开始→更新(×N)→结束」的配对,<strong>只有第3、4层有 update</strong>——
+  因为只有消息流式增量、工具执行进度这两件事需要「中途汇报」;
+  第1、2层(Agent、Turn)只有 start/end,没有中间态。
+</p>
+<div class="why">
+  <b>为什么每层统一「开始→更新→结束」配对?</b> 这给出一个一致的心智模型:
+  10 种事件看着不少,但你只需要记住「4 层 × 配对规律」而不是死记 10 个名字。
+  只有需要流式渲染(逐 token)或进度汇报(如 Bash 输出)的层才有 update——
+  这是根据「谁需要中间状态」反推出来的设计,不是凑数。
+</div>
+<cite>🔎 出处:教程 §二 / <code>packages/agent/src/types.ts:413-428</code>。</cite>
+
+<h2>2 · 用一棵树看嵌套关系</h2>
+<p>
+  把 10 种事件按发生顺序摆进一次真实的 Agent 运行里,就是一棵 4 层嵌套的树:
+</p>
+<div class="diagram">Agent 运行
+├── agent_start ───────────────────── Agent 开始
+│
+├── Turn 1(回忆第3章:一次模型调用 + 它触发的工具执行)
+│   ├── turn_start ────────────────── Turn 开始
+│   │
+│   ├── Message(LLM 的响应)
+│   │   ├── message_start
+│   │   ├── message_update ×N ────── 流式增量(逐 token 更新)
+│   │   └── message_end
+│   │
+│   ├── Tool Execution(工具执行)
+│   │   ├── tool_execution_start
+│   │   ├── tool_execution_update ×N  工具进度(如 Bash 的输出)
+│   │   └── tool_execution_end
+│   │
+│   └── turn_end ──────────────────── Turn 结束
+│
+├── Turn 2 ...(若无工具调用,就没有第4层嵌套)
+│
+└── agent_end ──────────────────────── Agent 结束
+</div>
+<p>
+  留意两处细节:第一,<strong>turn_start 到 turn_end 之间,模型被调用了恰好一次</strong>——
+  这正是第3章讲过的「一个 Turn」定义;第二,<strong>Turn 2 如果没有工具调用,
+  就完全没有第4层(tool_execution_*)那组嵌套</strong>——4 层是「最多 4 层」,不是「每次都 4 层」。
+</p>
+<cite>🔎 出处:教程 §二「10种事件4层嵌套」配图说明。</cite>
+
+<h2>3 · 为什么要分 4 层,而不是拍平成 10 个同级事件?</h2>
+<p>
+  这是理解本课的核心。答案不是「代码好看」,而是<strong>不同消费者关心不同粒度</strong>:
+</p>
+<table class="bd">
+  <thead><tr><th>消费者</th><th>关心的粒度</th><th>订阅的事件</th></tr></thead>
+  <tbody>
+    <tr><td>TUI(终端界面)</td><td>逐 token 渲染文字</td><td><code>message_update</code></td></tr>
+    <tr><td>Session 管理器</td><td>这一轮对话结束了没有</td><td><code>turn_end</code></td></tr>
+    <tr><td>日志 / 持久化扩展</td><td>Agent 整体是否跑完</td><td><code>agent_end</code></td></tr>
+  </tbody>
+</table>
+<div class="tradeoff">
+  🔑 <b>如果拍平成 10 个同级事件会怎样?</b> 每个消费者都得从一堆同级事件里自己过滤出想要的那几种,
+  还得自己判断「这条 message_update 属于哪个 turn」。4 层嵌套把这层归属关系显式表达出来,
+  让每种消费者在<strong>刚刚好</strong>的粒度上响应,不多订阅、不用自己拼归属。
+</div>
+
+<h2>4 · 内核之外:Session 层再扩展 7 种</h2>
+<p>
+  前 3 节讲的都是 Agent <strong>内核</strong>的 10 种事件。但 Pi 不只有 Agent 层,
+  上面还有一层产品会话层 <code>AgentSession</code>,它要处理内核里完全不存在的概念:
+  上下文压缩、自动重试、队列状态管理……
+</p>
+<pre><span class="type">AgentSessionEvent</span> =
+    <span class="cm">// 基础 10 种(agent_end 被重载,增加 willRetry 字段)</span>
+  + <span class="cm">// Session 新增 7 种:</span>
+      queue_update           <span class="cm">// ← steering/followUp 队列变化</span>
+      compaction_start/end   <span class="cm">// ← 上下文压缩(第9章详讲)</span>
+      auto_retry_start/end   <span class="cm">// ← LLM 调用失败自动重试</span>
+      session_info_changed   <span class="cm">// ← 会话名称变更</span>
+      thinking_level_changed <span class="cm">// ← 思考深度切换</span>
+</pre>
+<p>
+  基础 10 种 + Session 新增 7 种 = <strong>17 种</strong>。注意 <code>agent_end</code>
+  在 Session 层被重载,加了 <code>willRetry</code> 字段——因为「Agent 这一轮是否结束」
+  在 Session 层还要多回答一句「结束后会不会自动重试」。
+</p>
+<cite>🔎 出处:教程 §七 / <code>packages/coding-agent/src/core/agent-session.ts:126-150</code>。</cite>
+
+<h2>5 · 判断标准:一个事件该放内核还是 Session?</h2>
+<p>
+  这 7 种新事件(队列变化、压缩、自动重试、会话改名、思考深度)有一个共同点:
+  它们都只和「产品级体验」有关,和「Agent 内核逻辑」无关。判断标准非常直白:
+</p>
+<div class="why">
+  <b>去掉它之后,内核还能正常运行吗?</b> 能,它就属于外层(Session);不能,它才属于内核。
+  compaction/retry/queue 通通去掉,Agent 的核心循环(读消息→调模型→执行工具→emit 事件)
+  照样能转——所以它们不进内核,而是靠<strong>联合类型扩展</strong>叠加在 Session 层。
+  这样内核保持纯粹,只定义 4 层生命周期;产品层按需扩展,内核不被上层需求污染。
+</div>
+<p>
+  回到开头的类比:Linux 内核里找不到「蓝牙已连接」——去掉蓝牙通知,内核的调度和内存管理
+  一点不受影响,所以蓝牙协议栈理所当然长在内核之上。Agent 内核和 Session 层的分野,
+  是同一套逻辑。
+</p>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="3">
+    <p class="stem">① Agent 内核的 10 种 AgentEvent 是按什么方式组织的?</p>
+    <button class="opt">按字母顺序排列的一个扁平列表</button>
+    <button class="opt">按事件是否携带 message 字段分成两大类</button>
+    <button class="opt">按重要程度分成 3 个优先级档位</button>
+    <button class="opt">4 层嵌套生命周期(Agent→Turn→Message→Tool Execution),每层「开始→更新→结束」配对</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② 为什么要把事件分成 4 层,而不是把它们全部拍平成同级?</p>
+    <button class="opt">为了让代码看起来更整齐</button>
+    <button class="opt">TypeScript 的联合类型强制要求分层</button>
+    <button class="opt">不同消费者关心不同粒度:TUI 订阅 message_update 逐 token 渲染,Session 只看 turn_end</button>
+    <button class="opt">为了减少事件的总数量</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">③ 判断一个事件(如 compaction_start)应该放在 Agent 内核层还是 Session 层,标准是?</p>
+    <button class="opt">去掉它之后内核还能正常运行,它就属于外层(Session)</button>
+    <button class="opt">看它是否携带 message 字段</button>
+    <button class="opt">看它的名字里有没有 start/end</button>
+    <button class="opt">所有 start/end 都在内核,其余都在 Session</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>为什么第1、2层(Agent、Turn)没有 update,只有第3、4层有?</em>」
+  「<em>message_update 里的 assistantMessageEvent 字段具体装的是什么?</em>」
+  「<em>agent_end 在 Session 层被重载加了 willRetry,这个字段的值是怎么决定的?</em>」——
+  最后这个问题,正好带我们看下一课:文本增量(text_delta)是怎么一路从模型流到屏幕的。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第7章-事件驱动-Agent的神经系统.md">第 7 章 · 事件驱动 —— Agent 的神经系统</a>——
+  原文 §二 还有完整配图,§七、§八 讲了 Session 层扩展与三个设计决策的总结,值得通读。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0023):</strong> 我们跟着一个 text_delta 事件走一遍完整旅程——
+  从模型吐出第一个 token,到它变成 message_update,再到 TUI 屏幕上多出一个字——
+  这条链路串起了 pi-ai、Agent Loop、Session、TUI 四层,谁只管自己的事、谁把原始事件透传给谁。
+</p>
+
+<footer>
+  Lesson 0022 · 第 7 章 事件驱动 ·
+  下一课:<a href="./0023-text-delta-journey.html">0023 一次文本增量的旅程 →</a> ·
+  上一课:<a href="./0021-why-events-and-sync-barrier.html">0021 为什么 emit 是同步屏障</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。4 层嵌套,事件数 2+2+3+3=10。延伸:如果某个 Turn 没有工具调用,它就没有第4层嵌套(tool_execution_* 那组)。',
+               '✓ 对。4 层让每种消费者在「刚刚好」的粒度上响应。延伸:一个 Turn = 一次模型调用 + 它触发的所有工具执行,turn_start 到 turn_end 之间模型恰好被调一次。',
+               '✓ 对。内核只管生命周期,产品级体验(压缩/重试/队列)放 Session,用联合类型扩展。延伸:就像 Linux 内核里找不到「蓝牙已连接」——那是上层的事。'];
+  var msgNo = ['数一数每层各有几个事件,再看它们名字的后缀(_start/_update/_end)有什么共同规律——这提示了组织方式。',
+               '想想两个不同的消费者:逐 token 渲染文字的 TUI,和只关心「这一轮结束没有」的 Session 管理器——它们需要的颗粒度一样吗?',
+               '看看 Session 新增的 7 种事件都是些什么性质的事(压缩、重试、队列)——没有它们,Agent 内核的核心循环还转得动吗?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0004 · 项目骨骼:五个包各管各的</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 2 章 · 三层架构 ›
+  <a href="./0003-run-modes-and-models-json.html">上一课</a> ›
+  <strong>Lesson 0004</strong>
+</div>
+
+<p class="kicker">Lesson 0004 · 第 2 章 三层架构</p>
+<h1>项目骨骼:五个包各管各的</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们摸清了 Pi 怎么"跑起来"(运行模式 + models.json);
+  这一课往回退一步,先别管怎么跑,只看<strong>克隆下来的代码库长什么样</strong>——
+  <code>packages/</code> 下五个包,每个包各自负责哪一摊活。这是本章"三层架构"的第一块砖,
+  只讲物理骨骼,<strong>不碰依赖方向和类型细节</strong>(那是下一课的事)。
+</div>
+
+<div class="recall">
+  ⏮ <strong>回忆上一课</strong>:0003 讲了 Pi 的四种运行模式和 <code>models.json</code> 怎么接第三方模型——
+  但那节课里出现的 <code>cli.ts</code>、<code>main.ts</code> 这些名字,到底住在仓库的哪个角落?
+  这节课就带你去 <code>ls</code> 一下真实的目录。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 打开 Pi 的仓库,一眼认出
+  <span class="sys-pill">五个包</span>各自的职责——不是背下名字,而是能说出
+  "<em>pi-ai 只管调模型,pi-agent-core 只管跑循环,pi-coding-agent 才知道具体业务</em>"
+  这条主线,以及 pi-tui、pi-orchestrator 两个"旁支"为什么不算在主线里。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:先认识五个同事,再谈他们怎么协作</b>
+  第一次克隆 Pi,在终端敲下 <code>ls</code>,看见 <code>packages/</code> 下五个包整整齐齐排成一排——
+  先别管它们怎么勾连、谁听谁的,先像认识五个同事一样,搞清楚<b>每个人各自负责哪一摊活</b>。
+  谁管模型、谁管循环、谁管业务、谁管显示、谁是新来的实习生——这节课只做这件事。
+</div>
+
+<h2>1 · 打开仓库:五个包排排站</h2>
+<p>
+  假设你第一次克隆了 Pi 的代码库,<code>ls</code> 一下,看到的是标准的
+  <strong>npm workspaces monorepo</strong>——根目录 <code>package.json</code> 里声明了
+  <code>"workspaces": ["packages/*"]</code>,<code>packages/</code> 下每个子目录就是一个独立的包:
+</p>
+<pre><span class="ln">1</span>repo/
+<span class="ln">2</span><span class="sys">├──</span> packages/
+<span class="ln">3</span><span class="sys">│   ├──</span> ai/              <span class="cm">← @earendil-works/pi-ai</span>
+<span class="ln">4</span><span class="sys">│   ├──</span> agent/           <span class="cm">← @earendil-works/pi-agent-core</span>
+<span class="ln">5</span><span class="sys">│   ├──</span> coding-agent/    <span class="cm">← @earendil-works/pi-coding-agent</span>
+<span class="ln">6</span><span class="sys">│   ├──</span> orchestrator/    <span class="cm">← @earendil-works/pi-orchestrator(实验性,多 Agent 编排)</span>
+<span class="ln">7</span><span class="sys">│   └──</span> tui/             <span class="cm">← @earendil-works/pi-tui</span>
+<span class="ln">8</span><span class="sys">├──</span> package.json         <span class="cm">← 根配置,npm workspaces</span>
+<span class="ln">9</span><span class="sys">└──</span> tsconfig.json
+</pre>
+<div class="why">
+  <b>为什么拆成多个包,而不是一个大文件?</b> 用 npm workspaces 把职责切开,每个包只做一件事、
+  可以独立发布复用——理解了这一套"元结构",后面钻进任何一层都不会迷路。
+  这也是为什么这门课要先花一整节课"认人",再谈"协作"。
+</div>
+
+<h2>2 · 核心三件套:自底向上各管一摊</h2>
+<p>
+  五个包里,真正构成主线的是<strong>核心三件套</strong>:<code>pi-ai</code>(管调模型)→
+  <code>pi-agent-core</code>(管跑循环)→ <code>pi-coding-agent</code>(管具体业务)。
+  先看最底层的 <code>pi-ai</code>——它的 <code>index.ts</code> 导出清单说明了一切:
+</p>
+<pre><span class="ln">1</span><span class="cm">// packages/ai/src/index.ts(v0.80.x 节选)</span>
+<span class="ln">2</span><span class="cm">// 顶部注释明确写:Core only, side-effect free: no generated catalogs,</span>
+<span class="ln">3</span><span class="cm">// no provider factories, no api-registry, no OAuth implementations, no compat.</span>
+<span class="ln">4</span><span class="key">export</span> <span class="key">type</span> { <span class="type">Static</span>, <span class="type">TSchema</span> } <span class="key">from</span> <span class="str">"typebox"</span>;
+<span class="ln">5</span><span class="key">export</span> { <span class="type">Type</span> } <span class="key">from</span> <span class="str">"typebox"</span>;
+<span class="ln">6</span><span class="key">export</span> * <span class="key">from</span> <span class="str">"./api/lazy.ts"</span>            <span class="cm">// 各 Provider API 的懒加载入口</span>
+<span class="ln">7</span><span class="key">export</span> * <span class="key">from</span> <span class="str">"./auth/context.ts"</span>        <span class="cm">// 认证上下文</span>
+<span class="ln">8</span><span class="key">export</span> * <span class="key">from</span> <span class="str">"./auth/credential-store.ts"</span>
+<span class="ln">9</span><span class="key">export</span> * <span class="key">from</span> <span class="str">"./auth/helpers.ts"</span>
+<span class="ln">10</span><span class="key">export</span> * <span class="key">from</span> <span class="str">"./auth/types.ts"</span>
+<span class="ln">11</span><span class="key">export</span> * <span class="key">from</span> <span class="str">"./images-models.ts"</span>
+<span class="ln">12</span><span class="key">export</span> * <span class="key">from</span> <span class="str">"./models.ts"</span>              <span class="cm">// 模型定义(KnownProvider 35 个)</span>
+<span class="ln">13</span><span class="key">export</span> * <span class="key">from</span> <span class="str">"./types.ts"</span>               <span class="cm">// 统一类型</span>
+<span class="ln">14</span><span class="key">export</span> * <span class="key">from</span> <span class="str">"./utils/event-stream.ts"</span>  <span class="cm">// 事件流基类</span>
+<span class="ln">15</span><span class="cm">// 流式调用入口(stream / streamSimple)实际位于 ./compat.ts</span>
+</pre>
+<p>
+  数一数这份清单:没有 <code>agent</code>、没有 <code>tool</code>、没有 <code>loop</code>。
+  <code>pi-ai</code> 只承诺做一件事——<strong>抹平 30+ 提供商的差异,对外暴露统一类型和 <code>streamSimple()</code></strong>。
+</p>
+<p>
+  再往上一层,<code>pi-agent-core</code> 是 <strong>general-purpose</strong>(通用)的——它不知道自己在做
+  编程 Agent 还是客服 Agent,只知道怎么维护状态(<code>AgentState</code>)、跑循环(<code>agentLoop</code>)、
+  发事件(<code>AgentEvent</code>)、做上下文压缩(<code>compact</code>)。最后,<code>pi-coding-agent</code>
+  是最厚的一层——上百个源文件,7 个编程工具、扩展系统、会话持久化、CLI 全在这里。
+</p>
+<div class="why">
+  <b>为什么 pi-ai 的 index.ts 里刻意没有 agent / tool / loop?</b> 因为它把"调模型"这件事做纯,
+  才可能被上层无负担地复用。<b>为什么 pi-agent-core 强调 general-purpose?</b> 因为框架层不绑定任何领域,
+  客服 Agent、编程 Agent 都能复用同一套循环 / 状态 / 压缩——具体的 read / bash 工具,恰恰不住在这一层。
+</div>
+
+<h2>3 · pi-coding-agent:最厚的一层,启动链路从这里开始</h2>
+<p>
+  用户在终端敲下 <code>pi</code> 命令,程序从 <code>cli.ts</code> 启动——一个极简的入口:
+</p>
+<pre><span class="ln">1</span><span class="cm">// packages/coding-agent/src/cli.ts</span>
+<span class="ln">2</span><span class="cm">#!/usr/bin/env node</span>
+<span class="ln">3</span><span class="key">import</span> { <span class="fn">main</span> } <span class="key">from</span> <span class="str">"./main.js"</span>;
+<span class="ln">4</span><span class="fn">main</span>(process.argv.<span class="fn">slice</span>(2));
+</pre>
+<p>一个简单的入口,背后是一整条启动链路:</p>
+<pre><span class="ln">1</span>你输入: pi "帮我改个 bug"
+<span class="ln">2</span><span class="sys">│</span>
+<span class="ln">3</span><span class="sys">├──</span> cli.ts          <span class="cm">← 解析命令行参数</span>
+<span class="ln">4</span><span class="sys">│   └──</span> main.ts     <span class="cm">← 创建会话、选择运行模式(交互/打印/RPC)</span>
+<span class="ln">5</span><span class="sys">│       └──</span> AgentSession    <span class="cm">← 组装工具、加载扩展</span>
+<span class="ln">6</span><span class="sys">│           └──</span> Agent       <span class="cm">← 管理状态、跑循环</span>
+<span class="ln">7</span><span class="sys">│               └──</span> agentLoop()  <span class="cm">← 核心循环开始</span>
+</pre>
+<div class="tradeoff">
+  🔑 <b>记住这条链的方向:</b> <code>cli.ts → main.ts → AgentSession → Agent → agentLoop()</code>——
+  从外到内,从"解析参数"逐层收窄到"核心循环开始"。这条链会在后续讲 Agent Loop 的章节被逐段拆开细讲,
+  这节课只需要认得这五个名字、记住谁在最外层。
+</div>
+
+<h2>4 · pi-tui 与 pi-orchestrator:两个不在主线上的"旁支"</h2>
+<p>
+  剩下两个包,不属于核心三件套。<code>pi-tui</code> 是独立的终端 UI 层,运行时依赖只有两个包:
+</p>
+<pre><span class="ln">1</span><span class="cm">// packages/tui/package.json (dependencies,节选自教程 §2.4)</span>
+<span class="ln">2</span>{
+<span class="ln">3</span>  <span class="str">"dependencies"</span>: {
+<span class="ln">4</span>    <span class="str">"marked"</span>: <span class="str">"..."</span>,                    <span class="cm">// Markdown 渲染</span>
+<span class="ln">5</span>    <span class="str">"get-east-asian-width"</span>: <span class="str">"..."</span>     <span class="cm">// 东亚字符宽度计算</span>
+<span class="ln">6</span>  }
+<span class="ln">7</span>  <span class="cm">// 不含任何 pi-xxx 包,也不含任何 AI 相关的包</span>
+<span class="ln">8</span>}
+</pre>
+<p>
+  <code>pi-tui</code> 只管显示,和"Agent 怎么工作"没有直接关系。而 <code>pi-orchestrator</code> 是
+  v0.80.x 新增的<strong>实验性</strong>外围编排层,站在 <code>coding-agent</code> 之上,负责让多个
+  coding-agent 实例协同工作——学习主线暂不深入,留到进阶阶段再接触。
+</p>
+<div class="why">
+  <b>为什么 pi-tui 运行时不依赖任何 AI 包?</b> 显示与 Agent 逻辑彻底解耦,UI 换不换都不影响内核——
+  这也预告了下一课要讲的"依赖方向"规则:谁能依赖谁,是有硬边界的。
+</div>
+
+<div class="diagram">三层直觉分层图 —— 认完五个同事,先建立一个直觉画面
+
+┌─────────────────────────────────────────────┐
+│  pi-coding-agent:我知道怎么写代码            │  ← 最懂业务
+│  (工具、扩展、CLI、会话持久化)                │
+├─────────────────────────────────────────────┤
+│  pi-agent-core:我知道怎么跑 Agent            │  ← 只懂框架
+│  (循环、状态、事件、压缩)                     │
+├─────────────────────────────────────────────┤
+│  pi-ai:我知道怎么调模型                      │  ← 只懂模型
+│  (统一 API、流式调用、30+ 提供商适配)         │
+└─────────────────────────────────────────────┘
+
+旁边还有一个独立的 UI 包,和一个实验性外围包:
+┌──────────┐   ┌────────────────┐
+│  pi-tui  │   │ pi-orchestrator │ ← 站在 coding-agent 之上,实验性
+│ 只管显示  │   │ 多 Agent 编排   │
+└──────────┘   └────────────────┘
+</div>
+
+<h2>5 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① pi-agent-core 的 package.json 描述强调 "general-purpose"(通用的),这意味着什么?</p>
+    <button class="opt">它自己实现了 read/bash/edit 等具体编程工具</button>
+    <button class="opt">它负责终端里的 Markdown 渲染和代码高亮</button>
+    <button class="opt">它不知道自己在做哪种领域的 Agent,只提供通用的循环、状态、事件、压缩</button>
+    <button class="opt">它直接调用 OpenAI SDK 完成对话</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② 用户在终端输入 pi "帮我改个 bug" 后,本章给出的启动链路顺序是?</p>
+    <button class="opt">cli.ts → main.ts → AgentSession → Agent → agentLoop()</button>
+    <button class="opt">main.ts → cli.ts → agentLoop() → Agent → AgentSession</button>
+    <button class="opt">Agent → agentLoop() → cli.ts → main.ts → AgentSession</button>
+    <button class="opt">AgentSession → cli.ts → Agent → main.ts → agentLoop()</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">③ 为什么 pi-tui 被画在三层旁边、而不是当作三层之一?</p>
+    <button class="opt">因为它是 v0.80.x 新增的实验性包</button>
+    <button class="opt">因为它运行时依赖里没有任何 AI 相关的包,只负责把工作过程展示给用户,和"Agent 怎么工作"没有直接关系</button>
+    <button class="opt">因为它依赖 pi-coding-agent,会和上层形成循环依赖</button>
+    <button class="opt">因为它已被官方在 commit b141e1fa 中移除</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>为什么 coding-agent 要依赖上百个源文件,而不是精简一点?</em>」
+  「<em>如果我想写自己的 Agent,是不是必须把三层都用上?</em>」
+  「<em>pi-ai 的 index.ts 里没有 loop,那 pi-agent-core 又是怎么"看见" pi-ai 的类型的?</em>」——
+  最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>6 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第2章-三层架构-Pi-Agent项目的骨骼.md">第 2 章 · 三层架构——Pi-Agent 项目的骨骼</a>——
+  原文第 4、5 节还讲了依赖方向为什么允许"跨层引用"、类型怎么从"原子"变成"分子",值得通读建立全局观。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0005):</strong> 我们把"五个包各管各的"这张静态图往前推一步——
+  类型怎么在<code>pi-ai → pi-agent-core → pi-coding-agent</code> 这条堆栈里逐层递进扩展,
+  <code>Tool</code> 怎么一步步变成 <code>AgentTool</code> 再变成 <code>ToolDefinition</code>?
+</p>
+
+<footer>
+  Lesson 0004 · 第 2 章 三层架构 ·
+  下一课:<a href="./0005-type-progression-across-layers.html">0005 类型跨层递进 →</a> ·
+  上一课:<a href="./0003-run-modes-and-models-json.html">0003 运行模式与 models.json</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。general-purpose 意味着框架层对业务一无所知——正因如此,它才能被编程 Agent、客服 Agent 等任意领域复用。延伸想一下:具体的 read/bash 工具其实住在 coding-agent 层。',
+               '✓ 对。cli.ts 解析参数,交给 main.ts 选运行模式,再由 AgentSession 组装工具、Agent 管状态、最后 agentLoop() 开跑。延伸:这条链会在后续讲 Agent Loop 的章节被逐段拆开。',
+               '✓ 对。pi-tui 运行时只有 marked + get-east-asian-width,是个独立的终端渲染工具。延伸:被移除的是 pi-web-ui,实验性的是 pi-orchestrator,别记混。'];
+  var msgNo = ['回看 §2.2 pi-agent-core 做的四件事(状态/循环/事件/压缩),再对照 §2.3 里"具体工具"到底属于哪个包。',
+               '看 §2.3 那段缩进的启动链路图,注意谁是最外层入口(带 #!/usr/bin/env node 的那个文件)。',
+               '看 §2.4 对 pi-tui 依赖的描述,再区分一下"被移除的包"和"实验性的包"分别是哪个。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

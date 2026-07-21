@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0012 · 全参微调 vs 参数高效微调(PEFT)</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第四部分 微调 PEFT · 第 0012 课</p>
+<h1>全参微调 vs 参数高效微调(PEFT)</h1>
+<p class="lede">同样是「微调」,一种要为每个参数额外背上十几个字节的包袱,另一种只动全模型零点几个百分点的参数。这节课先把<strong>全参微调的显存账</strong>算清楚——面试官最爱让你现场估显存——再讲清 PEFT 为什么敢冻住 99% 以上的权重还能work,最后落到那道必考的判断题:<em>什么时候必须全参、什么时候 PEFT 就够了</em>。</p>
+
+<div class="recall">
+<p>前几课我们把开源模型的骨架(注意力、归一化、位置编码、常见架构)拆开看了。现在换个视角:你手上只有一张 24 GB 的显卡,想在一个 7B 模型上做微调。<strong>先别往下看,试着想一想:全参微调时,显存到底被谁吃掉了?为什么光是「装下模型」这一句话就不够?</strong></p>
+</div>
+
+<h2>一、全参微调的显存账:参数只是冰山一角</h2>
+<p>很多人第一反应是「7B 参数 × 2 字节(fp16)≈ 14 GB,放得下」。这是训练显存里<strong>最小的一块</strong>。真正微调时,主流做法是混合精度 + Adam(或 AdamW)优化器,每个参数身上还挂着一堆「随行物资」:</p>
+
+<ul>
+<li><strong>梯度</strong>:反向传播算出来的 $\partial L/\partial W$,和权重一样多。</li>
+<li><strong>优化器状态</strong>:Adam 要为每个参数维护<strong>一阶动量 $m$</strong>(梯度的滑动均值)和<strong>二阶动量 $v$</strong>(梯度平方的滑动均值),更新公式大致是</li>
+</ul>
+$$m_t=\beta_1 m_{t-1}+(1-\beta_1)g_t,\qquad v_t=\beta_2 v_{t-1}+(1-\beta_2)g_t^2$$
+<p class="formula-note">$g_t$ 是当前梯度。$m$、$v$ 都要常驻显存,各自和参数一样大;混合精度下还要额外存一份 fp32 的权重主副本用于精确更新。</p>
+
+<p>把这些按「每个参数占多少字节」摊开,就是那张业内熟知的账单(混合精度 + Adam):</p>
+
+<table>
+<thead><tr><th>组成</th><th>精度</th><th>字节 / 参数</th></tr></thead>
+<tbody>
+<tr><td>权重(前向用的 fp16 副本)</td><td>fp16</td><td>2</td></tr>
+<tr><td>梯度</td><td>fp16</td><td>2</td></tr>
+<tr><td>Adam 一阶动量 $m$</td><td>fp32</td><td>4</td></tr>
+<tr><td>Adam 二阶动量 $v$</td><td>fp32</td><td>4</td></tr>
+<tr><td>fp32 权重主副本(master weights)</td><td>fp32</td><td>4</td></tr>
+<tr><td><strong>合计(不含激活)</strong></td><td></td><td><strong>≈ 16</strong></td></tr>
+</tbody>
+</table>
+
+<p>也就是 <strong>约 16 字节 / 参数</strong>(ZeRO 论文的经典口径)。7B 模型光「模型状态」这一项就要 $7\times10^9\times16\ \text{B}\approx 112\ \text{GB}$——这还<strong>没算激活值</strong>。激活值随 batch size 和序列长度增长,是另一大块,且不像上面那样固定为「几字节每参数」。结论很直白:24 GB 单卡全参微调 7B,靠常规手段装不下,得靠多卡切分(如 ZeRO)或换 PEFT。</p>
+
+<p class="formula-note">注意:这是「混合精度 + Adam」的量级估算,不是所有配置的精确值。换 8-bit 优化器、纯 fp32、或别的优化器,系数都会变;记住"参数量的数倍"这个量级,别把 16 当成铁律。</p>
+
+<h2>二、PEFT 的核心思路:冻住大象,只训一根尾巴</h2>
+<p><strong>PEFT(Parameter-Efficient Fine-Tuning,参数高效微调)</strong>的想法一句话说清:<strong>把预训练得到的绝大部分权重冻结(不更新),只训练极少量的新增参数或低秩参数。</strong>被冻结的权重没有梯度、没有优化器状态——上面那张 16 字节账单里,占大头的「梯度 + $m$ + $v$ + 主副本」在冻结部分统统省掉,只有那一小撮可训练参数还需要背这些物资。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">预训练权重 $W_0$<br>(冻结 ❄️)</div>
+  <div class="node">注入 / 附加<br>少量可训练参数 $\theta$</div>
+  <div class="node">只对 $\theta$<br>算梯度 + 存优化器状态</div>
+  <div class="node good">显存骤降<br>可插拔切换</div>
+</div>
+<figcaption>全参微调更新整块 $W$;PEFT 让 $W_0$ 保持不动,把学习量集中到一小撮新参数 $\theta$ 上。</figcaption>
+</figure>
+
+<p>可训练参数常常只占全模型的<strong>零点几到个位数百分点</strong>。优化器状态和梯度显存跟着可训练参数量走,于是原本需要多卡的活儿,可能一张消费级卡就干了。</p>
+
+<h2>三、为什么冻住 99% 还能work:内在维度低</h2>
+<p>直觉上会担心:动这么点参数,模型学得动吗?答案藏在一个被反复验证的经验事实里——<strong>把一个已经预训练好的大模型适配到某个下游任务,所需的「有效自由度」其实很低</strong>。Aghajanyan 等人(2020)提出并测量了微调的<strong>内在维度(intrinsic dimension)</strong>:把参数更新限制在一个远低于全参数量的低维子空间里,往往就能达到接近全参微调的效果。</p>
+
+<p>形式化一点:与其在整个 $\theta_0+\Delta\theta$ 空间里搜索,不如令</p>
+$$\theta=\theta_0+P\,d,\qquad d\in\mathbb{R}^{D},\ D\ll \dim(\theta)$$
+<p class="formula-note">$P$ 把低维向量 $d$ 映射回全参数空间。只训练低维的 $d$——这正是 PEFT「少即是够」的理论底气。</p>
+
+<p>LoRA 把这个洞察落到<strong>权重更新矩阵</strong>上:假设 $\Delta W$ 是低秩的,用两个小矩阵的乘积近似,$\Delta W=BA$,其中 $B\in\mathbb{R}^{d\times r}$、$A\in\mathbb{R}^{r\times k}$、$r\ll\min(d,k)$。可训练参数从 $dk$ 降到 $r(d+k)$。(细节留到下一课。)</p>
+
+<h2>四、PEFT 家族一览(细节后面几课再拆)</h2>
+<p>PEFT 不是单一方法,而是一族思路。按「新增参数加在哪」大致分几类,先建立地图,不求现在吃透:</p>
+
+<table>
+<thead><tr><th>方法</th><th>动了什么</th><th>一句话</th></tr></thead>
+<tbody>
+<tr><td><strong>LoRA</strong></td><td>在权重旁路注入低秩矩阵 $BA$,只训 $A,B$</td><td>可合并回权重,合并后推理不加延迟(第 0013 课)</td></tr>
+<tr><td><strong>Adapter Tuning</strong></td><td>在 Transformer 层中插入小的瓶颈 MLP 模块,只训 adapter</td><td>串行小模块,推理时会引入一点额外计算(Houlsby 2019)</td></tr>
+<tr><td><strong>Prefix-Tuning</strong></td><td>冻结模型,在每层注意力前拼接可训练的前缀向量</td><td>改的是「上下文」而非权重(第 0014 课)</td></tr>
+<tr><td><strong>Prompt Tuning / P-Tuning</strong></td><td>在输入端学习一小段连续 soft prompt 向量</td><td>用可训练的连续提示替代人工离散模板</td></tr>
+</tbody>
+</table>
+
+<p>它们共享同一个骨架:<strong>冻结基座 + 只训一小撮参数</strong>,区别只在「那一小撮」长什么样、加在哪。</p>
+
+<h2>五、全量 vs PEFT:到底怎么取舍</h2>
+<table>
+<thead><tr><th>维度</th><th>全参微调</th><th>PEFT</th></tr></thead>
+<tbody>
+<tr><td>可训练参数</td><td>全部(100%)</td><td>极少(常见零点几~个位数 %)</td></tr>
+<tr><td>训练显存</td><td>高(≈16 B/参数 + 激活)</td><td>低很多(冻结部分免梯度/优化器状态)</td></tr>
+<tr><td>下游效果</td><td>上限高,注入新知识最稳</td><td>多数任务接近全参,不保证任务任务都追平</td></tr>
+<tr><td>产物大小</td><td>一份完整权重(每任务一份)</td><td>一个小 adapter(几 MB~几十 MB)</td></tr>
+<tr><td>部署</td><td>换任务要换整个模型</td><td>基座共享,适配器<strong>可插拔切换</strong>多任务</td></tr>
+<tr><td>灾难性遗忘</td><td>风险较高(基座被整体改写)</td><td>较轻(基座冻结,通用能力更易保留)</td></tr>
+</tbody>
+</table>
+
+<p>顺带解释一个高频困惑:「为什么 SFT 之后模型好像变笨了?」——常见原因是微调数据分布与预训练差异大,加上数据量小、模型容量大导致<strong>过拟合</strong>,把通用能力覆盖掉了(灾难性遗忘)。冻结基座的 PEFT 因为不动原权重,通常更不容易把预训练学到的东西写坏。</p>
+
+<dl class="keydef">
+<dt>PEFT(参数高效微调)</dt>
+<dd>一类微调范式:冻结预训练模型的绝大部分参数,只训练少量新增或低秩参数,以极小的可训练参数量逼近全参微调的效果,同时大幅降低训练显存与存储成本。</dd>
+<dt>内在维度(intrinsic dimension)</dt>
+<dd>把预训练模型适配到某下游任务所需的最小有效自由度。经验上它远小于模型总参数量,这正是 PEFT 可行的根据。</dd>
+<dt>灾难性遗忘(catastrophic forgetting)</dt>
+<dd>模型在新数据上更新时,把先前学到的能力覆盖/丢失的现象。全参微调风险更高,冻结基座的 PEFT 相对更轻。</dd>
+</dl>
+
+<h2>六、代码:一行之差,显存两个世界</h2>
+<p>PEFT 和全参微调在代码上的分水岭,就是<strong>优化器拿到的参数是谁</strong>。全参把 <code>model.parameters()</code> 全交给优化器;PEFT 只把那一小撮可训练参数交出去:</p>
+<pre><code># 全参微调:所有参数都进优化器,都要梯度 + 动量/方差
+optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5)
+
+# PEFT(以 LoRA 为例):冻结基座,只训注入的适配器
+from peft import LoraConfig, get_peft_model
+
+peft_config = LoraConfig(
+    r=16, lora_alpha=32,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
+)
+model = get_peft_model(model, peft_config)
+model.print_trainable_parameters()
+# 打印形如:trainable params: … || all params: … || trainable%: 很小
+</code></pre>
+<p>注意学习率:全参微调常用较小的 <code>lr</code>(如 <code>2e-5</code>),LoRA 这类 PEFT 常用大一个量级(如 <code>2e-4</code>)——因为要训的参数少、且是从零初始化的新参数,别把两者搞反。</p>
+
+<div class="implement">
+<p>不用任何库,手动体会「冻结」到底是什么:把 <code>requires_grad</code> 关掉,梯度和优化器状态就不会为这些参数产生。</p>
+<pre><code>import torch.nn as nn
+
+# 冻结整个基座
+for p in model.parameters():
+    p.requires_grad = False
+
+# 只解冻新加的一个小头(比如分类头 / 或新插入的适配器层)
+new_head = nn.Linear(hidden, num_labels)
+for p in new_head.parameters():
+    p.requires_grad = True   # 只有它会有梯度
+
+trainable = [p for p in model.parameters() if p.requires_grad] \
+          + list(new_head.parameters())
+optimizer = torch.optim.AdamW(trainable, lr=2e-4)   # 只给可训练参数
+
+# 数一数可训练比例
+tot  = sum(p.numel() for p in model.parameters())
+tune = sum(p.numel() for p in trainable)
+print(f"trainable {tune/tot:.4%}")   # 通常远小于 1%
+</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「全参微调一个 7B 模型大概要多少显存?」——按 ≈16 字节/参数(混合精度+Adam)算模型状态,再叠加随 batch/序列长度变化的激活;7B 光模型状态就上百 GB。别只答「14 GB 就够」。</li>
+<li>「PEFT 和全参微调的区别?」——全参更新全部权重、显存高;PEFT 冻结基座只训一小撮,省的是<strong>冻结部分的梯度和优化器状态</strong>。</li>
+<li>「PEFT 为什么有效?」——下游适配的内在维度低,低维子空间/低秩更新就够(Aghajanyan 2020 / LoRA)。</li>
+<li>「什么时候必须全参、什么时候 PEFT 够?」——见下方易错点里的判据,这是考「工程判断」而非背名词。</li>
+<li>「SFT 后模型变笨了怎么办?」——查数据分布偏移与过拟合,减小学习率/数据量、或改用冻结基座的 PEFT 缓解灾难性遗忘。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li><strong>不是所有 PEFT 推理都「零额外开销」。</strong>LoRA 能把 $BA$ 合并回权重、合并后不加延迟;Adapter、Prefix 这类在推理时仍会引入额外模块/前缀计算。说「PEFT 一律不增加推理成本」是错的。</li>
+<li><strong>PEFT 省的是优化器状态和梯度,不等于激活内存也省。</strong>反向传播仍要穿过冻结层才能到达可训练参数,激活值该多大还多大——这也是 QLoRA 要把基座量化到 4-bit 来进一步省显存的原因。</li>
+<li>什么时候倾向<strong>全参</strong>:要注入大量新领域知识、目标分布与预训练差异很大、数据充足且算力管够、追求效果上限。什么时候 <strong>PEFT 够</strong>:算力/显存受限、任务是风格或格式适配、要维护多个可插拔任务、想少踩灾难性遗忘的坑。这不是非黑即白,别把它答成绝对规则。</li>
+<li>全参 lr 小(约 <code>2e-5</code>)、LoRA lr 大(约 <code>2e-4</code>),量级别搞反。</li>
+<li>基座选 Base 还是 Chat 看任务:对话/指令类任务常从 Chat/Instruct 起步,单轮生成或从头灌新格式可选 Base——别默认「永远选 Chat」。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>用混合精度 + Adam 全参微调时,显存里占大头、而 PEFT 冻结基座后能省掉的,主要是哪一块?</p>
+<details><summary>A. 前向用的 fp16 权重本身</summary>权重那份基座仍要常驻(用于前向),这块并不因冻结而省;省的是它的梯度和优化器状态。</details>
+<details><summary>B. 冻结参数的梯度与 Adam 的一阶/二阶动量(及 fp32 主副本) ✅</summary>正确。冻结意味着不算梯度、不维护优化器状态,这几项按 ≈16 字节/参数里的大头被省掉。</details>
+<details><summary>C. 词表 embedding 查表的开销</summary>查表开销与是否冻结无关,也不是全参微调的显存大头。</details>
+<details><summary>D. 激活值(activations)</summary>恰恰相反,激活值不一定省——反向仍要穿过冻结层,这正是 QLoRA 还要量化基座的原因。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>下面哪种情形<strong>最应该优先考虑全参微调</strong>,而不是 PEFT?</p>
+<details><summary>A. 只想让模型输出换个说话风格,数据几千条</summary>风格/格式适配正是 PEFT 的舒适区,不必动全参。</details>
+<details><summary>B. 要同时维护十几个任务,希望共享一个基座、按需切换</summary>这是 PEFT「适配器可插拔」的典型场景,全参每任务存整份权重反而累赘。</details>
+<details><summary>C. 显存只有一张消费级卡,模型却是 7B</summary>资源受限恰恰是选 PEFT 的理由,全参在这里根本装不下。</details>
+<details><summary>D. 要把模型适配到与预训练差异很大的新领域、需注入大量新知识,且算力/数据充足 ✅</summary>正确。大幅分布偏移 + 灌入大量新知识时,全参的效果上限更高、更稳;这也是全参仍不可替代的场景。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning</strong>(Aghajanyan et al., 2020)——「低内在维度」是 PEFT 可行性的经验根据。</li>
+<li><strong>ZeRO: Memory Optimizations Toward Training Trillion Parameter Models</strong>(Rajbhandari et al., 2020)——本课「≈16 字节/参数」的模型状态账单出处。</li>
+<li><strong>LoRA: Low-Rank Adaptation of Large Language Models</strong>(Hu et al., 2021)——把低秩更新 $\Delta W=BA$ 落地,细节见下一课。</li>
+<li><strong>Parameter-Efficient Transfer Learning for NLP</strong>(Houlsby et al., 2019,Adapter)与 <strong>Prefix-Tuning</strong>(Li &amp; Liang, 2021)——PEFT 家族的另两支,后面几课展开。</li>
+<li>下一步:LoRA 原理与实现(第 0013 课),Prefix / P-Tuning 等 soft-prompt 方法(第 0014 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>全参微调每个参数背 ≈16 字节的物资(梯度+Adam 动量+主副本),显存爆炸;PEFT 冻住内在维度低的基座、只训一小撮参数,用极小代价逼近效果——够不够用看任务是否要灌大量新知识。</strong></p>
+<nav class="lesson-nav">
+<a href="0011-open-model-architectures.html">← 上一课:开源模型架构</a>
+<a href="0013-lora.html">下一课:LoRA 低秩适配 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

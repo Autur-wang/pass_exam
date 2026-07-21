@@ -1,0 +1,88 @@
+{
+ "num": "0032",
+ "slug": "build-session-context-and-jsonl-persistence",
+ "title": "从树到LLM上下文与JSONL落盘",
+ "narrowTopic": "树如何被 buildSessionContext '压扁'成 LLM 要的线性 messages 数组(路径遍历/类型分派/状态覆盖/压缩选择性收集),以及 JSONL 如何落盘;末尾埋钩引向扩展系统",
+ "analogySeed": "LLM 像一个只会读单行清单的读者:你内部存的是一棵族谱树,但递给它之前,必须沿一条血脉从祖到孙抄成一张单行纸条——旁支不抄。每次开口前都要现抄一遍,这就是 buildSessionContext。",
+ "keyPoints": [
+  "LLM 只接受线性 messages 数组、不认识树;树是存储形态,线性数组是'出口'形态,每次调 LLM 前都要现'压扁'一次",
+  "第一步路径遍历:从 leafId 沿 parentId 一路走到 root,再 path.reverse() 成 root→leaf;不在当前路径上的分支(如 e3-e5)不会发给 LLM",
+  "第二步按类型分派:消息推进 messages 数组;model_change/thinking_level 不进数组,改状态变量(覆盖式,沿路径最后一次生效)",
+  "节点化状态让回退天然正确:回退到切模型之前,路径不含那条 model_change,model 自动回到旧值;若路径无任何 model_change 则返回 model:null,由调用方兜底初始 model",
+  "CompactionEntry 是选择性收集:按其 firstKeptEntryId 跳过被压缩的旧 entry 并把 CompactionSummaryMessage 置顶,不真删(回退到压缩节点之前,压缩即失效,旧消息重新出现)",
+  "JSONL 行级追加(appendFileSync)与 append-only 树完美契合;延迟写入到首个 assistant 到达以避免'有问无答'的半截对话;只有创建分支副本或修复损坏文件才触发全文件重写",
+  "两层实现:agent-core 提供可插拔的 SessionStorage 接口(可自己用 mysql 实现),但 coding-agent 的 SessionManager 是独立实现、直接读写 JSONL、不复用该接口——各自实现而非统一继承"
+ ],
+ "codeRefs": [
+  {
+   "desc": "§五第一步 路径遍历代码:while 循环从 byId.get(leafId) 沿 parentId 往回 push,再 path.reverse() 变 root→leaf,得到 [e1,e2,e6,e7,e8,e9](e3-e5 不在其中)",
+   "cite": "教程 第10章 §五 / session-manager.ts buildSessionContext"
+  },
+  {
+   "desc": "§五 CompactionEntry 选择性收集的三步说明与最终 messages 数组:CompactionSummaryMessage 置顶、按 firstKeptEntryId 丢弃 e1-e2 保留 e3、e4 之后正常收集",
+   "cite": "教程 第10章 §五"
+  },
+  {
+   "desc": "§六 磁盘上的 .jsonl 文件示例:第一行 type:session 的 Header(version/cwd),其后每行一个 entry,e6 的 parentId 为 e2 标记出分支所在",
+   "cite": "教程 第10章 §六 / session-manager.ts _appendEntry(appendFileSync)"
+  },
+  {
+   "desc": "§六 延迟写入四种情况的对照表:有无 assistant × 是否已 flushed → 立即 append / 不写盘等待 / 重写整个文件(openSync wx 保原子) / 立即 append",
+   "cite": "教程 第10章 §六"
+  }
+ ],
+ "designRationale": [
+  "为什么必须有 buildSessionContext 这一步:LLM 的 API 只接受线性 messages 数组,无论内部结构多复杂,到 LLM 边界都必须变线性;树是存储形态,线性是出口形态",
+  "为什么把'切换模型'也存成节点而非全局状态变量:节点能完整记录'何时、在哪个位置切的',回退时路径遍历自动忽略被回退掉的 model_change,状态天然回到当时的样子——状态变量只能存最后值",
+  "为什么 CompactionEntry 用'选择性收集'而非真删旧消息:append-only 不允许删,压缩只是'当前路径上'的视图;回退到压缩节点之前,路径不含它,被压缩的消息又会作为正常消息出现——压缩不是破坏性的",
+  "为什么延迟写入到首个 assistant 到达:避免'有问无答'的半截对话残留(用户问了但网络断/API 报错,Agent 没回),保证落盘的对话至少有一对完整的 user-assistant 往返",
+  "为什么接口存在却不强制 coding-agent 复用:松耦合让 Web 版 Pi 可自己用 mysql 实现 SessionStorage 而不改其他逻辑,但代价是不能直接拿 coding-agent 的 SessionManager 去套该接口(签名不兼容)"
+ ],
+ "quiz": [
+  {
+   "stem": "为什么每次调用 LLM 之前都要跑一遍 buildSessionContext 把树'压扁'?",
+   "options": [
+    "为了顺便压缩 token 省钱",
+    "因为 LLM 的 API 只接受一个线性 messages 数组,它不认识树",
+    "为了把会话内容加密后再发送",
+    "为了在发送前删除被抛弃的旧分支"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。树是存储形态、线性 messages 是'出口'形态,到 LLM 边界必须变线性。延伸:压扁时只沿 leaf→root 当前路径走,旁支不发给 LLM。",
+   "noMsg": "想想 LLM 收到的 HTTP body 里 messages 是什么类型的数据结构?它看得懂一棵有分支的树吗?"
+  },
+  {
+   "stem": "Pi 把'切换模型'存成 ModelChangeEntry 节点(而非塞进一个全局状态对象),这对回退有什么好处?",
+   "options": [
+    "没有区别,只是写法不同而已",
+    "节点比状态变量更省内存",
+    "回退到切换模型之前的节点时,路径不含那条 model_change,model 自动回到切换前的值",
+    "节点化之后模型切换的速度更快"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。状态变量只能存'最后是什么',节点化的状态靠路径遍历天然回到当时样子——'节点化状态让回退天然正确'。延伸:若路径无任何 model_change,buildSessionContext 返回 model:null,由调用方兜底初始 model。",
+   "noMsg": "状态变量只能记'最后值',节点能记'什么时候、在哪个位置切的'。回退时哪一种能自动恢复到当时的模型?"
+  },
+  {
+   "stem": "JSONL 持久化里,为什么首次 assistant 消息到达前要延迟写入?",
+   "options": [
+    "为了把多条消息攒起来批量写以提速",
+    "因为 JSONL 格式不支持只写单行",
+    "为了等 token 统计(usage)算完再一起写",
+    "为了避免'有问无答'的半截对话残留——用户问了但 Agent 没回就落盘"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。延迟到首个 assistant 到来再批量写,保证落盘的对话至少有一对完整的 user-assistant 往返。延伸:JSONL 行级 append(appendFileSync)与 append-only 树'只追加不重写'完美契合;下一章将进入让 Agent 不改源码就加能力的扩展系统。",
+   "noMsg": "设想网络断了、而用户那句话已经立刻写盘,下次打开会话会看到什么?§六'延迟写入'那段给了答案。"
+  }
+ ],
+ "_chapter": "第10章",
+ "_chapterCN": "会话管理——对话的存储、恢复与分叉",
+ "prevFile": "0031-entry-anatomy-and-three-core-operations.html",
+ "prevNum": "0031",
+ "nextFile": null,
+ "nextNum": null,
+ "crumbLabel": "第 10 章 · 会话管理",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第10章-会话管理-对话的存储恢复与分叉.md",
+ "filename": "0032-build-session-context-and-jsonl-persistence.html"
+}

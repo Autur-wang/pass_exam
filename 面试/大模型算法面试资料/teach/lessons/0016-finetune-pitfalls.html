@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0016 · 微调的坑:灾难性遗忘、变差与过拟合</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第四部分 微调 PEFT · 第 0016 课</p>
+<h1>微调的坑:灾难性遗忘、变差与过拟合</h1>
+<p class="lede">数据备好、脚本跑通、loss 也在降——然后你满怀期待地一测,发现模型「变傻了」:原来会写代码的现在不会了,让它答个常识题也磕磕巴巴,甚至开始一句话翻来覆去说个没完。微调最反直觉的地方就在这:<strong>训练 loss 一路下降,能力却在倒退</strong>。这节课把「微调后变差」拆成三个可定位的病因——灾难性遗忘、过拟合、复读机——并给出面试官最爱追的两问:「变笨了怎么办」「loss 多少算过拟合」。</p>
+
+<div class="recall">
+<p>上节课(SFT 数据构建)我们强调了下游数据的质量、多样性与配比。假设数据你已经准备得很干净,现在拿去 SFT,却发现模型通用问答明显退步。<strong>先别往下看,想一想:训练 loss 明明在降,为什么模型反而变差了?loss 下降和「能力变强」是同一件事吗?</strong></p>
+</div>
+
+<h2>一、直觉:微调是「在预训练的巨人肩膀上挪一小步」</h2>
+<p>预训练把模型推到了一个「什么都懂一点」的参数点 $\theta_{\text{pre}}$——通用知识、语言常识、代码、推理,全都编码在这组权重的邻域里。SFT 做的事,只是从这里出发,朝「更听话、更贴合下游任务」的方向走一步:</p>
+$$\theta_{t+1} = \theta_t - \eta\,\nabla_\theta \mathcal{L}_{\text{SFT}}(\theta_t)$$
+<p class="formula-note">$\eta$ 是学习率,$\mathcal{L}_{\text{SFT}}$ 是下游数据上的交叉熵损失。走的每一步都在改写那组承载通用能力的权重。</p>
+<p>问题来了:这一步<strong>迈多大、朝哪个方向</strong>,都会付出代价。步子太大(学习率高),或者只顾着一个窄方向猛冲(数据太单一、训练太久),模型就会离 $\theta_{\text{pre}}$ 越来越远——而通用能力恰恰住在 $\theta_{\text{pre}}$ 附近。这就是「变差」的物理图像:<strong>为了拟合下游,把老本行的权重覆盖掉了</strong>。</p>
+
+<div class="trio">
+  <div class="cell"><strong>灾难性遗忘</strong><br>catastrophic forgetting<br><em>学新的,忘旧的:通用能力被下游数据覆盖</em></div>
+  <div class="cell"><strong>过拟合</strong><br>overfitting<br><em>把训练集背下来了,没学到能迁移的规律</em></div>
+  <div class="cell"><strong>复读机</strong><br>repetition<br><em>生成时反复输出同一段,停不下来</em></div>
+</div>
+<p>三者常常同时出现、互相放大,但病因和药方不同。逐个看。</p>
+
+<h2>二、病因一:灾难性遗忘——为什么 SFT 后「变傻」</h2>
+<p>「SFT 之后感觉 LLM 傻了」几乎是必考题。源头有两条主线:</p>
+<ul>
+<li><strong>数据偏移(distribution shift)</strong>:SFT 数据的分布和预训练见过的语料不一致。你只喂客服对话,模型就会把「世界」压缩成客服的样子,通用问答自然退化。</li>
+<li><strong>灾难性遗忘</strong>:神经网络学新任务时会覆盖旧任务的关键参数。这不是 LLM 特有的毛病,是连接主义网络的老问题(McCloskey &amp; Cohen 1989)。数据越窄、学习率越大、训练越久,遗忘越狠。</li>
+</ul>
+<p>再叠加一个常见操作失误:<strong>把预训练的大学习率照搬到 SFT</strong>。预训练动辄跑几千亿 token,学习率的绝对影响被海量数据摊薄;而 SFT 数据量小得多,同样的大 lr 会让权重在少量样本上剧烈震荡、狠狠偏离 $\theta_{\text{pre}}$,遗忘立刻发生。</p>
+
+<h3>缓解四件套(面试要能一口气说全)</h3>
+<div class="diagram">
+<div class="pipeline">
+  <div class="node">混入通用数据<br><em>replay / rehearsal</em></div>
+  <div class="node">PEFT 少动权重<br><em>冻结主干,只训 LoRA</em></div>
+  <div class="node">调小学习率<br><em>SFT 用远小于预训练的 lr</em></div>
+  <div class="node good">早停<br><em>验证集变差就停</em></div>
+</div>
+<figcaption>四招都指向同一目标:别让权重离预训练解 $\theta_{\text{pre}}$ 太远。</figcaption>
+</div>
+<ul>
+<li><strong>混入通用数据(replay)</strong>:在下游数据里掺一部分通用/指令数据,让模型「边学新边复习旧」,直接对抗遗忘。配比是个权衡——掺太多下游学不透,掺太少防不住遗忘。</li>
+<li><strong>用 PEFT 少动权重</strong>:LoRA 这类方法冻结主干 $W_0$,只训练低秩增量 $\Delta W=BA$。主干里的通用知识原封不动,遗忘天然更轻。这也是「怕遗忘就别全参微调」的道理。</li>
+<li><strong>调小学习率</strong>:SFT 的学习率通常比预训练小一到几个数量级。步子小,离 $\theta_{\text{pre}}$ 就近。</li>
+<li><strong>早停(early stopping)</strong>:验证集指标一掉头就停,别硬训到 loss 见底(下一节详述)。</li>
+</ul>
+<p class="formula-note">进阶:EWC(Kirkpatrick et al. 2017)给「对旧任务重要的参数」加一个二次惩罚,不让它们乱动——是遗忘问题的经典解法,面试提一句能加分,但工程上 replay + PEFT 更常用。</p>
+
+<h2>三、病因二:过拟合——「loss 多少算过拟合」</h2>
+<p>这问题问法很唬人,但答案很干净:<strong>过拟合不看 loss 的绝对值,看的是 train loss 和 eval loss 的「分叉」</strong>。</p>
+<pre>
+loss ↑
+     │＼                                     验证(eval) loss
+     │ ＼___                          ○○○○○○
+     │     ＼__                  ○○○○
+     │        ＼___        ○○○○○
+     │            ＼_○○○○○
+     │      拐点 → ╳ ← 早停应停在这里
+     │              ＼＿＿＿＿＿＿＿＿＿ 训练(train) loss
+     └──────────────────────────────────────→ step
+        欠拟合区         最佳          过拟合区(gap 扩大)
+</pre>
+<p>训练早期两条线一起降;越过某个拐点后,train loss 还在降(模型开始「背」训练样本),但 eval loss 掉头向上——模型学的是训练集的噪声和偶然规律,不是能迁移的知识。两者之差就是<strong>泛化间隙</strong>:</p>
+$$\text{gap} = \mathcal{L}_{\text{eval}} - \mathcal{L}_{\text{train}}$$
+<p class="formula-note">gap 持续扩大 = 过拟合的确凿信号,比任何单一 loss 数值都可靠。</p>
+<p>所以面试时若被问「train loss 到 0.3 算不算过拟合」,正确的回答是<strong>反问式的</strong>:「单看这个数字判断不了。不同 tokenizer、不同任务、不同序列长度下 loss 的尺度完全不同;要看验证集 loss 是否开始回升、下游/通用评测指标是否下降。」——这恰恰是源材料点的两个诱因:<strong>训练数据太小</strong>、<strong>模型容量相对数据过大</strong>,都会让模型有余力去「记住」而非「学会」。</p>
+<p>缓解手段和遗忘高度重叠:小学习率、早停、混更多样的数据、PEFT 限制可训练参数量(容量),必要时加正则(weight decay / dropout)。</p>
+
+<h2>四、病因三:复读机——生成时停不下来</h2>
+<p>「LLMs 复读机问题」指模型在生成时<strong>反复输出之前已经生成过的内容</strong>,一句话循环到 max token。源材料把成因归为三类:训练数据里的重复模式、处理长序列时注意力「失焦」、以及生成时对已生成内容的过度依赖。</p>
+<p>关键的排查思路是<strong>先分清是训练问题还是解码问题</strong>:</p>
+<ul>
+<li><strong>训练侧</strong>:数据里本就有大量重复,或过拟合到某种模板,模型学会了「复读」这个模式。药方回到前面——清洗重复数据、早停、别过拟合。</li>
+<li><strong>解码侧</strong>:更常见、也更快能救。贪心/beam search 倾向于反复选那个概率最高的 token,一旦进入循环就出不来。此时该调的是<strong>解码策略</strong>:</li>
+</ul>
+<dl class="keydef">
+<dt>重复惩罚(repetition penalty,Keskar et al. 2019 / CTRL)</dt>
+<dd>对已经出现过的 token 的 logit 施加惩罚,降低它再次被选中的概率:</dd>
+<dd>$$p_i = \frac{\exp\!\big(z_i / (T\cdot d_i)\big)}{\sum_j \exp\!\big(z_j / (T\cdot d_j)\big)},\qquad d_i=\begin{cases}\theta, & \text{token }i\text{ 已生成过}\\[2pt] 1, & \text{否则}\end{cases}$$</dd>
+<dd><em>$z_i$ 是 logit,$T$ 是温度,惩罚系数 $\theta&gt;1$(常取 $1.1\!\sim\!1.2$ 量级)。已出现过的 token 被额外「除大」,概率被压低。$\theta=1$ 时退化成普通 softmax。</em></dd>
+</dl>
+<p>配套的解码参数还有:<code>no_repeat_ngram_size</code>(直接禁止重复出现任意 $n$-gram)、以及适度提高<strong>采样随机性</strong>——温度 $T$ 和 top-$p$(nucleus sampling)。注意方向别搞反:<strong>把温度调到 0(贪心)会加剧复读,不是治它</strong>;适度采样反而给了模型跳出循环的出口(Holtzman et al. 2020 系统分析了这类「神经文本退化」)。</p>
+
+<div class="implement">
+<p>训练侧:小学习率 + 验证集 + 早停 + 混通用数据,把「变差」按在源头:</p>
+<pre><code>from transformers import Trainer, TrainingArguments, EarlyStoppingCallback
+
+args = TrainingArguments(
+    learning_rate=1e-5,           # SFT 用小 lr,别照搬预训练的大 lr
+    num_train_epochs=3,
+    eval_strategy="steps",        # 必须开验证集评估,才看得到分叉
+    eval_steps=100,
+    load_best_model_at_end=True,  # 早停:回滚到验证集最优的 checkpoint
+    metric_for_best_model="eval_loss",
+    weight_decay=0.01,
+)
+# train_dataset = 下游任务数据 + 混入一部分通用/指令数据(replay)防遗忘
+trainer = Trainer(
+    model=model, args=args,
+    train_dataset=train_ds, eval_dataset=eval_ds,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+)</code></pre>
+<p>解码侧:复读机现场急救,调 generate 参数(不用重训):</p>
+<pre><code>out = model.generate(
+    **inputs,
+    do_sample=True,
+    temperature=0.7,
+    top_p=0.9,
+    repetition_penalty=1.15,   # &gt;1 惩罚已出现过的 token
+    no_repeat_ngram_size=3,    # 禁止重复任何 3-gram
+    max_new_tokens=512,
+)</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「微调完模型通用能力下降/变笨了怎么办?」——先定位病因(数据偏窄→遗忘 / 训练太久→过拟合 / lr 过大),再对症下药:混通用数据、改用 PEFT、调小 lr、早停。能说出「离 $\theta_{\text{pre}}$ 太远」这个统一图像最好。</li>
+<li>「怎么判断微调过拟合了?train loss 到多少算过拟合?」——看 train/eval 分叉与泛化间隙,以及下游/通用评测,<strong>没有绝对 loss 阈值</strong>;不同任务尺度不同。</li>
+<li>「为什么 SFT 后模型会变傻?」——数据偏移 + 灾难性遗忘 + 学习率过大;答出这三点。</li>
+<li>「模型老是复读,怎么排查?」——先分训练侧(数据重复/过拟合)还是解码侧;解码侧调 repetition penalty / no_repeat_ngram / 采样参数,别用贪心。</li>
+<li>「全参 SFT 和 LoRA,哪个更容易遗忘?」——全参改整个权重更易遗忘;LoRA 冻结主干只训低秩增量,通用知识保留得更好。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把预训练的<strong>大学习率</strong>照搬到 SFT——SFT 数据量小,大 lr 会剧烈偏离预训练解、直接引发遗忘。SFT 用小得多的 lr。</li>
+<li>用 <strong>train loss 的绝对值</strong>判断过拟合——loss 尺度受 tokenizer、任务、序列长度影响,要看 gap 趋势和验证指标。</li>
+<li>以为<strong>贪心解码(temperature=0)能治复读</strong>——恰恰相反,greedy/beam 更容易陷入重复;适度采样才是出口。</li>
+<li>只盯 eval loss、不测真实能力——SFT 后要跑一个<strong>保留的通用评测集</strong>和 base 对比,否则遗忘悄悄发生你看不见。</li>
+<li>以为「混通用数据就不掉下游」——这是权衡,配比要调:掺多了下游学不透,掺少了防不住遗忘。</li>
+<li>把复读一律当解码问题猛调采样——如果病根在训练数据重复/过拟合,只调解码是治标。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>判断微调是否过拟合,最可靠的信号是下面哪一个?</p>
+<details><summary>A. train loss 低于某个绝对阈值(比如 0.5)</summary>loss 的绝对尺度受 tokenizer、任务、序列长度影响,没有通用阈值。</details>
+<details><summary>B. 训练几个 epoch 后 train loss 不再明显下降</summary>那更像收敛或欠拟合的迹象,不等于过拟合。</details>
+<details><summary>C. train loss 持续下降,但验证集 eval loss 开始回升,泛化间隙扩大 ✅</summary>正确。train/eval 的分叉(gap 扩大)才是过拟合的确凿信号,与任何单一 loss 数值无关。</details>
+<details><summary>D. 模型在训练集上的准确率达到 100%</summary>训练集拟合得好本身不是过拟合;关键要看它在<em>没见过</em>的数据上表现如何。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>模型生成时陷入「复读机」,同一句话反复输出停不下来。以下哪种调整最直接针对这个问题?</p>
+<details><summary>A. 增大 repetition penalty、设置 no_repeat_ngram_size,并适度提高采样随机性(temperature / top-p) ✅</summary>正确。这些是解码侧针对重复的直接手段:惩罚已出现 token、禁止重复 n-gram、给模型跳出循环的随机性。</details>
+<details><summary>B. 把 temperature 调到 0,改用纯贪心解码</summary>方向反了。贪心/beam 反而更容易陷入重复循环。</details>
+<details><summary>C. 增大 batch size 重新训练一遍</summary>batch size 影响训练稳定性,和生成阶段的重复没有直接关系。</details>
+<details><summary>D. 换一个参数量更大的基座模型</summary>换大模型成本高且不对症;复读多数能靠解码参数或数据/训练侧解决。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>McCloskey &amp; Cohen (1989)</strong>「Catastrophic Interference in Connectionist Networks」——灾难性遗忘概念的源头。</li>
+<li><strong>Kirkpatrick et al. (2017)</strong>「Overcoming Catastrophic Forgetting in Neural Networks」(EWC, PNAS)——给重要参数加惩罚以对抗遗忘的经典方法。</li>
+<li><strong>Hu et al. (2021)</strong>「LoRA: Low-Rank Adaptation of Large Language Models」——冻结主干、只训低秩增量,天然更抗遗忘;本部分 LoRA 专课细讲。</li>
+<li><strong>Keskar et al. (2019)</strong>「CTRL」——本课重复惩罚公式的出处。</li>
+<li><strong>Holtzman et al. (2020)</strong>「The Curious Case of Neural Text Degeneration」——系统分析了重复退化,并提出 nucleus sampling(top-$p$)。</li>
+<li>相邻课:上一课(0015)SFT 数据构建决定了「会不会遗忘/过拟合」的起点;下一课(0017)RLHF 又是另一种把模型「往人类偏好方向再挪一步」的微调,同样要提防能力回退。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>微调变差 = 遗忘 + 过拟合 + lr 过大;判过拟合看 train/eval 分叉而非绝对 loss;复读优先调解码(repetition penalty / 采样),别用贪心。</strong></p>
+<nav class="lesson-nav">
+<a href="0015-sft-data.html">← 上一课:SFT 数据构建</a>
+<a href="0017-rlhf-pipeline.html">下一课:RLHF 流水线 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0036 · 案例实战:从头写一个注册表单</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0036 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>案例实战:从头写一个注册表单</h1>
+
+<p class="lede">前面几课分别讲了受控/非受控表单怎么选、字段多了状态怎么管、校验该分几层做——这节课不再新增知识点,而是把这些结论收进一个完整案例里看一遍。源材料给的是一份从零开始的注册表单实战:从一个孤零零的 <code>&lt;input&gt;</code> 出发,一步步加到一个能通过 <code>fetch</code> 提交、经得起可访问性审查的表单。这节课要回答的问题很具体:一个"能跑、且站得住"的表单,到底要在浏览器原生能力上,依次叠加哪些东西才算完工。</p>
+
+<div class="recall">
+<p>先回忆一下 0031 讲过的区分:非受控输入把值留在 DOM 里,React 只在需要的时候通过 <code>ref</code> 或者表单本身去读,不必每敲一个字符就触发一次 <code>setState</code>。这节课的源材料开篇就点破一件事——这个注册表单示例用的输入全部是非受控的,"由于输入是未受控的,因此大多数点都不是 React 特有的"。这句话值得先愣一下:是不是说这节课的内容和 React 关系不大?恰恰相反——正因为大部分知识点是浏览器原生能力(表单元素、原生校验、<code>FormData</code>),它们才是换到任何框架都能直接用的通用底子;React 只在最后"用 <code>fetch</code> 提交"这一步才真正登场。</p>
+</div>
+
+<h2>一、这十步是什么、为什么要按这个顺序走</h2>
+
+<p>源材料开场说得很直白:"构建具有出色用户体验和可访问性的表单并非易事——但一旦您知道需要注意的事项,它也不会那么难。"这句话点出了这节课的定位:不是教一个孤立的新 API,而是把"看起来简单、处处是坑"的表单拆成十块砖,按顺序垫上去。</p>
+
+<table>
+<tr><th>#</th><th>加了什么</th><th>解决的问题</th></tr>
+<tr><td>1</td><td><code>&lt;input type="email"&gt;</code></td><td>类型决定浏览器怎么呈现、怎么辅助用户填写</td></tr>
+<tr><td>2</td><td><code>&lt;label htmlFor&gt;</code> 关联 <code>id</code></td><td>可访问性:辅助技术能说出这个输入是干什么的</td></tr>
+<tr><td>3</td><td>包进 <code>&lt;form&gt;</code></td><td>拿到浏览器原生的 Enter 提交行为</td></tr>
+<tr><td>4</td><td><code>action</code> / <code>method</code> / <code>enctype</code></td><td>告诉浏览器提交到哪、用什么方式、怎么编码</td></tr>
+<tr><td>5</td><td><code>&lt;button&gt;</code> 或 <code>&lt;input type="submit"&gt;</code></td><td>给出一个普遍被理解的提交入口</td></tr>
+<tr><td>6</td><td>每个 input 的 <code>name</code> 属性</td><td>决定提交数据里这个字段叫什么、值是什么</td></tr>
+<tr><td>7</td><td><code>autocomplete</code></td><td>让浏览器根据用户历史数据给出填写建议</td></tr>
+<tr><td>8</td><td><code>required</code> / <code>minlength</code> / <code>pattern</code></td><td>浏览器原生的第一层校验,不写 JS 也能拦下明显错误</td></tr>
+<tr><td>9</td><td><code>aria-describedby</code></td><td>把额外的提示文案念给屏幕阅读器听</td></tr>
+<tr><td>10</td><td><code>event.preventDefault()</code> + <code>FormData</code> + <code>fetch()</code></td><td>从整页跳转变成客户端提交,不丢应用状态</td></tr>
+</table>
+
+<p>这十步不是十个孤立知识点的罗列,是一条真实的搭建顺序——第 4 步的 form 属性要建立在第 3 步"已经把元素包进 form"之上;第 10 步的 <code>fetch</code> 要先有前面的表单结构和 <code>name</code> 属性才能读到数据。跟着这个顺序过一遍,比单独背"<code>aria-describedby</code> 是什么"更贴近面试现场真实发生的思考过程。</p>
+
+<h2>二、第 1-2 步:input 要有 type,还要有配得上的 label</h2>
+
+<p><code>&lt;input&gt;</code> 是 HTML 表单的支柱,根据 <code>type</code> 属性的值,浏览器会用不同的方式呈现这个控件——常见值包括 <code>text</code>、<code>email</code>、<code>number</code>、<code>url</code>、<code>checkbox</code>、<code>file</code> 等。光有这一行还不够:</p>
+
+<pre><code>&lt;input type="email" /&gt;</code></pre>
+
+<p>出于可访问性的目的,所有 <code>&lt;input&gt;</code> 都应该有一个关联的 <code>&lt;label&gt;</code>——这样辅助技术的用户才能知道这个输入框是干什么的,点击或触摸标签本身也会把焦点带到对应的表单控件上。<code>&lt;label&gt;</code> 和 <code>&lt;input&gt;</code> 分别用 <code>for</code>(React 里写作 <code>htmlFor</code>)和 <code>id</code> 属性链接起来:</p>
+
+<pre><code>&lt;label htmlFor="email-input"&gt;Email&lt;/label&gt;
+&lt;input id="email-input" type="email" /&gt;</code></pre>
+
+<p>另一种做法是在 <code>&lt;input&gt;</code> 上直接写 <code>aria-label</code>,省掉一个可见的 <code>&lt;label&gt;</code> 元素——但源材料的建议是优先用带可见文字的 <code>&lt;label&gt;</code>,而不是把标签藏进一个只有屏幕阅读器能读到的属性里。</p>
+
+<h2>三、第 3-4 步:包进 form,把提交先交给浏览器接管</h2>
+
+<p>这些元素接下来应该包进 <code>&lt;form&gt;</code>——这一步会启用浏览器自带的 enter-to-submit 行为,用户在任意一个输入框里按下 <kbd>Enter</kbd> 就能提交,不需要额外写一行 JS 去监听键盘事件:</p>
+
+<pre><code>&lt;form&gt;
+  &lt;label htmlFor="email-input"&gt;Email&lt;/label&gt;
+  &lt;input id="email-input" type="email" /&gt;
+&lt;/form&gt;</code></pre>
+
+<p><code>&lt;form&gt;</code> 标签本身还接受三个和"提交去哪、怎么送"直接相关的属性:</p>
+
+<table>
+<tr><th>属性</th><th>作用</th></tr>
+<tr><td><code>action</code></td><td>指定接收这次提交的服务器 URL</td></tr>
+<tr><td><code>method</code></td><td><code>POST</code> 把表单数据放进请求体;<code>GET</code> 把数据拼接成 URL 上的查询参数</td></tr>
+<tr><td><code>enctype</code></td><td>指定表单数据提交时怎么编码,上传文件时尤其重要</td></tr>
+</table>
+
+<pre><code>&lt;form method="POST" action="/users/signup"&gt;
+  &lt;label htmlFor="email-input"&gt;邮箱&lt;/label&gt;
+  &lt;input id="email-input" type="email" /&gt;
+&lt;/form&gt;</code></pre>
+
+<h2>四、第 5-6 步:提交按钮 + name,决定提交数据长什么样</h2>
+
+<p>并非所有用户都知道可以按 <kbd>Enter</kbd> 提交,提交按钮是普遍被理解的提交入口。<code>&lt;button&gt;</code> 如果没有指定 <code>type</code>,默认值就是 <code>type="submit"</code>,在 <code>&lt;form&gt;</code> 内触发它会导致表单提交;另一种等价写法是用带 <code>type="submit"</code> 的 <code>&lt;input&gt;</code>:</p>
+
+<pre><code>&lt;form method="POST" action="/users/signup"&gt;
+  &lt;label htmlFor="email-input"&gt;邮箱&lt;/label&gt;
+  &lt;input id="email-input" type="email" /&gt;
+  &lt;button&gt;注册&lt;/button&gt;
+&lt;/form&gt;
+
+// 或者
+&lt;input type="submit" value="注册" /&gt;</code></pre>
+
+<p>光有输入框和按钮还不够——定义了 <code>name</code> 属性的 <code>&lt;input&gt;</code> 元素才会作为名称/值对的一部分,被包含进这次提交的数据里。<code>name</code> 相当于表单数据的键,和输入的 <code>value</code> 配成一对;缺了 <code>name</code>,这个输入框的值就不会出现在提交给服务器的数据里,不管界面上写没写这个字段。指定 <code>name="userEmail"</code> 之后:</p>
+
+<ul>
+<li><code>&lt;form method="GET"&gt;</code> 会向 <code>/users/signup?userEmail=john.doe@gmail.com</code> 发出 <code>GET</code> 请求;</li>
+<li><code>&lt;form method="POST"&gt;</code> 会向 <code>/users/signup</code> 发出 <code>POST</code> 请求,请求体是 <code>userEmail=john.doe@gmail.com</code>;</li>
+<li>字段一多,多个键值对之间用 <code>&amp;</code> 连接,比如 <code>userEmail=john.doe@gmail.com&amp;password=securepassword123</code>。</li>
+</ul>
+
+<p>所以源材料的建议很直接:表单控件都该带上 <code>name</code> 属性——没写这一行,这份输入就等于没交上去。</p>
+
+<h2>五、第 7 步:autocomplete,让浏览器替用户翻老账</h2>
+
+<p>加上 <code>autocomplete</code> 属性之后,浏览器会根据这个值和用户自己保存过的自动填充数据(比如地址、支付方式)给出填写建议:</p>
+
+<pre><code>&lt;input autocomplete="email" id="email-input" name="userEmail" type="email" /&gt;</code></pre>
+
+<p>可能的取值包括 <code>email</code>、<code>family-name</code>、<code>new-password</code>、<code>street-address</code> 等,完整列表见文末的 MDN 链接。<code>autocomplete</code> 在结账页面的收货地址、账单地址这类表单上格外有用——用户不用把同一批信息在多个表单里反复敲一遍。</p>
+
+<h2>六、第 8 步:原生校验只是第一层,不是终点</h2>
+
+<p>给密码字段加上 <code>&lt;input type="password" /&gt;</code>,再在 <code>&lt;input&gt;</code> 上指定 <code>required</code>、<code>minlength</code>、<code>pattern</code> 这几个属性,浏览器就能在表单提交到服务器之前,先自己拦一遍不符合要求的输入:</p>
+
+<pre><code>&lt;input
+  autocomplete="email"
+  id="email-input"
+  name="userEmail"
+  required
+  type="email"
+/&gt;
+&lt;input
+  autocomplete="new-password"
+  id="password-input"
+  minlength="8"
+  name="userPassword"
+  required
+  type="password"
+/&gt;</code></pre>
+
+<p>源材料在这一步专门提醒:仅靠浏览器验证是不够的——恶意人员可以直接访问服务器端点,完全绕开这个 HTML 表单,所以服务器仍然要自己验证和清理所有用户输入。这句提醒你在 0033 那节课已经从"客户端校验能不能被绕过"的角度听过一遍;这里是同一条规则,只是换成了具体落在 <code>required</code>/<code>minlength</code>/<code>pattern</code> 这几个属性上——它们省掉了一部分手写 JS 校验的工作,但没有替掉服务端那一层复核。</p>
+
+<h2>七、第 9 步:aria-describedby,给提示文案配一个"听得到"的版本</h2>
+
+<p>需要额外描述或提示文字的 <code>&lt;input&gt;</code>,可以用 <code>aria-describedby</code> 把自己和一个包含描述性文字的元素(<code>&lt;span&gt;</code>、<code>&lt;div&gt;</code> 或其他合适的元素)关联起来:</p>
+
+<pre><code>&lt;input
+  aria-describedby="password-hint"
+  autocomplete="new-password"
+  id="password-input"
+  minlength="8"
+  name="userPassword"
+  required
+  type="password"
+/&gt;
+&lt;div id="password-hint"&gt;您的密码必须至少包含 8 个字符。&lt;/div&gt;</code></pre>
+
+<p>用户聚焦到密码输入框时,屏幕阅读器等辅助技术会把这个输入的标签,连同 <code>&lt;div&gt;</code> 里的附加说明一起读出来——这一步解决的问题很具体:密码规则不能只写在视觉上看得到的提示文字里,还要让听不见/看不见界面的用户,同样能在聚焦那一刻知道"至少 8 位"这条要求。</p>
+
+<h2>八、第 10 步:告别整页跳转,用 fetch() 提交</h2>
+
+<p>走到现在,表单提交时会向 <code>/users/signup</code> 发一次 <code>POST</code> 请求,但这会带来一次整页导航——离开当前页面,重新加载。这未必是理想的体验,尤其是想在提交后原地显示错误信息、或者不打断用户当前状态的场景。</p>
+
+<div class="codecompare">
+  <div class="side bad">
+    <p class="label">交给浏览器默认提交:整页跳转</p>
+    <pre><code>&lt;form method="POST" action="/users/signup"&gt;
+  ...
+  &lt;button&gt;注册&lt;/button&gt;
+&lt;/form&gt;
+// 点击提交 → 浏览器整页导航
+// React 应用连同内存里的状态一起被冲掉</code></pre>
+  </div>
+  <div class="side good">
+    <p class="label">用 fetch() 接管:客户端提交</p>
+    <pre><code>async function handleSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.target);
+
+  const response = await fetch('/users/signup', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: formData.get('userEmail'),
+      password: formData.get('userPassword'),
+    }),
+    headers: { 'Content-Type': 'application/json' },
+  });
+  // 页面留在原地,状态没有丢
+}</code></pre>
+  </div>
+</div>
+
+<p>需要改的三处,对应源材料给的三个动作:调用 <code>event.preventDefault()</code> 阻止浏览器整页导航;用 <code>new FormData(formElement)</code> 从表单元素上取出输入字段的数据;再通过 <code>fetch()</code> 把这份数据发到服务器 API 端点。完整拼起来是这样:</p>
+
+<pre><code>function SignupForm() {
+  async function handleSubmit(event) {
+    // 阻止默认行为,即导航
+    event.preventDefault();
+
+    const formElement = event.target;
+    const formData = new FormData(formElement);
+
+    const response = await fetch('/users/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: formData.get('userEmail'),
+        password: formData.get('userPassword'),
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      // 处理错误响应
+      return;
+    }
+    // 处理成功流程
+  }
+
+  return (
+    &lt;form onSubmit={handleSubmit}&gt;
+      ...
+    &lt;/form&gt;
+  );
+}</code></pre>
+
+<p>源材料在这一步刻意留白:<code>// 处理错误响应</code> 和 <code>// 处理成功流程</code> 两处没有展开具体 UI——这正是留给你自己接上 0033 讲过的"服务端校验联动"那一层的位置,比如把 <code>data.message</code> 塞进一个 <code>error</code> state 显示出来。到这一步,注册表单就是一个完全可访问、能通过 <code>fetch</code> 客户端提交的 React 组件了。</p>
+
+<h2>九、面试官到底想通过这道题验证什么</h2>
+
+<p>源材料对这道题的落点写得很短:"如何在 React 中独立构建一个具有验证和提交功能的可访问表单。"展开来说,面试官不是在逐个考你九个属性名叫什么,而是在看你有没有一套完整、可执行的心智模型——遇到"写一个注册/登录表单"这种题,能不能不假思索地把 label 关联、原生校验、<code>name</code> 属性、<code>fetch</code> 提交这几件事按顺序想到,而不是从一个裸 <code>&lt;input&gt;</code> 开始干憋着现场发明轮子。这也是这节课作为 React 专题收尾演练的意义:它不引入新概念,而是把 0025-0032 讲过的表单状态设计、0033 讲过的校验分层,摆进一个从头到尾走得通的真实案例里检验一遍。</p>
+
+<h2>十、关键定义</h2>
+
+<dl class="keydef">
+<dt>FormData</dt>
+<dd>浏览器内置的对象,用 <code>new FormData(formElement)</code> 从一个表单元素上读出所有带 <code>name</code> 属性的字段,按名称/值取用,例如 <code>formData.get('userEmail')</code>。<em>避免</em>以为非受控表单"提交时读不到值"——<code>FormData</code> 正是非受控表单在需要时读取数据的标准方式,不需要在每个字段上都维护一份 <code>useState</code>。</dd>
+<dt>aria-describedby</dt>
+<dd>一个 ARIA 属性,把某个表单控件和另一个包含描述性文字的元素关联起来,让屏幕阅读器在用户聚焦该控件时,把标签和这段描述一起读出来。<em>避免</em>把它和 <code>aria-label</code> 混为一谈——<code>aria-label</code> 是替代可见标签本身,<code>aria-describedby</code> 是在已有标签之外再补一段辅助说明,两者管的不是同一个位置。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>面试现场被要求"从零写一个注册/登录表单"时,可以照着这节课的十步顺序过一遍,而不是一上来就跳到"给每个字段挂 <code>useState</code> + <code>onChange</code>"的受控写法:先保证每个输入有类型、有 label,包进 form 拿到原生提交行为,加上 <code>name</code> 让数据能被序列化,再叠 <code>autocomplete</code> 和原生校验属性省掉一部分手写逻辑,密码这类需要提示文案的字段配上 <code>aria-describedby</code>,最后如果要做成单页应用体验,才用 <code>preventDefault</code> + <code>FormData</code> + <code>fetch</code> 接管提交。这个顺序本身就是一份可以讲给面试官听的思路,比直接甩代码更能体现你在有意识地搭一个东西,不是背下来的。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"用了 React 就必须给每个 input 挂 useState 做受控组件"当成唯一正确的写法。</strong>这节课的示例恰恰证明了相反的情况——一个简单的注册表单,完全可以用非受控输入 + 浏览器原生属性(<code>name</code>、<code>required</code>、<code>autocomplete</code>)搭完,只在最后提交那一步用 <code>FormData</code> 一次性读出所有值,不需要在打字过程中就同步维护一份 state。受控写法在需要"实时校验反馈""字段之间联动"时确实有优势(0033 讲的即时校验就是这类场景),但不是每个表单都天然需要它——先问清楚这个表单要不要打字过程中的实时反馈,再决定要不要上受控。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>挑一个你自己写过的表单,对着这节课的十步表格逐条打勾——有没有给每个 input 配 label?有没有写 name?有没有用 autocomplete 和原生校验属性?密码这类字段有没有用 aria-describedby 配提示文案?如果用了 fetch,有没有先调用 preventDefault?把缺的那一步补上,而不是同时重写整个表单。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>一个"看起来简单"的注册表单,其实是 HTML 原生能力(label 关联、name、autocomplete、原生校验、aria-describedby)叠加一层薄薄的 React 代码(<code>preventDefault</code> + <code>FormData</code> + <code>fetch</code>)搭出来的——先把原生这层搭牢,React 那层往往只用管"要不要接管提交、要不要整页跳转"这一件事。</p>
+</div>
+
+<h2>自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:源材料强调"由于输入是未受控的,因此大多数点都不是 React 特有的",这句话最准确的理解是下面哪一个? (A) 因为这个示例其实没有使用任何 HTML 原生表单能力,全靠手写 JS 逻辑实现 (B) 因为示例里 label 关联、name 属性、autocomplete、原生校验这些内容大多是浏览器和 HTML 本身提供的能力,只有最后用 fetch 提交这一步才真正涉及 React 代码 (C) 因为非受控表单在 React 里没办法读取用户输入的值,所以这个表单实际上无法把数据提交出去</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。整节课的十步里,前九步(类型、label、form 包裹、表单属性、按钮、name、autocomplete、原生校验、aria-describedby)都是浏览器和 HTML 原生就有的能力,只有第 10 步接管 <code>fetch</code> 提交才是这个例子里真正的 React 代码。(A) 说反了——这个例子的重点恰恰是大量依赖原生 HTML 能力,不是回避它们;(C) 混淆了"打字过程中不同步进 state"和"读不到值"——<code>FormData</code> 正是在提交那一刻把所有字段值读出来的标准方式,数据完全能提交出去。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于用 fetch() 提交这个注册表单,下面哪个说法最准确? (A) 必须调用 event.preventDefault() 阻止浏览器默认的整页导航,再用 new FormData(formElement) 从表单元素上读出字段值,传给 fetch 发起请求 (B) 只要在 handleSubmit 里调用了 fetch,就不需要再调用 event.preventDefault(),因为 React 会自动阻止表单的默认提交行为 (C) 用 fetch 提交之后,前端就不再需要担心服务端要不要校验,因为 fetch 请求本身已经具备和服务端校验等价的安全性</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。源材料给的改动清单很明确——先 <code>preventDefault</code> 挡住整页导航,再用 <code>FormData</code> 取值,最后才是 <code>fetch</code> 发请求,三步缺一不可。(B) 编造了一个不存在的自动行为——React 不会替你调用 <code>preventDefault</code>,不写这一行,浏览器仍然会按老规矩整页刷新;(C) 混淆了"提交方式"和"校验层级"两件事,<code>fetch</code> 只是换了一种发请求的方式,并不能替代第 8 步讲过的、也在 0033 里强调过的服务端校验。</p>
+</div>
+</details>
+</div>
+
+<h2>主推资源</h2>
+
+<p>本节第 7 步提到的 <code>autocomplete</code> 完整取值列表,源材料直接指向了 MDN 的对应页面:</p>
+<ul>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/autocomplete#values">MDN · autocomplete 属性完整取值列表</a> —— 除了 <code>email</code>、<code>new-password</code>,还能看到 <code>street-address</code>、<code>family-name</code> 等这节课没展开的其他取值,结账类表单会用到更多。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"非受控表单为什么也能读到用户输入的值",也可以让老师现场给你出一个"从零写注册表单"的题,让你按这节课的十步顺序口述一遍思路。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0035-react-data-fetching.html"><span class="dir">← 上一课</span>React 数据获取</a>
+  <a class="next" href="0037-front-end-resume-guide.html"><span class="dir">下一课 →</span>简历怎么写(前端向)</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

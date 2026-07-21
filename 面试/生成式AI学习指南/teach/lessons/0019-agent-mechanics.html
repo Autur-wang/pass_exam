@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0019 · Agent 机制:ReAct、function calling、tool design、MCP</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第六部分 Agents · 第 0019 课</p>
+<h1>Agent 机制:ReAct、function calling、tool design、MCP</h1>
+<p class="lede">上一课我们把 agent 拆成「模型 + harness」。这节课钻进 harness 里最常被追问的五个机制,一次答清五道真实面试题:<strong>「解释 ReAct 模式」「function calling / tool use 底层怎么工作」「怎么设计工具让 agent 可靠使用」「什么是 MCP、为何重要」「什么是 A2A、与 MCP 什么关系」</strong>(源:AI 工程师题库 Q57、Q58、Q65、Q59、Q70)。目标是让你能徒手画出 ReAct 的「思考→行动→观察」循环,并说清工具、MCP、A2A 三者各自解耦了什么。</p>
+
+<div class="recall">
+<p>先回忆上一课的一句话:<strong>agent = model + harness,你不是模型,你就是 harness</strong>。harness 有五件套——循环、上下文、工具、记忆、闸门。<strong>先别往下看:光有一个「会输出文本」的模型,它既不能查资料也不能改文件,你要加什么,它才能一边思考一边动手、并在出错时纠偏?</strong>本课就是这个「一边想一边做」的骨架。</p>
+</div>
+
+<h2>一、ReAct:把「推理」和「行动」交织起来</h2>
+<p>最朴素的做法是让模型一次性把计划想全,再照着执行。问题是:现实里信息要边做边收集,一开始定死的计划很容易在第三步就撞墙。<strong>ReAct</strong>(Reasoning + Acting,Yao et al. 2022)换了个节奏:让模型产出一段<strong>思考(Thought)</strong>,据此选一个<strong>行动(Action)</strong>去调工具,拿回<strong>观察(Observation)</strong>,再回到思考——<strong>思考 / 行动 / 观察 / 重复</strong>,直到满足收尾条件。</p>
+<p>它的好处是<strong>边收集信息边纠偏</strong>:上一步的观察会喂回下一步的推理,模型可以据此改主意,而不是抱着一个过时的计划走到黑。这也是今天多数工具型 agent 的骨架。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">Thought<br><em>我现在该干嘛</em></div>
+  <div class="arrow">→</div>
+  <div class="node">Action<br><em>选并调一个工具</em></div>
+  <div class="arrow">→</div>
+  <div class="node">Observation<br><em>工具返回的结果</em></div>
+  <div class="arrow">↻</div>
+  <div class="node good">收尾<br><em>信息够了 → 作答</em></div>
+</div>
+<figcaption>观察结果回流进下一轮思考,形成闭环;直到停止条件命中才跳出循环收尾。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>ReAct(Reasoning and Acting)</dt>
+<dd>一种交织「推理」与「行动」的 agent 提示/控制范式:模型显式写出思考、选择调用工具的动作、把观察结果读回上下文,循环推进任务。</dd>
+</dl>
+
+<p>它也有典型失败态,面试常追:<strong>空转不前进</strong>(反复思考却不动手,或来回调同一个工具)、<strong>推理偏离观察</strong>(不看返回结果、按幻想继续编)。约束手段是工程层面的:<strong>迭代上限</strong>(step budget)防死循环、<strong>清晰的停止条件</strong>让它知道何时收尾、以及——下一节的重点——<strong>好的工具设计</strong>。</p>
+<p class="formula-note">小提示:ReAct 这个名称来自题库与原论文,不在《生成式 AI 101》指南里,面试如果问「叫什么范式」,答 ReAct 是安全的;但别把它说成唯一的 agent 范式(还有 Plan-and-Execute、Reflexion 等变体)。</p>
+
+<h2>二、function calling:模型不动手,它只「开单子」</h2>
+<p>很多人以为模型自己会去调 API。<strong>并不会。</strong>底层其实是一次「开单子—你去执行—结果回喂」的分工:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">你:把工具以 schema<br>喂给模型<br><em>名 + 描述 + 带类型参数</em></div>
+  <div class="arrow">→</div>
+  <div class="node">模型:发出结构化请求<br><em>工具名 + 参数</em></div>
+  <div class="arrow">→</div>
+  <div class="node">你的代码:真正执行<br><em>调 API / 查库 / 跑命令</em></div>
+  <div class="arrow">→</div>
+  <div class="node good">结果回喂进上下文<br><em>供下一步推理</em></div>
+</div>
+<figcaption>function calling / tool use 的本质:模型负责「选哪个工具、传什么参数」,执行权始终在你的代码手里。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>function calling / tool use</dt>
+<dd>你用 schema(工具名、自然语言描述、带类型的参数)把可用工具告诉模型;模型不直接调用,而是输出一个结构化的调用请求(要调谁、传什么参),由你的 harness 代码执行、再把返回结果放回上下文,进入下一步。</dd>
+</dl>
+
+<p>可靠性从哪来?两件事:<strong>(1) 清晰的工具描述 + 良类型的参数</strong>,让模型选对工具、传对参;<strong>(2) 认真处理三类出错</strong>——调错工具、传坏参数、工具自身报错。好的 agent 会<strong>对工具错误反思并纠正重试</strong>(把报错当成一条 Observation 读回去,改参数再来一次),而不是直接崩掉。这一点正好接上 ReAct:错误也是观察,观察能纠偏。</p>
+
+<h2>三、tool design = 接口设计,也是 token 设计</h2>
+<p>工具型 agent 的可靠性,一大半押在工具怎么写上。核心洞察来自 harness engineering:<strong>agent 会读你返回的每一个 token,所以工具设计就是 token 设计</strong>。一个工具由三部分组成——schema(名 + 描述 + 参数)、执行器、返回结果——每一部分都在跟模型「说话」。</p>
+
+<div class="trio">
+  <div class="cell"><strong>怎么让它选对</strong><br>清晰的名 + 精确的「何时用」描述<br><em>域前缀命名,避免撞名歧义</em></div>
+  <div class="cell"><strong>怎么让它传对</strong><br>良类型、最小必要参数<br><em>参数越少越难传错</em></div>
+  <div class="cell"><strong>怎么让它读懂</strong><br>返回信息量够但不臃肿<br><em>默认简洁,按需给细节</em></div>
+</div>
+
+<p>几条从实践里提炼、面试能直接背的原则:</p>
+<ul>
+<li><strong>少而好胜过多而杂。</strong>工具集越庞杂,模型越难选——「更多工具」不等于「更强 agent」。还要主动告诉它<strong>何时别调工具</strong>。</li>
+<li><strong>search-first 优于 list-all。</strong>让它先检索再取,而不是一口气拉回全部列表把上下文塞爆。</li>
+<li><strong>错误要可行动。</strong>返回的报错要能指导模型自纠(告诉它哪错了、该怎么改),而不是甩一段栈信息。</li>
+<li><strong>包成贴合任务的高层工具。</strong>可以把多个低层调用合并成一个正好对着任务的高层工具,减少往返和出错面。</li>
+<li><strong>返回值要「削」过。</strong>把啰嗦命令的输出包一层,只浮出重要的(通常是失败信息),省 token 也省注意力。</li>
+</ul>
+<p>最后别忘了收口:把这些不要写成信仰,<strong>在 eval 里直接测「工具选择准确率」和「参数准确率」</strong>——能量化,才谈得上「可靠」。</p>
+
+<div class="implement">
+<p>把「工具 = token」落到一个对比上,感受差别:</p>
+<pre><code># 差:list-all,一次拉回上千条,塞爆上下文
+list_all_users() -> [ {全部字段} x 1000+ ]
+
+# 好:search-first + 域前缀 + 默认简洁
+crm_search_users(query: str, limit: int = 10)
+    -> [ {id, name} x 10 ]        # 摘要字段,细节按需再取
+crm_get_user(user_id: str)       # 需要时才拉全字段</code></pre>
+</div>
+
+<h2>四、MCP:给「工具」和「agent」之间装一个通用插头</h2>
+<p>假设你写好了一个很棒的工具。麻烦来了:换一个 agent、换一个应用,你又得为它重写一遍定制集成。工具和 agent 是 N×M 的耦合。<strong>MCP(Model Context Protocol)</strong>就是来拆这个耦合的:一个连接 agent 与外部工具 / 数据的<strong>开放标准、统一接口</strong>。</p>
+
+<dl class="keydef">
+<dt>MCP(Model Context Protocol)</dt>
+<dd>连接 agent 与外部工具 / 数据源的开放标准。你把一个能力实现成一个 <strong>MCP server</strong>,任何兼容 MCP 的 agent / harness 都能直接接入复用,不必为每个应用各写一遍集成。</dd>
+</dl>
+
+<p>它真正解耦的是:<strong>「造工具」和「造 agent」两件事</strong>。一次接入(写成 MCP server),到处复用——这就是它正在成为 agent 生态「通用插头」的原因。</p>
+<p>但要给面试官一个成熟的补充:<strong>安全是硬约束。</strong>一个 agent 连了很多 MCP server,它的动作面(能碰的系统)一下变得很宽,权限与信任边界必须收紧。harness 视角有个经典判据——<strong>致命三件套(lethal trifecta):不可信内容 + 私有数据访问 + 对外通信</strong>,三者同时具备就危险。MCP 让「接入能力」变简单的同时,也让这三者更容易凑齐,所以要配权限闸门,而不是无脑全开。</p>
+
+<h2>五、A2A:agent 之间的协作标准,和 MCP 是两个方向</h2>
+<p>MCP 解决「一个 agent 怎么够到工具和数据」。当生态里出现越来越多<strong>各有专长的独立 agent</strong>,又冒出一个新问题:它们之间怎么发现彼此、怎么委派任务、怎么协作?<strong>A2A(agent-to-agent)</strong>就是标准化这件事的。</p>
+
+<div class="trio">
+  <div class="cell"><strong>MCP</strong><br>agent ↕ 工具 / 数据<br><em>纵向:够到能力</em></div>
+  <div class="cell"><strong>A2A</strong><br>agent ↔ agent<br><em>横向:发现 / 委派 / 协作,常跨组织</em></div>
+  <div class="cell"><strong>二者互补</strong><br>同一个 agent<br><em>用 MCP 够工具,用 A2A 把子任务交给别家 agent</em></div>
+</div>
+
+<p>一句话记住方向:<strong>MCP 是纵向(agent 连工具),A2A 是横向(agent 连 agent)</strong>,而且横向协作常常跨越组织边界。它们不冲突而是叠着用。A2A 随「专职 agent 生态」的出现而变得重要;和 MCP 一样,它敞开的开放问题也是同一个——<strong>当 agent 能互相调用之后,信任与安全怎么办</strong>。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「ReAct 里 Thought / Action / Observation 各是什么?」——思考选动作、动作调工具、观察是工具返回;别答成「三个模型」。</li>
+<li>「function calling 是模型自己调 API 吗?」——不是,模型只输出结构化请求,执行在你的代码;这是高频送分/送命题。</li>
+<li>「工具报错了 agent 该怎么办?」——把报错当 Observation 读回去,反思后改参重试,而不是崩溃;答得出这条说明你懂 ReAct 和 tool design 的连接。</li>
+<li>「怎么让 agent 更可靠地用工具?」——清晰描述 + 良类型少参数 + 可行动的错误 + search-first + 少而好,并在 eval 里测选择/参数准确率。</li>
+<li>「MCP 和 function calling 什么关系?」——function calling 是模型层的调用机制,MCP 是把工具标准化暴露出来让任意 agent 复用的协议;一个是「怎么调」,一个是「怎么接」。</li>
+<li>「MCP 和 A2A 区别?」——MCP 纵向连工具、A2A 横向连 agent,互补;两者的共同软肋都是信任与安全。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别说「模型自己会调工具 / 调 API」。模型只<strong>开单子</strong>(输出工具名 + 参数),真正执行的是你的 harness 代码。</li>
+<li>别把「工具越多 agent 越强」当真——工具越杂越容易选错;<strong>少而好</strong>常常更可靠,还要告诉它何时别调。</li>
+<li>别说 ReAct 是<strong>唯一</strong>的 agent 范式。它是主流骨架,但还有 Plan-and-Execute、Reflexion 等;而且 ReAct 会空转/偏离观察,需要迭代上限和停止条件兜底。</li>
+<li>别把 MCP 和 A2A 混为一谈:一个连工具(纵向)、一个连 agent(横向),不是同一层。</li>
+<li>别把 MCP 说成「接上就完事」——连的 server 越多,动作面越宽,<strong>致命三件套</strong>越容易凑齐,权限/信任边界是硬约束。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>关于 function calling 的底层机制,下列哪句最准确?</p>
+<details><summary>A. 模型直接执行 HTTP 请求去调用外部 API</summary>不对。模型不执行任何调用,它只输出「要调哪个工具、传什么参数」的结构化请求。</details>
+<details><summary>B. 模型输出结构化的工具调用请求,由你的代码执行并把结果回喂上下文 ✅</summary>正确。模型开单子、你的 harness 执行、结果回喂供下一步——执行权始终在代码手里。</details>
+<details><summary>C. 工具的代码被打包进模型权重,推理时一并运行</summary>不对。工具是外部函数,通过 schema 描述给模型,和权重无关。</details>
+<details><summary>D. 只要工具报错,agent 就必然崩溃退出</summary>不对。好的 agent 会把报错当观察、反思后改参重试。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>MCP 和 A2A 的关系,哪句说得最对?</p>
+<details><summary>A. A2A 是 MCP 的旧版本,已被 MCP 取代</summary>不对。两者不是版本关系,而是两个不同方向的标准。</details>
+<details><summary>B. MCP 横向连 agent,A2A 纵向连工具</summary>方向反了。MCP 是纵向(连工具/数据),A2A 是横向(连 agent)。</details>
+<details><summary>C. MCP 纵向标准化 agent 连工具/数据,A2A 横向标准化 agent 之间协作,二者互补 ✅</summary>正确。一个 agent 可以用 MCP 够到工具、用 A2A 把子任务委派给别家 agent。</details>
+<details><summary>D. 两者都只用于单机、单进程内的函数调用</summary>不对。它们恰恰是为跨应用、跨组织的复用与协作设计的开放标准。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>ReAct: Synergizing Reasoning and Acting in Language Models</strong>(Yao et al., 2022)——ReAct 范式的原始论文,思考/行动/观察循环即出自此。</li>
+<li><strong>Anthropic, Writing Effective Tools for AI Agents</strong>——工具设计 = token 设计、search-first、域前缀命名、何时别调工具等原则的一手来源。</li>
+<li><strong>Anthropic, Building Effective Agents</strong>——「agent = 模型在循环里用工具」的框架文,配合上一课食用。</li>
+<li><strong>Model Context Protocol</strong>官方规范 / <strong>A2A</strong>协议文档——分别是本课 MCP(纵向连工具)与 A2A(横向连 agent)的一手材料。</li>
+<li>下一步:agent 靠什么跨会话「记住」进度、多 agent 怎么编排协作(第 0020 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>ReAct = 思考→行动→观察循环;function calling = 模型开单子、你的代码执行;好工具 = 清晰名+少而好+可行动的错误(工具即 token);MCP 纵向连工具、A2A 横向连 agent,都要守住信任边界。</strong></p>
+<nav class="lesson-nav">
+<a href="0018-agent-fundamentals.html">← 上一课:Agent 本质</a>
+<a class="next" href="0020-agent-memory-orchestration.html">下一课:Agent 记忆与编排 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

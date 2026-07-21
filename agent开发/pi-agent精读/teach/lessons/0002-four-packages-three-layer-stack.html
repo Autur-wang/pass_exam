@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0002 · 四包三层:堆栈与正交的 UI 库</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 1 章 · 开篇总览 ›
+  <a href="./0001-why-pi-three-identities.html">上一课</a> ›
+  <strong>Lesson 0002</strong>
+</div>
+
+<p class="kicker">Lesson 0002 · 第 1 章 开篇总览</p>
+<h1>四包三层<br>—— 堆栈与正交的 UI 库</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们只承认了「Pi 由 4 个包组成」这个事实,却没拆开它们的关系。
+  这一课只做一件事——把 <code>pi-ai / pi-agent-core / pi-coding-agent / pi-tui</code> 这四个包
+  之间「谁依赖谁、谁能单独拎出来用」讲清楚,不涉及任何一层内部的实现细节(那是后面每节课的任务)。
+</div>
+
+<div class="recall">
+  ↩️ <strong>接上一课:</strong> Lesson 0001 结尾留了个问题——「四个核心包到底怎么分工、谁依赖谁?」
+  当时我们只给了一句结论:「三层堆栈 + 一个正交 UI 库」。这节课把这句结论拆成看得懂的架构图和真代码。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出 Pi 的四包依赖图,并说清楚
+  <span class="sys-pill">pi-ai → pi-agent-core → pi-coding-agent</span> 为什么是「堆栈」而
+  <span class="sys-pill">pi-tui</span> 为什么是「正交」——这决定了你后面复用 Pi 时该拿哪一层。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:三层货架 + 旁边的工具间</b>
+  把 Pi 想成一栋三层楼货架:<b>底层 pi-ai</b> 管调模型(进货),<b>中层 pi-agent-core</b> 管跑循环(理货流程),
+  <b>顶层 pi-coding-agent</b> 是成品店面——每层都能单独拎出来用,想只进货就只租底层。
+  而 <b>pi-tui</b> 不是楼里的一层,它是货架旁边一个<em>独立的工具间</em>:谁都能借这套扳手螺丝刀,
+  它压根不知道货架在卖什么,却不属于这栋楼——反倒是店面(coding-agent)自己跑去工具间借了工具。
+</div>
+
+<h2>1 · 四个核心包,各司其职</h2>
+<p>
+  先重温一句话定义:Pi 是<strong>极简、可扩展的终端编码 Agent 外壳(coding agent harness)</strong>,
+  由 libGDX 作者 Mario Zechner 用 TypeScript 编写,MIT 开源。这个「外壳」由 <strong>4 个核心包</strong>拼成,
+  下面是教程原文的四层架构框图:
+</p>
+<pre><span class="ln">1</span>┌──────────────────────────────────────────┐
+<span class="ln">2</span>│          pi-coding-agent                 │  ← 完整 CLI 产品 + SDK
+<span class="ln">3</span>│  系统提示词 · 内置工具 · 会话管理 · 扩展  │
+<span class="ln">4</span>├──────────────────────────────────────────┤
+<span class="ln">5</span>│  pi-tui              │  pi-agent-core    │  ← 终端 UI + Agent 引擎
+<span class="ln">6</span>│  差分渲染 · 组件系统  │  AgentLoop · 工具 │
+<span class="ln">7</span>│                      │  系统 · 事件流    │
+<span class="ln">8</span>├──────────────────────┴───────────────────┤
+<span class="ln">9</span>│              pi-ai                       │  ← 多供应商 LLM 抽象
+<span class="ln">10</span>│  统一 API · 上下文交接 · 流式 · Token 追踪│
+<span class="ln">11</span>└──────────────────────────────────────────┘
+</pre>
+<p>
+  注意中间那一行:<code>pi-tui</code> 和 <code>pi-agent-core</code> 是<strong>并排</strong>画的,不是叠在一条链上——
+  这张图本身就在告诉你「四个包不是四层堆栈,而是三层堆栈 + 一根旁支」。
+</p>
+<cite>🔎 出处:教程第 1 章 §二「四个核心包,各司其职」ASCII 框图(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第1章-开篇-Pi-Agent框架总览.md</code>)。基于 pi <code>v0.80.2</code>。</cite>
+
+<h2>2 · 三层堆栈:自下而上,每层可独立用</h2>
+<p>
+  把 <code>pi-tui</code> 挪开之后,剩下 <code>pi-ai → pi-agent-core → pi-coding-agent</code> 才是真正的堆栈,
+  依赖方向严格自下而上:
+</p>
+<table class="bd">
+  <thead><tr><th>层</th><th>包名</th><th>只管一件事</th><th>依赖谁</th></tr></thead>
+  <tbody>
+    <tr><td>底层</td><td><code>pi-ai</code></td><td>调模型:统一 API、流式、跨供应商上下文交接、Token 追踪</td><td>不依赖任何 Agent 概念</td></tr>
+    <tr><td>中层</td><td><code>pi-agent-core</code></td><td>跑 Agent Loop:AgentLoop · 工具系统 · 事件流</td><td>依赖 <code>pi-ai</code>,不依赖上层</td></tr>
+    <tr><td>顶层</td><td><code>pi-coding-agent</code></td><td>组装成完整 CLI 产品 + SDK</td><td>依赖 <code>pi-ai</code> 和 <code>pi-agent-core</code></td></tr>
+  </tbody>
+</table>
+<p>
+  尝一口 <strong>Layer 1: <code>pi-ai</code></strong> 的最小调用——它不依赖任何 Agent 概念,
+  可以在任何需要调 LLM 的项目里单独使用:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 入口在 compat 子模块(不在主入口)</span>
+<span class="ln">2</span><span class="key">import</span> { <span class="fn">getModel</span>, <span class="fn">stream</span> } <span class="key">from</span> <span class="str">'@earendil-works/pi-ai/compat'</span>;
+<span class="ln">3</span><span class="key">import</span> <span class="key">type</span> { <span class="type">Context</span> } <span class="key">from</span> <span class="str">'@earendil-works/pi-ai'</span>;
+<span class="ln">4</span>
+<span class="ln">5</span><span class="key">const</span> model = <span class="fn">getModel</span>(<span class="str">'anthropic'</span>, <span class="str">'claude-sonnet-4-5'</span>);
+<span class="cm"><span class="ln">6</span>// Context 是 interface(不是 class),用对象字面量构造</span>
+<span class="ln">7</span><span class="key">const</span> context: <span class="type">Context</span> = {
+<span class="ln">8</span>  systemPrompt: <span class="str">'You are helpful.'</span>,
+<span class="ln">9</span>  messages: [{ role: <span class="str">'user'</span>, content: <span class="str">'Hello!'</span> }],
+<span class="ln">10</span>};
+<span class="ln">11</span>
+<span class="ln">12</span><span class="key">const</span> eventStream = <span class="fn">stream</span>(model, context);
+<span class="ln">13</span><span class="key">for</span> <span class="key">await</span> (<span class="key">const</span> event <span class="key">of</span> eventStream) {
+<span class="ln">14</span>  <span class="key">if</span> (event.type === <span class="str">'text_delta'</span>) process.stdout.<span class="fn">write</span>(event.delta);
+<span class="ln">15</span>}
+</pre>
+<p>
+  这段代码没有出现任何「Agent」「工具」「循环」——因为 <code>pi-ai</code> 压根不知道 Agent 是什么,
+  它只做一件事:把「给模型什么」变成「模型吐了什么」。这正是「底层」的含义。
+</p>
+<div class="why">
+  <b>为什么要求「每层可独立使用」?</b> 这是 Pi 作为 SDK 的核心价值——聊天机器人只需要
+  <code>pi-ai</code>,数据分析 / 客服 Agent 只需要 <code>pi-agent-core</code> 在自己应用里跑循环,
+  完全不必碰 CLI。项目长大了也不用换框架,只是往上多接一层。
+</div>
+<cite>🔎 出处:教程第 1 章 §5.1 <code>pi-ai</code>(compat 子模块)独立使用示例(同上文件)。代码为教程示意,基于 pi <code>v0.80.2</code>。</cite>
+
+<h2>3 · pi-tui:为什么画在堆栈旁边,而不是堆栈里</h2>
+<p>
+  回到第 1 节的框图:<code>pi-tui</code> 和 <code>pi-agent-core</code> 并排,不在链条上。
+  原因不是「差不多重要就并排画」,而是一个可以验证的事实——
+</p>
+<div class="tradeoff">
+  🔑 <b>正交,是从依赖关系上验证出来的,不是画风偏好:</b> <code>pi-tui</code> 的 <code>package.json</code>
+  只依赖 <code>get-east-asian-width</code> 和 <code>marked</code> 两个包,源码里<strong>零处</strong> import
+  任何 <code>@earendil-works/pi-*</code> 兄弟包。反倒是 <code>pi-coding-agent</code>
+  <strong>单向依赖</strong>它(比如从 pi-tui 引入 <code>fuzzyFilter</code>)——依赖箭头永远只从堆栈指向工具间,
+  从没有反过来。谁调不调 LLM,<code>pi-tui</code> 都无所谓。
+</div>
+<p>
+  这也解释了为什么它「最容易脱离 Pi 单独复用」:任何需要终端交互界面的 Node.js 程序——CLI 工具、
+  交互式 dashboard、TUI 游戏、自定义 REPL——都能直接借走它,完全不必关心 Agent 体系。
+</p>
+
+<h2>4 · 极简是刻意设计,不是偷懒</h2>
+<p>四个包合起来有多「小」?下面是 v0.80.2 源码的实际数字:</p>
+<table class="bd">
+  <thead><tr><th>指标</th><th>数值</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td>GitHub Stars</td><td>64,000+</td><td>十个月增长,社区验证了需求</td></tr>
+    <tr><td>内置工具</td><td>4 核心 + 3 辅助</td><td>核心 read / write / edit / bash;辅助 grep / find / ls</td></tr>
+    <tr><td>系统提示词</td><td>静态模板 ~90 词</td><td>运行时拼接后约 200–400 词</td></tr>
+    <tr><td>TUI 代码量</td><td>~12000 行</td><td>核心 <code>tui.ts</code> 单文件约 1700 行</td></tr>
+    <tr><td>支持供应商</td><td>30+ 家</td><td><code>KnownProvider</code> 枚举实际 35 个(含区域变体),独立品牌约 27 个</td></tr>
+    <tr><td>核心包数量</td><td>4 个</td><td>pi-ai / pi-agent-core / pi-tui / pi-coding-agent</td></tr>
+    <tr><td>运行模式</td><td>4 种</td><td>交互 / print-JSON / RPC / SDK</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么极简是刻意设计?</b> 上下文窗口是 Agent 最稀缺的资源——固定指令(4 个核心工具、
+  ~90 词提示词)占得越少,留给你的代码和项目上下文的空间就越多。同理,Mario 不用 blessed/ink
+  而自己写 TUI:一旦选择了「终端外壳」这个形态,就必须自己解决终端渲染,他按游戏引擎的思路重写,
+  换来了差分渲染、保留模式声明式组件这些能力——这也是一种「极简」的延伸:自己掌控每一行代码的取舍。
+</div>
+<cite>🔎 出处:教程第 1 章 §二「关键数字」表(同上文件)。</cite>
+
+<h2>5 · 刻意「不做」,本身也是分层的一部分</h2>
+<p>
+  上一课已经列过「不做 MCP、不做子 Agent、不做权限弹窗」这份清单,这里只补一句和分层直接相关的:
+  这些<em>缺失的功能</em>不是靠某一层内部悄悄加代码补上的,而是统一靠 TypeScript 扩展、技能、
+  Pi Package 在<strong>堆栈之外</strong>补充——分层分得干净,才谈得上「按需插件」而不是「层层打补丁」。
+</p>
+<div class="why">
+  <b>为什么「不做」清单本身是设计?</b> 看什么都做的框架只学到『他们做了什么』,
+  看刻意不做的框架才学到『做 Agent 到底需要什么』——而这份清单能存在,前提正是四包分层清楚,
+  「不做的东西」才有一个明确的、干净的地方可以插回来。
+</div>
+
+<div class="diagram">四包依赖关系 —— 三层堆栈 + 一根旁支
+
+   pi-coding-agent  (顶层:完整 CLI + SDK)
+         │
+         ▼ 依赖
+   pi-agent-core    (中层:AgentLoop · 工具系统 · 事件流)
+         │
+         ▼ 依赖
+   pi-ai            (底层:多供应商 LLM 抽象)
+
+   pi-tui  ⇢ 单向被 coding-agent 依赖,自己零 import 任何 pi-* 包
+   (正交的终端 UI 库,与上面这条链完全解耦)
+</div>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的架构图焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="0">
+    <p class="stem">① 为什么 pi-tui 在四层架构图里被画在 pi-agent-core 旁边(正交),而不是叠在堆栈链上?</p>
+    <button class="opt">因为它零处 import 任何 pi-* 兄弟包、与 Agent 体系完全解耦,是一个正交的通用终端 UI 库</button>
+    <button class="opt">因为它是最后开发的包,还没整合进堆栈</button>
+    <button class="opt">因为它体积最大(约 12000 行),放不进堆栈</button>
+    <button class="opt">因为它必须依赖 pi-ai 才能渲染模型输出</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② 下列哪条正确描述了 Pi 三层堆栈的依赖方向与用途?</p>
+    <button class="opt">pi-coding-agent 在底层负责调模型,pi-ai 在顶层组装 CLI</button>
+    <button class="opt">三层必须整体使用,单独拿出任何一层都无法运行</button>
+    <button class="opt">pi-ai(调模型)→ pi-agent-core(跑 Agent Loop)→ pi-coding-agent(完整 CLI+SDK),自下而上依赖且每层可独立用</button>
+    <button class="opt">pi-agent-core 依赖 pi-coding-agent 才能跑循环</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="3">
+    <p class="stem">③ Pi 刻意不内置 MCP、子 Agent、权限弹窗等功能,教程认为这种「减法」对学习者的价值是什么?</p>
+    <button class="opt">减少代码量,纯粹是为了跑得更快</button>
+    <button class="opt">为了在 TerminalBench 上刷分而砍功能</button>
+    <button class="opt">说明 Pi 功能不完整,只适合玩具项目</button>
+    <button class="opt">看刻意什么都不做的框架,才能学到『做 Agent 到底需要什么』,取舍背后都有工程理由</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果我把 pi-tui 整个删掉,pi-coding-agent 还能跑吗?</em>」
+  「<em>为什么『单向依赖』这个方向不能反过来——反过来会出什么问题?</em>」
+  「<em>三层堆栈里,中间那层 pi-agent-core 具体是怎么『跑循环』的?</em>」——最后这个问题,
+  正好把我们带向<strong>下一课</strong>要拆的运行模式与 models.json。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第1章-开篇-Pi-Agent框架总览.md">第 1 章 · 开篇总览</a>——
+  原文第五节完整讲了扩展系统、四种运行模式,以及 OpenClaw 等项目怎么在生产里嵌 Pi SDK,值得通读。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0003):</strong> 我们从「架构图」落回「怎么跑起来」——
+  Pi 的四种运行模式(交互 / print-JSON / RPC / SDK)到底怎么选,以及不想只用
+  <code>ANTHROPIC_API_KEY</code> 时,怎么用 <code>models.json</code> 接上智谱、DeepSeek 这些第三方模型。
+</p>
+
+<footer>
+  Lesson 0002 · 第 1 章 开篇总览 ·
+  下一课:<a href="./0003-run-modes-and-models-json.html">0003 运行模式与 models.json →</a> ·
+  上一课:<a href="./0001-why-pi-three-identities.html">0001 三重身份与减法哲学</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。pi-tui 只依赖 get-east-asian-width 和 marked,反倒是 coding-agent 单向依赖它——所以任何 Node.js 终端程序(CLI、dashboard、TUI 游戏)都能借它用。延伸:这种「反向依赖 + 零兄弟依赖」正是判断一个模块能否独立复用的硬指标。',
+               '✓ 对。底层 pi-ai 不含任何 Agent 概念、可单独调模型;中层 pi-agent-core 依赖 pi-ai 但不依赖上层;顶层把两层组装成产品。延伸:正因每层可独立用,OpenClaw 这类项目才能只嵌 SDK 而不要整个 CLI。',
+               '✓ 对。教程把 Pi 官网「What we didn\'t build」称作一份倒过来的宣言——每次舍弃都附清晰理由(如 MCP 会灌入 13,700+ token 工具描述)。延伸:极简核心之上,功能靠扩展/技能/Pi Package 按需补齐,而非默认全塞。'];
+  var msgNo = ['回看第二节框图和 5.1 节对 pi-tui 依赖关系的描述:它到底依赖谁、又被谁依赖?方向别搞反了。',
+               '想清楚谁是「地基」谁是「成品」:调模型的最底层,组装 CLI 的最顶层,依赖只能自下而上。',
+               '重读 4.3 节「减法哲学」:教程比较的是『看什么都做的框架』与『看什么都不做的框架』分别能学到什么。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

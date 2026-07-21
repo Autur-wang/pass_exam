@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0028 · 量化:INT8 / INT4 / AWQ / GGUF</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第八部分 训练与推理工程 · 第 0028 课</p>
+<h1>量化:INT8 / INT4 / AWQ / GGUF</h1>
+<p class="lede">上一课把模型「铺开」到几十张卡上训练;这节课反过来——怎么把一个 70B 的模型<strong>塞进一张消费级显卡</strong>甚至一台笔记本。答案是量化:把高精度的权重换成低比特整数,显存直接砍半再砍半。面试里它几乎是「推理工程」的必考题,因为它把一个尖锐的工程矛盾摆到台面上:<strong>省显存 / 加速</strong> 与 <strong>掉精度</strong> 之间怎么换。</p>
+
+<div class="recall">
+<p>源材料里问过一句朴素的问题:「为什么大模型推理时显存涨那么多还一直占着?」答案里第一条就是<strong>模型参数占用显存</strong>。<strong>先别往下看,试着估一下:一个 7B(70 亿参数)的模型,用 FP16 存权重,光参数本身要占多少显存?</strong></p>
+</div>
+
+<h2>一、直觉:量化就是「换一把更粗的尺子量同一段距离」</h2>
+<p>一个权重值本来用 16 位浮点(FP16/BF16)存,占 2 字节。量化做的事,是把一整批浮点数<strong>线性映射</strong>到一个很小的整数区间(比如 INT8 的 $-128 \sim 127$,或 INT4 的 $-8 \sim 7$),存的时候只存整数 + 一个共享的<strong>缩放因子</strong>(scale)。用的时候再乘回去、近似还原。</p>
+<p>为什么能省这么多?算笔账就懂了:参数量 $N$ 的模型,每个权重占的字节数就是显存的主导项。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">FP16 权重<br>2 字节 / 参数</div>
+  <div class="node">INT8<br>1 字节 / 参数</div>
+  <div class="node">INT4<br>0.5 字节 / 参数</div>
+  <div class="node good">显存越来越小<br>模型下沉到小卡</div>
+</div>
+<figcaption>同一个 $N$ 参数模型,比特数越低,权重显存越小。粗算:权重显存 $\approx N \times \text{字节数/参数}$。</figcaption>
+</figure>
+
+<p>一个可以口算的估算式(面试常让你现场估):</p>
+$$\text{权重显存} \approx N \times \frac{b}{8}\ \text{字节}$$
+<p class="formula-note">$N$ 是参数量,$b$ 是每参数比特数。FP16 时 $b=16$,7B 模型约 $7\times10^9 \times 2 \approx 14$ GB;换成 INT4($b=4$)理论上降到约 $3.5$ GB 量级。注意这只是<strong>权重</strong>那部分,推理时还有 KV Cache、激活、框架开销,实际占用更高。</p>
+
+<h2>二、精度阶梯:FP16 / BF16 → INT8 → INT4</h2>
+<p>先分清楚参与的几种数值格式,以及它们各自的取舍。这里给的是<strong>量级和方向</strong>,不写死具体掉点数字——那高度依赖模型、任务和量化算法。</p>
+
+<table>
+<thead><tr><th>格式</th><th>字节/参数</th><th>特点</th><th>典型用途</th></tr></thead>
+<tbody>
+<tr><td>FP32</td><td>4</td><td>单精度浮点,基准精度</td><td>训练早期 / 参考基线</td></tr>
+<tr><td>FP16</td><td>2</td><td>半精度,动态范围较窄,易溢出</td><td>推理 / 混合精度训练</td></tr>
+<tr><td>BF16</td><td>2</td><td>指数位与 FP32 相同,动态范围大、尾数少</td><td>大模型训练主力</td></tr>
+<tr><td>INT8</td><td>1</td><td>8 位整数,通常几乎无感掉点</td><td>服务端加速 / 省显存</td></tr>
+<tr><td>INT4</td><td>0.5</td><td>4 位整数,压缩极致,掉点风险明显上升</td><td>本地部署 / 塞进小卡</td></tr>
+</tbody>
+</table>
+
+<p><strong>FP16 vs BF16 别混:</strong>两者都是 2 字节,但 BF16 把更多位留给<strong>指数</strong>(动态范围),尾数更少(精度更低)。训练里怕的是梯度溢出/下溢,所以大模型训练偏爱 BF16;推理里两者都常见。这不是「量化」,只是低精度浮点,是量化的对照组。</p>
+<p>源材料里那句话可以更准确地复述:「INT8 在相同内存空间下能存更多数据,FP16 在较小数值范围内计算」——本质上,<strong>比特越少,单位显存装的参数越多,内存带宽压力越小,因此推理往往更快</strong>。但加速多少取决于硬件是否有对应的低比特算子(Tensor Core 的 INT8 支持等),没有硬件支持时可能只省显存、不加速,甚至因为反量化开销更慢。</p>
+
+<div class="keydef-wrap">
+<dl class="keydef">
+<dt>对称量化 / 缩放因子(scale)</dt>
+<dd>把浮点 $w$ 映射到 $b$ 位整数,最简单的对称量化:$$q = \operatorname{round}\!\left(\frac{w}{s}\right),\qquad s = \frac{\max |w|}{2^{b-1}-1}$$</dd>
+<dd><em>$s$ 就是缩放因子,由这批权重的绝对值最大值决定。反量化时 $\hat{w} = q \cdot s$。$\hat{w}$ 与原始 $w$ 的差就是<strong>量化误差</strong>。一个离群的大值会把 $s$ 撑大,让其余小值全挤到几个整数档位上——这正是低比特掉精度的核心症结。</em></dd>
+</dl>
+</div>
+
+<h2>三、两条路线:PTQ vs QAT</h2>
+<p>拿到一个训练好的模型,怎么量化?两条主线,面试常让你对比。</p>
+
+<div class="trio">
+  <div class="cell"><strong>PTQ</strong><br>Post-Training Quantization<br><em>训练后量化:模型练完再压,拿少量校准数据估好 scale 即可,不重训</em></div>
+  <div class="cell"><strong>QAT</strong><br>Quantization-Aware Training<br><em>量化感知训练:训练时就模拟量化误差,让模型「提前适应」低比特,精度更稳</em></div>
+  <div class="cell"><strong>取舍</strong><br><em>PTQ 快、便宜、无需训练管线;QAT 精度上限更高但要重训、成本大。大模型场景下 PTQ 是主流</em></div>
+</div>
+
+<p>为什么大模型几乎都走 PTQ?因为模型太大,QAT 意味着再跑一遍代价高昂的训练,大多数落地场景负担不起。所以工程界的重点变成了:<strong>如何把 PTQ 的掉点压到最小</strong>——这就催生了 GPTQ、AWQ 这类「聪明的 PTQ」。</p>
+
+<h2>四、AWQ 与 GPTQ:同为 PTQ,思路各异</h2>
+<h3>为什么 INT4 会明显掉点?异常值(outlier)在作祟</h3>
+<p>回到第二节那个 scale 公式:整批权重共享一个 $s$,而 $s$ 由最大绝对值决定。大模型的激活/权重里常有<strong>少数异常大的通道</strong>(outlier channels),它们把 $s$ 撑大,导致绝大多数「正常」权重被压到极少的整数档,信息损失严重。比特越低(INT4),档位越少($2^4=16$ 档),这个问题越致命。所以「怎么保护少数重要的东西」成了低比特量化的胜负手。</p>
+
+<div class="trio">
+  <div class="cell"><strong>分组量化</strong><br><em>group-wise:不再全层共享一个 scale,而是每 128 个权重一组各自算 scale,把 outlier 的影响局限在一小组内</em></div>
+  <div class="cell"><strong>AWQ 的洞察</strong><br><em>Activation-aware Weight Quantization:权重重不重要,要看它对应的<strong>激活</strong>有多大。保护激活大的那些权重通道(缩放后再量化),而非无差别压缩</em></div>
+  <div class="cell"><strong>GPTQ 一句话</strong><br><em>逐层用二阶信息(近似 Hessian)贪心地量化并补偿误差,让整层量化后的输出尽量贴近原始输出</em></div>
+</div>
+
+<p><strong>AWQ 的关键词是「激活感知」:</strong>它观察到只有一小部分(经验上很少的比例)权重通道对模型输出影响巨大,而判断哪些重要要看激活分布,不是看权重本身大小。对这些重要通道做保护性缩放,再统一量化,就能在 INT4 下把掉点压得很低。它<strong>不需要反向传播/重训</strong>,只要少量校准数据,这让它既便宜又效果好,是当前 INT4 权重量化的常见选择。</p>
+<p class="formula-note">注意「重要权重看激活」这个判据是 AWQ 的核心主张之一,不要说成「保护绝对值最大的权重」——那是另一回事。</p>
+
+<h2>五、GGUF:另一维度的东西,别和 AWQ 对立着记</h2>
+<p>初学者最容易搞混的一点:把 AWQ 和 GGUF 当成「两种量化算法」放在一起选。其实它们不在一个维度上。</p>
+<dl class="keydef">
+<dt>GGUF(GPT-Generated Unified Format)</dt>
+<dd>是 <strong>llama.cpp</strong> 生态使用的一种<strong>模型文件格式</strong>,把权重(可含多种量化位宽,如常见记法 Q4_K_M、Q5_K_M、Q8_0 等)、tokenizer、元数据打包进一个文件。它是 GGML 早期格式的后继。</dd>
+<dd><em>定位偏<strong>本地 / CPU(也支持 GPU offload)部署</strong>:让人在没有大显卡的机器上也能跑起大模型。它关心的是「用什么容器装、能在什么硬件上加载运行」,而 AWQ/GPTQ 关心的是「用什么算法把权重压到低比特且少掉点」。</em></dd>
+</dl>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">「怎么压」<br>算法维度</div>
+  <div class="node">GPTQ / AWQ<br>低比特量化算法</div>
+  <div class="node">「装在哪、跑在哪」<br>格式 + 运行时维度</div>
+  <div class="node good">GGUF + llama.cpp<br>本地/CPU 友好</div>
+</div>
+<figcaption>AWQ/GPTQ 回答「怎么把权重压到 INT4/INT8 少掉点」;GGUF 回答「量化后的模型用什么格式打包、在什么硬件上加载运行」。两者是不同的问题层面。</figcaption>
+</figure>
+
+<p>粗略的场景对应(讲权衡,不是硬规则):</p>
+<ul>
+<li><strong>服务端 GPU、要吞吐:</strong>常用 GPTQ / AWQ 的 INT4/INT8 权重,配合 vLLM、TensorRT-LLM 这类推理引擎(下一课细讲)。</li>
+<li><strong>本地跑、CPU 或消费级卡、图省事:</strong>常用 GGUF + llama.cpp / Ollama,一个文件下载即用,量化档位丰富。</li>
+</ul>
+
+<h2>六、为什么「几乎不掉精度」是可能的</h2>
+<p>把前面的线索串起来,回答面试官最爱追的「为什么压这么狠还能用」:</p>
+<ol>
+<li><strong>神经网络本身有冗余、对噪声鲁棒</strong>——权重上加一点量化噪声,输出通常只有小扰动。</li>
+<li><strong>分组量化</strong>把 outlier 的破坏力限制在小组内,而不是污染整层。</li>
+<li><strong>重要性不均</strong>:少数权重通道极重要、多数不那么重要。AWQ 这类方法<strong>差别对待</strong>——重点保护关键通道,对其余大胆压缩。</li>
+<li><strong>INT8 通常近乎无损,INT4 才需要这些技巧</strong>:比特降得越低,越依赖上面的手段来兜住精度。</li>
+</ol>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「量化为什么能省显存/加速?」——权重显存 $\approx N\times b/8$,比特越少显存越小、内存带宽压力越小;加速要看硬件有没有对应低比特算子,别答死「一定更快」。</li>
+<li>「PTQ 和 QAT 区别?大模型为什么多用 PTQ?」——PTQ 训后压不重训、便宜;QAT 训练时模拟量化误差、精度上限高但要重训;大模型重训代价太大,故 PTQ 为主。</li>
+<li>「AWQ 和 GPTQ 都是干嘛的、区别?」——都是 PTQ 权重量化算法。AWQ 靠激活分布挑重要通道做保护性缩放;GPTQ 用近似二阶信息逐层量化并补偿误差。别说成「一个好一个差」,讲思路差异。</li>
+<li>「AWQ 和 GGUF 有什么区别?」(高频陷阱)——不在一个维度:AWQ 是量化算法,GGUF 是 llama.cpp 的模型文件格式,偏本地/CPU 部署。</li>
+<li>「INT4 大概会掉多少精度?」——不写死数字。答:INT8 通常近乎无损;INT4 掉点明显更大,但靠分组量化 + AWQ/GPTQ 这类方法可以压到很多任务上可接受,具体看模型和任务。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把 <strong>BF16 / FP16 当成「量化」</strong>——它们是低精度浮点,是量化的对照组;量化特指映射到<strong>整数</strong>。</li>
+<li>把 <strong>AWQ 和 GGUF 并列成两种量化算法</strong>去二选一——一个是算法、一个是格式+运行时,层面不同。</li>
+<li>断言「量化<strong>一定</strong>加速」——没有对应低比特硬件算子时,反量化开销可能吃掉甚至反超收益,可能只省显存不提速。</li>
+<li>把 AWQ 说成「保护绝对值最大的权重」——它的判据是<strong>激活</strong>大小(activation-aware),不是权重大小。</li>
+<li>估显存时只算权重,忘了 <strong>KV Cache + 激活 + 框架开销</strong>,导致「按公式该放得下,实际 OOM」。</li>
+</ul>
+</div>
+
+<div class="implement">
+<p>手写一个最小的对称量化 / 反量化,把「换粗尺子」这件事跑一遍(看清 outlier 怎么撑大 scale):</p>
+<pre><code>import torch
+
+def quantize_symmetric(w, bits=8):
+    qmax = 2 ** (bits - 1) - 1          # INT8: 127, INT4: 7
+    s = w.abs().max() / qmax           # 缩放因子由绝对值最大值决定
+    q = torch.round(w / s).clamp(-qmax - 1, qmax)  # 映射到整数
+    return q.to(torch.int8), s
+
+def dequantize(q, s):
+    return q.float() * s               # 近似还原
+
+w = torch.tensor([0.1, -0.2, 0.05, 5.0])   # 最后一个是 outlier
+q, s = quantize_symmetric(w, bits=4)
+print(q, s)                # outlier 把 s 撑大,前三个小值全挤在 0 附近
+print(dequantize(q, s))    # 反量化后前三个几乎丢失 —— 这就是掉点来源
+# 对策:group-wise(每小组各算 s)/ AWQ(保护重要通道)</code></pre>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>一个 13B 参数的模型,用 INT4 存权重,权重部分大致占多少显存(只估权重,量级即可)?</p>
+<details><summary>A. 约 26 GB</summary>那是 FP16($b=16$)的量级:$13\times10^9\times2\approx26$ GB。</details>
+<details><summary>B. 约 13 GB</summary>那是 INT8($b=8$,1 字节/参数)的量级,不是 INT4。</details>
+<details><summary>C. 约 6.5 GB ✅</summary>正确。INT4 是 0.5 字节/参数:$13\times10^9\times0.5\approx6.5$ GB(仅权重,实际还要加 KV Cache/激活/框架开销)。</details>
+<details><summary>D. 约 52 GB</summary>那是 FP32($b=32$,4 字节/参数)的量级。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>下面关于 AWQ 与 GGUF 的说法,哪个最准确?</p>
+<details><summary>A. AWQ 是一种激活感知的低比特权重量化算法,GGUF 是 llama.cpp 用的模型文件格式,偏本地/CPU 部署 ✅</summary>正确。二者不在同一维度:一个回答「怎么压」,一个回答「用什么格式打包、在哪运行」。</details>
+<details><summary>B. AWQ 和 GGUF 是两种竞争的量化算法,精度更高的是 GGUF</summary>错。GGUF 不是量化算法,是文件格式;两者不构成「二选一的算法之争」。</details>
+<details><summary>C. AWQ 只能用于 CPU,GGUF 只能用于 GPU</summary>错。恰恰相反的刻板印象也不对:AWQ 常用于 GPU 服务端,GGUF 偏本地/CPU(也支持 GPU offload)。</details>
+<details><summary>D. AWQ 通过重新训练模型来适应低比特,属于 QAT</summary>错。AWQ 是 PTQ,不需要反向传播/重训,只用少量校准数据。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration</strong>(Lin et al., 2023)——「重要权重看激活」的原始论文。</li>
+<li><strong>GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers</strong>(Frantar et al., 2022)——用近似二阶信息做逐层 PTQ 的代表作。</li>
+<li><strong>LLM.int8()</strong>(Dettmers et al., 2022)——系统性讨论 LLM 中的 outlier 问题与混合精度分解,理解「异常值为什么难量化」的必读。</li>
+<li><strong>llama.cpp / GGUF</strong>——GGUF 格式与量化档位(Q4_K_M 等)看 llama.cpp 官方仓库文档,是本地部署生态的一手来源。</li>
+<li>下一步:量化后的模型如何真正跑起来、拉满吞吐(第 0029 课 推理服务)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>量化 = 把权重从浮点换成低比特整数省显存;INT8 近乎无损,INT4 靠分组量化 + AWQ/GPTQ 兜精度;AWQ 是算法、GGUF 是格式。</strong></p>
+<nav class="lesson-nav">
+<a href="0027-distributed-training.html">← 上一课:分布式训练</a>
+<a href="0029-inference-serving.html">下一课:推理服务 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

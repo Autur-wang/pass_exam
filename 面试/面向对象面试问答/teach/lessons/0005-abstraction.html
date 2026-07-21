@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抽象:抽象类 vs 接口 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第一部分 · 四大支柱 · 第 0005 节</p>
+<h1>抽象:抽象类 vs 接口</h1>
+<p class="lede">四大支柱里最容易"和封装混着答"的一个。这一节把抽象讲透,再把它的两种落地技术——抽象类与接口——摆到一张对照表和一棵决策树上,让你被追问"什么时候用哪个"时能当场给出理由。</p>
+
+<div class="recall">
+<p>先想一个日常场景:你按下遥控器的"开机"键,电视亮了。你<strong>不知道</strong>里面有多少块电路板、信号怎么解码——你只需要知道"有一个开机键,按下就开机"。这个"只暴露能做什么、藏起怎么做"的思路,就是抽象。那问题来了:如果你要设计一套"所有电器都必须有开机键"的规矩,你会怎么用代码表达"必须有,但各自怎么实现我不管"?先给个答案,再往下看。</p>
+</div>
+
+<h2>一、直觉:抽象是"只给你需要的那一层"</h2>
+
+<p>抽象(Abstraction)= <strong>聚焦本质特征,隐藏不必要的细节</strong>,在"高层概念"和"具体实现"之间划一条清晰的界线。你开车时面对的是方向盘、油门、刹车(高层概念),而不是燃烧室的喷油正时(实现细节)。这条界线让你能用简单的方式使唤复杂的东西。</p>
+
+<p>它带来三个直接好处,也正是源题给的答案:<strong>促进复用</strong>(高层接口稳定,底层可换)、<strong>可维护</strong>(改实现不影响用它的人)、<strong>安全</strong>(不必要的细节根本不暴露,也就无从被误用)。</p>
+
+<p>那"抽象"和上一簇的"封装"到底差在哪?这是几乎必被追问的一题,先在这里钉死:</p>
+
+<div class="keydef">
+<dl>
+<dt>抽象 (Abstraction)</dt>
+<dd>只对外暴露<strong>必要的功能(what:能做什么)</strong>,隐藏其余细节。关注"接口该长什么样"。</dd>
+<dt>封装 (Encapsulation)</dt>
+<dd>把数据和实现<strong>细节包起来、控制访问(how:怎么做的)</strong>。关注"数据的安全边界"。</dd>
+<dt>一句话区分</dt>
+<dd>抽象是<em>设计层面</em>"只给必要的";封装是<em>实现层面</em>"把细节藏起来"。二者常配合——你先决定暴露哪个接口(抽象),再把背后的状态锁好(封装)。</dd>
+</dl>
+</div>
+
+<h2>二、两种落地技术:抽象类 与 接口</h2>
+
+<p>源题问"有哪些抽象技术",标准答案给的是两条:<strong>抽象类(abstract class)</strong>和<strong>接口(interface)</strong>。它们都是"定义一个不完整的蓝本,逼后来者补全",区别在于"补多少、给不给默认实现"。</p>
+
+<div class="trio">
+<div class="cell">
+<div class="role">技术一</div>
+<div class="head">抽象类</div>
+<div class="sub">不能自己实例化</div>
+</div>
+<div class="cell">
+<div class="role">技术二</div>
+<div class="head">接口</div>
+<div class="sub">只有契约,没有实现</div>
+</div>
+<div class="cell">
+<div class="role">共同点</div>
+<div class="head">留白</div>
+<div class="sub">强制子类补全</div>
+</div>
+</div>
+
+<p><strong>抽象类</strong>:一个<strong>不能被自身实例化</strong>的类,专门当别人的基础。它可以有两种方法——</p>
+<ul>
+<li><strong>抽象方法</strong>:只声明、<strong>没有实现</strong>,把活留给子类;</li>
+<li><strong>具体方法</strong>:有真正的代码,提供默认行为,子类可直接复用,也可覆盖。</li>
+</ul>
+<p>它还能有构造器和实例状态。适用场景一句话:<strong>"有些方法有默认行为可被覆盖,有些必须由子类自己实现"</strong>——既想给点公共实现,又想强制留几个坑。</p>
+
+<p><strong>接口</strong>:一份类必须遵守的<strong>契约 / 蓝图</strong>。与抽象类不同,经典意义上的接口<strong>没有任何实现细节</strong>,只声明方法和属性的签名。它保证"实现类一定具备这组方法"(各自怎么实现可以不同),规定的是<strong>"必须能做什么"而不是"怎么做"</strong>。适用场景:<strong>让多个彼此不相关的类都遵守同一份契约、都提供相同的一组方法</strong>。</p>
+
+<div class="keydef">
+<dl>
+<dt>抽象方法 (abstract method)</dt>
+<dd>只有签名、没有方法体,由子类必须提供实现。</dd>
+<dt>契约 (contract)</dt>
+<dd>接口承诺的"任何实现类都保证提供这些方法";调用方只依赖契约,不依赖具体是谁实现的。</dd>
+<dt>Python 的现实</dt>
+<dd>Python <strong>没有 <code>interface</code> 关键字</strong>。表达抽象类用 <code>abc.ABC</code> + <code>@abstractmethod</code>;想表达"纯接口"有三条路:让 ABC 全是抽象方法、用 <code>typing.Protocol</code>(结构子类型,0021 详讲)、或直接靠鸭子类型。</dd>
+</dl>
+</div>
+
+<h2>三、Python 代码:用 abc 造一个抽象类</h2>
+
+<p>Python 里"抽象类"靠标准库 <code>abc</code>(Abstract Base Class)实现:继承 <code>ABC</code>,再给要强制的方法挂 <code>@abstractmethod</code>。看这个 <code>Vehicle</code>——它有一个<strong>抽象方法 <code>start</code></strong>(逼子类实现)和一个<strong>具体方法 <code>stop</code></strong>(给默认实现):</p>
+
+<pre><code>from abc import ABC, abstractmethod
+
+class Vehicle(ABC):                      # 继承 ABC → 本类不能被实例化
+    def __init__(self, name):
+        self.name = name                 # 抽象类可以有构造器和状态
+
+    @abstractmethod
+    def start(self) -&gt; None:             # 抽象方法:只声明、无实现,留给子类
+        ...
+
+    def stop(self) -&gt; None:              # 具体方法:提供默认实现,子类可直接复用
+        print(f"{self.name} 已停车")
+
+class Car(Vehicle):
+    def start(self) -&gt; None:             # 必须实现,否则 Car 也是抽象的、无法实例化
+        print(f"{self.name} 点火,引擎启动")
+
+c = Car("小蓝")
+c.start()        # 小蓝 点火,引擎启动 —— 用子类自己的实现
+c.stop()         # 小蓝 已停车     —— 复用父类的默认实现
+
+# v = Vehicle("x")   # ❌ TypeError: Can't instantiate abstract class Vehicle
+#                    #    with abstract method start
+</code></pre>
+
+<p>三个要点从这段代码里读出来:①继承 <code>ABC</code> 后,直接 <code>Vehicle(...)</code> 会在<strong>实例化那一刻</strong>抛 <code>TypeError</code>;②<code>Car</code> 只有把 <code>start</code> 补上,才"够格"被实例化——漏一个抽象方法,它自己也还是抽象类;③<code>stop</code> 证明抽象类<strong>可以有具体实现和构造器</strong>,这正是它区别于经典接口的地方。</p>
+
+<p>那"纯接口"在 Python 里长什么样?就是把 ABC 写成<strong>全是抽象方法、不给任何实现</strong>:</p>
+
+<pre><code>class Startable(ABC):        # 当"接口"用:只有契约,没有实现
+    @abstractmethod
+    def start(self) -&gt; None: ...
+
+    @abstractmethod
+    def stop(self) -&gt; None: ...
+# 任何 class X(Startable) 都必须同时实现 start 和 stop,否则无法实例化
+</code></pre>
+
+<p>(另一条更"Python 味"的路是 <code>typing.Protocol</code>——它靠"结构对不对得上"判断,连显式继承都不需要,留到 0021 专讲。)</p>
+
+<div class="interview">
+<p><strong>高频追问链(抽象几乎必问,而且爱往"vs 封装 / vs 接口"上引):</strong></p>
+<ul>
+<li>"抽象和封装有什么区别?" → 抽象是<strong>只暴露必要的功能(what)</strong>,封装是<strong>把实现细节藏起来(how)</strong>。抽象在设计层,封装在实现层,常一起用但不是一回事。</li>
+<li>"抽象类和接口怎么选?" → 需要在子类间<strong>共享部分实现或状态</strong> → 抽象类;只需<strong>定义契约</strong>、且实现类彼此不相关、或一个类要同时满足多份"接口" → 接口。见下面的决策树。</li>
+<li>"Python 里怎么表达接口?" → 没有 <code>interface</code> 关键字;用全抽象的 <code>abc.ABC</code>、或 <code>typing.Protocol</code>、或鸭子类型。这题是区分"背过定义"和"真写过 Python"的分水岭。</li>
+<li>"抽象类能被实例化吗?为什么不能?" → 不能。因为它有没实现的抽象方法,实例化了也没法正常工作;<code>abc</code> 在实例化时就替你拦下,把"漏实现"从运行时的隐蔽 bug 变成明确的 <code>TypeError</code>。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:说"抽象类不能有任何实现"。</strong>错——抽象类<strong>可以有构造器、实例状态和具体方法</strong>(上面的 <code>__init__</code> 和 <code>stop</code> 就是)。它只是<strong>不能被直接实例化</strong>而已。经典意义的<strong>接口</strong>才是"没有实现细节"。</p>
+<p><strong>坑二:把"接口没有实现"当成永恒真理。</strong>这个界限正在变模糊——<strong>Java 8+ 的接口允许 <code>default</code> 方法(带实现)</strong>,C# 8+ 也有默认接口方法。所以"接口一定没实现"只对经典/早期版本成立。面试时主动点出这段演变,比死背定义更能加分——但记得给它加上"经典意义上""Java 8 之前"这样的限定词。</p>
+<p><strong>坑三:以为"忘了实现抽象方法"会在定义类时就报错。</strong>不会。Python 是在你<strong>实例化</strong>那个类时才抛 <code>TypeError</code>——类定义本身不报错。所以漏实现可能潜伏到第一次 <code>X()</code> 被调用。</p>
+</div>
+
+<div class="crosslang">
+<p>"你这门语言怎么区分抽象类和接口?"是跨语言必问题,记住这张对照表:</p>
+<table>
+<tr><th>语言</th><th>抽象类</th><th>接口 / 纯契约</th></tr>
+<tr><td><strong>Python</strong></td><td><code>abc.ABC</code> + <code>@abstractmethod</code>,可含具体方法与状态</td><td>无关键字:全抽象的 ABC / <code>typing.Protocol</code> / 鸭子类型</td></tr>
+<tr><td><strong>Java</strong></td><td><code>abstract class</code>,可有实现与字段;<strong>类只能单继承</strong></td><td><code>interface</code>:Java 8 前纯契约、之后可有 <code>default</code>/<code>static</code> 方法;<strong>可多实现</strong></td></tr>
+<tr><td><strong>C++</strong></td><td>含纯虚函数(<code>virtual … = 0</code>)的类;支持多继承</td><td>没有独立 <code>interface</code>,用<strong>全是纯虚函数</strong>的类当接口</td></tr>
+<tr><td><strong>C#</strong></td><td><code>abstract class</code></td><td><code>interface</code>,C# 8+ 起也允许默认接口方法</td></tr>
+</table>
+<p>记忆锚:<strong>抽象类是"半成品基类"(可带实现),接口是"纯契约"(经典上无实现)</strong>;而"接口能不能带实现"这条线,近十年被 Java 8 / C# 8 悄悄改写了。</p>
+</div>
+
+<h2>四、决策树:到底选抽象类还是接口?</h2>
+
+<div class="flow">
+<div class="step decision">要在多个类之间<strong>共享一部分实现或状态</strong>吗?</div>
+<div class="down">▼</div>
+<div class="branches">
+<div class="branch">
+<div class="label">需要共享实现 / 状态</div>
+<div class="step terminal"><strong>抽象类</strong><br>给公共部分写默认实现,把差异部分留成抽象方法。<br><em>例:各种 <code>Vehicle</code> 都用同一套 <code>stop()</code>,只有 <code>start()</code> 各不相同。</em></div>
+</div>
+<div class="branch">
+<div class="label">只需定义契约</div>
+<div class="step decision">实现类彼此不相关,或一个类要同时满足<strong>多份</strong>契约?</div>
+<div class="down">▼</div>
+<div class="step terminal"><strong>接口</strong><br>只声明"必须能做什么",不管怎么做。<br><em>例:<code>Serializable</code>、<code>Comparable</code> 这类横跨无关类的能力。</em></div>
+</div>
+</div>
+</div>
+
+<p>一句话口诀:<strong>要复用实现 → 抽象类;只要立规矩 → 接口。</strong>在 Java 里还有一条硬约束帮你决策——类只能单继承(一个抽象类),但能实现多个接口;需要"多重身份"时,接口是唯一出路。</p>
+
+<div class="implement">
+<p>合上讲义,用 <code>abc</code> 自己写一个 <code>Shape</code> 抽象类:</p>
+<ul>
+<li>抽象方法 <code>area(self) -&gt; float</code>:没有默认实现,逼子类算面积。</li>
+<li>具体方法 <code>describe(self)</code>:打印 <code>f"这个图形面积是 {self.area()}"</code>——注意它<strong>调用了抽象方法</strong>,这就是"模板方法"雏形。</li>
+<li>写两个子类 <code>Circle(radius)</code> 和 <code>Rectangle(w, h)</code>,各自实现 <code>area</code>。</li>
+</ul>
+<p>写完自测两件事:①直接 <code>Shape()</code> 会发生什么?②如果 <code>Circle</code> 忘了实现 <code>area</code>,报错发生在"定义 <code>Circle</code> 时"还是"<code>Circle(1)</code> 时"?</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:下面这段代码运行到哪一行、抛出什么?</summary>
+<div class="answer">
+<pre><code>from abc import ABC, abstractmethod
+
+class Report(ABC):
+    @abstractmethod
+    def render(self): ...
+
+r = Report()      # ← 这一行</code></pre>
+<p><strong>答案:运行到 <code>r = Report()</code> 抛 <code>TypeError</code>(Can't instantiate abstract class Report with abstract method render)。</strong></p>
+<p>关键点:类定义本身<strong>不报错</strong>,报错发生在<strong>实例化那一刻</strong>。因为 <code>Report</code> 还有未实现的抽象方法 <code>render</code>,<code>abc</code> 拦下了实例化。要能创建对象,必须先有一个把 <code>render</code> 实现掉的子类。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:你要设计一组"可支付"的东西——信用卡、微信、Apple Pay,它们彼此毫无继承关系,但都必须提供 <code>pay(amount)</code>。你会用抽象类还是接口?为什么?</summary>
+<div class="answer">
+<p><strong>答案:接口(在 Python 里就是全抽象的 <code>abc.ABC</code> 或 <code>typing.Protocol</code>)。</strong></p>
+<p>理由:①这些类<strong>彼此不相关</strong>,没有可共享的实现或状态,用抽象类去当公共基类是硬凑一个不存在的"is-a"关系;②你要的只是一份<strong>契约</strong>——"任何支付方式都保证有 <code>pay</code>";③如果某个类还要同时满足别的能力(比如既能 <code>pay</code> 又能 <code>refund</code>),接口可以多实现,抽象类(在 Java 那种单继承语言里)做不到。反过来,如果它们能共享一大段公共下单流程,那才该考虑抽象类。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>抽象 = 只暴露必要功能(what)、隐藏细节;它的两种技术——<strong>抽象类</strong>(能带默认实现和状态、不能自己实例化,适合"共享一部分实现")与<strong>接口</strong>(经典上只有契约、没有实现,适合"给不相关的类立同一份规矩")。选择口诀:<strong>要复用实现选抽象类,只要立规矩选接口</strong>。Python 没有 <code>interface</code> 关键字,统一用 <code>abc.ABC</code> / <code>typing.Protocol</code> / 鸭子类型来表达。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《OOP 面试问答》Q6(What is abstraction? Name some abstraction techniques.)——抽象的定义、"聚焦本质/隐藏细节"、促进复用/可维护/安全三收益,以及"抽象类 vs 接口"两种技术及其契约 vs 实现的区分,均取自源题原文。</li>
+<li><strong>canon(补充锚定):</strong>Python 官方 <a href="https://docs.python.org/3/library/abc.html"><code>abc</code> 模块文档</a>(<code>ABC</code> / <code>@abstractmethod</code> 与实例化即报错的机制)、<a href="https://docs.python.org/3/library/typing.html#typing.Protocol"><code>typing.Protocol</code></a>(结构子类型);Java 侧对照见 <a href="https://docs.oracle.com/javase/tutorial/java/IandI/abstract.html">Oracle Java Tutorial: Abstract Methods and Classes</a> 与 <a href="https://docs.oracle.com/javase/tutorial/java/IandI/defaultmethods.html">Default Methods(Java 8 起接口可带实现)</a>。"没有 <code>interface</code> 关键字""default 方法模糊了界限"等语言机制细节属 canon 补充,源题未展开。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"为什么抽象类不能实例化"、或者把你写的 <code>Shape</code> 代码贴来我帮你评、又或者提前尝尝 <code>typing.Protocol</code> 和 ABC 的区别,都可以开口。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>抽象讲完,四大支柱就集齐了。下一节离开"支柱"这一簇,去看对象自己的一生——它怎么被创建、怎么被判定"是不是同一个"。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0004-polymorphism.html"><span class="dir">← 上一课</span>0004 · 多态:重写、重载与鸭子类型</a>
+<a class="next" href="0006-object-lifecycle-identity.html"><span class="dir">下一课 →</span>0006 · 对象的生命周期与身份</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

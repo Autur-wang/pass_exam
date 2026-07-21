@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0020 · 转换边界:convertToLlm 与可见性</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 6 章 · 消息系统 ›
+  <a href="./0019-agent-message-two-layers.html">上一课</a> ›
+  <strong>Lesson 0020</strong>
+</div>
+
+<p class="kicker">Lesson 0020 · 第 6 章 消息系统</p>
+<h1>转换边界:convertToLlm 与可见性</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课讲清了 AgentMessage 的「7 种类型、两层结构」——Agent 内部可以自由表达,
+  但 LLM 只认 3 种标准格式。这节课回答最后一个问题:<strong>这场「内部丰富 → 外部精简」的翻译到底在哪一步发生、
+  怎么发生</strong>?读完你会知道 <code>convertToLlm</code> 这个翻译器长什么样,以及它顺手解决的另一个问题——
+  怎么让某条消息「UI 能看、LLM 看不到」。
+</div>
+
+<div class="recall">
+  ⏮ <b>回忆上一课:</b> AgentMessage 联合类型一分为二——左支 <code>Message</code>(user/assistant/toolResult 三种标准)、
+  右支 <code>CustomAgentMessages</code>(bashExecution 等四种扩展),核心包完全不知道扩展消息的存在,
+  只留了一个「插槽」。但留了插槽只解决了「Agent 内部怎么表达」,没解决「LLM 调用前怎么办」——
+  这正是今天要拆的那道翻译边界。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出 <code>context.messages</code> 从 <code>AgentMessage[]</code>
+  到 <code>Message[]</code> 的完整两段管道,说清 <code>transformContext</code> 和 <code>convertToLlm</code>
+  为什么必须分开写,并解释 <span class="sys-pill">excludeFromContext</span> 如何让一条消息「对 UI 可见、对 LLM 隐身」。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:出海关的通行章</b>
+  跟着开头那条 <code>BashExecutionMessage</code> 走完最后一程:它从 <code>role: "bashExecution"</code> 出发,
+  带着 <code>command</code>/<code>output</code>/<code>exitCode</code> 这些「本国身份证件」,
+  在调用 LLM 前的最后一道关卡被<b>翻译</b>成一条普通的 <code>user</code> 消息——
+  就像出海关时,各国护照不管原本什么样式,最终都要盖上<b>同一种</b>通行章,LLM 才放行。
+</div>
+
+<h2>1 · 翻译发生在哪一刻?——两阶段管道</h2>
+<p>
+  Agent 内部用最多 7 种消息类型自由表达,但每次调用 LLM 时,LLM 只接受 3 种标准格式。
+  翻译不是随时发生的,而是在 <code>streamAssistantResponse</code>(第 3 章讲过的「调用模型」那一步)里,
+  <strong>调用 LLM 之前的最后一刻</strong>精确发生:
+</p>
+<div class="diagram">每次 LLM 调用前的消息处理管道
+
+context.messages: AgentMessage[]        ← Agent 内部消息(最多 7 种类型)
+        │
+        ▼
+[1] transformContext (可选)             ← AgentMessage[] → AgentMessage[]
+        │                                  同层变换:裁剪旧消息、注入外部上下文、触发压缩
+        ▼
+[2] convertToLlm (必须)                 ← AgentMessage[] → Message[]
+        │                                  跨层翻译:自定义消息 → 标准格式
+        ▼
+llmContext.messages: Message[]          ← LLM 看到的消息(只有 3 种类型)
+        │
+        ▼
+streamFunction(model, llmContext, ...)  ← 调用 LLM(第 4 章讲过)</div>
+<p>
+  注意顺序:<strong>先 transformContext(同层变换),再 convertToLlm(跨层翻译)</strong>。
+  这个顺序不是随意的——第 3 节会讲为什么必须这样分两步。
+</p>
+
+<h2>2 · 转换规则:所有自定义消息都变成 User</h2>
+<p>
+  coding-agent 的 <code>convertToLlm</code> 核心逻辑是一个按 <code>role</code> 字段分派的 <code>switch</code>:
+</p>
+<table class="bd">
+  <thead><tr><th>role</th><th>怎么处理</th></tr></thead>
+  <tbody>
+    <tr><td><code>"user"</code></td><td>直接透传,不做任何修改</td></tr>
+    <tr><td><code>"assistant"</code></td><td>直接透传</td></tr>
+    <tr><td><code>"toolResult"</code></td><td>直接透传</td></tr>
+    <tr><td><code>"bashExecution"</code></td><td><code>excludeFromContext=true</code> → 过滤掉;否则 → 转换成 UserMessage</td></tr>
+    <tr><td><code>"custom"</code></td><td>转换成 UserMessage</td></tr>
+    <tr><td><code>"branchSummary"</code></td><td>转换成 UserMessage(加 XML 标签包裹)</td></tr>
+    <tr><td><code>"compactionSummary"</code></td><td>转换成 UserMessage(加 XML 标签包裹)</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么都变成 <code>user</code>?</b> 因为 LLM API 对角色顺序有严格要求——对话格式是
+  <code>user → assistant → user → ...</code> 交替的,<strong>不能连续出现两个 assistant</strong>。
+  自定义消息本质上是「系统注入的信息」(Bash 执行结果、压缩摘要、分支摘要),放在 <code>user</code>
+  角色中最安全——这是「关键洞察」:所有自定义消息都被转换成了 <code>user</code> 角色的消息。
+</div>
+
+<h2>3 · 具体例子:BashExecutionMessage 的转换</h2>
+<p>
+  回到开头的场景。一条 <code>BashExecutionMessage</code> 从创建到被 LLM 看到,数据结构发生了这样的变化:
+</p>
+<p><strong>Before —— BashExecutionMessage(Agent 内部格式):</strong></p>
+<pre><span class="ln">1</span>{
+<span class="ln">2</span>    role: <span class="str">"bashExecution"</span>,
+<span class="ln">3</span>    command: <span class="str">"ls -la"</span>,
+<span class="ln">4</span>    output: <span class="str">"total 32\ndrwxr-xr-x  5 user  staff  160 May 30 10:00 .\n..."</span>,
+<span class="ln">5</span>    exitCode: 0,
+<span class="ln">6</span>    cancelled: <span class="key">false</span>,
+<span class="ln">7</span>    truncated: <span class="key">false</span>,
+<span class="ln">8</span>    timestamp: 1748568000000
+<span class="ln">9</span>}
+</pre>
+<p><strong>After —— UserMessage(LLM 看到的格式):</strong></p>
+<pre><span class="ln">1</span>{
+<span class="ln">2</span>    role: <span class="str">"user"</span>,
+<span class="ln">3</span>    content: [{
+<span class="ln">4</span>        type: <span class="str">"text"</span>,
+<span class="ln">5</span>        text: <span class="str">"Ran `ls -la`\n```\ntotal 32\ndrwxr-xr-x  5 user  staff  160 May 30 10:00 .\n...\n```"</span>
+<span class="ln">6</span>    }],
+<span class="ln">7</span>    timestamp: 1748568000000
+<span class="ln">8</span>}
+</pre>
+<p>变化总结:</p>
+<table class="bd">
+  <thead><tr><th>字段</th><th>变化</th></tr></thead>
+  <tbody>
+    <tr><td><code>role</code></td><td><code>"bashExecution"</code> → <code>"user"</code></td></tr>
+    <tr><td><code>command</code>/<code>output</code>/<code>exitCode</code></td><td>结构化字段 → 被格式化成一段文本</td></tr>
+    <tr><td><code>cancelled</code>/<code>truncated</code></td><td>丢失的信息:融合进文本描述里,不再是独立字段</td></tr>
+  </tbody>
+</table>
+<p>
+  其他自定义消息(CompactionSummary、BranchSummary)转换模式完全一样——把摘要文本用
+  <code>&lt;summary&gt;</code> 标签包裹,前面加一句说明,变成 UserMessage 的 content。
+</p>
+<cite>🔎 出处:教程 §五「转换规则」表格 / §五「具体例子:BashExecutionMessage 的转换」
+(<code>packages/coding-agent/src/core/messages.ts:82-195</code>)。</cite>
+
+<h2>4 · 为什么分两步,而不是一步到位?</h2>
+<p>
+  回到管道图,有一个设计细节值得追问:<strong>transformContext 和 convertToLlm 为什么分开写?</strong>
+</p>
+<ul>
+  <li><code>transformContext</code> 处理的是 <strong>AgentMessage 级别的操作</strong>:裁剪太旧的消息、
+    注入外部上下文、触发压缩算法。处理前后都是 <code>AgentMessage[]</code>,类型不变。</li>
+  <li><code>convertToLlm</code> 处理的是 <strong>跨类型翻译</strong>:把 AgentMessage 翻译成 Message。
+    处理前是 <code>AgentMessage[]</code>,处理后是 <code>Message[]</code>,类型变了。</li>
+</ul>
+<div class="tradeoff">
+  🔑 <b>分开的好处:你可以只替换其中一个,互不影响。</b>
+  换了<strong>上下文管理策略</strong>(比如从「删最旧消息」改成「压缩成摘要」),只需要改
+  <code>transformContext</code>——<code>convertToLlm</code> 不需要动。
+  换了<strong>应用类型</strong>(比如把 coding-agent 改造成 Web 客服 Agent,自定义消息从
+  <code>BashExecution</code>/<code>CompactionSummary</code> 变成 <code>TicketEvent</code>/<code>OrderNote</code>
+  这类业务消息),只需要改 <code>convertToLlm</code>——<code>transformContext</code> 不需要动。
+</div>
+<div class="why">
+  <b>那换 LLM 提供商(Claude → GPT)呢?convertToLlm 也不需要动。</b>
+  因为 <code>convertToLlm</code> 的输出已经是统一的 <code>Message[]</code>(3 种标准消息)——
+  「自定义消息 → 标准消息」这件事已经做完了。再往下,<strong>把 Message 翻译成各家 Provider 的私有格式</strong>
+  是 pi-ai 层(第 4 章讲过)的工作,那一层有自己的翻译器(anthropic-messages、openai-completions 等),
+  跟 convertToLlm 是完全独立的两层。<em>Pi 把「消息类型翻译」和「Provider 协议翻译」放在了两层不同的抽象里,
+  互不干扰。</em>
+</div>
+
+<h2>5 · 过滤机制:excludeFromContext 的可见性控制</h2>
+<p>
+  到目前为止,所有自定义消息最终都变成了 UserMessage 被 LLM 看到。但有些情况下,消息应该只给 UI 看、
+  不给 LLM 看——比如 Pi 的 Bash 工具有个功能:用 <code>!!</code> 前缀执行命令时(比如 <code>!!secret_cmd</code>),
+  这条命令的执行结果对 LLM 不可见。
+</p>
+<p>实现方式非常简单——BashExecutionMessage 有一个 <code>excludeFromContext</code> 字段,在 convertToLlm 里检查它:</p>
+<pre><span class="ln">1</span><span class="key">case</span> <span class="str">"bashExecution"</span>:
+<span class="ln">2</span>    <span class="key">if</span> (m.excludeFromContext) {
+<span class="ln">3</span>        <span class="key">return</span> <span class="key">undefined</span>;   <span class="cm">// 直接返回 undefined,后续被 filter 掉</span>
+<span class="ln">4</span>    }
+<span class="ln">5</span>    <span class="cm">// ... 否则正常转换</span>
+</pre>
+<cite>🔎 出处:教程 §七 excludeFromContext 段落(<code>packages/coding-agent/src/core/messages.ts:38-39</code>)。</cite>
+<div class="why">
+  <b>注意:</b> <code>excludeFromContext = true</code> 的消息<strong>仍然存在于 <code>context.messages</code> 中</strong>。
+  UI 仍然可以看到它、渲染它。只是在调用 LLM 的那一刻,这条消息被「隐身」了——
+  这就是「UI 能看、LLM 不能看」的机制:一个布尔字段,在翻译边界做过滤,<strong>数据本身不需要删除</strong>。
+</div>
+
+<h2>6 · 三种消息可见性级别</h2>
+<p>综合以上分析,Pi 的消息系统其实有三种可见性级别:</p>
+<table class="bd">
+  <thead><tr><th>可见性级别</th><th>LLM 是否看到</th><th>UI 是否看到</th><th>实现方式</th><th>典型消息</th></tr></thead>
+  <tbody>
+    <tr><td>全可见</td><td>是</td><td>是</td><td>convertToLlm 正常转换</td><td>普通的 BashExecution、User、Assistant</td></tr>
+    <tr><td>LLM 不可见</td><td>否</td><td>是</td><td><code>excludeFromContext = true</code></td><td><code>!!</code> 前缀的 Bash 执行</td></tr>
+    <tr><td>仅持久化</td><td>否</td><td>否</td><td>UI 渲染时跳过,convertToLlm 也过滤掉</td><td>Web UI 的 ArtifactMessage</td></tr>
+  </tbody>
+</table>
+<p>
+  第三级「仅持久化」和第二级不是同一回事:第二级是「翻译边界隐身」,第三级是<strong>两端都刻意跳过</strong>——
+  数据仍在,但既不进 UI 渲染逻辑,也不进 convertToLlm 的转换分支。
+</p>
+
+<h2>7 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="0">
+    <p class="stem">① convertToLlm 处理 bashExecution、custom、branchSummary、compactionSummary 这些自定义消息时,把它们统一转换成哪种角色的消息?</p>
+    <button class="opt">user 角色的 UserMessage</button>
+    <button class="opt">toolResult 角色,当成工具结果处理</button>
+    <button class="opt">assistant 角色,当成 AI 的补充说明</button>
+    <button class="opt">保留各自原来的 role,不改角色</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② 把 coding-agent 底层的 LLM 从 Claude 换成 GPT,需要改 convertToLlm 吗?</p>
+    <button class="opt">需要,因为 GPT 的消息格式和 Claude 不同</button>
+    <button class="opt">需要,换 Provider 必须重写整条转换管道</button>
+    <button class="opt">不需要,convertToLlm 只输出统一的 Message[],把 Message 翻成各家私有格式是 pi-ai 层的独立工作</button>
+    <button class="opt">不需要,因为 convertToLlm 会自动识别 Provider 类型</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="3">
+    <p class="stem">③ 用 !! 前缀执行命令后,那条 BashExecutionMessage 会怎样?</p>
+    <button class="opt">被彻底从 context.messages 删除,UI 和 LLM 都看不到</button>
+    <button class="opt">转换成 UserMessage 正常发给 LLM,只是 UI 不渲染</button>
+    <button class="opt">被存进单独的 session 文件,当前会话完全不加载</button>
+    <button class="opt">仍留在 context.messages(UI 照常渲染),但 convertToLlm 里返回 undefined 被过滤,LLM 看不到</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>transformContext 具体会做哪些「裁剪/注入/压缩」操作?</em>」
+  「<em>branchSummary、compactionSummary 加的 XML 标签具体长什么样?</em>」
+  「<em>既然翻译是「有损、单向」的,LLM 看到的历史和 UI 看到的历史会不会「对不上」?这会不会有问题?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>8 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第6章-消息系统-Agent的记忆如何组织与传递.md">第 6 章 · 消息系统——Agent的记忆如何组织与传递</a>——
+  原文 §八 还总结了「两个读者,两层架构」这条贯穿全章的主线,值得回头通读一遍串联全局。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0021):</strong> 我们要问一个更底层的问题——
+  为什么 Agent Loop 需要「事件」而不是直接返回结果?<code>events</code> 和「同步屏障(sync barrier)」
+  之间是什么关系?这会把我们带到 Agent 如何对外广播「发生了什么」的机制。
+</p>
+
+<footer>
+  Lesson 0020 · 第 6 章 消息系统 ·
+  下一课:<a href="./0021-why-events-and-sync-barrier.html">0021 为什么需要事件与同步屏障 →</a> ·
+  上一课:<a href="./0019-agent-message-two-layers.html">0019 AgentMessage 两层结构</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。都变成 user。延伸:因为 LLM 要求 user→assistant 交替、不能连续 assistant,而自定义消息本质是"系统注入的信息",放 user 最安全。',
+               '✓ 对。"消息类型翻译"(convertToLlm)和"Provider 协议翻译"(pi-ai 层)是两层独立抽象。延伸:换应用类型才需要改 convertToLlm,换上下文策略才改 transformContext。',
+               '✓ 对。excludeFromContext=true 只在翻译边界过滤,数据不删除——这就是"UI 能看、LLM 不能看"。延伸:再进一步"UI 也不看"就是第三级可见性"仅持久化"(如 Web UI 的 ArtifactMessage)。'];
+  var msgNo = ['看 §五 的转换规则表格最后四行,以及"关键洞察"那句话——它点明了所有自定义消息最终落到哪个角色。',
+               '回到 §六 那段专门强调"换 LLM 提供商 convertToLlm 不需要动"的解释——注意 Message→私有格式这一步是哪一层负责的。',
+               '看 §七 excludeFromContext 那段的关键提醒——它特意强调这条消息"仍然存在于 context.messages 中",区分"过滤"和"删除"。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

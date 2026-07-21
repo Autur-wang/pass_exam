@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0014 · QLoRA 与 Adapter / Prefix / P-Tuning</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第四部分 微调 PEFT · 第 0014 课</p>
+<h1>QLoRA 与 Adapter / Prefix / P-Tuning</h1>
+<p class="lede">上一课的 LoRA 已经把「可训练参数」砍到很小,但那张<strong>冻结的 16-bit 基座</strong>还是稳稳占着显存的大头。QLoRA 的一招就是把这块也压掉——4-bit 量化基座 + 在其上训 LoRA,于是单卡微调大模型成为可能。这节课把 QLoRA 讲透,再横向串起 Adapter / Prefix-Tuning / P-Tuning 这几条并列的 PEFT 路线。面试里它们几乎必然被摆在一起对比:<em>改哪里、加不加结构、参数量、推理有没有额外开销。</em></p>
+
+<div class="recall">
+<p>上节课(LoRA)的核心:冻结预训练权重 $W$,在旁边挂一条低秩旁路 $BA$,前向变成 $h=Wx+BAx=(W+BA)x$,训练时只更新 $A$、$B$,推理时把 $BA$ 合并回 $W$、<strong>零额外开销</strong>。<strong>先别往下看:LoRA 已经不训练 $W$ 了,可为什么显存还是下不去?那块显存到底花在哪?</strong></p>
+</div>
+
+<h2>一、QLoRA:把冻结的基座也压到 4-bit</h2>
+
+<h3>先想清楚:LoRA 省了什么、没省什么</h3>
+<p>微调时的显存大致分四块:<strong>基座权重</strong>、<strong>梯度</strong>、<strong>优化器状态</strong>(如 AdamW 的一阶、二阶动量,通常是参数量的好几倍)、<strong>激活值</strong>。LoRA 让可训练参数骤减,于是<em>梯度和优化器状态</em>几乎清零——这是它省显存的主战场。但那张冻结基座仍然以 16-bit 原封不动地躺在显存里,而它恰恰是最大的一块。</p>
+<p>QLoRA 的思路顺理成章:既然基座只用来做前向(不更新),那就没必要用 16-bit 存它——<strong>压成 4-bit</strong>,用的时候临时反量化算一算就行。基座这块显存直接缩到约四分之一,腾出的空间足以把上百亿参数的模型塞进单张 GPU。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">16-bit 基座 $W$</div>
+  <div class="node">NF4 量化<br>(冻结,只存不训)</div>
+  <div class="node">前向时反量化<br>→ BF16 临时权重</div>
+  <div class="node">$Wx$ 主干输出</div>
+  <div class="node good">$+\;\frac{\alpha}{r}BAx$<br>LoRA 旁路(可训练)</div>
+</div>
+<figcaption>基座以 4-bit 静躺显存,梯度只回流到 BF16 的 LoRA 参数 $A,B$;量化的 $W$ 全程不更新。</figcaption>
+</figure>
+
+<p>把这条前向写成一行,和 LoRA 只差一个「反量化」:</p>
+$$h=\operatorname{dequant}(W_{\text{NF4}})\,x+\frac{\alpha}{r}\,BA\,x$$
+<p class="formula-note">$\operatorname{dequant}$ 把 4-bit 权重临时还原成计算精度(如 BF16),用完即弃;$\alpha/r$ 是 LoRA 的缩放系数。梯度只流进 $A,B$。</p>
+
+<h3>QLoRA 的三件套(一句话各记住)</h3>
+<ul>
+<li><strong>NF4(4-bit NormalFloat)</strong>:一种为「近似正态分布」的权重量身定制的 4-bit 数据类型。神经网络权重大多零均值、近正态,NF4 用分位数把 16 个可用量化格点分配到概率密度高的区间,信息利用率比普通 INT4 更高,量化误差更小。</li>
+<li><strong>双重量化(Double Quantization)</strong>:分块量化会为每个块存一个缩放常数(absmax),这些常数本身也占空间;双重量化把<em>这些量化常数再量化一次</em>,进一步省下少量显存。是「省上加省」的边角料优化。</li>
+<li><strong>分页优化器(Paged Optimizers)</strong>:借助 NVIDIA 统一内存,在显存突然吃紧(如长序列 + 梯度检查点触发的峰值)时,把优化器状态自动「换页」到 CPU 内存,峰值过去再换回——本质就是操作系统里的<em>虚拟内存分页</em>搬到了 GPU,专治偶发 OOM。</li>
+</ul>
+<p>关键要说清:量化的是<strong>冻结基座</strong>,LoRA 适配器仍以较高精度(BF16)训练。所以 QLoRA 是把「4-bit 冻结 + 高精度低秩微调」缝在一起,而不是把整个模型都拿去做 4-bit 训练。</p>
+
+<h2>二、另外三条并列路线:Adapter / Prefix / P-Tuning</h2>
+<p>LoRA/QLoRA 属于「往权重旁边加低秩旁路」这一派。历史上更早的 PEFT 还有另外几条思路,面试常拿来和 LoRA 对照,核心区别是<strong>把可训练参数塞在哪</strong>。</p>
+
+<div class="trio">
+  <div class="cell"><strong>Adapter</strong><br>在层<em>之间</em>插模块<br><em>动了网络结构</em></div>
+  <div class="cell"><strong>Prefix-Tuning</strong><br>每层 K/V 前接虚拟 token<br><em>动了每层输入</em></div>
+  <div class="cell"><strong>P-Tuning</strong><br>输入处的连续 prompt 嵌入<br><em>动了提示,不动权重</em></div>
+</div>
+
+<h3>Adapter Tuning:层间插入小瓶颈模块</h3>
+<p>在 Transformer 每个子层后面塞进一个小小的<strong>瓶颈模块</strong>:先降维、过一个非线性、再升维,外加一条残差连接。训练时冻结原模型全部参数,只更新这些新增的 Adapter。用源材料的说法:固定 $W_0$ 不变,把可训练的适配器附加上去、只训适配器。</p>
+<p>代价很明确:这些模块是<strong>串行插入</strong>网络主干的新层,推理时必须逐个跑过去,无法像 LoRA 那样把增量合并回原权重——因此会带来实打实的额外前向延迟。这正是后来 LoRA 主打「无额外推理延迟」的动机来源。</p>
+
+<h3>Prefix-Tuning:每层前缀加可训练虚拟 token</h3>
+<p>不动任何权重,而是在<strong>每一层</strong>真实序列表征的前面,插入若干个连续的可训练「virtual token」向量作为前缀(prefix)。它们不必是词表里的真实词,只是一组自由参数。注意源材料强调的细节:这些前缀加在<em>每一层</em>,且每层的前缀不是上一层传下来的,而是各自独立的可训练 embedding。</p>
+<p>对自回归模型,拼成 $z=[\text{PREFIX};x;y]$;对 Encoder-Decoder,两端都加前缀。训练时只更新前缀,Transformer 原参数固定。直觉上,这相当于用一小段「可学习的开场白」去引导冻结的大模型进入某个任务状态。</p>
+
+<h3>P-Tuning v1 / v2:连续提示嵌入</h3>
+<p><strong>P-Tuning(v1)</strong>与 Prefix-Tuning 同源于「把离散的人工模板换成<em>连续、可训练</em>的提示向量」这一思想:在输入侧引入一组连续 prompt 嵌入(常配一个小的 prompt 编码器来生成),只训这部分,基座冻结,主要面向理解类(NLU)任务。它和纯人工写 prompt 的区别是——提示不再是词表里的词,而是可以梯度优化的向量。</p>
+<p><strong>P-Tuning v2</strong>是改进版,借鉴 Prefix-Tuning 的做法,<strong>在每一层都加入可训练的连续前缀</strong>,而不只在输入层加一层。多层深度提示带来了更强的容量,使它在不同规模、不同任务上都能逼近全量微调的水平。一句话记住二者之别:<em>v1 主要在输入层加提示,v2 每层都加。</em></p>
+
+<h2>三、横向对比表(面试默写版)</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>方法</th><th>改哪里</th><th>是否改网络结构</th><th>可训练参数量级</th><th>推理额外开销</th></tr>
+</thead>
+<tbody>
+<tr><td>全参微调 FT</td><td>全部权重</td><td>否</td><td>全部(最大)</td><td>无(但要另存一整份模型)</td></tr>
+<tr><td>LoRA</td><td>线性层旁挂低秩 $BA$</td><td>否(可合并)</td><td>低(取决于秩 $r$)</td><td>合并后≈零</td></tr>
+<tr><td>QLoRA</td><td>4-bit 冻结基座 + LoRA</td><td>否</td><td>低(同 LoRA)</td><td>训练期有反量化开销;推理可合并或留小旁路</td></tr>
+<tr><td>Adapter</td><td>层间插瓶颈模块</td><td><strong>是</strong>(串行新层)</td><td>低~中</td><td>有,不可合并</td></tr>
+<tr><td>Prefix-Tuning</td><td>每层 K/V 前缀虚拟 token</td><td>否(改每层输入)</td><td>低</td><td>占用序列位,略增</td></tr>
+<tr><td>P-Tuning v1</td><td>输入层连续 prompt 嵌入</td><td>否</td><td>很低</td><td>占少量序列位</td></tr>
+<tr><td>P-Tuning v2</td><td>每层连续前缀(≈用于 NLU 的 Prefix)</td><td>否</td><td>低</td><td>类似 Prefix</td></tr>
+</tbody>
+</table>
+</div>
+<p class="formula-note">记忆抓手:LoRA/QLoRA「加旁路可合并」、Adapter「加串行层不可合并」、Prefix/P-Tuning「加提示不碰权重」。QLoRA 相对 LoRA 的差异只在于「基座被 4-bit 量化了」。</p>
+
+<h2>四、关键定义</h2>
+<dl class="keydef">
+<dt>QLoRA</dt>
+<dd>把基座量化到 4-bit(NF4)并冻结,在其上以较高精度训练 LoRA 适配器的微调方法,再配双重量化与分页优化器进一步压显存与防 OOM。前向 $h=\operatorname{dequant}(W_{\text{NF4}})x+\frac{\alpha}{r}BAx$。</dd>
+<dt>NF4(4-bit NormalFloat)</dt>
+<dd>针对近似正态分布权重设计的 4-bit 量化数据类型,用分位数把量化格点集中到高概率区间,量化误差通常小于同位宽的普通整型量化。</dd>
+<dt>Adapter</dt>
+<dd>插在 Transformer 子层之间的小瓶颈模块(降维→非线性→升维 + 残差),只训该模块。因串行于主干,推理有额外延迟。</dd>
+<dt>连续提示 / 虚拟 token</dt>
+<dd>不属于词表、不对应任何真实词的可训练向量,作为「软提示」引导冻结模型;Prefix-Tuning 与 P-Tuning 系列都建立在它之上。</dd>
+</dl>
+
+<h2>五、代码:一份最小 QLoRA 配置</h2>
+<p>工程上 QLoRA 常用 <code>transformers</code> + <code>bitsandbytes</code> + <code>peft</code> 三件套拼出来:</p>
+<pre><code>from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+import torch
+
+# 1) 4-bit NF4 量化基座 + 双重量化,计算时反量化到 bf16
+bnb = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",           # NF4
+    bnb_4bit_use_double_quant=True,      # 双重量化
+    bnb_4bit_compute_dtype=torch.bfloat16,
+)
+model = AutoModelForCausalLM.from_pretrained("&lt;base-model&gt;", quantization_config=bnb)
+model = prepare_model_for_kbit_training(model)  # 让量化基座能配合梯度检查点等
+
+# 2) 在量化基座上挂 LoRA,只有这部分是 bf16 可训练参数
+lora = LoraConfig(r=16, lora_alpha=32, lora_dropout=0.05,
+                  target_modules=["q_proj", "v_proj"], task_type="CAUSAL_LM")
+model = get_peft_model(model, lora)
+model.print_trainable_parameters()      # 可训练参数只占很小比例
+# 训练时优化器可选 "paged_adamw_8bit"(分页优化器)</code></pre>
+
+<div class="implement">
+<p>换个角度,看一次线性层前向在 QLoRA 里到底发生了什么(概念示意,非真实内核):</p>
+<pre><code>def qlora_linear(x, W_nf4, absmax, A, B, alpha, r):
+    W = dequantize_nf4(W_nf4, absmax)       # 4-bit → bf16,临时权重,用完即弃
+    base = x @ W.T                          # 冻结主干,W 不更新
+    delta = (x @ A.T) @ B.T * (alpha / r)   # LoRA 旁路,只有 A、B 有梯度
+    return base + delta
+# 反向传播时,梯度进不了 W(它只是被反量化的常量),只更新 A、B</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「QLoRA 相对 LoRA 到底省在哪?」——省的是<strong>冻结基座本身</strong>的显存(4-bit 存 vs 16-bit 存);LoRA 省的是梯度/优化器状态,两者省的不是同一块。</li>
+<li>「QLoRA 的代价是什么?」——① 4-bit 量化带来精度损失(NF4 + LoRA 能挽回大部分质量,但不是无损);② 每次前向要反量化,单步训练通常比 BF16 的 LoRA 慢。拿显存换速度与一点精度。</li>
+<li>「NF4 / 双重量化 / 分页优化器各解决什么?」——见三件套:NF4 提高量化信息利用率、双重量化再省常数的显存、分页优化器防峰值 OOM。</li>
+<li>「Adapter 和 LoRA 的本质区别?」——Adapter 串行插层、推理有延迟且不可合并;LoRA 是并行旁路、可合并回权重、推理零额外开销。</li>
+<li>「Prefix-Tuning 和 P-Tuning v2 什么关系?」——v2 本质是把 Prefix-Tuning 的「每层加连续前缀」用到了理解类任务上;v1 主要在输入层加提示,v2 每层都加。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别说「QLoRA 是把整个模型做 4-bit 训练」——量化的只是<strong>冻结基座</strong>,LoRA 适配器仍是较高精度且可训练。</li>
+<li>别把 QLoRA 省的显存说成「优化器状态」——那是 LoRA 就已经省掉的;QLoRA 额外拿下的是<strong>基座权重</strong>那块。</li>
+<li>QLoRA 主要是<em>训练期</em>省显存的技术。想推理零开销就得把适配器合并进 16-bit 权重,那样又会失去 4-bit 的显存优势;二者需要权衡,不是「既省显存又零开销」。</li>
+<li>别把 Adapter 说成「像 LoRA 一样可合并」——它是串行新模块,合不掉,推理有延迟。</li>
+<li>源材料里「P-Tuning 对整个模型参数进行微调」的说法要当心:P-Tuning 系列同样只训练少量提示/前缀参数、基座冻结,这才是它归入 PEFT 的原因。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>相比普通 LoRA,QLoRA 主要多省下了哪一块显存?</p>
+<details><summary>A. 优化器状态(AdamW 的一阶、二阶动量)</summary>那正是 LoRA 靠「可训练参数极少」已经省掉的部分,不是 QLoRA 的增量贡献。</details>
+<details><summary>B. 激活值显存</summary>激活值主要靠梯度检查点等手段处理,不是 QLoRA 量化基座直接针对的对象。</details>
+<details><summary>C. 冻结基座权重本身的显存(4-bit 存 vs 16-bit 存) ✅</summary>正确。LoRA 没动那张 16-bit 冻结基座,而它是显存大头;QLoRA 把它压到 4-bit,基座这块显存缩到约四分之一。</details>
+<details><summary>D. 推理时的 KV Cache</summary>KV Cache 是推理阶段的缓存,和 QLoRA 的训练期量化不是一回事。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>下列哪种 PEFT 方法因为在层间<strong>串行插入新模块</strong>,即使训练完也会带来额外推理延迟、无法像 LoRA 那样合并进原权重?</p>
+<details><summary>A. LoRA</summary>恰恰相反:LoRA 是并行旁路,可把 $BA$ 合并回 $W$,推理零额外开销。</details>
+<details><summary>B. Adapter Tuning ✅</summary>正确。Adapter 是插在子层之间的串行瓶颈模块,推理必须逐个跑过、合并不掉,这也是 LoRA 主打「无额外推理延迟」的动机。</details>
+<details><summary>C. P-Tuning v2</summary>它在每层加连续前缀,不往主干里插串行的新权重层。</details>
+<details><summary>D. QLoRA</summary>QLoRA 的适配器同样是 LoRA 式旁路,可合并;它的开销主要在训练期的反量化。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>QLoRA: Efficient Finetuning of Quantized LLMs</strong>(Dettmers, Pagnoni, Holtzman, Zettlemoyer, 2023)——NF4、双重量化、分页优化器的原始来源;论文的标志性演示是在单张 48GB GPU 上微调 65B 量级模型。</li>
+<li><strong>LoRA: Low-Rank Adaptation of Large Language Models</strong>(Hu et al., 2021)——QLoRA 的适配器基础,详见第 0013 课。</li>
+<li><strong>Parameter-Efficient Transfer Learning for NLP</strong>(Houlsby et al., 2019)——Adapter Tuning 原论文。</li>
+<li><strong>Prefix-Tuning: Optimizing Continuous Prompts for Generation</strong>(Li &amp; Liang, 2021);<strong>GPT Understands, Too</strong>(Liu et al., 2021,P-Tuning);<strong>P-Tuning v2</strong>(Liu et al., 2021/2022)。</li>
+<li>想弄清 4-bit 量化的更底层机理,可回溯 <strong>LLM.int8()</strong>(Dettmers et al., 2022)这条量化脉络;下一步:微调离不开数据,见第 0015 课 SFT 数据构造。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>QLoRA = 4-bit(NF4)冻结基座 + 其上训 LoRA,省的是「基座权重」那块显存,代价是精度与速度;Adapter 串行插层、Prefix/P-Tuning 加连续提示,区别就看「改哪里、改不改结构、推理有没有额外开销」。</strong></p>
+<nav class="lesson-nav">
+<a href="0013-lora.html">← 上一课:LoRA 低秩适配</a>
+<a href="0015-sft-data.html">下一课:SFT 数据构造 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

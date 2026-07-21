@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0010 · 两种干预:steering vs followUp 与 Turn 钩子</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 3 章 · Agent Loop ›
+  <a href="./0009-kernel-onion-and-streaming-replace.html">上一课</a> ›
+  <strong>Lesson 0010</strong>
+</div>
+
+<p class="kicker">Lesson 0010 · 第 3 章 Agent Loop</p>
+<h1>两种干预:<br>steering vs followUp 与 Turn 钩子</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们剥完了「内核 + 叠加」的洋葱图,知道内核只有十几行,
+  叠加是产品功能。这节课把两块最容易混淆的叠加拆清楚:<strong>steering</strong> 和
+  <strong>followUp</strong> 这两种「外部消息注入」机制到底谁管什么、什么时候被检查,
+  以及 turn_end 之后挂的两个扩展钩子 <code>prepareNextTurn</code> 与 <code>shouldStopAfterTurn</code>
+  各自解决什么问题。
+</div>
+
+<div class="recall">
+  ⏮️ <b>回忆上一课:</b> 洋葱图从里到外是——最内核的最简 Loop(~10 行通用法则),
+  外层依次叠加 steering(紧急插队)、followUp(任务追加)、钩子(切模型/安全阀)。
+  剥掉任何一层,里层仍能跑。这节课就是把外面这几层挨个打开看。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 给定一个「用户中途插话」或「系统想追加任务」的场景,
+  你能立刻判断该走 <span class="sys-pill">steering</span> 还是 <span class="sys-pill">followUp</span>,
+  并说清 <code>prepareNextTurn</code> 和 <code>shouldStopAfterTurn</code> 各自的职责边界。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:开会递纸条 vs 翻信箱</b>
+  steering 是你正在开会,有人敲门递张纸条说"紧急,先看这个"——它在会议进行的间隙插队;
+  followUp 是开完会翻信箱,"不急,但需要处理"——等当前任务全部完成后才叫号。
+  而 prepareNextTurn 像每讲完一段就问一句"下一段要不要换个更资深的人来讲",
+  shouldStopAfterTurn 像会议室的安全阀"时间/空间快满了,该收尾了"。
+</div>
+
+<h2>1 · steering(叠加1):紧急插队,在工具执行间隙生效</h2>
+<p>
+  想象你让 Agent 帮你修一个 bug,Agent 正在读文件、分析代码。这时候你突然想到一个补充:
+  "也检查一下测试文件"——你希望这条指令能<strong>插队</strong>,而不是等 Agent 把当前任务做完再说。
+  这就是 steering:用户在 Agent 工作期间输入的新指令,会被放进 steering 队列。
+</p>
+<p>
+  它的检查时机不是一处,而是<strong>两处</strong>——runLoop 一进来的首次检查,
+  以及内层循环<strong>每圈结尾</strong>的二次检查:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// ① 首次 steering 检查(在进入内层循环之前!)</span>
+<span class="ln">2</span><span class="key">let</span> pendingMessages = (<span class="key">await</span> config.getSteeringMessages?.()) || [];
+<span class="ln">3</span>
+<span class="ln">4</span><span class="cm">// … 内层循环开头:把紧急消息注入到上下文</span>
+<span class="ln">5</span><span class="key">if</span> (pendingMessages.length &gt; 0) {
+<span class="ln">6</span>    <span class="key">for</span> (<span class="key">const</span> message <span class="key">of</span> pendingMessages) {
+<span class="ln">7</span>        <span class="key">await</span> emit({ type: <span class="str">"message_start"</span>, message });
+<span class="ln">8</span>        <span class="key">await</span> emit({ type: <span class="str">"message_end"</span>, message });
+<span class="ln">9</span>        currentContext.messages.<span class="fn">push</span>(message);
+<span class="ln">10</span>        newMessages.<span class="fn">push</span>(message);
+<span class="ln">11</span>    }
+<span class="ln">12</span>    pendingMessages = [];  <span class="cm">// 消费完毕,清空</span>
+<span class="ln">13</span>}
+</pre>
+<div class="why">
+  <b>为什么首次 steering 检查放在进入内层循环之前?</b>
+  用户在等待 LLM 首次响应时可能又输入了内容——这时候消息已经从外部排队了,但循环还没开始,
+  如果不提前取出来,<strong>这批消息就漏掉了</strong>。所以 <code>pendingMessages</code>
+  的初始化不是空数组,而是先问一遍 <code>getSteeringMessages</code>。
+</div>
+<cite>🔎 出处:教程 §4.3 / agent-loop.ts:167 steering 首次检查(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第3章-Agent-Loop-让模型转动起来的引擎.md</code>)。代码为教程示意,基于 pi <code>v0.80.2</code>。</cite>
+
+<h2>2 · turn_end 收尾四步:钩子在哪里插进来</h2>
+<p>
+  一个 Turn 的核心工作(调模型 + 执行工具)做完后,收尾分四步——前两步是内核,
+  后两步是 coding-agent 叠加的<strong>扩展点</strong>:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// ① emit turn_end —— 通知外部"这一轮结束了"(内核)</span>
+<span class="ln">2</span><span class="key">await</span> emit({ type: <span class="str">"turn_end"</span>, message, toolResults });
+<span class="ln">3</span>
+<span class="cm"><span class="ln">4</span>// ② prepareNextTurn —— 给外部一个机会"改装"下一轮(叠加)</span>
+<span class="cm"><span class="ln">5</span>// 返回值可包含 context / model / thinkingLevel 三者之一的覆盖</span>
+<span class="ln">6</span><span class="key">const</span> nextTurnSnapshot = <span class="key">await</span> config.prepareNextTurn?.({...});
+<span class="ln">7</span><span class="key">if</span> (nextTurnSnapshot) {
+<span class="ln">8</span>    currentContext = nextTurnSnapshot.context ?? currentContext;
+<span class="ln">9</span>    config.model = nextTurnSnapshot.model ?? config.model;
+<span class="ln">10</span>}
+<span class="ln">11</span>
+<span class="cm"><span class="ln">12</span>// ③ shouldStopAfterTurn —— 外部判断是否该停了(叠加)</span>
+<span class="ln">13</span><span class="key">if</span> (<span class="key">await</span> config.shouldStopAfterTurn?.({...})) {
+<span class="ln">14</span>    <span class="key">await</span> emit({ type: <span class="str">"agent_end"</span>, messages: newMessages });
+<span class="ln">15</span>    <span class="key">return</span>;
+<span class="ln">16</span>}
+<span class="ln">17</span>
+<span class="cm"><span class="ln">18</span>// ④ 再次检查 steering —— 有没有新的紧急消息?(叠加1)</span>
+<span class="ln">19</span>pendingMessages = (<span class="key">await</span> config.getSteeringMessages?.()) || [];
+</pre>
+<p>
+  <code>prepareNextTurn</code> 在每个 <code>turn_end</code> 之后、下一轮开始前被调用,
+  可以覆盖 <code>context</code> / <code>model</code> / <code>thinkingLevel</code> 三者之一。
+  例子:Turn 1 用 Haiku 开始读文件,<code>turn_end</code> 时发现要改的文件很多、任务变复杂了,
+  返回 <code>{model: opus}</code>,下一轮自动切到更强的 Opus。返回 <code>undefined</code>
+  表示"什么都不换,按原配置继续"。
+</p>
+<p>
+  <code>shouldStopAfterTurn</code> 是产品层的"安全阀":外部判断上下文窗口是否快满了
+  (快满就停下来触发压缩),或者是否达到了最大 Turn 数限制。返回 <code>true</code> 就
+  <code>emit agent_end</code> 并 <code>return</code>——最简 Loop 不需要它。
+</p>
+<div class="tradeoff">
+  🔑 <b>为什么把这两个钩子做成函数而不是数据?</b> Loop 在运行时调用它们"拉取"最新状态与决策,
+  把切模型、压缩、限流等产品策略与 Loop 内核彻底解耦——简单 Agent 不传这些钩子即可,
+  内核完全不受影响。这正是上一课「洋葱图」的落地:剥掉这层叠加,里层照样能跑。
+</div>
+<cite>🔎 出处:教程 §4.7 / agent-loop.ts:218-253 turn_end+钩子(同上文件)。代码为教程示意,基于 pi <code>v0.80.2</code>。</cite>
+
+<h2>3 · followUp(叠加2):内层结束后才检查,靠外层循环续命</h2>
+<p>
+  内层循环退出了——没有工具要执行,也没有紧急消息。但 coding-agent 的设计是:
+  此时检查一下 <code>getFollowUpMessages()</code>,看看系统有没有追加任务
+  (比如"顺便跑个测试"):
+</p>
+<pre><span class="cm"><span class="ln">1</span>const followUpMessages = (<span class="key">await</span> config.getFollowUpMessages?.()) || [];</span>
+<span class="ln">2</span><span class="key">if</span> (followUpMessages.length &gt; 0) {
+<span class="ln">3</span>    pendingMessages = followUpMessages;   <span class="cm">// 塞进 pending,触发新 Turn</span>
+<span class="ln">4</span>    <span class="key">continue</span>;                              <span class="cm">// 回到外层循环顶部</span>
+<span class="ln">5</span>}
+<span class="ln">6</span><span class="key">break</span>;  <span class="cm">// 两个队列都空了,真正退出</span>
+</pre>
+<p>
+  如果有 followUp 消息,它们被塞进 <code>pendingMessages</code>,<code>continue</code>
+  回到外层循环顶部,内层循环检测到 <code>pendingMessages</code> 不为空,
+  <strong>在同一个 Trace 内</strong>继续跑。
+</p>
+<div class="why">
+  <b>为什么用外层循环续命,而不是重启新的 <code>runAgentLoop()</code>?</b>
+  连续性——复用同一个 <code>newMessages</code> 数组和同一条事件序列,
+  在同一个 Trace 内继续,不需要额外合并两次运行的结果。如果重启一个全新的 Loop,
+  就得自己把两段独立的消息历史、事件流拼接起来,这正是"续命"比"重启"更省心的地方。
+</div>
+<cite>🔎 出处:教程 §4.9 / 外层 followUp 循环(同上文件)。代码为教程示意,基于 pi <code>v0.80.2</code>。</cite>
+
+<h2>4 · 一张表看清两种干预</h2>
+<p>本章出现了两种"外部消息注入"机制,放在一起对比才能看清差异:</p>
+<table class="bd">
+  <thead><tr><th>维度</th><th>steering(叠加1)</th><th>followUp(叠加2)</th></tr></thead>
+  <tbody>
+    <tr><td>检查时机</td><td>runLoop 开始前 + 内层循环<strong>每圈</strong>结尾</td><td>内层循环<strong>全部结束</strong>后</td></tr>
+    <tr><td>语义</td><td>"紧急插队"——在工具执行间隙中插入</td><td>"排队等叫号"——等当前任务全部完成</td></tr>
+    <tr><td>典型场景</td><td>用户在 Agent 工作时输入了新指令</td><td>系统在 Agent 完成后追加"顺便跑个测试"</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么检查时机差这么多?</b> 两者语义不同——steering 是"紧急插队",必须尽快在工具执行间隙生效;
+  followUp 是"排队等叫号",不急、要等当前任务干净收尾。时机差异直接对应语义差异,
+  这不是随意的工程选择,而是需求本身决定了它该被安插在哪个位置。
+</div>
+<cite>🔎 出处:教程 §4.10 steering vs followUp 对比表(同上文件)。</cite>
+
+<div class="diagram">两种干预 vs 两个钩子 —— 谁管什么、什么时候触发
+
+  runLoop 开始前 ─── ① 首次 steering 检查(取一次)
+        │
+        ▼
+  ┌─ 内层循环(每圈)───────────────────────────┐
+  │ 注入 pendingMessages ← steering 消息        │
+  │ 调 LLM → 执行工具 → emit turn_end           │
+  │ prepareNextTurn?  → 换 model/context        │
+  │ shouldStopAfterTurn? → true 则 emit+return  │
+  │ 再次检查 steering ← 每圈结尾都检查            │
+  └───────────────┬───────────────────────────┘
+                  ▼ (内层全部结束,才走到这一步)
+        检查 getFollowUpMessages()
+                  │
+        有 ──────►│──────► 塞进 pendingMessages,continue 回外层顶部(续命)
+                  │
+        无 ──────►└──────► break,真正退出
+</div>
+
+<h2>5 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 用户在 Agent 正读文件、分析代码时突然补了一句"也检查一下测试文件",希望立刻插队。这应该走哪种机制?它在何时被检查?</p>
+    <button class="opt">followUp;在内层循环全部结束后检查</button>
+    <button class="opt">steering;在 runLoop 开始前 + 内层循环每圈结尾检查</button>
+    <button class="opt">prepareNextTurn;在每个 turn_end 之后检查</button>
+    <button class="opt">shouldStopAfterTurn;在每轮结束判断是否该停时检查</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② Turn 1 用便宜的 Haiku 开始,turn_end 时系统发现"要改的文件很多、任务变复杂了",想让下一轮换成更强的 Opus。应该用哪个扩展点?</p>
+    <button class="opt">shouldStopAfterTurn,返回 true</button>
+    <button class="opt">steering,注入一条切换模型的消息</button>
+    <button class="opt">prepareNextTurn,返回 {model: opus}</button>
+    <button class="opt">followUp,追加一个换模型的任务</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">③ 内层循环全部结束、没有工具也没有紧急消息了,但 getFollowUpMessages() 返回了一条"顺便跑个测试"。相比重新启动一个新的 runAgentLoop(),用外层循环续命的主要好处是?</p>
+    <button class="opt">能节省一次网络请求</button>
+    <button class="opt">连续性:复用同一个 newMessages 数组和同一条事件序列,在同一个 Trace 内继续,不需额外合并</button>
+    <button class="opt">能让模型自动升级到更强的模型</button>
+    <button class="opt">可以跳过 stopReason 检查,直接执行工具</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果 steering 消息在内层循环开头刚被清空,紧接着 LLM 又要调用工具,这一圈里
+  steering 和「工具驱动的继续」是怎么共存在同一个 while 条件里的?</em>」
+  「<em>prepareNextTurn 换了 model 之后,下一轮的 llmContext 需要重建吗?为什么?</em>」
+  「<em>shouldStopAfterTurn 返回 true 时,为什么不检查 followUp 就直接 return 了?</em>」——
+  最后这个问题,正好把我们带向<strong>下一课</strong>:内核之上还包了哪一层"统一入口"。
+</div>
+
+<h2>6 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第3章-Agent-Loop-让模型转动起来的引擎.md">第 3 章 · Agent Loop —— 让模型转动起来的引擎</a>——
+  原文 §4.3~§4.10 完整展开了内层循环每一步(A~F)、五种 stopReason 分流,以及本课聚焦的两种叠加,
+  值得对照代码块通读一遍。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0011):</strong> 我们会看"翻译公司统一入口"这个类比——
+  为什么 pi-agent-core 要把 Agent Loop、事件、工具执行都收敛到一个统一入口,
+  而不是让调用方自己拼装这些叠加层?
+</p>
+
+<footer>
+  Lesson 0010 · 第 3 章 Agent Loop ·
+  下一课:<a href="./0011-translation-company-unified-entry.html">0011 翻译公司统一入口 →</a> ·
+  上一课:<a href="./0009-kernel-onion-and-streaming-replace.html">0009 洋葱图与流式替换</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。"紧急插队"是 steering,在开始前和每圈结尾都检查,能在工具执行间隙生效。延伸:对照 followUp 是"排队等叫号",等当前任务全部完成后才处理——像开完会翻信箱。',
+               '✓ 对。prepareNextTurn 在 turn_end 之后、下一轮开始前调用,可覆盖 model/context/thinkingLevel。延伸:返回 undefined 就表示"什么都不换,按原配置继续"。',
+               '✓ 对。外层 continue 回顶部让内层重开,在同一 Trace 内延续同一 newMessages 与事件序列。延伸:这就是为什么 followUp 被称作"续命"而不是"重启"——省去了合并两次独立运行的麻烦。'];
+  var msgNo = ['回看§4.10 对比表:"紧急插队"和"排队等叫号"分别是哪个?再看检查时机——是"每圈结尾"还是"内层全部结束后"?',
+               '回看§4.7:"动态切换下一轮配置"的钩子是哪个?shouldStopAfterTurn 管的是"停不停",不是"换什么"——别选错职责。',
+               '回看§4.9:followUp 是塞进 pendingMessages 后 continue 回外层顶部,还是新起一个 runAgentLoop?好处关键词是"同一个 Trace"的连续性。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

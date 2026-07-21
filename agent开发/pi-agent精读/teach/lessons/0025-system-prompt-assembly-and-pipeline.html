@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0025 · 系统提示词组装与全景管道</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 8 章 · 上下文工程 ›
+  <a href="./0024-context-engineering-overview.html">上一课</a> ›
+  <strong>Lesson 0025</strong>
+</div>
+
+<p class="kicker">Lesson 0025 · 第 8 章 上下文工程</p>
+<h1>系统提示词组装与全景管道<br>—— 上下文工程的「加法」侧</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们建立了「上下文工程是两层防护」的地图——
+  输入侧管窗口不被撑爆,历史侧管长对话不失控。这节课深入输入侧的<strong>加法</strong>问题:
+  怎么让 LLM 自动知道项目约定(比如「这个子项目用 pnpm 不用 npm」),而不用用户每轮重复说。
+  读完你会看到<strong>多层 CLAUDE.md 递归 + XML 包装 + Skills 懒加载</strong>三件事怎么拼成系统提示词,
+  以及它在「一次调用全景漏斗」里的位置。
+</div>
+
+<div class="recall">
+  ↩️ <b>先回忆上一课:</b> 上下文工程分两层防护——输入侧(单条工具输出别太大 / 提示词别太臃肿)
+  和历史侧(长对话要压缩 / 分支切换要摘要)。今天专注输入侧的第二件事:<strong>系统提示词怎么组装</strong>,
+  这是「加法」,和上节课讲的工具输出截断(「减法」)正好相对。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 说清系统提示词组装的三个动作
+  ——<span class="sys-pill">多层 CLAUDE.md 递归合并</span>、<span class="sys-pill">XML 包装</span>、
+  <span class="sys-pill">Skills 懒加载</span>——各自解决什么问题、为什么这样设计,
+  并能把它嵌进「一次调用经过的全景漏斗」里,指出它是漏斗的第几层。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:入职资料袋</b>
+  想象你入职一家跨国公司分公司的一个项目组。桌上摆着一叠文件,从下到上分别是
+  <b>公司总则</b>(全局规范)、<b>部门手册</b>(祖先目录的规范)、<b>项目须知</b>(当前项目最具体的规范)——
+  越往上越具体,遇到冲突以最上面那张为准。文件袋末尾还夹着一张<b>技能目录卡</b>:
+  列了公司有哪些操作手册(Skills),但手册全文不在袋子里,你需要用到时自己去档案室(read 工具)取。
+  这就是「不把整个档案室搬到你桌上,只给你一份目录 + 一条通往档案室的路」。
+</div>
+
+<h2>1 · 多层 CLAUDE.md 递归:从「满」变成「凑齐」</h2>
+<p>
+  Pi 在每个目录下找 <code>AGENTS.md</code> 或 <code>CLAUDE.md</code>(大小写都试),
+  然后从 <code>cwd</code> 向上递归到根目录,<strong>把沿途所有目录的规范文件全部合并</strong>。
+  为什么要向上递归,而不是只读 cwd 这一份?因为现代项目常是 monorepo 嵌套结构——
+  组织级、团队级、项目级规范分散在不同层的目录里,只读 cwd 会漏掉上层的通用约定,
+  向上递归才能凑齐一本完整的「分层规范手册」。完整的查找顺序(<code>loadProjectContextFiles</code>,
+  <code>resource-loader.ts:85-123</code>):
+</p>
+<pre><span class="cm"><span class="ln">1</span>┌──────────────────────────────────────────────────────┐</span>
+<span class="cm"><span class="ln">2</span>│  系统提示词组装顺序                                   │</span>
+<span class="cm"><span class="ln">3</span>├──────────────────────────────────────────────────────┤</span>
+<span class="ln">4</span>│  1. agentDir/CLAUDE.md   ← 全局(用户级)            │
+<span class="ln">5</span>│  2. 祖先目录/CLAUDE.md   ← 从 / 到 cwd 上一层        │
+<span class="ln">6</span>│  3. cwd/CLAUDE.md        ← 当前项目                  │
+<span class="cm"><span class="ln">7</span>└──────────────────────────────────────────────────────┘</span>
+</pre>
+<div class="why">
+  <b>为什么祖先在前、项目在后?</b> 从外到内 = 从通用到具体。后出现的项目规范能覆盖前面的通用规范,
+  符合「细则优先于总则」的直觉——就像入职资料袋,项目须知永远压在最上面,
+  真出现冲突,你听最上面那张的。这让 LLM 读到的是一本<em>有顺序</em>的分层手册,
+  而不是一堆同等权重、互相打架的规则。
+</div>
+<cite>🔎 出处:教程 §四「多级上下文文件」/ <code>loadProjectContextFiles</code>,<code>resource-loader.ts:85-123</code>。</cite>
+
+<h2>2 · XML 包装:给项目指令画一道清晰的边界</h2>
+<p>
+  找到上下文文件后,<code>buildSystemPrompt</code>(<code>system-prompt.ts:154-161</code>)
+  用 <code>&lt;project_instructions path="..."&gt;</code> 包装,外层再套一个 <code>&lt;project_context&gt;</code>:
+</p>
+<pre><span class="ln">1</span>&lt;<span class="sys">project_context</span>&gt;
+<span class="ln">2</span>
+<span class="ln">3</span>Project-specific instructions and guidelines:
+<span class="ln">4</span>
+<span class="ln">5</span>&lt;<span class="sys">project_instructions</span> <span class="key">path</span>=<span class="str">"/myorg/CLAUDE.md"</span>&gt;
+<span class="ln">6</span>全组织规范:所有项目使用 TypeScript strict 模式...
+<span class="ln">7</span>&lt;/<span class="sys">project_instructions</span>&gt;
+<span class="ln">8</span>
+<span class="ln">9</span>&lt;<span class="sys">project_instructions</span> <span class="key">path</span>=<span class="str">"/myorg/teams/teamA/projects/app1/CLAUDE.md"</span>&gt;
+<span class="ln">10</span>本项目使用 pnpm,测试用 vitest...
+<span class="ln">11</span>&lt;/<span class="sys">project_instructions</span>&gt;
+<span class="ln">12</span>
+<span class="ln">13</span>&lt;/<span class="sys">project_context</span>&gt;
+</pre>
+<div class="tradeoff">
+  🔑 <b>为什么用 XML 而不是 Markdown?</b> 两条理由——
+  ① <b>边界明确</b>:<code>&lt;/project_instructions&gt;</code> 是清晰的结束标记,LLM 不会把项目规范
+  和外部指令(比如用户临时插入的话)混淆;② <b>带 path 属性</b>:LLM 看到内容来自哪个文件,
+  就能区分「这是全组织规范」还是「这是本项目规范」,进而判断优先级。
+  这是主流 LLM 都吃得准的标准 prompt 技巧,和体积、解析速度无关。
+</div>
+<cite>🔎 出处:教程 §四「XML 包装」/ <code>buildSystemPrompt</code>,<code>system-prompt.ts:154-161</code>。</cite>
+
+<h2>3 · Skills 懒加载:清单进 prompt,全文按需 read</h2>
+<p>
+  Skills(项目特定操作指南)每个是一份 <code>SKILL.md</code>,可能几千字。
+  如果把所有 skill 全文塞进系统提示词,token 开销巨大且大部分用不上。
+  Pi 的方案是 <code>formatSkillsForPrompt</code>(<code>skills.ts:335-361</code>)——
+  <strong>只放轻量清单(name / description / location)</strong>,全文由 LLM 自己主动 read:
+</p>
+<pre><span class="ln">1</span>&lt;<span class="sys">available_skills</span>&gt;
+<span class="ln">2</span>  &lt;<span class="sys">skill</span>&gt;
+<span class="ln">3</span>    &lt;<span class="sys">name</span>&gt;test-setup&lt;/<span class="sys">name</span>&gt;
+<span class="ln">4</span>    &lt;<span class="sys">description</span>&gt;How to run tests for this project&lt;/<span class="sys">description</span>&gt;
+<span class="ln">5</span>    &lt;<span class="sys">location</span>&gt;/path/to/skills/test-setup/SKILL.md&lt;/<span class="sys">location</span>&gt;
+<span class="ln">6</span>  &lt;/<span class="sys">skill</span>&gt;
+<span class="ln">7</span>&lt;/<span class="sys">available_skills</span>&gt;
+</pre>
+<p>清单顶上还有一句契约:<em>Use the read tool to load a skill's file when the task matches its description</em>。对照两种方案的 token 开销:</p>
+<table class="bd">
+  <thead><tr><th>方案</th><th>Token 开销</th><th>信息密度</th></tr></thead>
+  <tbody>
+    <tr><td>推模式:全文塞</td><td>10 个 skill × 2000 字 ≈ 50K token</td><td>大部分无关</td></tr>
+    <tr><td>拉模式:懒加载</td><td>10 个 skill × 4 行 ≈ 500 token</td><td>精准命中才展开</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么 Skills 用拉模式而非推模式?</b> 大部分 skill 当前任务根本用不上,全文预付 token 是纯浪费。
+  Pi 把 LLM 的<em>主动性</em>(调 read 工具)纳入上下文工程设计——「用时才付,不用不付」。
+  这也揭示了更深一层的模式:<strong>工具调用本身就是一种按需上下文加载的载体</strong>。
+</div>
+<cite>🔎 出处:教程 §四「Skills 懒加载」/ <code>formatSkillsForPrompt</code>,<code>skills.ts:335-361</code>;Token 对照表。</cite>
+
+<h2>4 · 骨架收尾:Current date / cwd 放在最后</h2>
+<p>
+  把上面所有元素串起来,系统提示词骨架末尾才是 <code>Current date</code> 和
+  <code>Current working directory</code>——这两个看似简单的字段,其实是「基本元数据」:
+  LLM 需要知道「今天是哪天」才能处理「昨天」「上周」这类相对时间,
+  需要知道「我在哪个目录」才能处理相对路径。放在骨架末尾,离 LLM 实际推理最近,便于随手解算。
+</p>
+
+<h2>5 · 全景漏斗:这一课的组装,嵌在链路的第几层?</h2>
+<p>
+  第 24 课讲过「两层防护」的地图;把 §三(工具输出截断)到 §六(分支摘要)串起来,
+  就是一次工具调用经过的完整链路——本课讲的「系统提示词组装」正是这道漏斗的<strong>第 [1] 层</strong>:
+</p>
+<div class="diagram">一次工具调用经过的完整上下文工程链路
+
+用户输入 "修复 auth.ts 的 bug"
+    │
+    ▼
+[1] 系统提示词组装(本课)
+    buildSystemPrompt()
+    ├─ 找 CLAUDE.md(向上递归 + agentDir)
+    ├─ 加载 Skills 清单(懒加载)
+    ├─ 拼接工具列表 + guidelines
+    └─ 末尾加 Current date / cwd
+    │
+    ▼
+[2] 用户消息进入 context.messages
+    ▼
+[3] Agent Loop 开始
+    ▼
+[4] LLM 返回 toolCall: read("auth.ts")
+    ▼
+[5] 执行工具
+    ▼
+[6] ★ 工具输出截断(上一课讲的「减法」)
+    ▼
+[7] toolResult 进历史
+    ▼
+   ...循环...
+    ▼
+[8] agent_end 事件触发
+    ▼
+[9] 检查 shouldCompact?
+    ├── 否 → 等下一轮
+    └── 是 → 执行 Compaction(第9章)
+</div>
+<div class="tradeoff">
+  🔑 <b>四层组合成一道漏斗:</b> §三控制<strong>单条工具结果</strong>的体积,§四(本课)控制
+  <strong>系统提示词</strong>的内容,§五控制<strong>长对话</strong>的总长度,§六控制<strong>多分支</strong>的信息保留。
+  没有哪一层单独就够——它们组合起来,才能让最终送进 LLM 的是「对当前任务最有价值的信息」。
+</div>
+<cite>🔎 出处:教程 §七「全景链路」/ ASCII 全景图。</cite>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① 多层 CLAUDE.md 合并时,哪一份规范排在最后(最具体、可覆盖前面的通用规范)?</p>
+    <button class="opt">agentDir 全局规范</button>
+    <button class="opt">祖先目录规范</button>
+    <button class="opt">cwd 当前项目规范</button>
+    <button class="opt">顺序是随机的</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">② Pi 为什么用 XML 标签而不是 Markdown 来包装项目规范?</p>
+    <button class="opt">XML 体积更小、更省 token</button>
+    <button class="opt">边界明确(闭合标记)且 path 属性能传递来源优先级</button>
+    <button class="opt">Markdown 不支持中文内容</button>
+    <button class="opt">XML 加载解析速度更快</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">③ Skills 懒加载(「拉」模式)相比把全文塞进提示词(「推」模式)的关键优势是?</p>
+    <button class="opt">用时才付 token,不用不付</button>
+    <button class="opt">完全不占用任何 token</button>
+    <button class="opt">不需要用到 read 工具</button>
+    <button class="opt">能把 skill 内容加密保护</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果两个不同层级的 CLAUDE.md 内容互相矛盾,LLM 真的会「以后者为准」吗,还是要靠 prompt 里的措辞去引导?</em>」
+  「<em>Skills 清单里的 description 写得不好,会不会导致 LLM 该 read 的时候没 read?</em>」
+  「<em>系统提示词组装(加法)和工具输出截断(减法)都在「输入侧」,它们会不会互相冲突——比如提示词本身也会被截断吗?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课:工具输出截断</strong>的细节。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一节(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第8章-上下文工程-让有限窗口装下无限对话.md">第 8 章 · 上下文工程 —— 让有限窗口装下无限对话</a> 的 §四「输入侧②:系统提示词动态组装」和
+  §七「全景链路」——原文还配了系统提示词完整骨架的九行清单,值得对照读一遍。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0026):</strong> 我们回到全景漏斗的第 [6] 层——
+  <strong>工具输出截断</strong>,把「一条 bash 命令就能撑爆窗口」这个减法问题讲透:
+  truncateHead / truncateTail 两种策略怎么选、双重限制(行数+字节)先触者胜、以及 UTF-8 边界安全怎么处理。
+</p>
+
+<footer>
+  Lesson 0025 · 第 8 章 上下文工程 ·
+  下一课:<a href="./0026-tool-output-truncation.html">0026 工具输出截断 →</a> ·
+  上一课:<a href="./0024-context-engineering-overview.html">0024 上下文工程地图</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对,从外到内=从通用到具体,cwd 项目规范排在后面,像手册「先总则后细则」。延伸:这样 LLM 遇到冲突时会以更具体的项目规范为准。',
+               '✓ 对,</project_instructions> 是清晰的闭合标记,LLM 不会把规范与外部指令混淆,path 让它区分组织级/项目级。延伸:主流 LLM 对 XML 结构化理解都很到位,这是标准 prompt 技巧。',
+               '✓ 对,清单≈500 token vs 全文≈50K token,只有精准命中时才 read 展开全文。延伸:这揭示了更深的设计模式——工具调用本身就是按需上下文加载的载体。'];
+  var msgNo = ['回看 §四「系统提示词组装顺序」那三行框,想想哪个目录离你正在写的代码最近、最具体。',
+               '回看 §四「XML 包装」小节列出的两条理由,它们都和体积/速度无关。',
+               '回看 §四 Token 对照表和「拉模式」流程图:清单是进 prompt 的,但 skill 全文是 LLM 按需 read 进来的。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 
-BANK = Path("/Users/wangzihao/Code/pass_exam/operating_systems/exams")
+BANK = Path("/Users/bytedance/pass_exam/operating_systems/exams")
 TPL  = (BANK / "_template.html").read_text(encoding="utf-8")
 
 def render(template, title, qs, total, back_href):

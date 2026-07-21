@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0001 · 这份学习计划怎么用:75% 原则与节奏</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0001 课 · 起步与方法 · 预计 10 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>这份学习计划怎么用:75% 原则与节奏</h1>
+
+<p class="lede">这节不讲任何数据结构,只回答一个元问题:面对一份能膨胀到让人望而生畏的大纲,你到底该怎么用它?答案藏在作者拿到 Amazon offer 后写下的一句话里——<strong>覆盖计算机科学大约 75% 的内容,就足以应付面试了</strong>。把这条原则用好,你才不会被大纲的体量吓退,也不会把时间浪费在面试根本不问的角落。</p>
+
+<div class="recall">
+<p>开课前先想想:你上次面试(或模拟面试、刷题受挫)时,是卡在哪一类问题上的?是不知道该用什么数据结构,还是知道思路却写不对?先给自己一个诚实的答案——这份计划的价值,恰恰在于帮你把时间投到你真正会被问倒的地方。</p>
+</div>
+
+<h2>一、这份大纲是什么、为谁准备</h2>
+
+<p>先把定位说清,否则后面全错。这是仓库作者为了成为大公司软件工程师而做的<strong>多月自学计划</strong>,他照着做完之后拿到了 Amazon 的 offer。它有两个边界必须记住:</p>
+
+<ul>
+<li>它是一份关于<strong>软件工程(software engineering)</strong>的计划,<strong>不是前端工程、也不是全栈</strong>。前端/全栈另有自己的路线图。</li>
+<li>它的要求很低:一点编程经验(变量、循环、函数)、耐心、时间。它不假设你有 CS 学位。</li>
+</ul>
+
+<p>换句话说,它考的是<strong>通用的计算机科学基本功</strong>——数据结构、算法、复杂度、系统设计——而不是某个框架或某门语言的冷知识。这决定了你该往哪儿使劲。</p>
+
+<h2>二、75% 原则:够用就好,不是重修一遍 CS 学位</h2>
+
+<p>作者的原话是:大学 CS 专业要学的东西很多,但<strong>只掌握大约 75% 就足以应付面试</strong>,这也正是这份大纲收录的范围。剩下那 25%(更偏学术、更冷门的部分)不是不重要,而是<strong>投入产出比不划算</strong>——面试不问。</p>
+
+<figure class="diagram">
+<div class="bars">
+  <div class="row"><span class="lbl">完整 CS 学位</span><span class="track"><span class="val base" style="width:100%">全部内容 100%(含大量面试不问的部分)</span></span></div>
+  <div class="row"><span class="lbl">这份大纲</span><span class="track"><span class="val b" style="width:75%">面试所需 ~75%</span></span></div>
+  <div class="row"><span class="lbl">可暂时跳过</span><span class="track"><span class="val a" style="width:25%">冷门 25%</span></span></div>
+</div>
+<figcaption>75% 原则的本质是<strong>取舍</strong>:把有限时间压在会被反复问到的高频主题上。想要"完整版"CS 自学,另有更长的路线图(见文末资源)。</figcaption>
+</figure>
+
+<p>这条原则还有个反面用法:<strong>你已经掌握的主题,可以直接跳过</strong>。大纲是一张地图,不是一份必须逐字读完的考纲。会了就勾掉,把省下的时间还给薄弱环节。</p>
+
+<h2>三、怎么用它:自顶向下、逐一勾选</h2>
+
+<p>用法本身很朴素:<strong>从上到下逐一处理</strong>大纲里的主题。作者的做法是把仓库 Fork 到自己账号,然后用带复选框的清单标记进度——学完一项,就在方括号里打一个 <code>x</code>,把 <code>[ ]</code> 变成 <code>[x]</code>。这不只是仪式感:一个可见的、在缩短的待办清单,是对抗"大纲太长所以拖延"的最实在的工具。</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step">Fork 仓库 / 下载一份清单到本地</div>
+  <div class="down">↓</div>
+  <div class="step decision">从上到下,取下一个主题</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">已经会了</div>
+      <div class="step terminal">直接勾掉,跳过</div>
+    </div>
+    <div class="branch">
+      <div class="label">还不熟</div>
+      <div class="step">学它 → 学完再打 x</div>
+    </div>
+  </div>
+</div>
+<figcaption>关键是<strong>顺序 + 可见进度</strong>。允许跳过已会的,但别跳过"以为会其实没验证过"的——那正是下一课要解决的。</figcaption>
+</figure>
+
+<h2>四、节奏:每天一点,边学边做,长期坚持</h2>
+
+<p>作者当年每天自学 8~12 小时,持续数月——但他明确说<strong>你不必这么拼</strong>,他在很多不必要的事上浪费了时间。健康的日常节奏是这样一个循环:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node"><span class="n-title">取下一主题</span><span class="n-sub">按清单顺序</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">看视频建立直觉</span><span class="n-sub">该主题的讲解</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">自己写一遍实现</span><span class="n-sub">用你的语言</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">穿插做 2~3 道题</span><span class="n-sub">当场应用</span></div>
+</div>
+<figcaption>每个主题可能要花几天甚至一周,取决于你的日程。重点是<strong>循环而非线性</strong>:学完一个主题不是终点,过些天要回来再做几道题。</figcaption>
+</figure>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>这份大纲(coding-interview-university)</dt>
+<dd>面向<strong>软件工程</strong>方向的多月自学计划,作者靠它拿到 Amazon offer。<em>避免</em>把它当成前端/全栈路线图,或当成一份必须学满才能面试的清单。</dd>
+<dt>75% 原则</dt>
+<dd>覆盖计算机科学大约 75% 的内容即足以应付面试;剩下更冷门的 25% 面试不问,可暂时跳过。<em>避免</em>"必须学完整个 CS 学位才敢去面试"的想法。</dd>
+<dt>没有包含的内容(边界)</dt>
+<dd>这份大纲刻意不含 <strong>JavaScript、HTML/CSS 等前端技术、SQL</strong>。看到这些主题不在清单里不是遗漏,是范围之外。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>大公司的技术面试考的是<strong>通用 CS 基本功</strong>——你能不能识别问题、选对数据结构与算法、分析复杂度、把代码写对。它几乎不考"某框架的某个冷门 API"。所以 75% 原则不是偷懒,而是与面试的真实分布对齐:<strong>把有限时间投在高频主题上,才是效率最高的准备方式。</strong>反过来,如果你把三周花在一个面试从不问的角落,即便学得很深,面试当天也换不来任何分数。</p>
+</div>
+
+<div class="gotcha">
+<p><strong>两个方向相反的坑,踩哪个都会拖垮你。</strong></p>
+<p>一是<strong>被大纲的体量吓退</strong>,或者陷入"等我全部学完再去面试"的完美主义——75% 原则的核心恰恰是承认"够用就好",允许取舍和跳过。二是<strong>只收藏、只勾选,却不动手</strong>:把仓库 star 了、清单打印了,却从没真正写过一行实现。清单上的 <code>x</code> 只在你真会了的时候才算数。</p>
+</div>
+
+<div class="implement">
+<p><strong>本周就动手做的一件事:</strong>把这份大纲(或它的目录)Fork / 复制一份到本地,<strong>从上到下过一遍</strong>,把你已经掌握的主题勾掉,用另一种记号圈出你心里发虚的那些。做完你会得到一张属于自己的地图:剩下要攻的,大概就是你的那 75%。这张图,就是你后续每天"取下一主题"的依据。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>这份清单是一张<strong>地图,不是考纲</strong>。目标不是学满,而是覆盖会被反复问到的高频 75%——把有限的时间,投到你真正会被问倒的地方去。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:"75% 原则"最准确的意思是下面哪一个? (A) 你只要答对面试题的 75% 就能拿 offer (B) 覆盖 CS 约 75% 的内容就足以应付面试,更冷门的 25% 可暂时跳过 (C) 这份大纲只完成了 75%,还在更新</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。75% 说的是<strong>知识覆盖面</strong>——大学 CS 要学的东西很多,但面试真正会考的大约是其中 75%,所以把时间压在这部分即可,剩下更学术、更冷门的内容面试不问,可以跳过。(A) 把它误解成"考试通过率",(C) 把它误解成"项目完成度",都偏了。这条原则的关键词是<strong>取舍</strong>。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪一项<strong>不</strong>在这份大纲的范围内,属于"没有包含的内容"? (A) 数据结构与算法 (B) 系统设计 (C) HTML/CSS 与前端技术</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。作者明确列出这份大纲<strong>不含</strong> JavaScript、HTML/CSS 等前端技术,以及 SQL——因为它是<strong>软件工程</strong>方向的计划,不是前端/全栈路线图。数据结构、算法、系统设计恰恰是它的核心。看到前端主题不在清单里,不是遗漏,是范围之外。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题对应仓库大纲的「这是?」「如何使用它」「日常计划」几节。下面的一手链接都出自这几段:</p>
+<ul>
+<li><a href="https://roadmap.sh/computer-science">Kamran Ahmed 的计算机科学路线图</a> —— 如果你想要的是"完整版"CS 自学(那另外的 25% 也想学),这里是对照物;本大纲只取其中够面试的 75%。</li>
+<li><a href="https://roadmap.sh/">roadmap.sh(各职业路线图)</a> —— 如果你其实想走前端/全栈(不在本大纲范围),从这里找对应路线。</li>
+<li>作者按日常节奏"边学边写实现"的参考代码库:<a href="https://github.com/jwasham/practice-c">practice-c</a> · <a href="https://github.com/jwasham/practice-cpp">practice-cpp</a> · <a href="https://github.com/jwasham/practice-python">practice-python</a>。</li>
+<li><a href="http://www.hiredintech.com/algorithm-design/">算法设计画布(hiredintech)</a> —— 练题时用的一套"有方法、能口述"的解题流程,配合日常节奏使用。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"为什么 75% 就够",或帮你把手头这份大纲拆成一张"已会 / 待攻"的个人清单。</p>
+<nav class="lesson-nav">
+  <span class="none"></span>
+  <a class="next" href="0002-flashcards-spaced-repetition.html"><span class="dir">下一课 →</span>记得住才算学会:主动回忆与间隔重复</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

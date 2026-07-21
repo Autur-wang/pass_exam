@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0010 · 浏览器、Web API 与可访问性综合问答</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0010 课 · 3 HTML/CSS/浏览器高频问答 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>浏览器、Web API 与可访问性综合问答</h1>
+
+<p class="lede">这节课把 quiz 题库里三道分布在不同标签下的问答题拢到一起讲:判断浏览器支不支持某个功能,该用特性检测、特性推断还是 UA 字符串;页面加载到"可以初始化"之间,`load` 事件和它的替代方案分别在什么时候触发;想写一段"肉眼看不到、屏幕阅读器能读到"的内容,哪几种手法能用、哪几种看起来像但其实是错的。三道题标签不同,问的其实是同一件事:浏览器这层平台给了你什么能力,又在哪些地方靠"猜"是会踩坑的。</p>
+
+<div class="recall">
+<p>上一课(HTML 高频问答)问的是"这个标签、这段结构该怎么写"——文档结构、图片、多语言标注,都是你直接敲在 HTML 里的东西。这节课往下挪一层:不再问标签怎么写,而是问浏览器这个运行环境本身。先想一想,不看下文,凭直觉答一句:如果现在要判断用户的浏览器是否支持某个新 API,你的第一反应是查 <code>navigator.userAgent</code>,还是别的办法?这个直觉答案,就是这节课要印证或纠正的东西。</p>
+</div>
+
+<h2>一、先问浏览器"你支持这个吗":特性检测、特性推断、UA 字符串</h2>
+
+<p>遇到一个可能不是所有浏览器都实现的 API,常见的三种应对方式,靠谱程度差得很远。</p>
+
+<p><strong>特性检测</strong>直接问目标本身存在不存在,再决定走哪条代码分支,让浏览器始终有一条能跑通的路,而不是在不支持的浏览器里直接崩溃:</p>
+
+<pre><code>if ('geolocation' in navigator) {
+  // 可以使用 navigator.geolocation
+} else {
+  // 处理缺少的功能
+}</code></pre>
+
+<p><a href="https://modernizr.com/">Modernizr</a> 就是一个专门处理特性检测的库,不用自己攒一堆 <code>in navigator</code> 判断。</p>
+
+<p><strong>特性推断</strong>看起来也在"检测",但检测的不是你真正要用的那个东西,而是另一个"顺带假设它也存在"的方法:</p>
+
+<pre><code>if (document.getElementsByTagName) {
+  element = document.getElementById(id);
+}</code></pre>
+
+<p>这里真正要用的是 <code>getElementById</code>,却去检查 <code>getElementsByTagName</code> 存在不存在——两者存在与否并不是同一件事,只是"看起来经常一起出现"。这种做法不推荐,特性检测更万无一失。</p>
+
+<p><strong>UA 字符串</strong>是浏览器自己报出来的一串身份信息,通过 <code>navigator.userAgent</code> 读取,理论上能告诉网络协议对等方"我是什么类型的软件、什么操作系统、什么厂商、什么版本"。问题是这串字符串很难解析,而且可以被伪造。比如 Chrome 的 UA 字符串里同时带有 "Chrome" 和 "Safari" 两个词——要专门检测 Safari,你得同时确认字符串里有 Safari、又确认没有 Chrome,一步判断变成两步排除法。这种方法不建议使用。</p>
+
+<table class="compare">
+<tr><th>方法</th><th>怎么做</th><th>靠谱吗</th></tr>
+<tr><td>特性检测</td><td>直接检测目标本身:<code>'geolocation' in navigator</code></td><td class="good">推荐</td></tr>
+<tr><td>特性推断</td><td>检测一个相关但不是目标本身的方法,假定目标也存在</td><td class="warn">不推荐</td></tr>
+<tr><td>UA 字符串</td><td>解析 <code>navigator.userAgent</code> 里的关键词猜身份</td><td class="warn">避免</td></tr>
+</table>
+
+<h2>二、`load` 事件什么时候触发,什么时候你不想等它</h2>
+
+<p><code>load</code> 事件在文档加载过程结束时触发。到那个时间点,文档里的所有对象都已经在 DOM 中,并且所有图片、脚本、链接和子框架都已经完成加载——这是"整页彻底就位"那一刻。</p>
+
+<p>但很多时候你等不到、也不需要等到那一刻。<code>DOMContentLoaded</code> 事件会在页面 DOM 构建完成后就触发,不等其他资源(图片、子框架等)加载完。在你不需要"整页都加载完"才能开始初始化的场合,<code>DOMContentLoaded</code> 是首选——比如只是要绑定一个按钮的点击事件,没必要等一张还没下载完的大图。</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">HTML 解析完成</span><span class="n-sub">DOM 树搭建好</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">DOMContentLoaded</span><span class="n-sub">不等图片/子框架</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">图片/脚本/子框架加载完</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">load</span><span class="n-sub">所有对象都已就位</span></div>
+</div>
+
+<h2>三、只想让屏幕阅读器读到,肉眼看不出来:该用什么、不该用什么</h2>
+
+<p>这类技巧属于可访问性(a11y)范畴,目标很具体:内容留在可访问性树里、屏幕阅读器能读到,但在屏幕上几乎看不出来。</p>
+
+<table>
+<tr><th>技巧</th><th>写法</th><th>要注意的地方</th></tr>
+<tr><td>小/零尺寸 + clip</td><td><code>width:1px;height:1px</code> 配合 CSS <code>clip</code></td><td>别写成 <code>width:0;height:0</code>——搜索引擎可能把这当成关键词堆砌之类的恶意意图来惩罚</td></tr>
+<tr><td>绝对定位挪出屏幕</td><td><code>position:absolute;left:-99999px</code></td><td>只适合纯文本内容;可聚焦元素(链接、表单控件)不该这样藏</td></tr>
+<tr><td>文本缩进</td><td><code>text-indent:-9999px</code></td><td>只对 block 元素里的文本有效,同样不适合可聚焦元素</td></tr>
+</table>
+
+<p>为什么"可聚焦元素不该这样藏"要单独强调?<a href="https://webaim.org/techniques/css/invisiblecontent/">WebAIM 的文章</a>里说得很直接:可导航元素(链接、表单控件)不应该被藏到屏幕外——有视觉的用户仍然能用键盘 Tab 到它们,但除非专门设置"获得键盘焦点时显示"的样式,否则他们会看到焦点跳到一个自己看不见的地方,一头雾水。</p>
+
+<p>更容易踩的坑是下面这三种——它们看起来是在"隐藏内容",但隐藏的对象错了,把内容对屏幕阅读器<strong>也</strong>藏起来了:</p>
+
+<div class="codecompare">
+<div class="side bad"><p class="label">错——屏幕阅读器也读不到</p><pre><code>.hide {
+  display: none;
+}
+/* 或 visibility: hidden;
+   或 hidden 属性 */</code></pre></div>
+<div class="side good"><p class="label">对——sr-only:视觉隐藏,可访问性树保留</p><pre><code>.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}</code></pre></div>
+</div>
+
+<p>右边这段正是 Tailwind CSS 里 <code>.sr-only</code> 的实现,Bootstrap 的 <code>.visually-hidden</code> 思路也几乎一样。理想情况下建议组合上面几种手法一起用,确保各浏览器都表现一致——更实际的建议是直接用这些经过实战测试的现成工具类,而不是自己从头实现一套"从渲染树和 a11y 树里精确摘掉一个元素"的方案。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>特性检测(Feature Detection)</dt>
+<dd>直接检测浏览器是否支持你真正要用的那个 API 或属性,再决定走哪条代码分支,让代码在不同浏览器下都有一条能跑通的路。<em>避免</em>把它和"检查一个不相关的方法是否存在,就假定目标方法也存在"(特性推断)混为一谈——那是一种走捷径的猜测,不是真的检测。</dd>
+<dt>DOMContentLoaded 事件</dt>
+<dd>在 HTML 解析完、DOM 树搭建好的那一刻触发,不等图片、脚本等外部资源加载完成,适合"能操作 DOM 就可以开始"的初始化逻辑。<em>避免</em>把它和 <code>load</code> 事件当成同一个时间点——<code>load</code> 要等所有子资源都加载完才触发,通常晚得多。</dd>
+<dt>屏幕阅读器专属隐藏(sr-only)</dt>
+<dd>用 <code>width:1px;height:1px</code> 配合 <code>clip</code> 之类的手法,让内容留在可访问性树里、屏幕阅读器读得到,但在屏幕上几乎不占空间。<em>避免</em>用 <code>display:none</code>、<code>visibility:hidden</code> 或 <code>hidden</code> 属性做这件事——这三种会把内容连屏幕阅读器那边也一起藏掉,违背"只对屏幕阅读器可见"的初衷。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>做一个新功能前,先查目标 API 本身能不能用(特性检测),而不是查浏览器 UA 里带不带某个关键词;初始化只依赖 DOM 结构的逻辑(比如绑定事件、渲染骨架)挂在 <code>DOMContentLoaded</code> 上,真正要等图片尺寸、统计整页加载耗时之类的场景才用 <code>load</code>;界面上"跳到主内容""为图标按钮补充说明文字"这类只给屏幕阅读器用户看的文案,用 <code>.sr-only</code>/<code>.visually-hidden</code> 一类现成的工具类,不自己现场发明写法。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:图快、想走捷径,却没有真的检测"这段代码/这段内容在目标环境下会发生什么"。</strong>比如用特性推断代替特性检测,只是因为两个方法名字看起来相关就假定另一个也存在;或者以为 UA 字符串是浏览器身份的可靠证明,却没意识到它能被伪造、Chrome 的 UA 里甚至同时带着 "Safari" 字符串。同样的思路搬到 a11y 这一侧,就变成用 <code>display:none</code> 去实现"只给屏幕阅读器看的文字"——结果连屏幕阅读器都读不到,和"隐藏内容"的目的正好相反。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>打开手头一个项目,搜一下代码里有没有 <code>navigator.userAgent</code> 或者其他 UA 判断逻辑,看看能不能换成特性检测;再搜一下 <code>display: none</code> 旁边有没有写着"仅供屏幕阅读器"之类注释的地方,确认是不是该换成 <code>.sr-only</code> 写法。这两处搜索加起来花不了几分钟,但能当场揪出一类真实存在的坑。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>能用特性检测就别用特性推断或 UA 字符串猜;只需要 DOM 就绪就用 <code>DOMContentLoaded</code>,需要等全部资源才用 <code>load</code>;想让内容只对屏幕阅读器可见,用 <code>.sr-only</code> 这类定位 + 裁剪的组合手法,别用 <code>display:none</code> 图省事。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:想判断当前浏览器是否支持某个新 API,比较靠谱的做法是下面哪一个? (A) 检查一个和目标 API 无关但"看起来经常一起出现"的方法是否存在,借此推断目标 API 也存在 (B) 直接检测目标 API/属性本身是否存在,再决定走哪条代码分支 (C) 读取 navigator.userAgent,按字符串里出现的关键词判断浏览器身份</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>,也就是特性检测——直接问目标本身存不存在,靠谱且万无一失。(A) 是特性推断,检测的是另一个方法而不是目标本身,两者存在与否并不必然一致,不推荐;(C) 依赖的 UA 字符串很难解析且可以被伪造,比如 Chrome 的 UA 里同时带着 "Chrome" 和 "Safari",这种方法应该避免。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:想让一段文字只被屏幕阅读器读到、肉眼在页面上看不见,同时不影响其他可聚焦元素的可用性,比较合适的做法是下面哪一个? (A) 用 display: none 把这段文字藏起来 (B) 用 visibility: hidden 隐藏这段文字 (C) 用类似 .sr-only 的写法——position: absolute 配合 width:1px;height:1px 和 clip 裁剪</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。这种写法把内容留在可访问性树里,屏幕阅读器读得到,视觉上又几乎不占空间。(A) 的 <code>display:none</code> 和 (B) 的 <code>visibility:hidden</code> 都会把元素从渲染树/可访问性表达里整体摘掉,结果是屏幕阅读器<strong>也</strong>读不到,违背了"只对屏幕阅读器可见"这个目标。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<ul>
+<li><a href="https://modernizr.com/">Modernizr</a> —— 处理特性检测的现成库,遇到"这个 API 到底能不能用"就交给它判断,不用自己攒一堆 <code>in navigator</code> 判断。</li>
+<li><a href="https://webaim.org/techniques/css/invisiblecontent/">WebAIM · CSS in Action: Invisible Content Just for Screen Reader Users</a> —— 本课"只给屏幕阅读器看"这几种技巧的原始参考文章,讲了各种做法的取舍和踩坑细节。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"特性检测和特性推断到底差在哪",也可以让老师现场帮你审查一段用 UA 字符串判断浏览器的旧代码,看看能不能换成特性检测。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0009-html-trivia-structure-images-i18n.html"><span class="dir">← 上一课</span>HTML 高频问答:文档结构、图片与多语言</a>
+  <a class="next" href="0011-ui-coding-interviews.html"><span class="dir">下一课 →</span>UI 编程面试怎么考</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

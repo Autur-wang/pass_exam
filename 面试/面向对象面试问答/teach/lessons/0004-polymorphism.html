@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多态 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第一部分 · 四大支柱 · 第 0004 节</p>
+<h1>多态:重写 vs 重载与动态分派</h1>
+<p class="lede">多态是四大支柱里"名字最唬人、答案最容易只答一半"的一个。很多人一开口就说"多态就是重写",漏掉了重载这一半;还有人张口就来"Python 支持方法重载",当场翻车。这一节把这两个坑一次填平。</p>
+
+<div class="recall">
+<p>先想一个场景:你有 <code>Cat</code>、<code>Dog</code>、<code>Duck</code> 三个类,都有一个 <code>speak()</code> 方法。现在要写一个函数,遍历一群动物、让每个都叫一声。你会给这个函数写几个 <code>if isinstance(...)</code> 分支?还是根本不用写?——先给个答案,再往下看。</p>
+</div>
+
+<h2>一、直觉:同一个按钮,不同的对象各按各的</h2>
+
+<p>多态(Polymorphism)字面是"多种形态"。放到代码里,它的意思是:<strong>一段通用代码,面对不同类型的对象,能各自触发对的行为——而调用方不需要知道对方到底是哪个具体类型。</strong></p>
+
+<p>打个比方:你按下遥控器的"播放"键,电视放视频、音箱放音乐、扫地机开始扫地。<strong>按键的动作是统一的(共享接口),背后干什么由对象自己决定。</strong>你(调用方)不必为每种设备写一套不同的操作。多态干掉的就是那一大堆 <code>if 是电视 / elif 是音箱 / elif 是扫地机</code> 的分支。</p>
+
+<p>源题一句话点题:多态让不同类型的对象<strong>通过共享接口被统一对待</strong>,抽象掉方法细节,从而提升灵活性与复用性。而它落地有两条完全不同的路——这正是面试的分水岭。</p>
+
+<div class="keydef">
+<dl>
+<dt>多态 (Polymorphism)</dt>
+<dd>让不同类型的对象通过<strong>共享接口</strong>被统一调用,具体执行哪份实现由对象自己决定。它有两副面孔 ↓</dd>
+<dt>① 重载 (Overloading) —— 编译期多态</dt>
+<dd>同一个类里有多个<strong>同名方法</strong>,靠<strong>参数不同(签名不同)</strong>来区分。选哪个在<strong>编译期</strong>按签名定下来。也叫 ad-hoc / 静态多态。</dd>
+<dt>② 重写 (Overriding) —— 运行时多态</dt>
+<dd>子类为父类<strong>已有的同名方法</strong>提供新实现,替换父类版本。签名相同,选哪个在<strong>运行时</strong>按对象的真实类型定。也叫 subtype / 动态多态。</dd>
+<dt>动态分派 / 后期绑定 (Dynamic Dispatch / Late Binding)</dt>
+<dd>运行时才确定"这一次到底调哪份方法实现"的机制,是运行时多态的引擎。</dd>
+</dl>
+</div>
+
+<h2>二、重写(Overriding):运行时多态,Python 的主场</h2>
+
+<p>重写是你天天在写、却未必意识到的那种多态。子类把父类的方法"换一个实现",调用时按对象<strong>运行时的真实类型</strong>去找该调哪个:</p>
+
+<pre><code>class Animal:
+    def speak(self):
+        return "..."           # 父类的默认实现
+
+class Cat(Animal):
+    def speak(self):           # override:同名同签名,提供新实现
+        return "Meow"
+
+class Dog(Animal):
+    def speak(self):
+        return "Woof"
+
+# 一段"通用代码":它只知道"这些东西都能 speak",不关心具体是猫是狗
+def chorus(animals):
+    for a in animals:
+        print(a.speak())       # 动态分派:看 a 运行时的真实类型来决定调哪个 speak
+
+chorus([Cat(), Dog(), Animal()])
+# Meow
+# Woof
+# ...
+</code></pre>
+
+<p>注意 <code>chorus</code> 里<strong>一个 <code>if isinstance</code> 都没有</strong>。加一个 <code>Duck</code> 类,<code>chorus</code> 一行都不用改——这就是多态给的"开闭"(对扩展开放、对修改关闭)红利。这里的 <code>a.speak()</code> 具体调到哪份实现,是<strong>运行时</strong>才敲定的,即所谓动态分派 / 后期绑定。</p>
+
+<p><strong>canon 补充(必须讲,是加分点):</strong>Python 的方法查找<strong>天生就是运行时动态的</strong>——它不需要像 C++ 那样给方法加 <code>virtual</code> 关键字。每次 <code>a.speak()</code>,解释器都沿着对象的类型 → MRO(方法解析顺序)去字典里现查。所以在 Python 里,"重写"随处可见、无需任何声明;上面这段代码本身就是运行时多态。</p>
+
+<h2>三、重载(Overloading):编译期多态,以及 Python 的大坑</h2>
+
+<p>重载是<strong>另一半</strong>多态,漏掉它是最常见的失分点。它指同一个类里<strong>同名、但参数签名不同</strong>的多个方法,编译器按你传的参数在<strong>编译期</strong>挑一个:</p>
+
+<pre><code>// C++ 里的方法重载:同名 area,签名不同,编译器按参数选
+int area(int side);              // 正方形
+int area(int w, int h);          // 矩形
+// area(5) 与 area(3, 4) 在编译期就被解析到不同函数
+</code></pre>
+
+<p>但到了 Python,情况完全不同——<strong>这是本节头号面试陷阱:</strong></p>
+
+<pre><code>class Calc:
+    def add(self, a, b):
+        return a + b
+
+    def add(self, a, b, c):      # 同名!Python 不会"重载"
+        return a + b + c         # 而是直接用后者覆盖(replace)前者
+
+Calc().add(1, 2)
+# ❌ TypeError: add() missing 1 required positional argument: 'c'
+# 第一个 add 已经不存在了 —— 类的字典里同名 key 只留最后一个
+</code></pre>
+
+<p>为什么?因为 Python 的类体本质是往一个字典里塞 <code>{"add": 函数对象}</code>,<strong>同名 key 后写的覆盖先写的</strong>,没有"按签名共存多份"的机制。所以严格说:<strong>Python 不原生支持方法重载(method overloading)。</strong>要达到类似效果,Python 的地道做法是默认参数、<code>*args</code>/<code>**kwargs</code>,或 <code>functools.singledispatch</code>(按类型分派)——这留到 0020 专讲。</p>
+
+<div class="interview">
+<p><strong>高频追问链(多态是四大支柱里追问最密的一个):</strong></p>
+<ul>
+<li><strong>"重写和重载有什么区别?"</strong> → 三点对照:①时机——重载编译期定、重写运行时定;②位置——重载在<strong>同一个类</strong>内、重写跨<strong>父子类</strong>;③签名——重载靠签名<strong>不同</strong>区分、重写要求签名<strong>相同</strong>。一句话:重载是"同名不同参",重写是"同名同参换实现"。</li>
+<li><strong>"Python 支持方法重载吗?"</strong> → 不原生支持,同名方法后者覆盖前者;可用默认参数 / <code>*args</code> / <code>singledispatch</code> 模拟(0020)。<strong>但要区分:方法重载不支持,运算符重载(operator overloading,靠 <code>__add__</code>、<code>__eq__</code> 等 dunder 方法)是支持的。</strong>别把这两个混为一谈。</li>
+<li><strong>"动态分派靠什么实现?"</strong> → C++/Java 靠虚方法表(vtable):对象里存一个指向函数指针表的指针,运行时查表跳转。Python 更"软"——靠运行时在实例 <code>__dict__</code>、类及其 MRO 里逐级查名字。点到 vtable 即可,别展开汇编(本课范围外)。</li>
+<li><strong>"为什么说重载也算多态?"</strong> → 因为"同一个名字 <code>area</code> 应对多种参数形态"本身就是"一名多态";学名 ad-hoc polymorphism(特设多态)。多态 ≠ 只有运行时那一种。</li>
+</ul>
+</div>
+
+<h2>四、虚方法(virtual):C++ 为什么要多这个关键字?</h2>
+
+<p>源题特意点了 C++ 的 <code>virtual</code>,因为它揭示了动态分派"不是免费的"这层真相。在 C++ 里,基类方法<strong>默认不是虚的</strong>——通过基类引用/指针调用时,默认按<strong>静态类型</strong>调(即"你声明成什么类型就调谁的"),那就<strong>调不到</strong>派生类的重写版本。只有给基类方法标上 <code>virtual</code>,才启用动态分派,让基类引用也能调到正确的派生实现:</p>
+
+<pre><code>// C++:必须显式 virtual,基类引用才能调到派生类的实现
+class Animal {
+public:
+    virtual void speak() { /* ... */ }   // 去掉 virtual,下面就调不到 Cat::speak
+};
+class Cat : public Animal {
+public:
+    void speak() override { /* "Meow" */ }
+};
+</code></pre>
+
+<p>对照之下:<strong>Java 的实例方法默认就是虚的</strong>(除 <code>static</code>/<code>private</code>/<code>final</code> 外),不用写关键字就能重写;<strong>Python 更彻底,方法调用永远是动态查找</strong>,连"虚不虚"这个概念都不需要暴露给你。三种语言,三种默认。</p>
+
+<div class="gotcha">
+<p><strong>翻车点一:"多态就是重写。"</strong> 这是最常见的半个答案。完整表述是:多态有<strong>编译期</strong>(重载、模板/泛型)与<strong>运行时</strong>(重写、虚函数)两种;只答重写等于丢掉一半分。面试官往往就等着追一句"那重载算不算多态?"来筛人。</p>
+<p><strong>翻车点二:"Python 支持方法重载。"</strong> 错。Python 同名方法<strong>后定义者覆盖先定义者</strong>,不存在按签名共存的多份实现。要 hedge 得准:①<strong>方法</strong>重载——不原生支持,用默认参数 / <code>singledispatch</code> 模拟;②<strong>运算符</strong>重载——支持,靠 dunder 方法。混着说就露怯。</p>
+<p><strong>翻车点三:把动态分派说成"编译期就定好了"。</strong> 恰恰相反——运行时多态的核心就是"编译时不知道、运行时才定"(late binding)。编译期定死的是重载。</p>
+</div>
+
+<div class="crosslang">
+<p>两个维度先分清,再看三门语言的默认差异——这两张表几乎覆盖多态的所有跨语言追问。</p>
+<table>
+<tr><th>维度</th><th>编译期多态</th><th>运行时多态</th></tr>
+<tr><td>典型手段</td><td>方法重载、模板/泛型(如 C++ <code>vector&lt;int&gt;</code>)</td><td>方法重写、虚函数</td></tr>
+<tr><td>何时定分派</td><td>编译期(按签名 / 类型参数)</td><td>运行时(按对象真实类型)</td></tr>
+<tr><td>学名</td><td>ad-hoc / 参数化 / 静态多态</td><td>subtype / 动态多态</td></tr>
+</table>
+<table>
+<tr><th>语言</th><th>方法默认是否"虚"(可直接重写并动态分派)</th><th>方法重载</th></tr>
+<tr><td><strong>Python</strong></td><td>永远动态查找,<strong>无需关键字</strong></td><td>不原生支持(同名后者覆盖前者)</td></tr>
+<tr><td><strong>Java</strong></td><td>默认虚(除 <code>static</code>/<code>private</code>/<code>final</code>)</td><td>支持</td></tr>
+<tr><td><strong>C++</strong></td><td>否,必须显式 <code>virtual</code> 才动态分派</td><td>支持</td></tr>
+</table>
+<p>一句话:<strong>"虚不虚"这件事,Python 免谈、Java 默认给、C++ 要你自己开。</strong></p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写一遍,验证你真的分得清两半:</p>
+<ul>
+<li>写 <code>Shape</code> 基类,方法 <code>area(self)</code> 返回 <code>0</code>;再写 <code>Circle</code>、<code>Rectangle</code> 各自<strong>重写</strong> <code>area</code>。</li>
+<li>写一个通用函数 <code>total_area(shapes)</code>,<strong>不用任何 <code>isinstance</code></strong>,累加所有形状面积——体会运行时多态。</li>
+<li>然后故意在 <code>Shape</code> 里写两个同名 <code>describe(self)</code> 和 <code>describe(self, verbose)</code>,调用 <code>Shape().describe()</code> 看会发生什么(想想为什么报错),亲手撞一次"Python 没有方法重载"的墙。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:下列哪一项属于<strong>编译期多态</strong>?</summary>
+<div class="answer">
+<p>A. 子类 <code>Cat</code> 重写父类 <code>Animal</code> 的 <code>speak()</code><br>
+B. 同一个类里 <code>add(int)</code> 与 <code>add(int, int)</code> 两个同名不同参的方法<br>
+C. 通过基类引用调用被 <code>virtual</code> 标记的方法<br>
+D. Python 里遍历一组对象调用它们各自的 <code>speak()</code></p>
+<p><strong>答案:B。</strong> 方法重载(同名不同签名,编译期按参数选)是编译期多态。A、C、D 都是运行时多态(重写 / 虚方法 / 动态分派)。这题就是在筛"是不是只把多态等同于重写"。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:下面这段 Python 会输出什么?为什么?</summary>
+<div class="answer">
+<pre><code>class Printer:
+    def show(self, msg):
+        print("one arg:", msg)
+    def show(self, msg, times):
+        print("two args:", msg * times)
+
+Printer().show("hi")</code></pre>
+<p><strong>答案:抛 <code>TypeError</code>(缺少参数 <code>times</code>),而不是打印 "one arg: hi"。</strong></p>
+<p>因为 Python <strong>不支持方法重载</strong>:类体里同名 <code>show</code> 的第二个定义直接覆盖了第一个,类的字典里只剩接收两个参数的那份。调 <code>show("hi")</code> 少传一个参数,自然报错。想让一个方法应对不同参数个数,正解是默认参数(<code>def show(self, msg, times=1)</code>)或 <code>*args</code>,而不是写多份同名方法。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>多态 = 共享接口下"一名多态",有两半——重载(编译期,同名不同参,同一类内)和重写(运行时,同名同参,跨父子类,靠动态分派)。答题千万别只说重写。语言默认各异:Python 方法调用永远动态、但不原生支持方法重载(可支持运算符重载);Java 方法默认虚;C++ 要 <code>virtual</code> 才动态分派。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《52 Important OOP Interview Questions in 2026》(Devinterview.io)Q4(What is polymorphism? Explain overriding and overloading)——多态定义、重载=编译期多态、重写=运行时多态、C++ <code>virtual</code> 虚方法、动态分派 / 后期绑定,均取自源题原文。</li>
+<li><strong>canon(补充锚定):</strong>"Python 方法查找天生动态、不需要 <code>virtual</code>""Python 不原生支持方法重载"来自 Python 官方文档 —— <a href="https://docs.python.org/3/tutorial/classes.html#method-objects">Classes / 方法对象</a> 与 <a href="https://docs.python.org/3/reference/datamodel.html#special-method-names">Data Model(运算符重载靠 dunder 方法)</a>、<a href="https://docs.python.org/3/library/functools.html#functools.singledispatch"><code>functools.singledispatch</code></a>;Java 实例方法默认虚见 <a href="https://docs.oracle.com/javase/specs/jls/se17/html/jls-8.html#jls-8.4.8.1">Java Language Specification §8.4.8(overriding)</a>;C++ <code>virtual</code> 与动态分派见 <a href="https://en.cppreference.com/w/cpp/language/virtual">cppreference: virtual functions</a>。术语"ad-hoc / subtype polymorphism"是编程语言理论通用分类。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 讲清"为什么 C++ 要 <code>virtual</code> 而 Python 不用"、或者把你写的 <code>Shape</code> 代码拿来评,或者提前看 0020 的 <code>singledispatch</code>,都可以开口。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节收尾四大支柱——抽象:抽象类 vs 接口,以及"只暴露必要"的设计哲学。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0003-inheritance.html"><span class="dir">← 上一课</span>0003 · 继承:is-a、继承类型与 super</a>
+<a class="next" href="0005-abstraction.html"><span class="dir">下一课 →</span>0005 · 抽象:抽象类、接口与只暴露必要</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

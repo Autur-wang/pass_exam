@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0019 · DFS 三种序:前序 / 中序 / 后序</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0019 课 · 树 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>DFS 三种序:前序 / 中序 / 后序</h1>
+
+<p class="lede">上一课我们说 DFS「一头扎到底」。但「扎到底」的路上,<strong>什么时候把当前节点算作『访问』</strong>,有三个时机可选——放在处理孩子之前、之间、之后,就得到<strong>前序、中序、后序</strong>。别把它们当三句要死记的口诀:每一种都对应一类真实需求,尤其那句「<strong>BST 的中序遍历得到有序序列</strong>」,是后面无数题的钥匙。</p>
+
+<div class="recall">
+<p>先回忆:上一课(<a href="0018-trees-and-traversal.html">树入门与遍历</a>)里,DFS 靠递归(或显式栈)沿一条分支探到底再回退。这节我们不换算法,只调整一件事——<strong>在递归里「访问根」这句话插在哪一步</strong>。先自己想想:如果把它插在「递归左孩子」和「递归右孩子」中间,访问顺序会有什么规律?</p>
+</div>
+
+<h2>一、三种序,只差一行代码的位置</h2>
+
+<p>DFS 处理一个节点时要做三件事:<strong>访问根(visit)</strong>、<strong>递归左子树(L)</strong>、<strong>递归右子树(R)</strong>。左总在右前,变的只是「visit」插在哪:</p>
+
+<figure class="diagram">
+<div class="trio">
+  <div class="cell"><span class="role">visit 在最前</span><span class="head">前序</span><span class="sub">根 → 左 → 右</span></div>
+  <div class="cell"><span class="role">visit 在中间</span><span class="head">中序</span><span class="sub">左 → 根 → 右</span></div>
+  <div class="cell"><span class="role">visit 在最后</span><span class="head">后序</span><span class="sub">左 → 右 → 根</span></div>
+</div>
+<figcaption>「前 / 中 / 后」说的是<strong>根被访问的时机</strong>相对于左右孩子的早晚。左右孩子的相对顺序永远是「先左后右」。</figcaption>
+</figure>
+
+<p>下面这棵树把三种序同时标出来:每个节点旁边三个数字,分别是它在<strong style="color:var(--accent)">前序(红)</strong>、<strong style="color:var(--good)">中序(绿)</strong>、<strong style="color:var(--muted)">后序(灰)</strong>里第几个被访问。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 440 300" role="img" aria-label="一棵二叉树,每个节点标注它在前序、中序、后序遍历中的访问编号">
+  <line class="dgm-edge" x1="220" y1="32" x2="120" y2="100"/>
+  <line class="dgm-edge" x1="220" y1="32" x2="330" y2="100"/>
+  <line class="dgm-edge" x1="120" y1="106" x2="60" y2="172"/>
+  <line class="dgm-edge" x1="120" y1="106" x2="175" y2="172"/>
+  <line class="dgm-edge" x1="330" y1="106" x2="385" y2="172"/>
+  <line class="dgm-edge" x1="175" y1="178" x2="130" y2="244"/>
+  <line class="dgm-edge" x1="175" y1="178" x2="220" y2="244"/>
+  <line class="dgm-edge" x1="385" y1="178" x2="340" y2="244"/>
+  <!-- nodes -->
+  <circle class="dgm-node" cx="220" cy="30" r="19"/><text class="dgm-text" x="220" y="36" text-anchor="middle" font-size="15">F</text>
+  <circle class="dgm-node" cx="120" cy="103" r="19"/><text class="dgm-text" x="120" y="109" text-anchor="middle" font-size="15">B</text>
+  <circle class="dgm-node" cx="330" cy="103" r="19"/><text class="dgm-text" x="330" y="109" text-anchor="middle" font-size="15">G</text>
+  <circle class="dgm-node" cx="60" cy="175" r="19"/><text class="dgm-text" x="60" y="181" text-anchor="middle" font-size="15">A</text>
+  <circle class="dgm-node" cx="175" cy="175" r="19"/><text class="dgm-text" x="175" y="181" text-anchor="middle" font-size="15">D</text>
+  <circle class="dgm-node" cx="385" cy="175" r="19"/><text class="dgm-text" x="385" y="181" text-anchor="middle" font-size="15">I</text>
+  <circle class="dgm-node" cx="130" cy="247" r="19"/><text class="dgm-text" x="130" y="253" text-anchor="middle" font-size="15">C</text>
+  <circle class="dgm-node" cx="220" cy="247" r="19"/><text class="dgm-text" x="220" y="253" text-anchor="middle" font-size="15">E</text>
+  <circle class="dgm-node" cx="340" cy="247" r="19"/><text class="dgm-text" x="340" y="253" text-anchor="middle" font-size="15">H</text>
+  <!-- pre / in / post triples: F -->
+  <text class="dgm-accent-text" x="247" y="20" font-size="11">1</text>
+  <text class="dgm-good-text"   x="247" y="33" font-size="11">6</text>
+  <text class="dgm-muted"       x="247" y="46" font-size="11">9</text>
+  <!-- B -->
+  <text class="dgm-accent-text" x="147" y="93"  font-size="11">2</text>
+  <text class="dgm-good-text"   x="147" y="106" font-size="11">2</text>
+  <text class="dgm-muted"       x="147" y="119" font-size="11">5</text>
+  <!-- G -->
+  <text class="dgm-accent-text" x="357" y="93"  font-size="11">7</text>
+  <text class="dgm-good-text"   x="357" y="106" font-size="11">7</text>
+  <text class="dgm-muted"       x="357" y="119" font-size="11">8</text>
+  <!-- A -->
+  <text class="dgm-accent-text" x="20" y="165" font-size="11">3</text>
+  <text class="dgm-good-text"   x="20" y="178" font-size="11">1</text>
+  <text class="dgm-muted"       x="20" y="191" font-size="11">1</text>
+  <!-- D -->
+  <text class="dgm-accent-text" x="202" y="165" font-size="11">4</text>
+  <text class="dgm-good-text"   x="202" y="178" font-size="11">4</text>
+  <text class="dgm-muted"       x="202" y="191" font-size="11">4</text>
+  <!-- I -->
+  <text class="dgm-accent-text" x="412" y="165" font-size="11">8</text>
+  <text class="dgm-good-text"   x="412" y="178" font-size="11">9</text>
+  <text class="dgm-muted"       x="412" y="191" font-size="11">7</text>
+  <!-- C -->
+  <text class="dgm-accent-text" x="90" y="255" font-size="11">5</text>
+  <text class="dgm-good-text"   x="90" y="268" font-size="11">3</text>
+  <text class="dgm-muted"       x="90" y="281" font-size="11">2</text>
+  <!-- E -->
+  <text class="dgm-accent-text" x="242" y="255" font-size="11">6</text>
+  <text class="dgm-good-text"   x="242" y="268" font-size="11">5</text>
+  <text class="dgm-muted"       x="242" y="281" font-size="11">3</text>
+  <!-- H -->
+  <text class="dgm-accent-text" x="362" y="255" font-size="11">9</text>
+  <text class="dgm-good-text"   x="362" y="268" font-size="11">8</text>
+  <text class="dgm-muted"       x="362" y="281" font-size="11">6</text>
+</svg>
+</div>
+<figcaption>每节点旁三数=<span style="color:var(--accent)">前序</span> / <span style="color:var(--good)">中序</span> / <span style="color:var(--muted)">后序</span> 的访问序号。前序:F B A D C E G I H;<strong>中序:A B C D E F G H I(恰好从小到大)</strong>;后序:A C E D B H I G F。</figcaption>
+</figure>
+
+<h2>二、每种序各自擅长什么</h2>
+
+<p><strong>前序(根 → 左 → 右)</strong>:根最先被处理,适合<strong>「先复制/建立根,再挂上子树」</strong>——比如深拷贝一棵树、把树序列化。</p>
+<p><strong>中序(左 → 根 → 右)</strong>:对<strong>二叉搜索树(BST)</strong>做中序,输出<strong>严格递增</strong>的有序序列。原因很直白:BST 的不变量是「左子树全部 &lt; 根 &lt; 右子树全部」,而中序正好按「先左、再根、后右」访问,自然升序。这条性质是「BST 找第 k 小」「验证 BST」等题的核心武器,下一课会反复用到。</p>
+<p><strong>后序(左 → 右 → 根)</strong>:根最后处理,适合<strong>「必须先拿到孩子的结果,才能算自己」</strong>——比如释放/删除整棵树(先删孩子再删自己,否则丢指针)、求树高(先知道左右子树高,取 max+1)。</p>
+
+<h2>三、写法:递归三行,迭代靠栈</h2>
+
+<p>递归写法几乎就是定义本身,以中序为例:<code>inorder(node){ if(!node) return; inorder(node.left); visit(node); inorder(node.right); }</code>——把 <code>visit</code> 挪到最前是前序、挪到最后是后序。<strong>迭代写法</strong>要用一个显式栈模拟递归调用栈:中序迭代的套路是「一路压左孩子到底,弹出即访问,再转向其右孩子」。能手写迭代中序,是面试里区分「背过」和「真懂」的分水岭。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>前序 / 中序 / 后序(pre- / in- / post-order)</dt>
+<dd>DFS 的三种访问时机:根在左右孩子之前 / 之间 / 之后被访问。左孩子恒在右孩子之前。</dd>
+<dt>中序有序性(in-order sorted property)</dt>
+<dd>对<strong>二叉搜索树</strong>做中序遍历,得到的是元素的升序序列。<em>避免</em>误以为对任意二叉树中序都有序——只有 BST 才成立。</dd>
+</dl>
+
+<h2>五、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>平均</th><th>最坏</th></tr></thead>
+<tbody>
+<tr><td class="op">任一种序遍历(每节点访问一次)</td><td>O(n)</td><td>O(n)</td></tr>
+<tr><td class="op">递归栈 / 显式栈空间(= 树高 h)</td><td class="best">O(h)</td><td class="warn">O(n)</td></tr>
+</tbody>
+</table>
+<p>三种序的时间完全一样(都是 O(n)),空间也一样——都吃「当前根到叶那条路径」的深度 h。平衡树 h≈log n;退化成链时 h=n,空间 O(n)。换句话说,选哪种序不影响复杂度,只影响<strong>你在什么时机拿到节点</strong>。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>遍历序是「重建二叉树」这一高频题族的入口:</p>
+<ul>
+<li><strong>给定两个遍历序列,重建原树</strong>:<strong>中序 + 前序</strong>(或中序 + 后序)可<strong>唯一</strong>确定一棵二叉树。思路:前序的首元素(或后序的末元素)就是根,拿它去中序里一劈,左半是左子树、右半是右子树,递归即可。</li>
+<li><strong>「BST 的第 k 小 / 是否有序 / 相邻差最小」</strong>:一律先想「中序遍历成升序序列」,题目瞬间线性化。</li>
+<li>被追问「<strong>光有前序 + 后序</strong>行不行」:一般<strong>不行</strong>——遇到只有单个孩子的节点时无法区分它是左还是右,重建不唯一。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>光背「根左右 / 左根右 / 左右根」而不理解,考场上一定会背串。</strong>记住锚点:<strong>「前/中/后」修饰的永远是『根』被访问的时机</strong>,左恒在右前。</p>
+<p>更要命的坑:<strong>「中序得到有序序列」只对 BST 成立</strong>。对一棵普通二叉树做中序,输出就是普通顺序、毫无升序可言。很多同学把这条性质错记成「中序天生有序」,一到非 BST 的题就用错。</p>
+</div>
+
+<div class="implement">
+<p>沿用上一课的二叉树节点,把三种序都写出<strong>递归版与迭代版</strong>:</p>
+<p><code>preorder</code> / <code>inorder</code> / <code>postorder</code> 各两版(迭代中序用栈最能体现原理)。再挑战一道经典题:写 <code>build(inorder, preorder)</code>,由中序 + 前序<strong>重建</strong>二叉树,并对建出来的树再跑一遍遍历,验证序列和输入一致。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>三种序只差「访问根」这一步插在哪。真正要焊死进肌肉记忆的是——<strong>对 BST 做中序 = 升序输出</strong>,以及<strong>中序 + 前序/后序能唯一重建二叉树</strong>。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:单独给你一棵二叉树的中序遍历序列,能唯一确定这棵树吗?</summary>
+<div class="answer">
+<p><strong>不能。</strong>中序只告诉你「根把序列劈成左、右两段」,但没告诉你根是谁,同一个中序序列能对应许多不同形状的树。必须再补一个<strong>前序(点名第一个根)</strong>或<strong>后序(点名最后一个根)</strong>,才能递归地唯一重建。而且注意:<strong>前序 + 后序仍不够</strong>——碰到只有一个孩子的节点时无法判定左右,重建不唯一。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪种遍历能对一棵二叉搜索树(BST)输出从小到大的有序序列?</summary>
+<div class="answer">
+<p><strong>中序(左 → 根 → 右)。</strong>因为 BST 的不变量是「左子树全部 &lt; 根 &lt; 右子树全部」,中序恰好先访问较小的左子树、再访问根、最后访问更大的右子树,自然升序。前序/后序/层序都不具备这个性质。注意前提是「BST」——普通二叉树中序不会有序。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题仍在仓库大纲「树 → 树-介绍」小节,关注遍历部分:</p>
+<ul>
+<li><a href="https://www.coursera.org/lecture/data-structures/tree-traversal-fr51b">树遍历(Coursera 视频)</a> —— 把三种序讲透的一条。</li>
+<li><a href="https://www.youtube.com/playlist?list=PL9xmBV_5YoZO1JC2RgEi04nLy6D-rKk6b">11 分钟内的树遍历(复习播放列表)</a> —— 考前快速回炉三种序。</li>
+<li><a href="https://www.youtube.com/watch?v=uWL6FJhq5fM">BFS 和 DFS(视频)</a> —— 回到 DFS 的整体框架再看三种序。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师给你两个遍历序列,当场让你重建出树的形状;或让你只用栈、不用递归写出中序迭代版。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0018-trees-and-traversal.html"><span class="dir">← 上一课</span>树入门与遍历:BFS vs DFS</a>
+  <a class="next" href="0020-binary-search-tree.html"><span class="dir">下一课 →</span>二叉搜索树:有序性即不变量</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

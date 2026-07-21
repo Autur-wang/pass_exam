@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0020 · Agent 记忆与编排:long-horizon、orchestrator-worker、防循环</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第六部分 Agents · 第 0020 课</p>
+<h1>Agent 记忆与编排:long-horizon、orchestrator-worker、防循环</h1>
+<p class="lede">上一课把 agent 的「一步」讲透了:ReAct 循环、工具调用、MCP。这节课处理「跑很多步」之后的四道真实面试题:<strong>「什么是 agent 记忆、有哪些类型?」「长程 agent 怎么管上下文?」「什么是 orchestrator-worker/sub-agent、子 agent 怎么通信?」「怎么防 agent 无限循环或成本失控?」</strong>(源:AI 工程师题库 Q61、Q68、Q69、Q60)。一句话主线:<strong>上下文是整条运行的托管预算,不是可以无限追加的 transcript。</strong></p>
+
+<div class="recall">
+<p>上一课的 agent 靠 ReAct 循环工作:每步「想 → 调工具 → 把结果读回上下文 → 再想」。<strong>先别往下看:如果 agent 每步都把工具返回原样塞回上下文,跑到第 50 步会发生什么?到那时它还答得准吗、还便宜吗?</strong></p>
+</div>
+
+<h2>一、Agent 记忆:短期 vs 长期</h2>
+<p>面试官问「agent 记忆有哪些类型」,想听的是你能把两个层次分清楚,而不是只答一句「存数据库」。记忆本质上是个<strong>上下文工程问题</strong>,不只是存储问题。</p>
+
+<dl class="keydef">
+<dt>短期记忆 / 工作记忆(short-term / working memory)</dt>
+<dd>就是<strong>当前上下文窗口</strong>里的东西:近期的对话消息、刚拿到的工具结果、正在写的草稿。它随会话存在,窗口一满或一换会话就没了。</dd>
+<dt>长期记忆(long-term memory)</dt>
+<dd><strong>跨会话持久</strong>,通常存在窗口<strong>外部</strong>(数据库、向量库、文件),用到时才按需检索回来。装的是持久事实、用户偏好、过往任务的结果。</dd>
+</dl>
+
+<p>真正的工程活儿有三样,面试答得出这三条就到位了:</p>
+<ul>
+<li><strong>写什么进长期</strong>:哪些信息值得跨会话留住,哪些用完即弃。</li>
+<li><strong>怎么检回来</strong>:每一步只把<em>该步相关的切片</em>捞回上下文,而不是把整个记忆库倒进窗口。</li>
+<li><strong>怎么防陈旧与臃肿</strong>:记忆会变旧、会越堆越大,得主动淘汰。模型更吃<strong>结构化的 JSON 面包屑</strong>,而不是松散散文。</li>
+</ul>
+
+<h2>二、长程上下文:把窗口当预算来管</h2>
+<p>长程 agent(跑几十上百步)会不断累积消息和冗长的工具输出。放任不管,两个毛病一起来:一是 <strong>context rot</strong>——窗口越塞越满,连贯性和判断力下降;二是<strong>成本爆炸</strong>——每一步都要为越来越长的上下文重新付 token 钱。所以要<strong>主动管理</strong>工作上下文,而不是任其增长。</p>
+<p>核心手法可以归成三个动作(记住:它们不等价,取舍不同):</p>
+
+<div class="trio">
+  <div class="cell"><strong>Clear(逐出/截断)</strong><br>删掉已完成、陈旧的工具结果<br><em>安全、基本无损</em></div>
+  <div class="cell"><strong>Compact(压缩)</strong><br>把旧轮对话摘要成短文<br><em>有损——摘要 ≠ 完整连贯</em></div>
+  <div class="cell"><strong>Offload(卸载)</strong><br>持久事实写到外部记忆<br><em>该步要用时再检回</em></div>
+</div>
+
+<p>还有第四招是<strong>隔离</strong>:把一个子任务丢给拥有<em>独立上下文</em>的 sub-agent 去做,让它只把简短结果回传,子任务的一大堆中间过程根本不进主线窗口。Anthropic 的多 agent 研究系统就是这么干的——给每个 subagent 隔离的窗口,回传浓缩摘要给主 agent。</p>
+<p>把这一切串起来的心法:<strong>上下文是整条运行的托管预算</strong>。你像管内存一样管它——该腾就腾、该摘要就摘要、该卸载就卸载,而不是把它当成一条只增不减的 transcript 无脑追加。</p>
+
+<h2>三、Orchestrator-Worker:靠隔离,靠契约</h2>
+<p>当一个任务大到单个 agent 的上下文扛不住,就拆成<strong>编排者(orchestrator)+ 多个 worker(sub-agent)</strong>:编排者拆任务、把子任务委派给各自带独立上下文与工具的 worker,最后综合它们的结果。</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step">编排者 Orchestrator:读总目标 → 拆成子任务 → 决定派给谁</div>
+  <div class="down">↓ 委派(每个 worker 拿到<strong>独立窗口</strong> + 各自的工具)</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">Worker A · 独立上下文</div>
+      <div class="step">子任务:检索</div>
+    </div>
+    <div class="branch">
+      <div class="label">Worker B · 独立上下文</div>
+      <div class="step">子任务:分析</div>
+    </div>
+    <div class="branch">
+      <div class="label">Worker C · 独立上下文</div>
+      <div class="step">子任务:核对</div>
+    </div>
+  </div>
+  <div class="down">↑ 各自只回传「短结构化结果 / artifact」,<strong>不回灌完整轨迹</strong></div>
+  <div class="step terminal">编排者综合各 worker 的浓缩结果 → 产出最终答案</div>
+</div>
+<figcaption>隔离是关键:每个 worker 保持小而聚焦的上下文,而不是一个臃肿的共享窗口。</figcaption>
+</figure>
+
+<p>面试官最想听的两个点:</p>
+<ul>
+<li><strong>为什么这么拆(隔离的价值)</strong>:每个 worker 的窗口小而聚焦,不用背别人的一大堆中间过程,因此更可靠;子任务彼此独立,还能<strong>并行</strong>跑。</li>
+<li><strong>子 agent 怎么通信(关键设计)</strong>:sub-agent 之间应该经<strong>良定义的接口</strong>,只传「短结构化结果 / artifact」,而不是共享原始轨迹。因为——你把完整 transcript 灌来灌去,就等于把刚刚辛苦分开的上下文<em>臃肿又请回来</em>,隔离的好处全抵消了。</li>
+</ul>
+<p>所以一句总结:编排者与 worker 之间那份<strong>清晰的契约</strong>(输入是什么、回传什么格式),和写好 prompt 一样重要。</p>
+
+<h2>四、防无限循环与成本失控</h2>
+<p>Q60 是个工程题,考的是你有没有「给自主系统装刹车」的意识。别只答一句「加个 max_steps」——好答案是<strong>多层防线</strong>叠起来:</p>
+<ul>
+<li><strong>硬上限</strong>:最大步数 / 工具调用次数、墙钟时间或 token 预算、每个任务的成本上限。撞到就停,兜底。</li>
+<li><strong>进度检查</strong>:检测到重复相同动作、或连续几步没带来新信息,就主动停——空转就是烧钱。</li>
+<li><strong>分层用模型</strong>:便宜模型跑常规子步,强模型只在真正需要的地方上,别拿最贵的模型去干打杂的活。</li>
+<li><strong>缓存</strong>:稳定的上下文和工具结果做缓存,重复的东西不重复付费。</li>
+<li><strong>按需给推理预算</strong>:只给该步真正需要的思考量,不是每步都开到最大。</li>
+<li><strong>工具设计成「可恢复」</strong>:工具失败时返回<strong>可行动的错误信息</strong>,让模型据此调整、恢复,而不是盲目重试——盲目重试既烧钱又容易转成死循环。</li>
+</ul>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「agent 记忆有哪些类型?」——短期(工作,即当前上下文)vs 长期(持久、存外部、按需检回);别只答「存数据库」。</li>
+<li>「跑很多步、上下文爆了怎么办?」——主动管理:compact 摘要旧轮、clear 逐出陈旧工具结果、offload 到外部记忆只检回该步所需,再加把子任务隔离进 sub-agent。</li>
+<li>「什么是 orchestrator-worker?子 agent 怎么通信?」——编排者拆任务→派给带独立上下文的 worker→综合;通信传短结构化结果,不共享原始轨迹。</li>
+<li>「为什么不干脆把完整 transcript 传给 sub-agent?」——那会把你分开的上下文臃肿又请回来,隔离的意义就没了。</li>
+<li>「怎么防 agent 无限循环 / 成本失控?」——硬上限 + 进度检查 + 便宜模型跑常规步 + 缓存 + 工具返回可行动错误。</li>
+<li>「记忆库只增不减行不行?」——不行,会变慢变乱;要设计「丢什么」,forgetting 是特性不是 bug。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(凡是绝对化措辞都要小心):</strong></p>
+<ul>
+<li>别说「长期记忆<strong>就是</strong>向量库」——向量检索只是一种取回方式;持久的结构化事实用数据库、键值、文件都行,模型往往更吃 JSON 面包屑而非松散散文。</li>
+<li>别说「记忆越多越好」——只增不减的记忆库会变慢、变混乱;<strong>forgetting 是特性</strong>,要设计淘汰什么。</li>
+<li>别说「sub-agent 共享完整上下文最省事」——共享原始轨迹会把隔离的好处抵消掉;应只传浓缩结果。</li>
+<li>别说「多 agent 一定比单 agent 强」——多 agent 带来协调开销、级联失败、更难调试;先跑单 agent,有证据再加第二个。</li>
+<li>别说「工具失败就自动重试到成功」——盲目重试烧钱且易转成死循环;工具应返回可行动错误,让模型恢复。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>在 orchestrator-worker 模式里,子 agent 之间应该怎样通信最合适?</p>
+<details><summary>A. 共享同一个上下文窗口,让所有 worker 都能读到彼此完整轨迹</summary>错。共享原始轨迹会把刚分开的上下文臃肿又请回来,隔离的好处全没了。</details>
+<details><summary>B. 经良定义的接口只传「短结构化结果 / artifact」,不共享原始轨迹 ✅</summary>正确。清晰契约 + 浓缩结果,既保住隔离又能综合。</details>
+<details><summary>C. 每个 worker 把自己的完整 transcript 广播给其他所有 worker</summary>错。这比共享窗口更糟,上下文会指数级膨胀。</details>
+<details><summary>D. worker 之间从不通信,全靠用户手动复制粘贴中转</summary>错。编排的意义正是自动委派与综合,不是人肉搬运。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>下面哪种做法最能同时防住 agent 无限循环<em>和</em>成本失控?</p>
+<details><summary>A. 把所有子步都换成最强的模型,力求一次做对省得重来</summary>错。最贵模型干打杂活反而推高成本,也拦不住循环。</details>
+<details><summary>B. 只要工具失败就自动无限重试,直到它成功为止</summary>错。盲目重试既烧钱又容易转成死循环,应返回可行动错误让模型恢复。</details>
+<details><summary>C. 设硬上限(最大步数 / token 预算)+ 进度检查(重复动作、无新信息就停)✅</summary>正确。多层刹车叠起来:硬上限兜底,进度检查掐掉空转。</details>
+<details><summary>D. 把上下文窗口开到最大,让 agent 永远不必管理上下文</summary>错。更大窗口不是免费午餐,相关信息仍会淹没在长上下文中间。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Anthropic, Building Effective Agents</strong>——workflows vs agents、orchestrator-workers 编排模式的权威梳理。</li>
+<li><strong>Anthropic 工程博客(多 agent 研究系统)</strong>——给每个 subagent 隔离窗口、回传浓缩摘要的真实案例,本课的隔离论断即出自此类实践。</li>
+<li><strong>Anthropic, Effective context engineering for AI agents</strong>——clear / compact / offload、把上下文当预算来管的一手来源。</li>
+<li><strong>Lost in the Middle</strong>(Liu et al., 2023)——「更大窗口不是免费午餐」的证据:相关信息会淹没在长上下文中间。</li>
+<li><strong>Anthropic, Writing Effective Tools for AI Agents</strong>——工具设计成返回可行动错误、让模型可恢复。</li>
+<li>下一步:把这些机制做成「稳」的系统(第 0021 课 Agent 可靠性)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>记忆分短期(当前上下文)与长期(存外部、按需检回);长程要把上下文当托管预算主动管(clear / compact / offload + sub-agent 隔离);编排靠传短结构化结果而非原始轨迹;防失控靠硬上限 + 进度检查 + 分层用模型。</strong></p>
+<nav class="lesson-nav">
+<a href="0019-agent-mechanics.html">← 上一课:Agent 机制:ReAct/工具/MCP</a>
+<a class="next" href="0021-agent-reliability.html">下一课:Agent 可靠性 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

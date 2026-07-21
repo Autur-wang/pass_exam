@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0028 · Hooks 的规则 + 自定义 Hook 设计</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0028 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>Hooks 的规则 + 自定义 Hook 设计</h1>
+
+<p class="lede">上一课过了 useState、useEffect、useContext、useRef、useId 这五个内建 hook 各自怎么用、各自的陷阱;但面试官更常追问的不是这些 API 细节,而是两个更底层的问题——"为什么 hook 不能写在 if 里面"和"你能不能把这段重复逻辑抽成一个自定义 hook"。这节课要回答的正是这两个问题:hooks 的两条规则到底在保护什么、违反了具体会坏在哪里;以及一段重复逻辑什么时候该抽成自定义 hook、抽出来之后到底复用了什么。</p>
+
+<div class="recall">
+<p>回忆一下上一课:useState、useEffect、useContext、useRef、useId 各自解决什么问题、各自最容易踩的陷阱是什么,你现在应该已经能不看笔记说出至少三个。这节课不会重复这些 API 细节——但要用到一个前提:hook 内部靠什么"认出"这是第几次调用、该对应哪一份状态?如果这一点还说不清楚,后面"为什么不能在 if 里调用 hook"的答案会很难接住。</p>
+</div>
+
+<h2>一、hooks 靠什么记住状态:调用顺序</h2>
+
+<p>useState、useRef 这些 hook 内部并不知道自己叫"count"还是"user"——React 记录状态靠的是<strong>调用顺序</strong>:每次渲染,React 都会按代码里出现的先后顺序,依次执行组件函数里的每一次 hook 调用,再把这次调用对应的状态,按"这是本次渲染里第几次调用 hook"这个位置去匹配。</p>
+
+<p>这套机制成立的前提,是"每次渲染,hook 调用的顺序和次数保持不变"。手册对这一点说得很直接:hooks 必须在每次渲染时以相同的顺序调用,条件 hooks 可能会导致 React 错位状态更新;以不同的顺序调用它们或调用不同的次数,可能会破坏 React 的内部状态跟踪。这就是"仅在顶层调用 hooks"这条规则真正要保护的东西——不是代码风格,是一套按位置对号的记账系统。</p>
+
+<h2>二、规则一:只在顶层调用 Hooks</h2>
+
+<p>具体来说:不要在循环、条件、嵌套函数或 <code>try</code>/<code>catch</code>/<code>finally</code> 块内调用 hook。面试里最常被拿出来问的违规写法,是把 hook 塞进一个 <code>if</code>:</p>
+
+<div class="codecompare">
+  <div class="side bad">
+    <p class="label">❌ 条件语句里调用</p>
+    <pre><code>if (someCondition) {
+  // 条件为真才调用,为假就跳过
+  const [count, setCount] = useState(0);
+}</code></pre>
+  </div>
+  <div class="side good">
+    <p class="label">✅ hook 留在顶层,条件只包住"用不用"</p>
+    <pre><code>const [count, setCount] = useState(0);
+
+if (someCondition) {
+  console.log(count);
+}</code></pre>
+  </div>
+</div>
+
+<p>把 hook 挪出条件语句之后,不管 <code>someCondition</code> 这次渲染是真是假,<code>useState</code> 都在同一个位置被调用一次——这正是 React 能对上号的前提。左边那种写法一旦 <code>someCondition</code> 在两次渲染之间变了,这次渲染调用了这个 hook、下次没调用,后面所有 hook 读到的状态位置就会集体错位。</p>
+
+<p>顶层被破坏的方式不止 <code>if</code> 一种,下面三种在面试里同样常被追问"错在哪":</p>
+
+<table>
+<tr><th>场景</th><th>违规写法要点</th><th>为什么破坏顺序</th></tr>
+<tr><td>循环内调用</td><td><code>for</code> 循环里每次循环都调用一次 <code>useState</code></td><td>循环次数一旦变化,hook 调用次数就跟着变;稳妥做法是写成两个独立的 <code>useState</code>,不放进循环</td></tr>
+<tr><td>条件 <code>return</code> 之后调用</td><td>先判断 <code>if (hidden) return;</code>,再调用 <code>useState</code></td><td>有些渲染在 <code>return</code> 处就退出了,根本没走到后面的 hook 调用;把 hook 挪到 <code>return</code> 之前,才能保证不同渲染路径下调用次数一致</td></tr>
+<tr><td>事件处理程序内调用</td><td><code>handleClick</code> 里调用 <code>useContext</code></td><td>hook 变成"按需触发",不再随组件每次渲染固定执行一次,和渲染本身的调用顺序对不上</td></tr>
+</table>
+
+<h2>三、规则二:只从组件或自定义 Hook 里调用</h2>
+
+<p>第二条规则更好记:hook 只能出现在两种地方——React 函数组件内部,或者另一个自定义 hook 内部;不能在普通的 JavaScript 函数里调用,也不能直接写在组件外部的模块顶层。</p>
+
+<pre><code>// ❌ 错误:在组件外部
+const count = useState(0);
+
+function App() {
+  // ...
+}
+
+// ✅ 正确:在函数组件或自定义 Hook 内部
+function App() {
+  const [count, setCount] = useState(0);
+  return &lt;p&gt;{count}&lt;/p&gt;;
+}
+
+function useCounter() {
+  const [count, setCount] = useState(0);
+  return [count, () => setCount((x) => x + 1)];
+}</code></pre>
+
+<p>原因和规则一同源:hook 依赖 React 的渲染周期和组件实例去挂靠对应的状态;组件外部的模块顶层代码只在模块被加载时跑一次,不在 React 的渲染循环里,没有"正在渲染哪个组件"这个上下文可以让状态挂靠上去。</p>
+
+<h2>四、自定义 Hook:把重复逻辑抽出去</h2>
+
+<p>自定义 hook 是一个从组件里提取出来、可以复用的普通函数,内部照样调用 <code>useState</code>、<code>useEffect</code> 之类的内建 hook 来维护状态和副作用;它遵守和内建 hook 完全相同的两条规则,只是换了个名字、挪到了组件外面。它解决的问题主要是四类:</p>
+
+<table>
+<tr><th>好处</th><th>说明</th></tr>
+<tr><td>代码可重用性</td><td>把逻辑封装进 hook,多个组件复用同一份逻辑,不用把同一段状态 + 副作用代码复制粘贴好几遍</td></tr>
+<tr><td>关注点分离</td><td>组件只管"渲染成什么样",状态管理、获取数据、事件监听这些逻辑收进自定义 hook</td></tr>
+<tr><td>组件更简洁、更易读</td><td>组件函数体里少了一大段状态/副作用代码,读起来更容易看出它在渲染什么</td></tr>
+<tr><td>副作用被单独封装</td><td>API 调用之类的副作用集中在 hook 内部管理,调试和测试都更容易定位问题</td></tr>
+</table>
+
+<p>判断"这是不是一个自定义 hook"有一条简单标准:名字以 <code>use</code> 开头,并且内部至少调用一次其他 React hook——如果一个函数不调用任何 hook,它就不需要写成 hook,只是个普通函数。以 <code>useCounter</code> 为例:</p>
+
+<pre><code>function useCounter(initialValue = 0) {
+  const [count, setCount] = useState(initialValue);
+
+  const increment = () => setCount(count + 1);
+  const decrement = () => setCount(count - 1);
+  const reset = () => setCount(initialValue);
+
+  return { count, increment, decrement, reset };
+}
+
+function CounterComponent() {
+  const { count, increment, decrement, reset } = useCounter(10);
+
+  return (
+    &lt;div&gt;
+      &lt;p&gt;Count: {count}&lt;/p&gt;
+      &lt;button onClick={increment}&gt;+&lt;/button&gt;
+      &lt;button onClick={decrement}&gt;-&lt;/button&gt;
+      &lt;button onClick={reset}&gt;Reset&lt;/button&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+<p>这个例子的价值不在于"少写几行代码",而在于它<strong>不暴露</strong> <code>setCount</code> 本身——调用 <code>useCounter</code> 的组件拿到的只是 <code>increment</code>、<code>decrement</code>、<code>reset</code> 三个受限操作,没法把 <code>count</code> 直接改成任意值。这正是关注点分离的体现:内部状态怎么变,由 hook 自己收着,组件只拿到它需要的那扇窄门。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>Hooks 规则</dt>
+<dd>两条硬性约束:只在组件函数(或自定义 hook)的顶层调用 hook,不放进循环、条件、嵌套函数或 <code>try</code>/<code>catch</code>/<code>finally</code> 块;并且只从 React 函数组件或自定义 hook 里调用 hook。两条规则本质都在保证"每次渲染,hook 的调用顺序和次数不变",这是 React 按位置对应状态的前提。<em>避免</em>把这两条当成"最佳实践建议",可以视情况打破——它们是状态追踪机制成立的硬性前提,违反后不一定马上报错,但状态错位是迟早的事。</dd>
+<dt>自定义 Hook</dt>
+<dd>一个以 <code>use</code> 开头、内部调用了至少一个其他 React hook 的普通函数,用来把重复的状态/副作用逻辑从组件里抽出来复用,遵守和内建 hook 相同的两条规则。<em>避免</em>以为两个组件调用同一个自定义 hook 会共享同一份状态——每次调用都会通过内部的 <code>useState</code> 等 hook 各自建立一份独立状态,互不影响。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>代码审查时,看到 hook 调用出现在 <code>if</code>/<code>for</code>/<code>try</code> 内部,或者出现在一个既不是组件、也不以 <code>use</code> 开头的普通函数里,直接当成 bug 打回去,不用等运行时报错才处理——这两条规则是"必须遵守",不是"建议遵守"。判断"要不要抽成自定义 hook"也有一条简单标准:同一套 state + effect 组合,已经在两三个组件里重复出现了,就该抽;只在一个地方用,先别急着抽,"以后可能会被复用"不等于"现在已经被复用"。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把 hook 包进 <code>try</code>/<code>catch</code> 做错误处理,以为这只是"给 hook 加一层保护",不算违反规则。</strong>规则里明确点名了 <code>try</code>/<code>catch</code>/<code>finally</code> 块,和循环、条件、嵌套函数是同一类位置。把 hook 塞进 <code>try</code> 块之后,一旦这次渲染在 <code>try</code> 之前的代码就抛出异常提前退出,或者只在 <code>catch</code> 分支里才补一次 hook 调用,hook 的调用次数或顺序照样会变——本质上和写进 <code>if</code> 判断里是同一类错误,只是包装成了"错误处理"的样子,容易被忽略。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>在自己手头的项目里挑一个已经出现过两三次的 state + effect 组合(比如 loading/data/error 三件套加对应的 fetch 逻辑),把它抽成一个以 <code>use</code> 开头的自定义 hook,验证抽取前后组件行为不变;顺便扫一眼项目里现有的 hook 调用,看有没有藏在 <code>if</code>/<code>for</code>/<code>try</code> 或者普通帮助函数里的。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>hooks 的两条规则本质上保护的是同一件事——React 靠调用顺序把状态和 hook 对应上,顺序或次数在某次渲染里变了,状态就会错位;自定义 hook 只是一个内部调用了别的 hook、名字以 <code>use</code> 开头的普通函数,复用的是逻辑,不是状态本身——两个组件各自调用同一个自定义 hook,拿到的是两份互不相干的状态。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:为什么不能在条件语句(比如 if)内部调用 useState? (A) 因为 JSX 语法本身不允许在条件语句里声明变量 (B) 因为 React 靠"调用顺序"把每次渲染的 hook 对应到各自的状态,一旦某次渲染跳过了这次 hook 调用,后面所有 hook 读到的状态位置都会错位 (C) 因为 useState 内部使用了 async/await,写在条件语句里无法正确等待返回结果</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。React 靠"这是本次渲染里第几次调用 hook"来对应状态,如果某次渲染因为条件为假跳过了这次调用,后面的 hook 就会读到本该属于别的 hook 的那份状态,这正是"仅在顶层调用 hooks"要防止的错位。(A) 是编造的限制——普通 JavaScript 的变量声明写在 <code>if</code> 里从来没有语法问题,这和 JSX 无关;(C) 也是虚构的技术细节,<code>useState</code> 不是异步函数,不涉及 <code>await</code>。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于自定义 Hook,下面哪个说法正确? (A) 自定义 Hook 必须是一个以 use 开头、内部至少调用一次其他 React Hook 的函数;如果一个函数没有调用任何 hook,就不需要把它写成 hook (B) 两个组件各自调用同一个自定义 Hook(比如都调用了 useCounter()),会共享同一份 count 状态,一边改另一边也会跟着变 (C) 自定义 Hook 是对内建 hook 的更高级封装,不受"仅在顶层调用"和"仅从组件或自定义 Hook 调用"这两条规则约束</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。自定义 hook 的判定标准就是"以 <code>use</code> 开头 + 内部调用其他 hook";如果一个函数不调用任何 hook,只是普通逻辑,给它加个 <code>use</code> 前缀没有意义。(B) 说反了——每次调用 <code>useCounter()</code> 都会在各自组件实例里通过 <code>useState</code> 建立一份独立的状态,互不影响;(C) 也不成立,自定义 hook 内部依然是普通函数调用其他 hook,一样必须遵守这两条规则,没有获得任何特权豁免。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<ul>
+<li><a href="https://react.dev/reference/rules/rules-of-hooks">Rules of Hooks – React</a> —— 官方对"仅在顶层调用"和"仅从组件或自定义 Hook 调用"这两条规则最权威的说明,本节的规则示例基本对应这一页。</li>
+<li><a href="https://react.dev/learn/reusing-logic-with-custom-hooks">Reusing Logic with Custom Hooks – React</a> —— 官方教程,讲怎么判断一段逻辑该不该抽成自定义 hook,以及抽取之后到底复用了什么。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师现场出一段违反 hooks 规则的代码让你揪错,也可以让老师陪你把项目里一段真实的重复逻辑抽成自定义 hook。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0027-react-builtin-hooks.html"><span class="dir">← 上一课</span>内建 Hooks 怎么考:useState/useEffect/useContext/useRef/useId</a>
+  <a class="next" href="0029-react-event-handling-basics.html"><span class="dir">下一课 →</span>React 怎么处理事件</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

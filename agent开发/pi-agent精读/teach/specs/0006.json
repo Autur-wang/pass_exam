@@ -1,0 +1,84 @@
+{
+ "num": "0006",
+ "slug": "dependency-direction-and-layer-boundaries",
+ "title": "层边界与依赖：方向单向向上",
+ "narrowTopic": "只讲分层的真正规则——依赖方向单向向上，跨层引用其实合法、层数按复杂度可选，并埋钩子引向下一章的 Agent Loop。",
+ "analogySeed": "你以为分层就像网络协议栈\"隔一层调一层\"，于是打开 coding-agent 的 package.json——却发现它直接依赖了 pi-ai，跳过了中间层。你愣了一下：这不是破坏分层了吗？这个\"意外\"正是理解真正规则的入口。",
+ "keyPoints": [
+  "常见误解：分层 = 上层只能依赖相邻下层。但 coding-agent 的 dependencies 直接列了 pi-ai，跨层引用了底层。",
+  "跨层依赖不是设计失误而是必然：某些基础类型（如 ImageContent）必须在一处定义，所有层直接引用这一处。",
+  "分层的真正规则不是\"能不能跨层\"，而是\"依赖方向是不是单向的\"：所有箭头都朝上，底层永远不知道上层的存在。",
+  "反向依赖对照表证明：pi-ai 不依赖任何 pi-xxx 包；agent-core 只向上依赖 pi-ai；coding-agent 只向上依赖，均无反向依赖。",
+  "三层不是教条：只用 pi-ai（自己写循环）、pi-ai+agent-core（自己写工具）、或全三层（做编程助手），层数取决于复杂度。",
+  "三个可带走的方法：依赖漏斗分层法、类型递进扩展模式、可独立使用测试（去掉上层这一层还能跑吗？）。",
+  "唯一不可违反的铁律：底层代码里不能出现任何对上层的引用——这保证任何一层都能被替换。",
+  "钩子：下一章钻进 Agent 的心脏——Agent Loop，看一条用户消息从回车到\"我完成了\"的完整旅程。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "第 4 节 packages/coding-agent/package.json 的 dependencies 片段，显示它同时依赖 pi-agent-core、pi-ai（带\"也直接依赖底层？\"注释）、pi-tui。",
+   "cite": "教程 §4 / packages/coding-agent/package.json"
+  },
+  {
+   "desc": "第 4 节\"那分层的规则到底是什么\"下的三行反向依赖对照表：pi-ai / pi-agent-core / pi-coding-agent 各自依赖了谁、有没有反向依赖。",
+   "cite": "教程 §4 反向依赖对照表"
+  },
+  {
+   "desc": "第 6 节\"三层不是教条\"下的场景对照表：只用 pi-ai / pi-ai+agent-core / 全部三层，分别适合什么、你自己要做什么。",
+   "cite": "教程 §6 场景对照表"
+  }
+ ],
+ "designRationale": [
+  "为什么 coding-agent 直接依赖 pi-ai 不是错：ImageContent 等原子类型只在 pi-ai 定义，上层要用就必须直接引用它——这是集中定义原子的必然结果。",
+  "为什么规则是\"控制方向\"而非\"限制层级\"：限制跨层会逼你复制类型或加转发层，而单向向上既允许跨层复用原子、又杜绝了循环依赖。",
+  "为什么底层绝不能 import 上层：只有底层对上层一无所知，你才能把 pi-ai 整个换成自己的模型层而不动上面两层——这是分层的核心承诺。",
+  "为什么三层可裁剪：Agent 最难的是循环/状态/事件/压缩，agent-core 已包办；你的复杂度决定要几层，但依赖方向的铁律与层数无关。"
+ ],
+ "quiz": [
+  {
+   "stem": "打开 coding-agent 的 package.json，发现它直接依赖了 pi-ai（而不是只通过 pi-agent-core 间接使用）。本章认为这说明什么？",
+   "options": [
+    "这是一个设计失误，打破了严格分层，应当修复",
+    "说明分层架构在这个项目里已经失败了",
+    "这是必然——某些基础类型（如 ImageContent）必须在一处定义，所有层直接引用这一处",
+    "coding-agent 应该删掉对 pi-ai 的依赖，改成手动复制类型"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。原子类型集中在 pi-ai，上层用到就得直接引它，跨层反而是健康的。延伸：真正要警惕的不是跨层，而是反向依赖。",
+   "noMsg": "回看 §4\"答案藏在类型系统里\"，想想 ImageContent 定义在哪、为什么上层非得直接引用它。"
+  },
+  {
+   "stem": "根据本章，分层的\"真正规则\"是什么？",
+   "options": [
+    "依赖方向必须单向向上，底层永远不知道上层的存在",
+    "上层只能依赖相邻的下层，严格禁止任何跨层引用",
+    "所有包必须互相依赖，才能保证功能完整",
+    "包的层数必须正好是三层，不能多也不能少"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。规则是控制方向而非限制层级——所有箭头朝上、无反向依赖即可。延伸：这正是能把任意一层替换成自己实现的前提。",
+   "noMsg": "看 §4 那张\"所有箭头都朝上\"的依赖图和它下面加粗的那句话，注意区分\"限制层级\"和\"控制方向\"。"
+  },
+  {
+   "stem": "如果你只想写一个用 OpenAI、只需要一两个工具的简单 Agent，本章给出的建议是？",
+   "options": [
+    "必须用满三层，否则 Agent 根本无法工作",
+    "可以只用 pi-ai + pi-agent-core、甚至只用 pi-ai，层数取决于复杂度；但依赖方向单向的规则不能违反",
+    "只能单独使用 pi-coding-agent，因为它最全",
+    "必须先自己重写一个 pi-ai 才能开始"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。三层是可裁剪的（场景 A/B/C），铁律只有一条：底层不能引用上层。延伸：下一章会钻进 agent-core 的核心——Agent Loop。",
+   "noMsg": "回看 §6 的三个场景与场景对照表，再看结尾那条\"无论几层不能违反\"的规则到底是哪一条。"
+  }
+ ],
+ "_chapter": "第2章：三层架构 —— Pi-Agent 项目的骨骼",
+ "_chapterCN": "三层架构：Pi-Agent 项目的骨骼",
+ "prevFile": "0005-type-progression-across-layers.html",
+ "prevNum": "0005",
+ "nextFile": "0007-why-loop-trace-and-turn.html",
+ "nextNum": "0007",
+ "crumbLabel": "第 2 章 · 三层架构",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第2章-三层架构-Pi-Agent项目的骨骼.md",
+ "filename": "0006-dependency-direction-and-layer-boundaries.html"
+}

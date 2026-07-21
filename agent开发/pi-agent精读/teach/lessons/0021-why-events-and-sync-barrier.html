@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0021 · 为什么要事件 + emit 是同步屏障</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 7 章 · 事件驱动 ›
+  <a href="./0020-convert-to-llm-and-visibility.html">上一课</a> ›
+  <strong>Lesson 0021</strong>
+</div>
+
+<p class="kicker">Lesson 0021 · 第 7 章 事件驱动</p>
+<h1>为什么要事件<br>—— emit 是同步屏障,不是通知</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课讲完消息怎么转成 LLM 能读的格式、又怎么在 UI 上保持可见性——
+  但消息是<em>怎么从 Agent 内部传到外面</em>的?这节课打开 Agent 的「神经系统」:
+  事件系统。你会看到 Pi 最反直觉的一个设计——<strong>每次 emit 都要 await</strong>。
+</div>
+
+<div class="recall">
+  ⏮ <b>回忆上一课:</b> 我们讲过 <code>convertToLlm</code> 把内部消息结构转成 LLM 能吃的格式,
+  同时又要维护 UI 上的「可见性」——同一份数据,两种消费者看到不同的形状。
+  这背后其实一直藏着一个问题没答:Agent 内部发生的每一件事(消息开始了、更新了、工具跑起来了),
+  到底是<em>怎么</em>被 UI、日志、持久化这些外部消费者知道的?答案就是本课的主角——事件。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 解释清楚 Pi 为什么用<span class="sys-pill">发布-订阅</span>
+  而不是直接函数调用,并说出 <code>emit</code> 里那个反常识的 <code>await</code>
+  ——它换来的是<strong>状态一致性</strong>,而不是「异步提速」。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:美团外卖的状态推送</b>
+  你点了份外卖,App 推送一连串状态:「商家已接单 → 骑手已取餐 → 骑手距你 500 米 → 已送达」。
+  每个状态更新就是一个<b>事件</b>——它告诉你「发生了一件事」,你不用一直盯着骑手看,
+  收到事件时瞥一眼就够了。但 Pi 的 <code>emit</code> 更进一步:它发完一个状态后要
+  <b>「站着等」</b>你(监听器)看完、处理完,才肯发下一个状态。这就是本课要讲透的地方。
+</div>
+
+<h2>1 · 不用事件会怎样:一个 6 行的对比实验</h2>
+<p>
+  假设你要给 Agent 加一个「工具调用日志」功能:每次调工具打印一行日志。
+  <strong>不用事件系统</strong>:你得改 Agent 源码,在 <code>tool.execute()</code> 前后加
+  <code>console.log</code>。Pi 一更新,你 merge 上游代码就冲突——你加的日志和上游新逻辑撞在一起,
+  下周更新又冲突。<strong>用事件系统</strong>,只需要:
+</p>
+<pre><span class="ln">1</span>session.<span class="fn">subscribe</span>((event) =&gt; {
+<span class="ln">2</span>    <span class="key">if</span> (event.type === <span class="str">"tool_execution_end"</span>) {
+<span class="ln">3</span>        console.<span class="fn">log</span>(<span class="str">`[LOG] 调用了 ${event.toolName}，结果：${event.isError ? "失败" : "成功"}`</span>);
+<span class="ln">4</span>    }
+<span class="ln">5</span>});
+</pre>
+<p>
+  六行代码,不碰 Agent 一行源码。Agent 更新时你只需要 <code>npm update</code>,
+  日志逻辑不受影响,不会有任何 merge 冲突。
+</p>
+<div class="why">
+  <b>为什么这就是事件驱动最核心的价值?</b> 它把「发生了什么」和「谁关心什么」彻底分离。
+  Agent 只管把快照推给所有关心它的人,它<em>不知道也不关心</em>谁在听。
+  这跟直接调用完全不同——<b>直接调用是「我亲自找你」</b>(Agent 要知道所有消费者才能一个个调用它们),
+  <b>发布-订阅是「我对着空气喊一声,谁听到算谁的」</b>。在 Pi 里,「喊」就是
+  <code>emit(event)</code>,「听」就是 <code>subscribe(listener)</code>。
+  新增功能只需要 subscribe,内核代码里没有一行 <code>updateTerminal()</code> 或
+  <code>appendToFile()</code>——它甚至不知道 TUI 和文件存储的存在。
+</div>
+
+<h2>2 · emit 的类型签名:一个 Promise 藏着大秘密</h2>
+<p>
+  事件是在 Agent Loop 里发出的,发出动作叫 <code>emit</code>。先看它的类型定义:
+</p>
+<pre><span class="ln">1</span><span class="key">export</span> <span class="key">type</span> <span class="type">AgentEventSink</span> = (event: <span class="type">AgentEvent</span>) =&gt; <span class="type">Promise</span>&lt;<span class="key">void</span>&gt; | <span class="key">void</span>;
+</pre>
+<p>
+  注意返回值——<code>Promise&lt;void&gt;</code>。emit <strong>可以是异步的</strong>。
+  如果你写过 Node.js 的 <code>EventEmitter</code>,你熟悉的 emit 是<em>同步</em>的、
+  <em>fire-and-forget</em> 的——发了就走,不管谁在听。但 Pi 的 Agent Loop 里,
+  每次调用 emit 都带着 <code>await</code>:
+</p>
+<pre><span class="ln">1</span><span class="key">await</span> <span class="fn">emit</span>({ type: <span class="str">"agent_start"</span> });
+<span class="ln">2</span><span class="key">await</span> <span class="fn">emit</span>({ type: <span class="str">"turn_start"</span> });
+<span class="ln">3</span><span class="key">await</span> <span class="fn">emit</span>({ type: <span class="str">"message_start"</span>, ... });
+<span class="ln">4</span><span class="key">await</span> <span class="fn">emit</span>({ type: <span class="str">"message_update"</span>, ... });
+<span class="ln">5</span><span class="key">await</span> <span class="fn">emit</span>({ type: <span class="str">"message_end"</span>, ... });
+</pre>
+<p>每一个 <code>await</code> 都在说:<strong>「等这个事件被完全处理完,再继续。」</strong></p>
+<cite>🔎 出处:教程 §三 emit 不是"通知"，是"同步屏障"(<code>agent-loop.ts:25</code>)。</cite>
+
+<h2>3 · processEvents:先更新状态,再逐一等监听器</h2>
+<p>
+  <code>emit</code> 的实体是 Agent 类的 <code>processEvents</code> 方法,做三件事:
+</p>
+<pre><span class="ln">1</span><span class="key">private</span> <span class="key">async</span> <span class="fn">processEvents</span>(event: <span class="type">AgentEvent</span>): <span class="type">Promise</span>&lt;<span class="key">void</span>&gt; {
+<span class="ln">2</span>    <span class="cm">// 第一步：根据事件类型更新内部状态</span>
+<span class="ln">3</span>    <span class="key">switch</span> (event.type) {
+<span class="ln">4</span>        <span class="key">case</span> <span class="str">"message_start"</span>:
+<span class="ln">5</span>            <span class="key">this</span>._state.streamingMessage = event.message;   <span class="cm">// 开始追踪流式消息</span>
+<span class="ln">6</span>            <span class="key">break</span>;
+<span class="ln">7</span>        <span class="key">case</span> <span class="str">"message_update"</span>:
+<span class="ln">8</span>            <span class="key">this</span>._state.streamingMessage = event.message;   <span class="cm">// 更新流式消息内容</span>
+<span class="ln">9</span>            <span class="key">break</span>;
+<span class="ln">10</span>        <span class="key">case</span> <span class="str">"message_end"</span>:
+<span class="ln">11</span>            <span class="key">this</span>._state.streamingMessage = <span class="key">undefined</span>;       <span class="cm">// 清空临时工位</span>
+<span class="ln">12</span>            <span class="key">this</span>._state.messages.<span class="fn">push</span>(event.message);       <span class="cm">// 搬入正式档案</span>
+<span class="ln">13</span>            <span class="key">break</span>;
+<span class="ln">14</span>        <span class="cm">// ... tool_execution_start/end 更新 pendingToolCalls 等</span>
+<span class="ln">15</span>    }
+<span class="ln">16</span>
+<span class="ln">17</span>    <span class="cm">// 第二步：拿 AbortSignal</span>
+<span class="ln">18</span>    <span class="key">const</span> signal = <span class="key">this</span>.activeRun?.abortController.signal;
+<span class="ln">19</span>
+<span class="ln">20</span>    <span class="cm">// 第三步：同步等待所有监听器完成</span>
+<span class="hl"><span class="ln">21</span>    <span class="key">for</span> (<span class="key">const</span> listener <span class="key">of</span> <span class="key">this</span>.listeners) {</span>
+<span class="hl"><span class="ln">22</span>        <span class="key">await</span> <span class="fn">listener</span>(event, signal);   <span class="cm">// ← 一个一个等！</span></span>
+<span class="ln">23</span>    }
+<span class="ln">24</span>}
+</pre>
+<p>
+  关键在第三步(第 21–23 行):<strong>Agent 按订阅顺序,逐一 await 所有监听器。</strong>
+  <code>this.listeners</code> 是一个 Agent <em>并不知道内容</em>的外部 Set——
+  谁在 Set 里、谁不在,完全由外部通过 <code>subscribe()</code> 控制,Agent 只负责「遍历并等待」。
+</p>
+<div class="why">
+  <b>为什么先更新状态,再 await 监听器?</b> 顺序不能反——监听器被唤起时,
+  读到的 <code>streamingMessage</code> 等状态必须已经是最新的。如果先通知再更新,
+  监听器读到的会是「上一刻」的状态,又制造了不一致。
+</div>
+<cite>🔎 出处:教程 §三 processEvents:先更新状态，再等监听器(<code>agent.ts:509-556</code>)。</cite>
+
+<h2>4 · 为什么非要 await?——不 await 会发生什么</h2>
+<div class="diagram">假设 emit 是 fire-and-forget（不等待）：
+
+Agent Loop:  emit(start)  emit(update)  emit(end)
+                ↓             ↓              ↓
+TUI 监听器:   [开始渲染...]  [还没处理完    [三个事件堆在一起了]
+                              start...]
+
+问题：TUI 还没处理完 message_start，message_update 就来了。
+      UI 可能显示空消息，也可能显示过时的内容——状态不一致。
+
+────────────────────────────────────────────────────
+
+实际设计（await，同步屏障）：
+
+Agent Loop:  emit(start)──await──→  emit(update)──await──→  emit(end)──await──→
+                ↓                      ↓                       ↓
+TUI 监听器:    [处理完毕，返回]       [处理完毕，返回]          [处理完毕，返回]
+
+保证：Agent 在监听器返回前不会发出下一个事件。</div>
+<div class="tradeoff">
+  🔑 <b>一句话总结:</b> <code>await</code> 不是为了「通知」,而是为了<strong>「同步协商」</strong>
+  ——确保所有消费者都跟上了,Agent 才走下一步。这就是「同步屏障」的含义。
+  代价是<b>性能</b>(必须等最慢的消费者),换来的是<b>正确性</b>(状态永远一致)。
+</div>
+
+<h2>5 · 一个例外:tool_execution_update 的「先收集,后批量等」</h2>
+<p>
+  同步屏障听起来很严格——那 <code>tool_execution_update</code> 呢?工具执行时可能疯狂输出进度
+  (比如 Bash 的每一行输出),每次都 await 会不会太慢?Pi 对这种高频事件做了特殊处理:
+</p>
+<pre><span class="ln">1</span><span class="key">const</span> updateEvents: <span class="type">Promise</span>&lt;<span class="key">void</span>&gt;[] = [];   <span class="cm">// 收集箱</span>
+<span class="ln">2</span><span class="key">let</span> acceptingUpdates = <span class="key">true</span>;
+<span class="ln">3</span>
+<span class="ln">4</span><span class="key">const</span> result = <span class="key">await</span> tool.<span class="fn">execute</span>(id, args, signal, (partialResult) =&gt; {
+<span class="ln">5</span>    <span class="key">if</span> (!acceptingUpdates) <span class="key">return</span>;   <span class="cm">// 工具已结束，丢弃迟到 update</span>
+<span class="ln">6</span>    <span class="cm">// 不 await！先把 emit 的 Promise 收集起来</span>
+<span class="ln">7</span>    updateEvents.<span class="fn">push</span>(<span class="fn">emit</span>({ type: <span class="str">"tool_execution_update"</span>, ... }));
+<span class="ln">8</span>});
+<span class="ln">9</span>
+<span class="ln">10</span>acceptingUpdates = <span class="key">false</span>;             <span class="cm">// 关闭闸门</span>
+<span class="ln">11</span><span class="key">await</span> <span class="type">Promise</span>.<span class="fn">all</span>(updateEvents);      <span class="cm">// 一次性等所有 update 处理完</span>
+</pre>
+<div class="why">
+  <b>为什么这不矛盾?</b> 同步屏障的规则不松,但对<em>可合并</em>的进度事件开了个口子。
+  进度更新是「高频、低价值、可合并」的——多发一条少发一条不影响最终状态;
+  而生命周期事件(start/end)是「低频、高价值」的——错过了 <code>message_start</code> 就没机会了。
+  <br><br>
+  <b><code>acceptingUpdates</code> 闸门是为了防什么?</b> 工具的 <code>execute</code>
+  是 async 函数,它内部的进度回调可能在 Promise resolve 之后还异步触发(残留定时器/延迟回调)。
+  没有这道闸门,迟到的 <code>partialResult</code> 会在 <code>tool_execution_end</code> 之后
+  又发出 <code>tool_execution_update</code>,让监听器看到「工具已经结束了却还在更新」的错乱序列。
+</div>
+<cite>🔎 出处:教程 §三 一个例外：tool_execution_update 不等(<code>agent-loop.ts:628-669</code>)。</cite>
+
+<h2>6 · 监听器循环没有 try-catch——像保险丝一样</h2>
+<p>
+  再看一眼第 3 节的循环体:<code>await listener(event, signal)</code>,
+  <strong>没有 try-catch 包裹它。</strong>如果某个监听器抛异常,异常会一路冒泡,
+  触发整个 Agent 运行失败——一个 UI 渲染的 bug 能把 Agent 干掉,听起来很危险。
+</p>
+<div class="why">
+  <b>为什么不包 try-catch?</b> 因为 Pi 的设计哲学是:监听器出错,运行就停下来,
+  问题<em>立刻</em>可见。如果静默吞掉异常,Agent 看起来「正常」运行,但 UI 已经乱套了——
+  你调试时根本找不到问题。这就像电路里的<b>保险丝</b>——烧断了,你立刻知道哪坏了;
+  如果每个元件都默默兜底从不报错,整个系统「看起来正常」但可能已经坏了一半。
+</div>
+<p>
+  但有一个例外:<strong>扩展系统</strong>。第三方扩展的回调由框架自己做 try-catch 隔离,
+  单个扩展崩溃不会拖垮整个 session。原则是:<b>对内层受信任的代码(自己写的监听器),
+  让异常直接暴露;对外层不受信任的代码(第三方扩展),由框架做隔离。</b>
+</p>
+
+<h2>7 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① 用事件系统给 Agent 加一个"工具调用日志"功能,相比直接改 Agent 源码,最大的好处是什么?</p>
+    <button class="opt">日志打印速度更快</button>
+    <button class="opt">日志可以异步执行,提高整体吞吐</button>
+    <button class="opt">不碰 Agent 一行源码,Agent 更新时不会产生 merge 冲突</button>
+    <button class="opt">事件比函数调用占用更少内存</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② Pi 的 Agent Loop 里每次 emit 都带 await,这个 await 最准确的作用是?</p>
+    <button class="opt">确保所有消费者处理完当前事件,Agent 才发下一个,状态永远一致</button>
+    <button class="opt">让 emit 变成异步以提高性能</button>
+    <button class="opt">通知监听器有新事件到达了</button>
+    <button class="opt">防止同一个监听器被重复注册</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ 为什么 tool_execution_update 可以"先收集后批量 await",而 message_start 不能?</p>
+    <button class="opt">update 事件携带的数据量更小</button>
+    <button class="opt">message_start 必须同步是因为它不返回 Promise</button>
+    <button class="opt">进度更新高频、低价值、可合并,而生命周期事件低频、高价值,错过就没机会</button>
+    <button class="opt">update 由第三方扩展发出,不受同步屏障约束</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果 processEvents 先 await 监听器、再更新内部状态,会出什么问题?</em>」
+  「<em>acceptingUpdates 闸门如果去掉,最坏情况下 UI 会看到什么样的错乱序列?</em>」
+  「<em>既然 Agent 内核只有 10 种事件,Session 层为什么还要再扩展出一批新事件?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>:事件的嵌套层次与两层设计。
+</div>
+
+<h2>8 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第7章-事件驱动-Agent的神经系统.md">第 7 章 · 事件驱动 —— Agent 的神经系统</a>——
+  原文 §一「不用事件会怎样」有完整的发布-订阅对比图,§三「emit 不是通知，是同步屏障」
+  有更详细的 fire-and-forget 对照示意,值得通读一遍建立画面感。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0022):</strong> 我们把「事件」摊开成一张图——
+  Agent 内核到底定义了<em>哪 10 种</em>事件、它们怎么构成 <strong>4 层嵌套</strong>的生命周期
+  (Agent → Turn → Message → Tool Execution),以及 Session 层又是怎么在这 10 种之上
+  <em>再扩展出</em>一批产品级事件的。
+</p>
+
+<footer>
+  Lesson 0021 · 第 7 章 事件驱动 ·
+  下一课:<a href="./0022-event-nesting-and-two-layers.html">0022 事件的嵌套与两层设计 →</a> ·
+  上一课:<a href="./0020-convert-to-llm-and-visibility.html">0020 convertToLlm 与可见性 ←</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。发布-订阅把"发生了什么"和"谁关心"解耦,Agent 不知道谁在听,新增功能只需 subscribe。延伸:Pi 的 TUI、持久化、Web 转发全都是靠订阅事件实现的,同一个机制。',
+               '✓ 对。await = 同步屏障,用性能(等最慢的消费者)换正确性(状态一致)。延伸:传统 EventEmitter 是 fire-and-forget"喊一声就走",Pi 偏偏站着等所有人处理完。',
+               '✓ 对。同步屏障规则不松,但对可合并的进度事件开了个口子;还有 acceptingUpdates 闸门防止迟到 update 在 end 之后造成错乱序列。延伸:这是"一致性 vs 性能"在两类事件上的差异化取舍。'];
+  var msgNo = ['回看第一节"不用事件会怎样"——痛点不在性能或内存,而在你改了源码之后每次上游更新都要面对什么?',
+               '想想若不 await 会怎样:message_update 在 TUI 还没处理完 message_start 时就来了,界面会出现什么问题?await 是为了解决那个问题。',
+               '比较两类事件的"频率"和"价值":错过一条 Bash 进度更新,和错过 message_start,后果一样严重吗?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

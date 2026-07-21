@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0006 · KV Cache:自回归推理的显存账</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第二部分 注意力与架构进阶 · 第 0006 课</p>
+<h1>KV Cache:自回归推理的显存账</h1>
+<p class="lede">同一个模型,训练时算得动、上线服务时却被显存卡住——差别常常就在 KV Cache 这一步。它是把 Transformer 从「能跑」变成「能高并发上线」的关键工程技巧,用<strong>显存换算力</strong>。凡是面试问到推理、部署、长上下文、显存瓶颈,这道题几乎必考:它是什么、缓存里到底存了什么、显存怎么估、为什么长上下文和高并发一上来就爆。</p>
+
+<div class="recall">
+<p>第 0002 课我们拆过:一个位置的注意力输出,要拿它的 <strong>Q</strong> 去和序列里<em>所有</em>位置的 <strong>K</strong> 比相似度,再对所有 <strong>V</strong> 加权求和。<strong>先别往下看,想一个问题:大模型是一个词一个词往外蹦的(自回归),那每生成一个新词,前面已经生成的那几十上百个词的 K、V,是不是每一步都要从头再算一遍?</strong></p>
+</div>
+
+<h2>一、问题:自回归生成天生在重复劳动</h2>
+<p>解码器类大模型(GPT 系)靠<strong>自回归</strong>生成:第 $t$ 步用前面 $t-1$ 个 token 预测第 $t$ 个,把它拼回序列,再进入第 $t+1$ 步。关键在因果 mask——每个 token 只能看它<em>左边</em>的 token。这带来一个决定性的性质:</p>
+<p><strong>已经算过的那些历史 token,它们每一层的 K、V 一旦算出来就不会再变。</strong>因为 token $i$ 的表示只依赖位置 $\le i$ 的输入,后面再追加新 token 完全影响不到它。</p>
+<p>如果不做缓存,朴素实现会在<em>每一步</em>把整段前缀重新喂进模型,把前面所有 token 的 K/V 又算一遍——纯属重复劳动,而且重复量随生成长度越滚越大。</p>
+
+<pre>无 cache(每步重算整段前缀的 K/V):
+ step 1: [t1]            → 算 K/V: t1
+ step 2: [t1 t2]         → 算 K/V: t1 t2       ← t1 又算一遍
+ step 3: [t1 t2 t3]      → 算 K/V: t1 t2 t3    ← t1 t2 又算一遍
+ ...重复计算量随步数快速膨胀
+
+有 cache(历史 K/V 存下来,每步只算新 token):
+ step 1: [t1]            → 算 t1 的 K/V , cache = {t1}
+ step 2:    [t2]         → 算 t2 的 K/V , cache = {t1,t2}
+ step 3:       [t3]      → 算 t3 的 K/V , cache = {t1,t2,t3}
+ ...每步只往 cache 里追加一列</pre>
+
+<p>算一笔粗账:朴素解法第 $t$ 步要在长度 $t$ 的序列上算注意力,代价约 $O(t^2)$,生成 $n$ 个 token 累计约 $O(n^3)$;有了 cache,第 $t$ 步只让新 token 的 Q 去打 $t$ 个缓存的 K,代价约 $O(t)$,累计降到约 $O(n^2)$。这是典型的<strong>空间换时间</strong>。</p>
+
+<h2>二、方案:缓存 K 和 V,不缓存 Q</h2>
+<p>做法很直接:每层各准备两块缓冲区,存下历史 token 的 K 向量和 V 向量。每生成一个新 token,只算这一个 token 的 Q/K/V,把新的 K、V <strong>追加</strong>到缓存尾部,然后拿新 Q 去和「缓存里全部的 K」打分、对「缓存里全部的 V」加权求和。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">新 token</div>
+  <div class="node">只算它的<br>$q_t,\;k_t,\;v_t$</div>
+  <div class="node">$k_t,v_t$ 追加进<br>KV Cache</div>
+  <div class="node">$q_t$ 打分<br>缓存里全部 $K$</div>
+  <div class="node good">$\operatorname{softmax}\times$<br>缓存里全部 $V$</div>
+</div>
+<figcaption>解码每一步:历史 K/V 直接从缓存取,只有当前 token 的 K/V 需要新算并入缓存。</figcaption>
+</figure>
+
+<h3>为什么只缓存 K、V,不缓存 Q?</h3>
+<p>因为角色不对称。第 0002 课说过:K、V 是「被查阅的资料」,Q 是「当下带着的问题」。生成第 $t$ 个 token 时,我们只需要<em>当前这一步</em>的 Q($q_t$),它去检索全部历史的 K/V。而历史 token 的 Q 呢?它们各自在自己那一步早就用完、产出过输出了,后面再也用不到——所以历史 Q 没有缓存价值,缓存的只有会被反复检索的 K 和 V。这也是「KV Cache」名字的由来。</p>
+
+<h3>prefill 与 decode 两个阶段</h3>
+<p>真实服务里生成分两段。<strong>Prefill(预填充)</strong>:把用户输入的整段 prompt 一次性并行喂入,一口气算出所有 prompt token 每层的 K/V,把缓存填好——这一步算力密集但只做一次。<strong>Decode(解码)</strong>:之后逐 token 生成,每步只追加一个 K/V、只做一次访存密集的检索。理解这两段的差别,是回答「为什么首 token 慢、后续 token 快」这类问题的基础。</p>
+
+<h2>三、显存账:KV Cache 有多大</h2>
+<p>先想清楚每个 token、每一层要存多少:一份 K 向量 + 一份 V 向量,每份维度是 $n_h\times d_h$(头数乘每头维度,在 MHA 里就等于 $d_{\text{model}}$)。把所有层、整段序列、整个 batch 乘起来:</p>
+
+<dl class="keydef">
+<dt>KV Cache 显存估算公式</dt>
+<dd>$$\text{KV Cache bytes} = 2 \times L \times s \times n_h \times d_h \times p \times b$$</dd>
+<dd><em>$2$:K 和 V 两份;$L$:层数;$s$:序列长度(上下文长度);$n_h$:注意力头数;$d_h$:每头维度;$p$:每个数值的字节数(fp16/bf16 为 $2$,fp32 为 $4$);$b$:batch size(并发请求数)。其中 $n_h\times d_h$ 在标准 MHA 里等于 $d_{\text{model}}$。</em></dd>
+</dl>
+
+<p>公式里没有隐藏项,每个因子都能对应到「省显存」的一条思路——这正是下一课和第 0029 课要动的地方:</p>
+
+<table>
+<thead><tr><th>公式因子</th><th>含义</th><th>谁在压它</th></tr></thead>
+<tbody>
+<tr><td>$n_h \times d_h$</td><td>每 token 每层的 K/V 尺寸</td><td>MQA / GQA / MLA(第 0007 课)</td></tr>
+<tr><td>$p$</td><td>每个数值的字节数</td><td>KV Cache 量化(如降到 int8)</td></tr>
+<tr><td>$s$</td><td>序列长度</td><td>滑动窗口 / 稀疏注意力</td></tr>
+<tr><td>$s \times b$ 的浪费与重复</td><td>显存碎片、共享前缀</td><td>PagedAttention / prefix caching(第 0029 课)</td></tr>
+</tbody>
+</table>
+
+<h2>四、为什么它是长上下文与高并发的瓶颈</h2>
+<p>关键对比:<strong>模型权重是一次性的固定开销</strong>,不管你上下文多长、并发多高,它就那么大;而 <strong>KV Cache 随 $s$ 和 $b$ 双双线性增长</strong>。上下文翻倍,cache 翻倍;并发翻倍,cache 也翻倍(每个请求各有一份独立缓存,默认并不共享)。</p>
+<p>于是显存被劈成两块:权重占掉一部分,剩下的全留给 KV Cache。cache 能塞多少,就决定了你能同时服务多长的上下文、多少路并发。一旦 cache 把剩余显存吃满,新请求就排不进来——<strong>吞吐量的天花板往往不是算力,而是 KV Cache 撑不撑得下</strong>。这就是为什么长上下文、高并发场景里,几乎所有推理优化都在想办法把这块显存压下去。</p>
+
+<pre><code># 一段最小的带 cache 自回归解码(伪代码,略去多头/多层细节)
+past_k, past_v = None, None                 # KV Cache,初始为空
+token = bos
+for step in range(max_new_tokens):
+    x = embed(token)                          # 只喂「一个」新 token
+    q, k, v = x @ Wq, x @ Wk, x @ Wv          # 只算这一个 token 的 q/k/v
+    if past_k is not None:
+        k = torch.cat([past_k, k], dim=1)     # 拼上历史 K
+        v = torch.cat([past_v, v], dim=1)     # 拼上历史 V
+    past_k, past_v = k, v                     # 追加更新缓存(Q 不缓存)
+    attn = softmax(q @ k.transpose(-2, -1) / d_k**0.5) @ v
+    token = sample(head(attn))                # 采样出下一个 token</code></pre>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「KV Cache 是什么,解决什么问题?」——自回归每步只新增一个 token,历史 K/V 不变可缓存复用,避免每步重算整段前缀;空间换时间。</li>
+<li>「为什么只缓存 K、V 不缓存 Q?」——历史 token 的 Q 在它自己那一步用完就不再需要;只有会被反复检索的 K/V 值得缓存。</li>
+<li>「估一下 KV Cache 显存。」——写出 $2\,L\,s\,n_h\,d_h\,p\,b$,并说清每个因子的来历,尤其那个 $2$ 和 $\times L$。</li>
+<li>「为什么长上下文/高并发显存吃紧?」——权重固定,cache 随 $s$ 与 $b$ 线性增长,是吞吐上限的真正约束。</li>
+<li>「有哪些压 KV Cache 的手段?」——按公式因子答:MQA/GQA/MLA 压 $n_h\,d_h$、量化压 $p$、窗口/稀疏压 $s$、PagedAttention 减碎片、prefix caching 复用共享前缀。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>缓存的是<strong>每一层</strong>的 K/V,不是只有最后一层——公式里那个 $\times L$ 不能漏,这是量级差几十倍的关键。</li>
+<li>说「缓存 Q/K/V 三者」是错的:Q 不缓存。别把它和训练时的中间激活混为一谈。</li>
+<li>缓存随 batch <strong>线性叠加</strong>,默认<em>不</em>在请求间共享——把「并发翻倍显存不变」当成理所当然会答错(只有 prefix caching 命中共享前缀时才省)。</li>
+<li>缓存的是<strong>投影后的 K/V 向量</strong>,不是原始 token 的 embedding,更不是注意力权重矩阵。</li>
+<li>算字节数时精度别用错:fp16/bf16 是 $2$ 字节,按 fp32 的 $4$ 字节估会翻倍。</li>
+</ul>
+</div>
+
+<div class="implement">
+<p>把显存公式写成一个小函数,自己敲一遍、代不同的 $s$ 和 $b$ 进去感受它涨得多快:</p>
+<pre><code>def kv_cache_bytes(n_layers, seq_len, n_heads, head_dim,
+                   batch=1, bytes_per=2):   # bytes_per=2 → fp16/bf16
+    # 2 = K 和 V 两份
+    return 2 * n_layers * seq_len * n_heads * head_dim * batch * bytes_per
+
+# 下面全是「假设配置」,仅用来演示公式量级,不对应任何真实模型
+gb = kv_cache_bytes(n_layers=32, seq_len=8192,
+                    n_heads=32, head_dim=128) / 1024**3
+# 结果 ≈ 4 GB —— 注意这只是单条 8192-token 序列(batch=1);
+# batch 或上下文翻倍,它就跟着翻倍。</code></pre>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>关于 KV Cache 缓存了什么,下面哪一项正确?</p>
+<details><summary>A. 缓存 Q、K、V 三者,因为它们都会在后续步骤被复用</summary>错。历史 token 的 Q 在它自己那一步就用完了,不会再被检索,所以不缓存。</details>
+<details><summary>B. 只缓存 K 和 V;历史 token 的 Q 用过一次就不再需要 ✅</summary>正确。只有会被后续 Q 反复检索的 K/V 值得缓存,这也是「KV Cache」名字的由来。</details>
+<details><summary>C. 只缓存最后一层的 K/V,前面各层不缓存</summary>错。每一层都要缓存,显存公式里的 $\times L$ 正来自于此。</details>
+<details><summary>D. 缓存的是每步算出的注意力权重矩阵</summary>错。缓存的是投影后的 K、V 向量,不是 $n\times n$ 的权重矩阵。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>某推理服务把并发请求数(batch)翻倍,而上下文长度不变,KV Cache 显存大约怎么变?</p>
+<details><summary>A. 基本不变,因为缓存在多个请求间共享</summary>错。默认每个请求各有独立缓存,并不共享(除非命中 prefix caching 的共享前缀)。</details>
+<details><summary>B. 增大到约 4 倍,和 batch 是平方关系</summary>错。公式里 $b$ 是一次项,是线性不是平方。</details>
+<details><summary>C. 增大到约 2 倍,和 batch 成线性关系 ✅</summary>正确。$\text{bytes}=2\,L\,s\,n_h\,d_h\,p\,b$ 中 $b$ 为线性因子,并发翻倍 cache 翻倍——这正是高并发的显存瓶颈。</details>
+<details><summary>D. 减小,因为批处理能摊薄显存</summary>错。批处理摊薄的是权重与算力利用率,KV Cache 反而随 batch 累加。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Attention Is All You Need</strong>(Vaswani et al., 2017)——因果注意力与解码器结构的原点,KV Cache 正是建立在「历史表示不随后续 token 改变」这一性质上。</li>
+<li><strong>Fast Transformer Decoding: One Write-Head is All You Need</strong>(Shazeer, 2019)——MQA 论文,明确点出增量解码时 KV 的访存/显存是瓶颈,是「压 $n_h\,d_h$」这条线的源头。</li>
+<li><strong>GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</strong>(Ainslie et al., 2023)——MHA 与 MQA 之间的折衷,下一课细讲。</li>
+<li><strong>Efficient Memory Management for LLM Serving with PagedAttention</strong>(Kwon et al., 2023,即 vLLM)——用分页管理 KV Cache 显存、减少碎片、支撑更高并发,第 0029 课深入。</li>
+<li>下一步:注意力变体 MHA/MQA/GQA/MLA 如何直接改小这块缓存(第 0007 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>KV Cache 用显存换算力——只缓存历史 K、V(Q 用过即弃),显存约 $2\,L\,s\,n_h\,d_h\,p\,b$,随上下文和并发线性膨胀,是推理吞吐的真正天花板。</strong></p>
+<nav class="lesson-nav">
+<a href="0005-residual-layernorm-ffn.html">← 上一课:残差连接、LayerNorm 与 FFN</a>
+<a href="0007-attention-variants-mha-gqa-mla.html">下一课:注意力变体 MHA/MQA/GQA/MLA →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

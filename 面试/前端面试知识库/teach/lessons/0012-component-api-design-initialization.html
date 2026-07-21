@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0012 · 组件 Props 怎么设计:初始化原则</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0012 课 · 4 UI 编程面试 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>组件 Props 怎么设计:初始化原则</h1>
+
+<p class="lede">上一课说到,UI 编程面试的复杂性,很大一部分从"数据结构与算法"转移到了"组件状态与 API 设计"上。这节课就从最靠前的一步拆开这句话:一个 UI 组件从不存在到能跑起来,历史上出现过哪几种初始化方式;给它设计 props(有的框架里叫选项、参数)时,又有哪几条看似琐碎、却直接决定这个组件好不好用的原则。</p>
+
+<div class="recall">
+<p>先回忆一下上一课(0011)里的那张评估维度表格:"复杂性主要来自哪里"这一行,算法编码面试写的是"数据结构与算法本身",UI 编程面试写的是"组件状态与 API 设计"。当时只给了个结论,没有展开。这节课要把"API 设计"具体拆开——面对一个组件,第一个绕不开的问题是:别人要怎么把它"造出来"?如果现在让你设计一个 slider(滑块)组件的初始化方式,你会让调用者传几个参数、分别是什么?先想一个答案,再往下看。</p>
+</div>
+
+<h2>一、为什么这是"基本功",不是可选技能</h2>
+
+<p>像 <a href="https://getbootstrap.com/">Bootstrap</a> 和 <a href="https://mui.com/">Material UI</a> 这样的用户界面组件库,提供按钮、选项卡、模态框这类常用组件,是为了让开发者不必在每个新项目里从头搭一遍同样的东西,免得重复造轮子。</p>
+
+<p>手册说得很直接:前端面试里经常会要求候选人现场构建 UI 组件,并为它设计一套用来初始化的 API。设计好的组件 API,被列为前端工程师的<strong>基本功</strong>——这也是为什么这节课把"怎么初始化"单独拎出来讲一整节,而不是把它当成实现细节里一个可以顺手带过的小分支。</p>
+
+<h2>二、三种初始化风格:根元素怎么传,选项怎么传</h2>
+
+<p>按 UI 技术演进的时间线,手册列出了三种主流做法。它们的差别主要体现在两件事上:组件要不要一个"根元素"参数、自定义选项怎么传进去。</p>
+
+<div class="trio">
+  <div class="cell"><span class="role">jQuery 风格</span><span class="head">根元素 + 选项对象</span><span class="sub">构造函数两个参数,选项可省略</span></div>
+  <div class="cell"><span class="role">Vanilla JS 风格</span><span class="head">没有官方标准,但趋同</span><span class="sub">推荐参照 jQuery,函数签名 (rootEl, options)</span></div>
+  <div class="cell"><span class="role">React 风格</span><span class="head">只有选项(props)</span><span class="sub">组件不接受根元素,渲染要另一套 API</span></div>
+</div>
+
+<p>在 <a href="https://react.dev/">React</a>、<a href="https://angular.io/">Angular</a> 和 <a href="https://vuejs.org/">Vue</a> 这些现代框架出现之前,<a href="https://jquery.com/">jQuery</a>(和 <a href="https://jqueryui.com/">jQuery UI</a>)是构建 UI 最流行的方式。jQuery UI 推广了通过"构造函数"初始化组件的做法,一行代码就能把一个 DOM 元素变成滑块:</p>
+
+<pre><code>&lt;div id="gfe-slider"&gt;&lt;/div&gt;
+&lt;script&gt;
+  $('#gfe-slider').slider({
+    animate: true,
+    max: 50,
+    min: 10,
+  });
+&lt;/script&gt;</code></pre>
+
+<p><code>slider()</code> 方法本身不需要显式传入根元素参数,因为 <code>$('#gfe-slider')</code> 这一步已经先选中了元素,<code>slider()</code> 只是对着这个"选中结果"执行操作——jQuery 整套 API 都建立在"先选一个元素、再对它做点什么"这个模式上,<code>this</code> 关键字在方法内部就指向被选中的元素。完整的可选项列表可以在<a href="https://api.jqueryui.com/slider/">jQuery UI 官方文档</a>里查到。</p>
+
+<p>Vanilla JavaScript 不是标准或框架,所以没有官方规定的初始化写法。但手册指出,如果读过足够多 vanilla JS UI 编码题的参考解法,会发现推荐的 API 和 jQuery 很接近——构造函数同样接受根元素和选项两个参数:</p>
+
+<pre><code>function slider(rootEl, options) {
+  // 对 rootEl 和 options 做一些事情。
+}</code></pre>
+
+<p>到了 React(或其他类似的基于组件的库),情况变了一层。React 强制把 UI 写成组件,组件本质上是"描述自己该怎么渲染"的函数,它接收的 <code>props</code> 本质上就是这个组件的自定义选项:</p>
+
+<pre><code>function Slider({ min, max }) {
+  // 使用 props 渲染自定义组件。
+  return &lt;div&gt;...&lt;/div&gt;;
+}
+
+&lt;Slider max={50} min={10} /&gt;;</code></pre>
+
+<p>但组件函数本身不接受根元素——要把它渲染到页面里某个具体的 DOM 节点上,需要另外一套 API:</p>
+
+<pre><code>import { createRoot } from 'react-dom/client';
+import Slider from './Slider';
+
+const domNode = document.getElementById('#gfe-slider');
+// React 将管理此元素中的 DOM。
+const root = createRoot(domNode);
+// 在元素中显示 Slider 组件。
+root.render(&lt;Slider max={50} min={10} /&gt;);</code></pre>
+
+<p>如果整个页面本身就是一个 React 应用,通常不需要自己手写这段 <code>createRoot()</code> 调用,因为在根/页面级别一般只有一处这样的调用。</p>
+
+<table>
+<tr><th>风格</th><th>根元素怎么传</th><th>自定义选项怎么传</th></tr>
+<tr><td>jQuery</td><td>不作为构造函数参数,靠先用选择器选中元素</td><td>纯 JS 对象,作为构造函数参数,可整体省略</td></tr>
+<tr><td>Vanilla JS</td><td>作为构造函数第一个参数显式传入</td><td>作为构造函数第二个参数,同样是纯 JS 对象</td></tr>
+<tr><td>React</td><td>组件函数不接受,由 <code>createRoot</code> 这类单独的渲染 API 负责</td><td>作为 <code>props</code> 传给组件函数</td></tr>
+</table>
+
+<h2>三、选项("props")有一条容易被忽略的性质:默认值</h2>
+
+<p>三种风格讲完,能看出一条共性:不管叫"选项"还是"props",本质上都是"给组件的自定义配置"。手册在描述 jQuery UI 的自定义选项时,专门用了"可选的、额外的"这两个词来形容它——这不是随口一说,而是直接决定了调用者用起来省不省心。</p>
+
+<p><strong>默认值。</strong>上面 jQuery UI 示例里传的 <code>animate</code>/<code>max</code>/<code>min</code> 都是可选的——不传就用组件内部的默认值。这意味着大多数自定义选项都应该配一个"够用"的默认值,调用者只需要覆盖自己真正关心的那几个字段,而不是每次初始化都要把全部选项抄一遍才能用。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>自定义选项(Options / Props)</dt>
+<dd>除了根元素(如果这种初始化风格需要的话)之外,用来定制组件行为和外观的可选配置——jQuery 风格里是传给构造函数的纯 JS 对象,React 里是传给组件函数的 <code>props</code>。<em>避免</em>把每个选项都设计成必填参数:大多数选项应该有合理默认值,调用者用不到就不用传。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>面试现场被要求设计一个组件(比如 slider、tabs)的 API 时,可以按这节课的顺序过一遍:先确定用哪种初始化风格(如果题目限定用 React,根元素这一步直接省掉);再对着自己列出来的选项,逐个问自己"这个字段有没有默认值"——像 <a href="https://api.jqueryui.com/slider/">jQuery UI 的 slider 文档</a>那样,把每个选项的名字和默认值列成一张表讲给面试官听,比边写代码边临时决定命名,更能体现你在主动设计 API,而不是只在拼凑功能。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"能跑起来"当成 API 设计已经过关。</strong>两个常见的翻车方向:一是把每个可选项都做成必填参数,调用者哪怕只想要个默认样子的组件,也要把所有字段抄一遍才能用起来,违背了上面 <code>animate</code>/<code>max</code>/<code>min</code> 都可以不传的初衷;二是把 jQuery/vanilla 的心智模型直接搬到 React 上,以为组件函数本身也要接收根元素——却忘了 React 组件不接受根元素参数,渲染到哪个 DOM 节点由 <code>createRoot</code> 这类单独的 API 负责,和组件的 props 是两件不同的事。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>打开 jQuery UI 的 slider 选项文档,挑 3~5 个选项,给它们各设计一版对应的 React props——写出对应的 prop 名字和默认值,并说清楚哪些字段可以直接省略。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>不管用哪种技术,组件初始化本质上都在回答同一个问题——根元素(如果需要)怎么传、自定义选项(props)怎么传;而选项设计得好不好,至少要看有没有给出合理默认值,让调用者不必为每个字段都手动传参就能用起来。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于 jQuery 风格和 React 风格初始化组件的核心区别,下面哪个说法最准确? (A) jQuery 风格和 React 风格都要求先手动创建根 DOM 元素,并把它作为组件本身的第一个参数传入 (B) React 组件函数本身不接受根元素参数,渲染到页面上的哪个 DOM 节点,由 createRoot 之类的单独 API 负责 (C) React 的 props 和 jQuery 构造函数里的自定义选项本质上互不相关,是两种没有共同点的设计</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。React 组件不接受根元素,渲染发生在单独的一步——先拿到 DOM 节点,再用 <code>createRoot</code> 包一层,最后 <code>root.render()</code> 把组件塞进去。(A) 混淆了两种风格:jQuery 的 <code>.slider()</code> 不是把根元素当参数传入构造函数,而是先用选择器选中元素,根元素是隐式的;(C) 恰好弄反了——React 的 props 本质上正是 jQuery 自定义选项思路的延续,都是"给组件的可选配置",只是载体和传递方式不同,不是互不相关。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于 jQuery UI 的 slider() 方法和它的自定义选项(如 animate/max/min),下面哪个说法最准确? (A) 这些选项本质上是可选的,不传就使用组件内部默认值,调用者只需要覆盖自己真正关心的字段 (B) 这些选项一旦在文档里列出来,就必须在每次调用 slider() 时全部显式传入,否则组件无法初始化 (C) 这套"可选项 + 默认值"的设计只存在于 jQuery 风格里,和 React 的 props 没有任何相似之处</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。手册把这些自定义选项形容为"可选的、额外的",这正是这节课"默认值"这条原则的出处——调用者只覆盖自己关心的字段,其余交给组件内部默认值兜底。(B) 恰好说反了:如果每个选项都是必填,<code>animate</code>/<code>max</code>/<code>min</code> 就不该被称为"可选";(C) 混淆了载体和思路——jQuery 构造函数的选项对象、React 的 props,都是"给组件的自定义配置",只是传递方式不同,思路是相通的,不是互不相关。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本节内容对应综合面试手册这篇文章"初始化"一节里点名的几个组件库和文档,建议按下面顺序看:</p>
+<ul>
+<li><a href="https://api.jqueryui.com/slider/">jQuery UI · Slider</a> —— 本节 jQuery 示例背后的完整选项文档,对照它的命名和默认值,练习给同一个组件设计一版 props。</li>
+<li><a href="https://jqueryui.com/">jQuery UI</a> —— 手册举例时引用的组件库官网,可以翻翻其他组件的构造函数怎么设计选项。</li>
+<li><a href="https://react.dev/">React</a> —— 理解 props 作为"组件自定义选项"这套机制的官方文档。</li>
+<li><a href="https://getbootstrap.com/">Bootstrap</a> —— 本节开篇提到的组件库范例之一,可以对照它公开的组件配置项,看成熟项目里命名和默认值长什么样。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"props 和 jQuery 选项到底是不是一回事",也可以现场挑一个组件,让老师陪你把选项表和默认值走一遍。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0011-ui-coding-interviews.html"><span class="dir">← 上一课</span>UI 编程面试怎么考</a>
+<a class="next" href="0013-component-api-design-customization-i18n.html"><span class="dir">下一课 →</span>组件外观怎么让人能自定义(含国际化)</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>面向对象(OOP)面试问答冲刺 · 精读课</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .hero { margin: 1rem 0 2rem; }
+  .hero .chain { font-family: "PingFang SC", sans-serif; font-weight: 700; color: var(--accent); font-size: 1.05rem; margin: .6rem 0; }
+  .toplinks { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.2rem 0 0; font-family: "PingFang SC", sans-serif; font-size: .85rem; }
+  .toplinks a { border: 1px solid var(--border); border-radius: 999px; padding: .35em .9em; text-decoration: none; color: var(--link); }
+  .pcard { border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem 1.3rem; margin: 1.4rem 0; background: var(--code-bg); }
+  .pcard h2 { margin-top: 0; font-size: 1.12rem; border: none; }
+  .pblurb { color: var(--muted); font-size: .9rem; margin: .2rem 0 .9rem; }
+  ol.plist { list-style: none; padding: 0; margin: 0; }
+  ol.plist li { margin: .3rem 0; }
+  ol.plist a { display: flex; align-items: baseline; gap: .7rem; text-decoration: none; color: var(--ink); border: 1px solid transparent; border-radius: 8px; padding: .45em .6em; }
+  ol.plist a:hover { border-color: var(--border); background: var(--paper); }
+  .lnum { font-family: "SF Mono", Menlo, monospace; font-size: .8rem; color: var(--muted); flex: 0 0 auto; }
+  .lname { font-family: "PingFang SC", sans-serif; font-weight: 600; flex: 0 0 auto; }
+  .lsub { color: var(--muted); font-size: .84rem; }
+  ol.plist li.miss { opacity: .45; }
+  ol.plist li.miss .lnum, ol.plist li.miss .lname, ol.plist li.miss .lsub { padding: .45em 0; }
+  .stat { font-family: "PingFang SC", sans-serif; font-size: .85rem; color: var(--muted); margin-top: 2rem; }
+</style>
+</head>
+<body>
+<main>
+<div class="hero">
+<h1>面向对象(OOP)面试问答冲刺 · 精读课</h1>
+<p class="lede">以《52 Important OOP Interview Questions》的 15 道真答题为核心骨架,补齐 SOLID / 设计模式 / 语言机制 canon,聚类成 26 节微课。<strong>Python 为主</strong>,关键处对照 Java/C++/C#。每节攻一簇高频真题,答到面试级。</p>
+<p class="chain">讲清是什么 → 讲透为什么 → 落到代码 → 落到面试 → 答得住追问</p>
+<nav class="toplinks">
+<a href="MISSION.md">🎯 Mission</a>
+<a href="GLOSSARY.md">📖 术语表</a>
+<a href="RESOURCES.md">🔗 资源与出处</a>
+<a href="reference/cheatsheet.html">🗂️ 打印速查表</a>
+</nav>
+</div>
+
+<section class="pcard">
+  <h2>第一部分 · 四大支柱</h2>
+  <p class="pblurb">面试开场必答:封装、继承、多态、抽象各是什么、为什么、怎么写</p>
+  <ol class="plist">
+    <li><a href="lessons/0001-what-is-oop.html"><span class="lnum">0001</span> <span class="lname">什么是 OOP</span><span class="lsub">对象、类与四大支柱全景</span></a></li>
+    <li><a href="lessons/0002-encapsulation.html"><span class="lnum">0002</span> <span class="lname">封装</span><span class="lsub">信息隐藏、@property 与 Python 伪私有</span></a></li>
+    <li><a href="lessons/0003-inheritance.html"><span class="lnum">0003</span> <span class="lname">继承</span><span class="lsub">is-a、五种继承类型与 super</span></a></li>
+    <li><a href="lessons/0004-polymorphism.html"><span class="lnum">0004</span> <span class="lname">多态</span><span class="lsub">重写 vs 重载与动态分派</span></a></li>
+    <li><a href="lessons/0005-abstraction.html"><span class="lnum">0005</span> <span class="lname">抽象</span><span class="lsub">抽象类 vs 接口</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第二部分 · 类的机制</h2>
+  <p class="pblurb">对象怎么生、怎么活、怎么死,以及三种成员</p>
+  <ol class="plist">
+    <li><a href="lessons/0006-object-lifecycle-identity.html"><span class="lnum">0006</span> <span class="lname">对象生命周期与身份</span><span class="lsub">is vs ==、identity/state/behavior</span></a></li>
+    <li><a href="lessons/0007-constructors.html"><span class="lnum">0007</span> <span class="lname">构造器</span><span class="lsub">__init__ vs __new__、命名构造器</span></a></li>
+    <li><a href="lessons/0008-destructors-resource-management.html"><span class="lnum">0008</span> <span class="lname">析构与资源管理</span><span class="lsub">__del__、GC、with、RAII</span></a></li>
+    <li><a href="lessons/0009-static-class-instance-members.html"><span class="lnum">0009</span> <span class="lname">实例/类/静态成员</span><span class="lsub">@staticmethod、@classmethod、类变量陷阱</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第三部分 · 关系与耦合</h2>
+  <p class="pblurb">对象之间怎么连:is-a、has-a、高内聚低耦合</p>
+  <ol class="plist">
+    <li><a href="lessons/0010-composition-vs-inheritance.html"><span class="lnum">0010</span> <span class="lname">组合 vs 继承 vs mixin</span><span class="lsub">组合优于继承</span></a></li>
+    <li><a href="lessons/0011-associations-aggregation-composition.html"><span class="lnum">0011</span> <span class="lname">关联/聚合/组合</span><span class="lsub">has-a 关系与 UML 记号</span></a></li>
+    <li><a href="lessons/0012-cohesion-and-coupling.html"><span class="lnum">0012</span> <span class="lname">内聚与耦合</span><span class="lsub">七级内聚、六级耦合</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第四部分 · SOLID 五原则</h2>
+  <p class="pblurb">面试第一大设计话题:从坏味道到重构方向</p>
+  <ol class="plist">
+    <li><a href="lessons/0013-solid-srp-ocp.html"><span class="lnum">0013</span> <span class="lname">SOLID(一):SRP + OCP</span><span class="lsub">单一职责与开闭原则</span></a></li>
+    <li><a href="lessons/0014-solid-lsp.html"><span class="lnum">0014</span> <span class="lname">SOLID(二):LSP</span><span class="lsub">里氏替换与矩形/正方形反例</span></a></li>
+    <li><a href="lessons/0015-solid-isp-dip.html"><span class="lnum">0015</span> <span class="lname">SOLID(三):ISP + DIP</span><span class="lsub">接口隔离、依赖倒置与依赖注入</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第五部分 · 设计模式</h2>
+  <p class="pblurb">GoF 三大类的高频模式与 Python 化简</p>
+  <ol class="plist">
+    <li><a href="lessons/0016-design-patterns-creational.html"><span class="lnum">0016</span> <span class="lname">总览 + 创建型</span><span class="lsub">单例/工厂/建造者</span></a></li>
+    <li><a href="lessons/0017-design-patterns-structural.html"><span class="lnum">0017</span> <span class="lname">结构型</span><span class="lsub">适配器/装饰器/代理</span></a></li>
+    <li><a href="lessons/0018-design-patterns-behavioral.html"><span class="lnum">0018</span> <span class="lname">行为型</span><span class="lsub">策略/观察者/模板方法</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第六部分 · Python 机制与跨语言</h2>
+  <p class="pblurb">把&#x27;Python 没有 X&#x27;这类送分追问答透</p>
+  <ol class="plist">
+    <li><a href="lessons/0019-multiple-inheritance-mro.html"><span class="lnum">0019</span> <span class="lname">多重继承与 MRO</span><span class="lsub">diamond、C3、super 协作</span></a></li>
+    <li><a href="lessons/0020-overloading-in-python.html"><span class="lnum">0020</span> <span class="lname">&quot;重载&quot;在动态语言</span><span class="lsub">singledispatch、运算符重载</span></a></li>
+    <li><a href="lessons/0021-duck-typing-abc-protocol.html"><span class="lnum">0021</span> <span class="lname">鸭子类型、ABC 与 Protocol</span><span class="lsub">名义 vs 结构子类型、EAFP</span></a></li>
+    <li><a href="lessons/0022-equality-and-hashing.html"><span class="lnum">0022</span> <span class="lname">相等与哈希</span><span class="lsub">__eq__/__hash__ 契约</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第七部分 · 进阶工程</h2>
+  <p class="pblurb">值/引用语义、Pythonic 建类与范式选择</p>
+  <ol class="plist">
+    <li><a href="lessons/0023-value-reference-mutability.html"><span class="lnum">0023</span> <span class="lname">值/引用语义与可变性</span><span class="lsub">传对象引用、可变默认参数坑</span></a></li>
+    <li><a href="lessons/0024-modern-python-class-tools.html"><span class="lnum">0024</span> <span class="lname">现代 Python 建类</span><span class="lsub">dataclass、__slots__、Enum</span></a></li>
+    <li><a href="lessons/0025-oop-vs-other-paradigms.html"><span class="lnum">0025</span> <span class="lname">OOP vs 过程式 vs 函数式</span><span class="lsub">范式对比与何时用 OOP</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第八部分 · 答题方法论</h2>
+  <p class="pblurb">把&#x27;知道&#x27;讲成&#x27;答得住&#x27;的收官方法论</p>
+  <ol class="plist">
+    <li><a href="lessons/0026-interview-answer-method.html"><span class="lnum">0026</span> <span class="lname">OOP 面试答题法</span><span class="lsub">追问链地图、白板设计题、全课复盘</span></a></li>
+  </ol>
+</section>
+
+<p class="stat">共 26 节 · 8 部分 · 自包含 HTML,本地打开即可 · 无数学依赖 · 零外部依赖</p>
+</main>
+</body>
+</html>

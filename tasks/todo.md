@@ -158,3 +158,212 @@
 - `.good` 诚实框逐节亲读:「mino 真有(白名单符号锚)」vs「方法论层未实现(明写不虚构)」口径全部到位。
 
 **遗留**:未提交 git(遵守「仅用户明确要求才提交」);6 节为提前储备、未直播讲授;headless 浏览器交互实测未做(结构级已过,可按需补);此后如需再建从 **0019** 起。
+
+---
+
+# ⟪第三课程⟫ 面试/编程面试大全 · 全新课程(用户点名:「用 teach 为这些资料生成一套课程」)
+
+> 素材:`面试/编程面试大全/`(= jwasham 的 **coding-interview-university / 编程面试大学**,README-cn 137KB 学习大纲 + cheat-sheets PDF)。脚手架:`面试/编程面试大全/teach`(skill 版 teach,**空白**:仅 SKILL+4×FORMAT,无 assets/无内容)。
+> 用户决策(AskUserQuestion):范围=**完整精读版 · 约52课**;难度侧重=**均衡(直觉+面试要点)**。
+> 落点:`面试/编程面试大全/teach/`(该脚手架自身即 workspace 根;上游 README/LICENSE/cheat-sheets 保持只读原封)。
+> 建法:三段式(摸 README 骨架→手写金标准 0007→子代理 fan-out 克隆)。**中途 ultracode 开启 + 后台 Agent 因 API 抖动接连卡死**,改用 **Workflow** 完成 fan-out(内置重试/失败隔离/缓存 resume,抗不稳定)。磁盘 spec(specs/C-K.md)沉淀 grounding,启动成本恒定、中断可续。
+
+## 骨架:13 部分 52 节(每节锚定 README-cn 真实主题小节)
+- [x] 起步与方法(0001-0003):学习法/75%原则 · 抽认卡与间隔重复 · 选哪门语言
+- [x] 复杂度基石(0004-0006):Big-O 直觉 · 常见复杂度类 · 摊还分析
+- [x] 线性结构(0007-0012):数组/动态数组 · 链表 · 双向链表陷阱 · 栈 · 队列/环形 · 哈希表上
+- [x] 哈希与查找(0013-0015):哈希表下(冲突/扩容) · 二分查找 · 二分变体与蓝图
+- [x] 位运算(0016-0017):位运算基础 · 补码/置位/位技巧
+- [x] 树(0018-0022):树与遍历 BFS/DFS · DFS 三序 · BST · BST 增删后继 · 堆/优先队列
+- [x] 排序(0023-0027):排序全景/稳定性 · O(n²)三兄弟 · 归并 · 快排 · 堆排序/非比较
+- [x] 图(0028-0031):表示法 · 遍历 · 拓扑/环检测 · Dijkstra
+- [x] 算法范式(0032-0036):递归 · 回溯 · DP上 · DP下 · 贪心vsDP
+- [x] 工程与设计(0037-0043):OOP/设计模式 · 组合概率 · NP完全 · 程序如何运行 · 缓存 · 进程线程 · 并发原语
+- [x] 更多结构与文本(0044-0048):字符串搜索 · Trie · 并查集 · 平衡树 · 布隆过滤器/跳表
+- [x] 机器表示与网络(0049-0050):浮点/Unicode/字节序 · 网络基础
+- [x] 系统设计(0051-0052):数字直觉/CAP · 缓存/分片/一致性哈希/作答框架
+
+## 质量闸(逐节)
+- [x] 自成一体 HTML,只 link 本 workspace 的 `../assets/style.css`(自包含,零外部资源)
+- [x] 均衡结构:直觉/图 → 关键定义 → 复杂度(Big-O 表)→ 🎯面试怎么考 → ⚠面试易错点 → ⌨️动手写一遍 → ✅自测(≥2 题,答案打乱)→ 主推资源(引 README 精选的真实一手链接)→ 上下课导航
+- [x] 脚手架:MISSION/NOTES/GLOSSARY/RESOURCES + index.html 门户 + reference/ 打印速查表
+- [x] 全量核验:结构 52/52、内链(前后课+门户)、无外链、headless 渲染抽样(表/SVG/树图/深浅色)、术语一致
+
+## Review
+
+**产出**:`面试/编程面试大全/teach/` 下建成完整一套课——**52 节自成一体 HTML 微课**(0001-0052,10.5–17KB/节)+ 门户 `index.html`(13 部分卡片,52 链)+ 脚手架(自包含 `assets/style.css`、MISSION/NOTES/GLOSSARY(48 词)/RESOURCES)+ 打印速查表 `reference/cheatsheet.html` + 学习记录。上游 README/LICENSE/cheat-sheets 原封未动。
+
+**建法(可复用于「为一份大纲/仓库生成一套课」)**:① 摸 README-cn 真实主题骨架(`- ### 主题` 锚点),按用户决策(52 课/均衡)编排 13 部分;② 手写并浏览器验收金标准 0007(数组),锁定房屋风格与 8 装置(recall/keydef/bigo 表/interview/gotcha/implement/quiz/nav);③ 磁盘 spec(specs/C-K.md 给每节 README 行号+scope+prev/next)+ 子代理 fan-out 克隆。**中途踩坑**:后台 fire-and-forget Agent 在 API 抖动下 3/3 卡死零产出 → 改 Workflow(10 工作项并行,内置重试/失败隔离),一次成功 10/10、0 错 0 空。
+
+**全量核验(主循环亲验,非信 agent 自述)**:
+- 结构:52/52 落盘,0 missing/0 extra;每节 lang=zh-CN + favicon 抑制 + **只 link 一份自包含样式表** + 装置齐(≥2 自测/interview/gotcha/nav)+ 标签闭合。
+- 内链:prev/next 全链 0001↔0052 正确;**抓到并修复 10 处死交叉链接**(agent 猜兄弟课 slug:如 0005-big-o-complexity→complexity-classes、union-find 号写成 0026→实为 0046),按锚文本意图逐一映射修复,复验零死链。
+- 反幻觉:**190 条外部一手链接逐条比对 README,零编造**(grounding 靠「agent 读 README 行号区间抽真实链接」的数据结构保证,非提示词)。
+- 渲染:0007/0018/0045(深色)/0052 等 8+ 页 headless 实测,SVG 树/字典树/一致性哈希环、bigo 表、cells、pipeline、trio 在深浅色下均可读、`dgm-` 主题类深色安全;**控制台零报错**(process_mac 噪声已排除)。门户截图 13 卡片布局精美无重叠。
+
+**遗留**:52 节为提前储备、未直播讲授(NOTES 约定 `[x]`=素材就绪,直播掌握是另一回事);未提交 git(遵守「仅用户明确要求才提交」);长尾冷门(FFT/van Emde Boas/HyperLogLog/凸包/线性规划)按用户「完整精读版」决策**主动排除**(README 自标可选、面试极少考)。此后如需再建从 **0053** 起。
+
+---
+
+# ⟪第四课程⟫ 面试/ 资料库建设(用户逐仓库贴分析 → 克隆提取 → 中文命名归档)
+
+> 模式:用户在外部对某个 GitHub 仓库做完"哪些是纯参考资料 / 哪些是项目基建"的分析,贴进来,只说「保存」「保存一下」或直接甩链接;我据此浅克隆(大仓库改用 `--filter=blob:none --no-checkout` + `sparse-checkout` 部分克隆,避免拉大体积 notebook/数据)→ 只落地纯参考文本(md 为主,MIT 仓库带 LICENSE)→ 归到 `/Users/bytedance/pass_exam/面试/` 下**中文命名**的二级文件夹,不新建多余文档。`teach/` 自动注入脚手架不删(用户已明确「这个没有问题」)。
+
+## 已完成
+
+- [x] **技术面试手册**(yangshun/tech-interview-handbook)—— LICENSE + questions/algorithms/coding-interview/behavioral-interview/self-presentation
+- [x] **编程面试大全**(jwasham/coding-interview-university)—— README/README-cn/programming-language-resources/LICENSE.txt/cheat-sheets(10 PDF 全保留)
+- [x] **面向对象面试问答**(Devinterview-io/oop-interview-questions)—— README.md
+- [x] **工程领导力资源**(gregorojstersek/resources-to-become-a-great-engineering-leader)—— README.md(仓库无 LICENSE,只落索引类内容)
+- [x] **大模型算法面试资料**(aceliuchanghong/FAQ_Of_LLM_Interview)—— LICENSE + 面试必问问题 + 大模型基础(13)+ 微调(5)+ 面试专题(10,2026 docs)+ 综合题库 + 公司面经(2024/2025/2026,剔除作者自标"不建议看"的速成问答)
+
+## 已完成(续)
+
+- [x] **生成式AI学习指南**(aishwaryanr/awesome-generative-ai-guide)—— 克隆多次因大文件被断连(HTTP/2 流被重置在 `resources/`那类含 notebook/图片/PDF 的目录上),改为**逐目录 sparse-checkout + 非 cone 模式按 `*.md` 过滤**才落地稳。保留原仓库自身的 journeys/paths/topics/interview_prep/research_updates/free_courses/resources 结构(判定其导航体系本身就是价值所在,不重新拍平);LICENSE.md + README + courses.md;`interview_prep` 只留角色 6 件套 md,不留 `system-design/*/code/`;`research_updates` 排除 `state_of_ai_2025_report/`(独立版权声明);`resources/llm_lingo` 6 个术语 PDF 参照"编程面试大全"cheat-sheets 先例保留;全部 img/png/notebook/csv 排除。共 179 文件 4.7M。
+- [x] **Agent全栈36章教程**(Callous-0923/agent-study)—— 用户自己的分析明确指出:内容是"讲义即代码"(每章一个 .py,概念+面试题+简化 Demo 混写),不是独立 md 参考资料,且分析本身建议不要直接整仓当 Wiki、需要提炼加工。就此询问用户要做到哪一步,用户选择**只落盘原始章节**(不做提炼)。于是只取 37 个 `chapter_*/*.py` + 根 README.md + LICENSE(MIT),排除对应的 `*.html`(build_html.py 生成的静态站产物,内容是 .py 的渲染版,冗余)、`index.html`/`package.json`/`vercel.json`/`build_html.py`(仓库自身的建站基建,非参考内容)。共 39 文件 796K,本仓库无历史网络问题(全 .py 文本,无大二进制)。提炼成结构化 Wiki 仍是待办,当前只是原始素材落地。
+- [x] **Coding Agent运行时工程笔记**(7-e1even/learn-agent)—— 与 agent-study 同类"教学代码仓",沿用上一次"只落盘原始章节"的默认(未重复询问)。这个仓库文档与代码是分离的(每章 README.md + 若干 .mjs),不像 agent-study 那样混在一个文件里,所以直接保留两者。取 19 章 `s01`~`s19` 全部 `*.md`+`*.mjs`(含 `s10_prompt_assembly/skills/*/SKILL.md` 这两个章节内演示用 Skill 文件)+ 根 README.md/LICENSE(MIT)/SUMMARY.md,排除 `assets/*.svg`(19 张架构图,按"排除所有图片类素材"的既定口径)、`.gitbook.yaml`/`README_EN.md`(建站配置/英文重复版)。共 70 文件 680K,无网络问题。
+- [x] **前端面试知识库**(yangshun/front-end-interview-handbook)—— monorepo,真正的内容全在 `packages/*/contents` 和 `packages/quiz/questions`,`website/` 只是 Docusaurus 建站代码。按用户分析口径只留 `en-US.mdx`+`zh-CN.mdx`(quiz 题另加 `metadata.json`,里面是 topics/difficulty/importance 结构化标签),排除:`pt-BR.mdx`(第三语言,不需要)、`*.langnostic.json`(纯翻译工具哈希表,核实内容后确认无实质信息)、根目录 `questions/*.md`(打开发现只是"已迁移"跳转桩,无实际内容)、`assets/`(网站图标插画)、`website/`(建站代码)。归类成 5 个中文子目录:`quiz题库`(40 题)/`综合面试手册`(10 主题)/`React面试手册`(12 主题)/`前端系统设计`(6 主题)/`行为面试手册`(9 主题)。共 196 文件 1.5M,LICENSE 为 MIT,无网络问题。
+- [x] **前端系统设计案例索引**(greatfrontend/awesome-front-end-system-design)—— 全仓就一份 560 行 README(按新闻流/电商/聊天/协同编辑/视频流等真实产品场景 + 前端横向专题 + UI 组件三种方式组织,链接到大厂工程博客),LICENSE(MIT)+ `assets/cover.png` 封面图。只落 README.md + LICENSE,封面图排除。用户分析特别提醒:仓库本身 MIT 只覆盖 README 的分类整理,外链的大厂博客/论文/第三方仓库各自版权状态不一,只保留标题和链接性质的索引,不代表可以二次转载外链正文。共 2 文件。
+
+## 待处理(用户已贴分析,排队等待执行——先记完计划,暂不动手)
+
+- [ ] **DevOps 面试题库(暂定名)**(devops-interviews/devops-interview-questions)
+  - 仓库地址:https://github.com/devops-interviews/devops-interview-questions
+  - 定位:场景化 DevOps/SRE 实战题库(115 题),不是背概念,是"给故障场景→要求现场处理"
+  - 保留:`README.md`(总索引,含分类/难度/公司标签)+ `cloud/*.md`(AWS 为主)+ `docker/*.md` + `git/*.md` + `kubernetes/*.md` + `linux/*.md` + `networking/*.md` + `programming/*.md` + `security/*.md`,全部纯 Markdown
+  - 排除:`lnkd.jpg`/`pht.png`(README 用图,无技术内容)
+  - 注意点(来自用户分析):README 计数不同步(115 vs 109);多数完整解法在外部视频,仓库内只有任务描述;公司标签是作者个人经历+Glassdoor/Blind 汇总,非官方背书;cloud 目前只有 AWS;CI/CD 偏 GitHub Actions
+  - 仓库无 LICENSE 提及,克隆时需核实——按"工程领导力资源"先例,若确认无 LICENSE 则只落文本、不做二次分发定性
+
+## Review
+(本轮 5 个仓库全部保存后回填;用户说"待会儿再给几个任务",本文件持续追加同模式的新仓库)
+
+---
+
+## ⟪课程生成 · 第五门⟫ 大模型算法面试精读课(2026-07-17)
+
+任务:针对 `面试/大模型算法面试资料` 用 `teach/` 脚手架生成一套课程。与前面"资料收集"线不同,这是**从真实资料建成一门可交互授课的微课**。
+
+### 用户决策(AskUserQuestion)
+- 范围 = **技术核心版 · 31 课**(9 部分;软性面/HR 话术、手撕算法、传统 ML、多模态 VLM 主动排除)
+- 数学 = **本地内嵌 KaTeX**(构建时下载、运行时零外网依赖)
+- 难度 = **均衡 · 直觉 + 面试要点**
+
+### 计划(全部完成)
+- [x] Phase 0:建 teach 脚手架 + 内嵌并验证 KaTeX 离线渲染 + 扩展 style.css(数学/宽公式滚动/.paper 装置)+ 手写并浏览器验收金标准母版 0002
+- [x] Phase 1:锁定 9 部分 31 课 manifest + 写磁盘 BRIEF/spec 供 fan-out grounding
+- [x] Phase 2:Workflow fan-out 克隆金标准生成 0001、0003-0031(中断一次,断点重跑补齐 9 节)
+- [x] Phase 3:全量核验(结构 31/31、零死链、KaTeX 多页无头渲染、反幻觉抽查)
+- [x] Phase 4:门户 index.html + 速查表 cheatsheet.html + MISSION/NOTES/GLOSSARY/RESOURCES/SKILL + 学习记录 + 记忆
+
+### 产物
+`面试/大模型算法面试资料/teach/`:31 节微课(0001-0031,505KB)+ 门户 + 自包含 style.css + 本地 KaTeX(596K)+ 4 脚手架文档 + 打印速查表 + learning-records/0001。9 部分:Transformer→注意力进阶→模型家族→微调PEFT→对齐RL→RAG→Agent→训练推理工程→评估数据。
+
+### 核验结论(每条亲跑,不信 agent 自述)
+- 结构 **31/31 通过**、编号 0001-0031 连续、**零死链**(精确 slug grounding)
+- 数学:6 节多样化重课(0002/0004/0007/0016/0019/0023)无头渲染实测——公式全渲染、`.katex-error`=0、残留`$`=0、控制台零错;深色模式由 KaTeX currentColor 保证
+- **抓修一个系统性缺陷**:8/31 课行内公式 `$a<b$` 的 `<` 被浏览器当标签吃掉致不渲染(且不报错),批量转义 `&lt;` 修复
+- **抓修一个自引入回归**:修复正则误把真 `<em>` 转义,被正交检查(数学区裸中文扫描)逮住并修回
+- 反幻觉:"16倍显存/15%掩码率/99%类别不均衡"均为真实非编造
+- 未提交 git(遵守"仅明确要求才提交")
+
+### 记忆
+新建 `llm-algo-interview-course.md` + MEMORY.md 索引行:默认交互式授课、不重建、加课从 0032 起。
+
+---
+
+## ⟪课程生成 · 第六门:生成式 AI / AI 工程师面试冲刺⟫(2026-07-17)
+
+**请求**:按 `面试/生成式AI学习指南/teach` 规范,在 `面试/生成式AI学习指南` 生成一套完整课程。
+源 = **awesome-generative-ai-guide**(Aishwarya Naresh Reganti,MIT):177 md/4.8M 的全景 GenAI 课程库。
+**关键判断**:源是混合体——真题库/101指南/free_courses 是真内容(抽取成课),courses.md/月度论文/工具清单是纯策展(归 RESOURCES/📄延伸)。teach/ 此前只有空脚手架。
+
+**用户决策(AskUserQuestion)**:① 主线=**面试冲刺版**(两大真题库为骨,AI 工程师岗为主骨);② 面试视角=**每课都落到面试**。范围 ~30 课。
+
+### 产出
+`面试/生成式AI学习指南/teach/`:**31 节微课**(0001-0031,548KB)+ 门户 index.html + 自包含 style.css(复用姊妹课)+ 本地 KaTeX(596K)+ MISSION/NOTES/GLOSSARY(约90词)/RESOURCES + 打印速查表 cheatsheet.html + learning-records/0001。teach 总 1.2M。10 部分:基础与Transformer→Embedding与向量检索→Prompting与上下文工程→微调与对齐→RAG(5节)→Agents(4节)→推理模型→评估→生产/幻觉/安全→多模态与系统设计。骨=`60_gen_ai_questions.md`(62题)+`roles/ai-engineer/questions.md`(145题)。
+
+### 核验结论(每条亲跑,不信 agent 自述)
+- 结构 **31/31 全绿**、编号 0001-0031 连续、**零死链**(精确文件名 grounding,门户31链+各课prev/next全对)
+- DOM 实测:门户(10卡片/31链/0缺失/0溢出)+ 8 节抽验(0001/0002/0006/0011/0012/0017/0021/0028)——KaTeX 全渲染、`.katex-error`=0、残留`$`=0、overflow=0、leaked entities=0、console error=0;深色模式由 currentColor 保证
+- **KaTeX `<` 陷阱这次零发生**(spec 前置显式警告 + 本课偏应用公式少)——对比上门课 8/31 中招
+- 反幻觉全量扫描通过:0003「4倍/16倍」是 O(n²) 正确推导;0021 百分比是 0.95ⁿ 正确外推(77/60/8%);0028 安全统计(94.4/58-59/37-40%)匹配源真值且正确 hedged;0025 成本课**零百分比**全程定性
+- 上游源(两大题库/101指南/free_courses/LICENSE)只读原封;未提交 git(遵守"仅明确要求才提交")
+
+### 建法关键
+把**每节答案精髓嵌进 fanout 脚本**(逐字源真题+亲读题库提炼的要点),让 30 个并行 agent"组织给定要点"而非"回忆知识"→ 幻觉面大幅收窄。Workflow 扇出 30/30、0 error、0 skip、0 empty、约 12 分钟。
+
+### 记忆
+新建 `genai-interview-course.md` + MEMORY.md 索引行:默认交互式授课、不重建、加课从 0032 起。
+
+---
+
+## ⟪课程生成 · 第七门:面向对象(OOP)面试问答冲刺⟫(2026-07-17)
+
+### 请求与源
+用户:「按 `面试/面向对象面试问答/teach` 规范在 `面试/面向对象面试问答` 生成一套完整课程」。
+源 = 同级 `README.md`《52 Important OOP Interview Questions in 2026》(Devinterview.io,38K)。
+**关键判断**:源半封闭——**仅前 15 题(Q1–Q15)有完整答案**,Q16–52 在付费墙后、仓库无原文。且**零数学**(OOP 无公式)→ 不需 KaTeX。teach/ 此前只有空脚手架。注意与仓库《面向对象高级编程 advanced_oop》(编程进阶课)区分。
+
+**用户决策(AskUserQuestion)**:① 范围=**面试全景版**(15 题为骨 + SOLID/设计模式/语言机制 canon,~26 课);② 语言=**Python 为主**(关键差异对照 Java/C++/C#)。
+
+### 产出
+`面试/面向对象面试问答/teach/`:**26 节微课**(0001-0026)+ 门户 index.html + 自包含 style.css(借姊妹课结构、**删 KaTeX 段**、**加 `.crosslang` 装置**、`.paper` 改"权威出处")+ MISSION/NOTES/GLOSSARY(约70词)/RESOURCES + 打印速查表 cheatsheet.html + learning-records/0001。8 部分:四大支柱→类的机制→关系与耦合→SOLID→设计模式→Python机制与跨语言→进阶工程→答题方法论。骨=源 15 题、肉=canon(GoF/Uncle Bob/Liskov/官方文档),每节📚权威出处**诚实分层标注**。金标准母版=0002 封装(含 name mangling 演示)。
+
+### 核验结论(每条亲跑,不信 agent 自述)
+- 结构 verify.py **26/26 全绿**、编号连续、**零死链**(精确文件名)、**零外部依赖**(无 KaTeX/CDN)、标签闭合、代码转义
+- DOM 全 26 页 fetch 实测:leaked entities=0、katex=0、外部script/link=0、每节 recall+interview+gotcha+quiz 齐、2 处 inline SVG(0019 diamond 260×200 正常渲染);渲染抽验(0019/0023/门户)overflow 全 0
+- **代码区裸 `<`/`>` 转义纪律**(取代 AI 课 KaTeX `<` 陷阱):26 节代码区裸 `<` 全 0
+- 反幻觉全 26 扫描:绝对措辞皆定义正确/正确建议/主动破除误区/有语境限定(如"在 Java 里…接口是唯一出路");无编造 benchmark(仅 3 处 90%/99% 口语修辞);版本号(Java8 default/Java9 弃 finalize/C#8/Python3.10+ slots)全真实带限定
+- 上游源(README/LICENSE)只读原封;**未提交 git**(遵守"仅明确要求才提交")
+
+### 建法关键与教训
+把**每节答案要旨+来源层嵌进 fanout spec**,让 25 个并行 agent 组织给定要点而非回忆。**会话额度上限致 5 agent(0022-0026)"失败但已落盘"**——workflow `<failures>` 报 agent 终态非副作用,磁盘/DOM 才定论,故未盲目 resume(那会重放覆盖 20 个已好文件),而是对 5 个"失败"文件做完整性体检确认可用。
+
+### 记忆
+新建 `oop-interview-course.md` + MEMORY.md 索引行:默认交互式授课、不重建、加课从 0027 起。
+
+---
+
+## ⟪课程生成 · 第八门:Pi-Agent SDK 深度精读⟫(2026-07-21)
+
+### 请求与源
+用户:「把这个克隆下来并使用 teach 建立一套课程 https://github.com/buchidonggua/dg-ai-notes.git」。
+源 = **冬瓜《Pi-Agent SDK 深度教程》**(buchidonggua/dg-ai-notes,CC-BY-SA-4.0 文档 / MIT 代码):10 章拆解 earendil-works 开源的生产级 Agent SDK `pi`(基于 v0.80.2),TS+Python 双版本、每章配 SVG 图解、含 Astro 在线站与 agent-loop notebook。TS 版全书约 19 万字(单章 1.3–3 万字,ch03 Agent Loop 最重)。
+**关键判断**:这是**源码精读体裁**(同 learn-code 读 xv6),归 `agent开发/` 板块作第四门子课(与 book-course/from-zero/四支柱并列),非 面试/ 刷题。grounding 源 = **教程 markdown 本身**(pi SDK 真源码不在库内,只有教程 docs);忠实转译教程内容为微课,引用教程的 file:line 口径而非自称读过 pi 源码。
+
+### 用户决策(AskUserQuestion)
+- 范围 = **全量建课**(10 章 → 约 32 节微课,一节一窄主题)
+- 语言轨 = **TypeScript**(pi SDK 本体即 TS,配图/类型/行号全对得上原作)
+
+### 计划(分阶段 · 带验证闸门 · 分批生成,规避 session 上限中断)
+- [ ] **Phase 0 落盘+骨架**:源仓库去 .git 作只读快照落 `原始资料/dg-ai-notes/`;建 `pi-agent精读/teach/{lessons,learning-records,reference}` ✅(已完成)
+- [ ] **Phase 1 地基+母版**:自包含 `assets/style.css`(融合 learn-code 代码块高亮 + 通用装置)+ 手写并浏览器验收金标准母版 0001 + 脚手架文档(MISSION/NOTES/GLOSSARY/RESOURCES/SKILL/*-FORMAT/baseline)+ chapter-map.html
+- [ ] **Phase 2 设计扇出**:Workflow 10 并行章读者 → 每章结构化蓝图(窄主题切分 + 逐字源码块/关键表/设计取舍点/类比种子/自测种子),我汇总编号 0001–0032 + 写磁盘 spec 供 grounding
+- [ ] **Phase 3 生成扇出(分批)**:Workflow pipeline 按章分批(每批约 6–10 节):起草 agent(**不用 schema,直接 Write 落盘**,规避 schema 跳过副作用)→ 对抗式复核 agent(读盘复核准确性/难度/模板)→ 按需修复;每批后我磁盘+DOM 亲验
+- [ ] **Phase 4 集成核验**:门户 index.html + cheatsheet + 全量核验(结构 32/32、零死链、headless 渲染抽样、反幻觉扫描)+ 更新 README/CLAUDE 计数 + learning-record + 记忆
+
+### 质量闸(逐节)
+- [ ] 源码精读装置齐:窄主题 · 类比 · 关键定义 · **逐字 TS 代码块(带教程 file:line 出处)** · 设计取舍「为什么这样做」框 · ASCII/流程图 · ≥1 自测(答案打乱)· 上下课导航
+- [ ] 自包含:仅 link 本课 `../assets/style.css`,零 CDN/外链/外部脚本;lang=zh-CN;favicon 抑制
+- [ ] 忠实转译教程:代码/数字/设计理由不臆造;引教程口径,不自称读过 pi 源码
+- [ ] 磁盘+DOM 亲验(不信 agent 自述):结构、内链、标签闭合、答案打乱、反幻觉
+
+### Review
+
+**产出**:`agent开发/pi-agent精读/teach/` 建成完整一门课——**32 节自成一体 HTML 微课**(0001-0032,232–340 行/节,代码块合计 119)+ 门户 `index.html`(10 章编排 32 卡,grid)+ 自包含 `assets/style.css`(融合代码块高亮+教学装置)+ 脚手架(MISSION/NOTES/GLOSSARY/RESOURCES/SKILL/4×FORMAT)+ `reference/chapter-map.html`(章→课映射,全✅超链)+ `learning-records/0001-baseline.md` + `specs/`(31 节设计蓝图,grounding 沉淀)。源仓库 `dg-ai-notes` 去 .git 作只读快照落 `原始资料/`(3.9M)。
+
+**建法(五阶段·带验证闸门)**:
+1. Phase 0 落盘+骨架;Phase 1 自包含 style.css + **手写并浏览器验收金标准母版 0001**(锁房屋风格)+ 脚手架。
+2. Phase 2 **设计扇出**(Workflow 10 章读者并行,读完整章→结构化蓝图:窄主题/类比种子/教学要点/codeRefs/设计取舍/3题自测;schema 安全无写盘副作用)→ 校验落盘 specs/ + 注入精确 prev/next 防死链 + 重排 2 处单调答案。44万token/9min/0错。
+3. Phase 3 **生成扇出分批**(批A 0002-0017、批B 0018-0032):pipeline 起草(sonnet,**不用schema直接Write**规避副作用跳过)→ 对抗复核(opus高effort,schema判决)→ 按需修复。两批共 62 agent、31/31 pass、0 需修复。
+4. Phase 4 门户 + chapter-map 全✅ + 全课核验 + 集成 README/CLAUDE/NOTES。
+
+**核验(主循环亲验,不信 agent 自述)**:
+- 结构 **32/32 存在**、span 全平衡、自包含(仅 ../assets/style.css,0 CDN/img/外脚本)、每节≥1代码块。
+- **零死链**(全链扫描;唯一 1 处是我手写母版 0001 预猜 0002 slug 为 four-package-architecture,实为 four-packages-three-layer-stack,已修)。
+- 自测:31 节 data-correct **逐位==设计蓝图** correctIndex;全局答案分布 0/1/2/3=21/33/28/11(不单调)。
+- DOM 抽样 6 节(0001/0002/0009/0015/0021/0028/0032):**控制台 0 错 0 警告**、无横向溢出、0 实体泄漏、代码块 `<>` 正确转义显示、TS 高亮着色、自测答对/答错分支正确、grid 门户布局正常。
+- 反幻觉:全课 pi 版本号**仅 v0.80.2**(无臆造);64,000/13,700/12000 等关键数字均源自教程且出现在正确章节。
+
+**遗留**:32 节为提前储备的素材、**未直播讲授**(baseline LR 约定:掌握以复述/自测表现为准);未提交 git(遵守「仅明确要求才提交」);Python 轨与 pi 真源码逐行未做(MISSION 已划出 scope);此后如需加课从 **0033** 起。

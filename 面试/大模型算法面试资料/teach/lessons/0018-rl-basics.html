@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0018 · 强化学习基础:马尔科夫 / 贝尔曼 / 价值与策略</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第五部分 对齐与强化学习 · 第 0018 课</p>
+<h1>强化学习基础:马尔科夫 / 贝尔曼 / 价值与策略</h1>
+<p class="lede">下一课起就是 PPO、GRPO,满屏的 $V$、$Q$、$\hat{A}_t$、$\gamma$、「优势」「on-policy」。非 RL 背景的人看到这些会直接懵。这节课不碰任何具体对齐算法,只把地基一次夯实:一个决策问题怎么被写成 <strong>MDP</strong>、什么是<strong>策略</strong>与<strong>价值</strong>、<strong>贝尔曼方程</strong>凭什么能把长期收益写成一步递归、以及 DP / 蒙特卡洛 / TD 三种求解思路的分野。面试爱考它,是因为你答 PPO 之前得先证明你懂它站在什么之上。</p>
+
+<div class="recall">
+<p>上节课(RLHF 流水线)讲到第三步:拿奖励模型给回答打分,再用 <strong>PPO</strong> 去优化语言模型。我们把「生成下一个 token」当成了一个<strong>动作</strong>,把已生成的前缀当成<strong>状态</strong>。<strong>先别往下看,想一想:如果每一步都要为「未来整段回答的好坏」负责,而好坏要等生成结束才知道,模型怎么才能在<em>当下这一步</em>就判断该往哪走?</strong></p>
+</div>
+
+<h2>一、先把问题写成 MDP</h2>
+<p>强化学习研究的是<strong>序贯决策</strong>:一个智能体(agent)在环境里反复「观察状态 → 选动作 → 拿奖励 → 进入新状态」,目标是让<strong>长期累计奖励</strong>最大。这个交互循环,正是整个 RL 的舞台。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">Agent<br>(策略 $\pi$)</div>
+  <div class="node">动作 $a_t$</div>
+  <div class="node">Environment<br>(转移 $P$)</div>
+  <div class="node">新状态 $s_{t+1}$<br>+ 奖励 $r_{t+1}$</div>
+  <div class="node good">回到 Agent<br>循环</div>
+</div>
+<figcaption>RL 的基本循环:策略产生动作,环境给出新状态与奖励,如此往复。把这个循环形式化,就是 MDP。</figcaption>
+</figure>
+
+<p>要让「长期收益最大」这句话可计算,得先给它一个数学骨架——<strong>马尔科夫决策过程(Markov Decision Process, MDP)</strong>,由五个元素组成 $(\mathcal{S},\mathcal{A},P,R,\gamma)$:</p>
+
+<table>
+<thead><tr><th>元素</th><th>含义</th><th>在 LLM 对齐里对应什么</th></tr></thead>
+<tbody>
+<tr><td>状态 $\mathcal{S}$</td><td>环境当前的完整描述</td><td>prompt + 已生成的前缀</td></tr>
+<tr><td>动作 $\mathcal{A}$</td><td>agent 在某状态下能做的选择</td><td>下一个 token(整个词表)</td></tr>
+<tr><td>转移 $P(s'\mid s,a)$</td><td>做完动作后进入各新状态的概率</td><td>拼上该 token 得到新前缀(近乎确定)</td></tr>
+<tr><td>奖励 $R(s,a)$</td><td>这一步的即时回报</td><td>奖励模型/规则给的分(常在句末给)</td></tr>
+<tr><td>折扣 $\gamma\in[0,1]$</td><td>未来奖励的贴现率</td><td>控制「看多远」</td></tr>
+</tbody>
+</table>
+
+<h3>为什么叫「马尔科夫」?</h3>
+<p>因为它假设<strong>马尔科夫性</strong>:下一步只取决于<em>当前状态</em>,与到达这里的历史路径无关。</p>
+$$P(s_{t+1}\mid s_t,a_t)=P(s_{t+1}\mid s_1,a_1,\dots,s_t,a_t)$$
+<p class="formula-note">这不是说历史不重要,而是要求「状态」本身把该记的都记进去。</p>
+<p>这条假设是整套理论能成立的地基:正因为「当前状态」已是充分统计量,我们才敢用一步递归去表达长期价值(下面的贝尔曼方程)。在 LLM 里它天然成立——状态就是「到目前为止的全部文本」,信息一点没丢。</p>
+
+<h2>二、目标:回报、策略、价值</h2>
+<p>agent 要最大化的不是某一步奖励,而是从当前时刻起的<strong>折扣累计回报(return)</strong>:</p>
+$$G_t=r_{t+1}+\gamma r_{t+2}+\gamma^2 r_{t+3}+\cdots=\sum_{k=0}^{\infty}\gamma^k\, r_{t+k+1}$$
+<p class="formula-note">$\gamma$ 越接近 1,越看重远期;越接近 0,越只顾眼前。$\gamma&lt;1$ 还保证无限步的和收敛。</p>
+
+<p>行为的规则叫<strong>策略(policy)</strong> $\pi(a\mid s)$:给定状态,选各动作的概率。RL 的终极目标就是找到让回报期望最大的策略。而要比较策略好坏,我们需要给「状态」和「状态-动作」打分——这就是两个<strong>价值函数</strong>:</p>
+
+<dl class="keydef">
+<dt>状态价值 $V^\pi(s)$</dt>
+<dd>从状态 $s$ 出发、之后一直按策略 $\pi$ 行动,能拿到的期望回报:$$V^\pi(s)=\mathbb{E}_\pi\!\left[G_t\mid S_t=s\right]$$<em>回答「这个局面本身值多少」。</em></dd>
+<dt>动作价值 $Q^\pi(s,a)$</dt>
+<dd>在状态 $s$ <em>先强行做动作 $a$</em>、之后再按 $\pi$ 行动的期望回报:$$Q^\pi(s,a)=\mathbb{E}_\pi\!\left[G_t\mid S_t=s,\,A_t=a\right]$$<em>回答「在这个局面下,选这个动作值多少」。</em></dd>
+</dl>
+
+<p>两者的桥梁:$V$ 是 $Q$ 按策略取的平均,而 $Q$ 是「即时奖励 + 下一状态的 $V$」:</p>
+$$V^\pi(s)=\sum_a \pi(a\mid s)\,Q^\pi(s,a),\qquad Q^\pi(s,a)=\mathbb{E}_{s'}\!\left[R(s,a)+\gamma V^\pi(s')\right]$$
+
+<h2>三、贝尔曼方程:把长期收益压成一步递归</h2>
+<p>直接按定义算 $V^\pi$ 要对无穷长的未来求期望,没法算。贝尔曼(Bellman)的洞见是:<strong>回报可以拆成「这一步 + 剩下的回报」</strong>,而「剩下的回报」的期望恰恰又是下一状态的 $V$。于是长期价值坍缩成一条<strong>自我引用</strong>的递归——<strong>贝尔曼期望方程</strong>:</p>
+$$V^\pi(s)=\sum_a \pi(a\mid s)\sum_{s'} P(s'\mid s,a)\big[\,R(s,a)+\gamma\, V^\pi(s')\,\big]$$
+<p class="formula-note">当前状态的价值 = 对(动作、下一状态)求期望的「即时奖励 + 折扣后的下一状态价值」。$V$ 出现在等号两边,这就是它的精髓。</p>
+
+<p>如果我们不再固定某个策略,而是每一步都<strong>贪心地选最好的动作</strong>,就得到最优价值满足的<strong>贝尔曼最优方程</strong>:</p>
+$$V^*(s)=\max_a \sum_{s'} P(s'\mid s,a)\big[\,R(s,a)+\gamma\, V^*(s')\,\big]$$
+<p class="formula-note">期望方程里对动作是「按 $\pi$ 加权平均」,最优方程里换成了「取最大」。求解 RL 本质上就是在解这一族方程。</p>
+
+<h2>四、三种求解思路:DP vs 蒙特卡洛 vs TD</h2>
+<p>知道了贝尔曼方程,怎么真正把 $V$ 算出来?三条主线,区别只在两点:<strong>要不要环境模型</strong>、以及<strong>靠自举(bootstrap)还是靠实际回报</strong>。</p>
+
+<div class="trio">
+  <div class="cell"><strong>动态规划 DP</strong><br>价值迭代<br><em>知道 $P,R$,用贝尔曼做全宽度扫描</em></div>
+  <div class="cell"><strong>蒙特卡洛 MC</strong><br>跑完整 episode<br><em>不用模型,用真实回报 $G_t$ 更新</em></div>
+  <div class="cell"><strong>时序差分 TD</strong><br>走一步就更新<br><em>不用模型,用估计去更新估计</em></div>
+</div>
+
+<h3>动态规划:价值迭代</h3>
+<p>如果转移 $P$ 和奖励 $R$ <strong>已知</strong>,把贝尔曼最优方程当成赋值语句反复迭代,$V$ 会收敛到 $V^*$:</p>
+$$V_{k+1}(s)\leftarrow\max_a\sum_{s'} P(s'\mid s,a)\big[R(s,a)+\gamma V_k(s')\big]$$
+<p>它对每个状态做<strong>全宽度 backup</strong>(遍历所有后继),而且用当前的 $V_k$ 估计去更新——这叫<strong>自举</strong>。缺点很致命:现实里我们几乎从不知道环境模型,状态空间也可能大到扫不完。</p>
+
+<h3>蒙特卡洛:等尘埃落定再算账</h3>
+<p>不知道模型?那就<strong>去采样</strong>。让策略跑完一整个 episode,拿到真实发生的回报 $G_t$,直接朝它更新:</p>
+$$V(s_t)\leftarrow V(s_t)+\alpha\big[\,G_t-V(s_t)\,\big]$$
+<p>用的是<strong>真实回报</strong>,所以<strong>无偏</strong>;但 $G_t$ 是一长串随机奖励的和,<strong>方差很大</strong>,而且<strong>必须等 episode 结束</strong>才能更新——回答不生成完就没法算 return。</p>
+
+<h3>时序差分:走一步就学一步</h3>
+<p>TD 是 DP 和 MC 的私生子:像 MC 一样<strong>靠采样</strong>(不需要模型),又像 DP 一样<strong>自举</strong>(用下一状态的估计代替剩下的真实回报)。最基本的一步 TD:</p>
+$$V(s_t)\leftarrow V(s_t)+\alpha\underbrace{\big[\,r_{t+1}+\gamma V(s_{t+1})-V(s_t)\,\big]}_{\text{TD 误差 }\delta_t}$$
+<p class="formula-note">$\delta_t$ 就是「实际这一步观测到的 + 对未来的估计」与「原本的估计」之差,是驱动学习的信号。</p>
+<p>它把 MC 的 $G_t$ 换成了 $r_{t+1}+\gamma V(s_{t+1})$——只往前看一步,剩下的用估计补。代价是<strong>引入偏差</strong>(估计本身可能不准),回报是<strong>方差小、可在线更新</strong>。绝大多数现代 RL(包括 PPO)都站在 TD 这一侧。</p>
+
+<table>
+<thead><tr><th></th><th>需要模型 $P,R$?</th><th>更新时机</th><th>是否自举</th><th>偏差 / 方差</th></tr></thead>
+<tbody>
+<tr><td>动态规划 DP</td><td>需要</td><td>全宽度扫描</td><td>是</td><td>无采样(精确)</td></tr>
+<tr><td>蒙特卡洛 MC</td><td>不需要</td><td>episode 结束后</td><td>否</td><td>无偏 / 高方差</td></tr>
+<tr><td>时序差分 TD</td><td>不需要</td><td>每一步</td><td>是</td><td>有偏 / 低方差</td></tr>
+</tbody>
+</table>
+<p class="formula-note">共同点:三者都在逼近同一族贝尔曼方程。真正的连续谱系是「往前看几步」:看 1 步是 TD,看到底是 MC,中间是 $n$-step 与 GAE(下一课会用到)。</p>
+
+<h2>五、优势函数:为 PPO / GAE 埋的线</h2>
+<p>有了 $Q$ 和 $V$,一个极其重要的量随之而来——<strong>优势函数(advantage)</strong>:</p>
+<dl class="keydef">
+<dt>优势函数 $A^\pi(s,a)$</dt>
+<dd>$$A^\pi(s,a)=Q^\pi(s,a)-V^\pi(s)$$<em>在状态 $s$ 下选动作 $a$,比「按当前策略的平均水平」好多少。$A&gt;0$ 表示这个动作优于平均,值得强化;$A&lt;0$ 则该抑制。</em></dd>
+</dl>
+<p>为什么策略梯度类算法(如 PPO)偏爱它而不是直接用 $Q$?因为 $V^\pi(s)$ 是一个<strong>只与状态有关、与动作无关的 baseline</strong>。从 $Q$ 里减掉它,<strong>不改变策略梯度的期望(无偏),却能大幅降低方差</strong>——「这一步比平均好多少」比「这一步绝对值多少」是稳定得多的学习信号。</p>
+<p>更妙的是,前面 TD 误差 $\delta_t=r_{t+1}+\gamma V(s_{t+1})-V(s_t)$ 正是优势的一个<strong>单步估计</strong>:当 $V$ 准确时,$\mathbb{E}[\delta_t]=A^\pi(s_t,a_t)$。把不同步长的 $\delta$ 按 $\gamma\lambda$ 指数加权求和,就是 <strong>GAE</strong>(下一课 PPO 会正式登场)。这条线索请记牢:<em>优势 → TD 误差 → GAE → PPO</em>。</p>
+
+<div class="implement">
+<p>把价值迭代敲一遍最能体会贝尔曼「反复代入直到不动」的味道(极小网格世界,已知模型):</p>
+<pre><code>import numpy as np
+
+# states 0..n-1; P[s][a] -> list of (prob, s_next, reward); gamma 折扣
+def value_iteration(states, actions, P, gamma=0.9, tol=1e-6):
+    V = {s: 0.0 for s in states}
+    while True:
+        delta = 0.0
+        for s in states:
+            # 对每个动作算「即时奖励 + 折扣后的下一状态价值」的期望,取最大
+            q_sa = [sum(p * (r + gamma * V[s2]) for p, s2, r in P[s][a])
+                    for a in actions]
+            v_new = max(q_sa)                 # 贝尔曼最优方程的一次赋值
+            delta = max(delta, abs(v_new - V[s]))
+            V[s] = v_new
+        if delta &lt; tol:                       # 不再变化 = 收敛到 V*
+            break
+    return V</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「写出贝尔曼(期望)方程。」——$V^\pi(s)=\sum_a\pi(a\mid s)\sum_{s'}P(s'\mid s,a)[R+\gamma V^\pi(s')]$;能顺手写出最优方程(把 $\sum_a\pi$ 换成 $\max_a$)加分。</li>
+<li>「$V$ 和 $Q$ 的区别与联系?」——$V$ 评估状态、$Q$ 评估状态-动作;$V^\pi(s)=\sum_a\pi(a|s)Q^\pi(s,a)$,$A=Q-V$。</li>
+<li>「DP、MC、TD 有什么区别?」——按「要不要模型 / 是否自举 / 偏差方差」三刀切;TD = 采样 + 自举,是二者的结合。</li>
+<li>「on-policy 和 off-policy 一句话?」——<strong>用来生成数据的策略是不是就是正在优化的策略</strong>:是则 on-policy(SARSA、PPO),否则 off-policy(Q-learning、DQN,可复用经验回放)。</li>
+<li>「PPO 为什么用优势而不是直接用奖励/回报?」——减去 baseline $V$ 降方差、且不引入偏差,学习信号更稳。</li>
+<li>「$\gamma$ 调大调小有什么影响?」——大则重视长期、方差更大、可能更难收敛;小则短视但稳定。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别把 $V$ 和 $Q$ 说反:$Q$ 多「钉住一个动作」,$V$ 是对动作求了期望的 $Q$。</li>
+<li>优势是 $A=Q-V$,<strong>不是</strong> $Q$ 本身;baseline 用 $V$ 是为了<em>降方差</em>,不是为了改变最优解。</li>
+<li>MC 必须 episode 结束才能更新(要真实 $G_t$);TD 每步都能更新。把「TD 需要跑完整回合」说出口就露馅了。</li>
+<li>on/off-policy 的分界是<strong>行为策略是否等于目标策略</strong>,不是「在线/离线」或「有没有经验回放」这些表象。</li>
+<li>马尔科夫性不是「历史无关紧要」,而是「状态必须包含足够信息」;状态设计不当会悄悄破坏它。</li>
+<li>$\gamma=1$ 在持续型(非分幕)任务里可能让回报发散,通常取 $\gamma&lt;1$。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>关于蒙特卡洛(MC)与时序差分(TD)对价值函数的更新,下面哪一项<strong>正确</strong>?</p>
+<details><summary>A. MC 和 TD 都必须等到 episode 结束才能更新价值</summary>错。只有 MC 需要真实回报 $G_t$、须等结束;TD 每一步就能更新。</details>
+<details><summary>B. TD 是无偏的,MC 是有偏的</summary>说反了。MC 用真实回报无偏但方差大;TD 自举有偏但方差小。</details>
+<details><summary>C. TD 用「即时奖励 + 下一状态价值估计」来更新,是采样与自举的结合 ✅</summary>正确。TD 误差 $\delta_t=r_{t+1}+\gamma V(s_{t+1})-V(s_t)$ 既靠采样(不需模型),又靠自举(用估计代替剩余真实回报)。</details>
+<details><summary>D. MC 和 TD 都需要已知环境的转移概率 $P$</summary>错。需要模型的是动态规划(DP);MC 与 TD 都是无模型方法。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>策略梯度算法(如 PPO)常用优势 $A^\pi(s,a)=Q^\pi(s,a)-V^\pi(s)$ 而不是直接用 $Q$,主要原因是?</p>
+<details><summary>A. 减去只依赖状态的 baseline $V$,不改变梯度期望却显著降低方差 ✅</summary>正确。$V^\pi(s)$ 与动作无关,是无偏 baseline;「比平均好多少」比绝对价值稳定得多,收敛更好。</details>
+<details><summary>B. 因为 $Q$ 无法计算,而 $A$ 可以精确求出</summary>错。$A$ 也要估计(常借 TD 误差/GAE);用 $A$ 的动机是降方差,不是可计算性。</details>
+<details><summary>C. 优势能让奖励恒为正,便于训练</summary>错。优势本就正负交替(均值约为 0),这正是它作为信号的价值所在。</details>
+<details><summary>D. 用 $A$ 就不再需要价值函数 $V$ 了</summary>错。恰恰相反,算 $A$ 依赖对 $V$(或 $Q$)的估计,PPO 里还专门有 critic 估 $V$。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Reinforcement Learning: An Introduction</strong>(Sutton &amp; Barto, 2nd ed.)——MDP、贝尔曼方程、DP / MC / TD 的权威教材来源,本课第三、四节对应其第 3、4、5、6 章。</li>
+<li><strong>High-Dimensional Continuous Control Using Generalized Advantage Estimation</strong>(Schulman et al., 2015)——GAE 论文,把本课的 TD 误差与优势正式接上 PPO,下一课会用。</li>
+<li>下一步:第 0019 课 PPO 会把这里的策略、优势、KL 约束组装成可训练的目标函数;GRPO(第 0020 课)则用「组内相对优势」替掉 critic。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>把决策写成 MDP,用贝尔曼把长期价值压成一步递归;DP/MC/TD 只在「要不要模型、自举还是真回报」上分家;优势 $A=Q-V$ 是喂给 PPO 的稳定信号。</strong></p>
+<nav class="lesson-nav">
+<a href="0017-rlhf-pipeline.html">← 上一课:RLHF 流水线</a>
+<a href="0019-ppo.html">下一课:PPO →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>创建型设计模式 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第五部分 · 设计模式 · 第 0016 节</p>
+<h1>设计模式总览与创建型模式</h1>
+<p class="lede">这一节先给你一张"设计模式全景地图"(三大类各是什么、为什么这么分),再把创建型里最高频的三个——单例、工厂、建造者——讲到能当场用 Python 写出来、也能回答"这在 Python 里是不是根本不需要"。</p>
+
+<div class="recall">
+<p>先想两个具体需求:①你要让"配置对象"在整个程序里<strong>只有一份</strong>,任何模块拿到的都是同一个;②你想在<strong>不改调用代码</strong>的前提下,根据字符串 <code>"circle"</code> / <code>"square"</code> 造出不同的图形对象。这两件事你会怎么写?先在心里给个方案——它们各自对应一个经典的<strong>创建型</strong>模式。</p>
+</div>
+
+<h2>一、什么是设计模式?先破一个误解</h2>
+
+<p>设计模式(Design Pattern)不是库,不是能 <code>import</code> 的代码,也不是框架。它是<strong>针对反复出现的设计问题的、可复用的通用解法</strong>——是前人踩坑后沉淀下来的"套路名字"。你和同事说"这里用个工厂",对方立刻知道你要干什么,这就是模式最大的价值:<strong>它是工程师之间的共享词汇。</strong></p>
+
+<p>但请把这句话刻进脑子里,它是本节的总原则,也是面试区分"读过书"和"用过"的分水岭:</p>
+
+<div class="gotcha">
+<p><strong>模式是"识别出问题后套用"的经验,不是"为用而用"的目标。</strong>先有反复出现的问题,才有对应的模式;没有那个问题却硬套模式,只会平白增加复杂度(over-engineering)。面试里如果你张口就是"我会用单例+工厂+观察者",却说不出各自解决什么痛点,反而是减分项。</p>
+</div>
+
+<h2>二、GoF 的三大分类:一张地图</h2>
+
+<p>1994 年四位作者(俗称 GoF,Gang of Four)在《Design Patterns》里总结了 23 个模式,并按"这个模式主要在操心什么"分成三类。记住这个分类维度,比记住 23 个名字更重要:</p>
+
+<div class="trio">
+  <div class="cell">
+    <div class="role">Creational</div>
+    <div class="head">创建型</div>
+    <div class="sub">怎么<strong>造</strong>对象<br>单例/工厂/建造者 → 本节</div>
+  </div>
+  <div class="cell">
+    <div class="role">Structural</div>
+    <div class="head">结构型</div>
+    <div class="sub">怎么<strong>组合</strong>对象与类<br>适配器/装饰器/代理 → 0017</div>
+  </div>
+  <div class="cell">
+    <div class="role">Behavioral</div>
+    <div class="head">行为型</div>
+    <div class="sub">对象间怎么<strong>协作分工</strong><br>观察者/策略/迭代器 → 0018</div>
+  </div>
+</div>
+
+<p>三类的区别用一句话拎清:<strong>创建型关心"对象从哪来"、结构型关心"对象怎么拼在一起"、行为型关心"对象之间怎么通信与分责"。</strong>本节只讲创建型里最高频的三个。</p>
+
+<div class="keydef">
+<dl>
+<dt>创建型模式 (Creational Pattern)</dt>
+<dd>把<strong>对象的创建过程</strong>本身封装/抽象出来,让代码不必到处硬写 <code>SomeClass(...)</code>,从而降低"使用方"和"具体类"之间的耦合。</dd>
+<dt>① 单例 Singleton</dt>
+<dd>保证一个类<strong>全局只有一个实例</strong>,并提供一个全局访问点。</dd>
+<dt>② 工厂 Factory</dt>
+<dd>把"造哪个具体类"的决定<strong>封装起来</strong>,调用方只面向抽象,不必知道具体类名。</dd>
+<dt>③ 建造者 Builder</dt>
+<dd><strong>分步</strong>构造一个复杂对象(尤其是可选参数很多时),把"怎么拼"和"最终产物"分开。</dd>
+</dl>
+</div>
+
+<h2>三、单例 Singleton:全局只此一份</h2>
+
+<p>动机很实在:有些资源在整个程序里<strong>逻辑上就该只有一份</strong>——全局配置、日志器、连接池。如果每处都 <code>new</code> 一个,状态就散了、也浪费。单例要解决的就是"保证唯一 + 提供统一入口"。</p>
+
+<p>在 Java/C++ 里,标准做法是"私有构造器 + 一个 static 实例 + 一个 <code>getInstance()</code> 静态方法"。<strong>但在 Python 里,最地道的单例根本不用写类技巧——模块本身就是单例。</strong></p>
+
+<pre><code># ── 法一:模块级对象(最 Pythonic)────────────────
+# 文件 config.py
+class _Config:
+    def __init__(self):
+        self.debug = False
+
+# 一个模块首次被 import 后会缓存在 sys.modules,
+# 之后再 import 拿到的是同一个模块对象,所以下面这个
+# config 天然全局唯一——不需要任何"单例代码"。
+config = _Config()
+
+# 别处使用:
+#   from config import config
+#   config.debug = True     # 谁改都是改同一个对象
+</code></pre>
+
+<p>如果面试官坚持要"类级别的单例写法"(常见于把 Java 习惯带过来的题目),可以重写 <code>__new__</code>。多线程环境下要加锁,保证并发时也只造一次:</p>
+
+<pre><code># ── 法二:重写 __new__ + 加锁 ────────────────────
+import threading
+
+class Logger:
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        # __new__ 负责"造实例";我们拦截它,只在第一次真正创建
+        with cls._lock:                       # 加锁:多线程下只造一次
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+        return cls._instance
+
+a = Logger()
+b = Logger()
+print(a is b)      # True —— 永远是同一个实例
+</code></pre>
+
+<div class="gotcha">
+<p><strong>坑一:别硬搬 Java 的"双重检查锁(DCL)"。</strong>Java 里 DCL 是为绕开锁开销的经典写法,但在 Python 中,90% 的场景直接用<strong>模块级对象</strong>就够了,又简单又线程安全(模块首次导入本身受 import 锁保护)。上来就手写 DCL,往往是"把陌生语言的习惯生搬过来"。</p>
+<p><strong>坑二:<code>__new__</code> 单例里 <code>__init__</code> 每次调用都会重跑。</strong>调用 <code>Logger()</code> 时,只要 <code>__new__</code> 返回的是本类实例,Python 就会紧接着调用 <code>__init__</code>。也就是说即便实例是同一个,<code>__init__</code> 里的初始化仍会被反复执行,可能把状态覆盖掉。要么把初始化逻辑也做幂等,要么干脆用模块级方案回避这个问题。</p>
+</div>
+
+<div class="interview">
+<p><strong>高频追问链(单例几乎必被追一句"它是不是反模式"):</strong></p>
+<ul>
+<li>"单例是不是反模式?" → 它的争议在于:单例本质是<strong>全局状态</strong>。全局状态会<strong>隐藏依赖</strong>(函数签名里看不出它偷偷用了这个单例)、<strong>难做单元测试</strong>(测试间状态互相污染,还很难替换成 mock)。所以很多人视其为反模式,建议慎用。真要用,优先留给"确实天然唯一、且无状态或状态只读"的资源。</li>
+<li>"那不用单例,全局唯一的东西怎么办?" → 常见替代是<strong>依赖注入</strong>:把需要的对象当参数传进去,而不是让代码自己去全局取。这样依赖显式、也好测试。</li>
+<li>"Python 里写单例有几种方式?" → 模块级对象(首选)、重写 <code>__new__</code>、用元类(metaclass)统一拦截创建、或用一个返回缓存实例的装饰器/函数。</li>
+</ul>
+</div>
+
+<h2>四、工厂 Factory:把"造哪个"藏起来</h2>
+
+<p>动机:当"用一个对象"和"决定造哪个具体类"这两件事纠缠在一起时,调用方就被绑死在具体类上了。工厂的思路是——<strong>把创建逻辑收进一个地方,调用方只说"我要一个形状",不关心是 Circle 还是 Square。</strong>这正好呼应 SOLID 里的 OCP(对扩展开放)和 DIP(面向抽象编程)。</p>
+
+<pre><code>from abc import ABC, abstractmethod
+
+class Shape(ABC):
+    @abstractmethod
+    def area(self) -&gt; float: ...
+
+class Circle(Shape):
+    def __init__(self, r):
+        self.r = r
+    def area(self) -&gt; float:
+        return 3.14159 * self.r ** 2
+
+class Square(Shape):
+    def __init__(self, side):
+        self.side = side
+    def area(self) -&gt; float:
+        return self.side ** 2
+
+def shape_factory(kind: str, *args) -&gt; Shape:
+    """简单工厂:调用方只说'要什么',不碰具体类的构造。"""
+    registry = {"circle": Circle, "square": Square}
+    if kind not in registry:
+        raise ValueError(f"未知形状:{kind}")
+    return registry[kind](*args)
+
+# 调用方:不 import Circle,也不写 Circle(2)
+s = shape_factory("circle", 2)
+print(s.area())        # 面向 Shape 抽象,拿到什么具体类无所谓
+</code></pre>
+
+<p>好处:哪天要新增 <code>Triangle</code>,只改工厂内部的 <code>registry</code>(甚至做成注册表自动登记),<strong>所有调用方一行都不用动</strong>。这就是"把易变的创建决策收敛到一处"。</p>
+
+<div class="gotcha">
+<p><strong>坑三:上面这个 <code>shape_factory</code> 叫"简单工厂",它其实<em>不是</em> GoF 23 个模式之一</strong>——它是一种常见编程惯用法(idiom),可以看作工厂方法的退化版。GoF 正式收录的是"工厂方法(Factory Method)"和"抽象工厂(Abstract Factory)"。面试时把这层说清,能显出你读得细。</p>
+<p><strong>坑四:工厂方法 vs 抽象工厂,别混。</strong>记一句话:<strong>工厂方法造"一个"产品,抽象工厂造"一族"产品。</strong>见下表。</p>
+</div>
+
+<table>
+<tr><th></th><th>工厂方法 Factory Method</th><th>抽象工厂 Abstract Factory</th></tr>
+<tr><td><strong>造什么</strong></td><td>一类产品的<strong>一个</strong>对象</td><td>一<strong>族</strong>相关/配套的产品</td></tr>
+<tr><td><strong>形式</strong></td><td>一个(可被子类覆盖的)创建方法,由子类决定实例化哪个类</td><td>一个接口,里面有多个创建方法,分别造这族里的各件产品</td></tr>
+<tr><td><strong>例子</strong></td><td><code>create_button()</code> 返回一个按钮</td><td>"Windows 主题工厂"同时造配套的按钮 + 复选框 + 滚动条;换成"Mac 主题工厂"则造对应的一整套</td></tr>
+</table>
+
+<h2>五、建造者 Builder:告别"望远镜式构造器"</h2>
+
+<p>动机:当一个对象有<strong>很多可选参数</strong>时,构造器会膨胀成一长串——这就是"望远镜式构造器(telescoping constructor)":</p>
+
+<pre><code># ❌ 望远镜:参数一多就没法读,调用处全是 None 占位
+class Pizza:
+    def __init__(self, size, cheese=False, mushroom=False,
+                 bacon=False, onion=False, olives=False):
+        ...
+
+p = Pizza("L", True, False, True, False, True)   # 每个 True/False 是啥?
+</code></pre>
+
+<p>建造者把"分步设置"和"最终产出"拆开,让构造过程<strong>可读、可选、可复用</strong>。Python 里常用链式调用来实现:</p>
+
+<pre><code># ✅ 建造者:一步一步说清楚要什么,最后 build()
+class PizzaBuilder:
+    def __init__(self, size):
+        self.size = size
+        self.toppings = []
+    def add(self, topping):
+        self.toppings.append(topping)
+        return self               # 返回自身 → 支持链式
+    def build(self):
+        return f"{self.size} 披萨,配料:{self.toppings}"
+
+p = (PizzaBuilder("L")
+     .add("cheese")
+     .add("bacon")
+     .build())                    # 读起来就像一句话
+</code></pre>
+
+<p>什么时候用建造者?判据很简单:<strong>可选参数多、或构造需要分步/校验时。</strong>参数就两三个、且都必填,直接用普通构造器即可,别为用而用(呼应本节总原则)。</p>
+
+<div class="crosslang">
+<p>GoF 模式诞生于 C++/Smalltalk 那个"类型静态、函数不是一等公民"的世界。到了 Python,因为有<strong>一等函数、鸭子类型、模块天生单例</strong>,不少创建型模式被大幅简化,甚至"退化到看不见":</p>
+<table>
+<tr><th>模式</th><th>GoF 原生形态(C++/Java)</th><th>Python 里的退化形态</th></tr>
+<tr><td><strong>Singleton</strong></td><td>私有构造器 + static 实例 + <code>getInstance()</code></td><td>直接用<strong>模块级对象</strong>(模块天生单例)</td></tr>
+<tr><td><strong>Factory</strong></td><td>专门的工厂类/工厂方法层级</td><td>一个返回对象的<strong>普通函数</strong>(函数是一等公民)</td></tr>
+<tr><td><strong>Strategy</strong>(行为型,顺带一提)</td><td>定义策略接口 + 多个实现类</td><td>直接把<strong>函数当参数传</strong>进去</td></tr>
+</table>
+<p>面试可以点出这一层:<strong>"很多 GoF 模式是在补静态语言的能力短板;Python 的动态特性让其中一部分退化成一行代码。"</strong>这句话能显出你理解的是"模式背后的问题",而不是把模式当教条。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写两段:</p>
+<ul>
+<li><strong>单例:</strong>写一个 <code>Counter</code>,用重写 <code>__new__</code> 的方式让它全局唯一;再验证 <code>Counter() is Counter()</code> 为 <code>True</code>。然后故意在 <code>__init__</code> 里 <code>self.n = 0</code>,想想为什么"每次调用 <code>Counter()</code> 计数都被清零"——这就是坑二。</li>
+<li><strong>工厂:</strong>给 <code>shape_factory</code> 加一个 <code>Triangle</code>,只允许你改工厂内部,<strong>不许改任何调用处</strong>——体会"新增不改旧代码"(OCP)。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:下面关于"在 Python 里实现单例"的说法,哪一个最准确?</summary>
+<div class="answer">
+<p><strong>答案:最地道、最简单的单例是直接用模块级对象,因为模块首次 import 后会被缓存、天然全局唯一;<code>__new__</code>/元类只是"当需要类级写法时"的备选。</strong></p>
+<p>常见错误答案:"Python 单例必须用双重检查锁"。反例:模块级对象根本不需要锁,且模块导入本身受保护。DCL 是从 Java 搬来的习惯,在 Python 大多数场景里是过度设计。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:同事说"我们的 UI 要同时支持深色和浅色两套皮肤,每套皮肤都有配套的按钮、输入框、滚动条,要能整套切换。"该用工厂方法还是抽象工厂?为什么?</summary>
+<div class="answer">
+<p><strong>答案:抽象工厂。</strong></p>
+<p>关键词是"配套的一整族产品、要整套切换"。抽象工厂正是用来创建"一族相关对象"的:一个 <code>DarkThemeFactory</code> 负责造深色的按钮+输入框+滚动条,一个 <code>LightThemeFactory</code> 造对应的浅色全套,切皮肤=换工厂,整族一致。工厂方法只解决"造一个产品该实例化哪个类",覆盖不了"一族产品保持配套"这个诉求。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>设计模式是"识别出反复出现的问题后才套用"的共享词汇,不是为用而用的目标;GoF 把它们分成创建型(怎么造)、结构型(怎么拼)、行为型(怎么协作)。创建型三高频:单例(全局唯一——但它是全局状态,慎用;Python 首选模块级)、工厂(把"造哪个具体类"藏起来,解耦创建与使用)、建造者(可选参数多时分步构造,避免望远镜式构造器)。别忘了:Python 的动态特性让不少模式退化成一个函数或一个模块。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层(本节为 <strong>canon</strong> 层,无对应源题 README,以下均为权威锚定):</p>
+<ul>
+<li><strong>canon(一手/权威):</strong>Gamma, Helm, Johnson, Vlissides《Design Patterns: Elements of Reusable Object-Oriented Software》(1994,GoF 原著)——三大分类与各模式定义的源头;<a href="https://refactoring.guru/design-patterns">Refactoring.Guru · Design Patterns</a>——最易读的现代图解与分类(创建型/结构型/行为型)。</li>
+<li><strong>canon(语言机制):</strong><a href="https://docs.python.org/3/reference/datamodel.html#object.__new__">Python 官方 Data Model · <code>__new__</code></a>——单例重写 <code>__new__</code> 及 <code>__init__</code> 随后被调用的准确行为;<a href="https://docs.python.org/3/library/threading.html#threading.Lock"><code>threading.Lock</code> 文档</a>——多线程加锁。</li>
+<li><strong>canon(延伸视角):</strong><a href="https://norvig.com/design-patterns/">Peter Norvig · Design Patterns in Dynamic Languages</a>——为什么许多 GoF 模式在动态语言里"退化或消失"。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用元类再写一版单例、或把抽象工厂用完整代码演示"整套切皮肤",都可以喊我。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节进入结构型模式:当对象已经造好,如何把它们"拼装"起来——适配器、装饰器、代理各解决什么组合难题。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0015-solid-isp-dip.html"><span class="dir">← 上一课</span>0015 · SOLID:接口隔离与依赖倒置</a>
+<a class="next" href="0017-design-patterns-structural.html"><span class="dir">下一课 →</span>0017 · 结构型模式:适配器、装饰器与代理</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

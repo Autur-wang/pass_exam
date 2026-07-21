@@ -1,0 +1,83 @@
+{
+ "num": "0003",
+ "slug": "run-modes-and-models-json",
+ "title": "四种运行模式与 models.json 配置",
+ "narrowTopic": "只讲 Pi 的四种运行模式,以及如何用 models.json 接入第三方(国内)模型。",
+ "analogySeed": "把 Pi 想成一台既能手动开、也能装到流水线上的机床:交互模式是你亲手操作,print/JSON 是接进自动流水线,RPC 是给别的语言的机器人递零件,SDK 是把整台机床嵌进你自己的工厂;而 models.json 就是这台机床的「刀具登记表」——你得写清每把刀(模型)从哪进货(baseUrl)、用哪种接口卡口(api)、叫什么型号(id),它才认得。",
+ "keyPoints": [
+  "Pi 有四种运行模式:交互模式(pi,日常 TUI)、print/JSON 模式(pi -p,脚本与 CI/CD)、RPC 模式(stdin/stdout 交换 JSON,集成进非 Node.js 程序)、SDK 模式(createAgentSession() 嵌入自己的应用)。",
+  "多模式的意义:Pi 可以从「开发者手边的工具」无缝演进为「生产系统中的 Agent 能力提供者」,项目长大后不用换框架。",
+  "官方默认让你设 ANTHROPIC_API_KEY,但国内的智谱/DeepSeek/Kimi/Qwen 不可能靠一个环境变量搞定——你得告诉 Pi:baseUrl、api 协议、模型 id、上下文窗口。",
+  "解法是本地 JSON 配置文件 ~/.pi/agent/models.json,由 ModelRegistry.create() 在启动时自动读取,不需要任何命令行参数。",
+  "models.json 关键字段:providers(键名自起,作为 provider 显示名)、api(选协议,最常见 openai-completions,还有 anthropic-messages/openai-responses)、baseUrl、apiKey(明文存放)、models 列表(id 是真实模型名、name 是 TUI 友好名)、可选 contextWindow/maxTokens。",
+  "配好后三种用法:会话中 /model 或 Ctrl+L 临时切换、在 settings.json 设 defaultProvider/defaultModel 设为默认、pi models 命令行查列表(解析错误会打印在终端顶部)。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "第 3.7 节 models.json 的完整 JSON 配置示例(zhipu 与 deepseek 两个 provider,含 baseUrl/api/apiKey/models,以及 deepseek-v4-pro 带 contextWindow 1000000、maxTokens 384000)",
+   "cite": "教程 §3.7 / model-registry.ts:367(ModelRegistry.create)"
+  },
+  {
+   "desc": "第 5.3 节「四种运行模式」表格(交互 / print-JSON / RPC / SDK 四行,含用途与示例命令 pi、pi -p、createAgentSession())",
+   "cite": "教程 §5.3「四种运行模式」表"
+  },
+  {
+   "desc": "第 5.1 节 Layer 3 的 createAgentSession() SDK 模式代码示例:传入 cwd 与 getModel 得到的 Model 对象,session.subscribe 监听 turn_end 事件,await session.prompt(...)",
+   "cite": "教程 §5.1 / pi-coding-agent(createAgentSession)"
+  }
+ ],
+ "designRationale": [
+  "为什么用 models.json 而非环境变量:接入第三方模型需要一次性告知 baseUrl、api 协议、模型 id、上下文窗口等多个维度,一个环境变量根本表达不了;文件形式还能被 ModelRegistry.create() 启动时自动读取,零命令行参数。",
+  "为什么 api 字段如此关键:它决定 Pi 用哪种请求格式去调(openai-completions / anthropic-messages / openai-responses),国内厂商几乎都支持 openai 兼容接口,所以多数填 openai-completions。",
+  "为什么 apiKey 明文存放却仍这样设计:换取本地配置的简单直接,代价是必须把 .pi/ 加进 .gitignore,否则一个 git add . 就泄露——这是一个显式的安全权衡。",
+  "为什么要四种运行模式:同一套框架覆盖从本地手用到 CI 脚本到嵌入生产的全场景,让 Pi 从『手边工具』平滑演进为『生产 Agent 能力提供者』,不必中途换框架。",
+  "为什么区分 id 与 name:id 是调 API 时传的真实模型名(机器用),name 是 TUI 里显示的友好名(人看),职责分离让展示与调用互不干扰。"
+ ],
+ "quiz": [
+  {
+   "stem": "教程为什么说接入国内的智谱/DeepSeek 不能靠一个环境变量,而要用 models.json?",
+   "options": [
+    "因为环境变量在 Windows 上不生效",
+    "因为接入第三方模型需要同时指定 baseUrl、api 协议、模型 id、上下文窗口等多个维度,单个环境变量表达不了",
+    "因为 Pi 不支持任何环境变量",
+    "因为国内模型必须用 anthropic-messages 协议"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。models.json 由 ModelRegistry.create() 在启动时自动读取,不需要命令行参数。延伸:apiKey 明文存放,务必把 .pi/ 加进 .gitignore,否则一个 git add . 就泄露。",
+   "noMsg": "想想接入一个第三方模型到底要告诉 Pi 几件事:光有一把 key 够不够,它还得知道去哪调、用什么协议、模型叫什么?"
+  },
+  {
+   "stem": "models.json 里的 api 字段(如 openai-completions)起什么作用?",
+   "options": [
+    "它是 provider 在 TUI 里显示的友好名字",
+    "它决定 Pi 用哪种请求格式去调这个 provider,国内厂商几乎都支持 openai-completions",
+    "它是该模型的上下文窗口大小",
+    "它是 apiKey 的加密算法名"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。api 常见取值有 openai-completions、anthropic-messages、openai-responses,选错协议请求格式就对不上。延伸:显示名其实由 provider 键名和每个 model 的 name 字段负责,别和 api 混了。",
+   "noMsg": "重读 3.7 节对各字段的拆解:哪个字段管『用什么请求格式去调』?friendly 显示名是另一个字段的活。"
+  },
+  {
+   "stem": "你想把 Pi 接进 CI/CD 流水线让它解释一段代码并输出结果,应该用哪种运行模式?",
+   "options": [
+    "print/JSON 模式,例如 pi -p \"explain this code\"",
+    "交互模式,直接运行 pi",
+    "RPC 模式,通过 stdin/stdout 交换 JSON",
+    "SDK 模式,调用 createAgentSession()"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。print/JSON 模式(pi -p)正是为脚本和 CI/CD 流水线设计的。延伸:四种模式让 Pi 从本地手用无缝演进到生产嵌入,项目长大不用换框架。",
+   "noMsg": "回看 5.3 节四种模式表:哪一行的『用途』明确写着脚本和 CI/CD?交互模式是给人手用的。"
+  }
+ ],
+ "_chapter": "第1章",
+ "_chapterCN": "开篇——Pi-Agent 框架总览",
+ "prevFile": "0002-four-packages-three-layer-stack.html",
+ "prevNum": "0002",
+ "nextFile": "0004-five-packages-project-skeleton.html",
+ "nextNum": "0004",
+ "crumbLabel": "第 1 章 · 开篇总览",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第1章-开篇-Pi-Agent框架总览.md",
+ "filename": "0003-run-modes-and-models-json.html"
+}

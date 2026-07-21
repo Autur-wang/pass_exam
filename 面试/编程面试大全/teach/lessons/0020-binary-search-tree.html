@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0020 · 二叉搜索树:有序性即不变量</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0020 课 · 树 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>二叉搜索树:有序性即不变量</h1>
+
+<p class="lede">普通二叉树只是「能分叉」,没有任何秩序。给它加上一条铁律——<strong>左子树全部 &lt; 根 &lt; 右子树全部</strong>——它就升级成<strong>二叉搜索树(BST)</strong>:一个把「有序数组的二分查找」和「链表的动态增删」揉在一起的结构。这节课只讲透这一条不变量,以及它如何一手推导出「查找/插入 O(h)」的红利,和「可能退化成链表」的代价。</p>
+
+<div class="recall">
+<p>先回忆:上一课(<a href="0019-dfs-orders.html">DFS 三种序</a>)最重的结论是——<strong>对 BST 做中序遍历会得到升序序列</strong>。这节你会看到,那不是巧合,而是 BST 不变量的直接推论。先自己说说:如果「左 &lt; 根 &lt; 右」在每个节点都成立,为什么「左 → 根 → 右」地走一遍就一定是从小到大?</p>
+</div>
+
+<h2>一、一条不变量,决定一切</h2>
+
+<p>BST 的定义只有一句话,但它是<strong>递归</strong>的:对<strong>每一个</strong>节点,它左子树里的<strong>所有</strong>值都比它小,右子树里的<strong>所有</strong>值都比它大。注意是「整棵子树」而不是「直接的那个孩子」——这个细节下一课会成为验证 BST 的关键陷阱。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 440 300" role="img" aria-label="一棵二叉搜索树,高亮查找值 7 时经过的路径">
+  <line class="dgm-edge" x1="220" y1="32" x2="120" y2="100"/>
+  <line style="stroke:var(--accent);stroke-width:2.5" x1="220" y1="32" x2="120" y2="100" stroke-dasharray="0"/>
+  <line class="dgm-edge" x1="220" y1="32" x2="330" y2="100"/>
+  <line class="dgm-edge" x1="120" y1="106" x2="60" y2="172"/>
+  <line style="stroke:var(--accent);stroke-width:2.5" x1="120" y1="106" x2="175" y2="172"/>
+  <line class="dgm-edge" x1="330" y1="106" x2="385" y2="172"/>
+  <line style="stroke:var(--accent);stroke-width:2.5" x1="175" y1="178" x2="220" y2="244"/>
+  <line class="dgm-edge" x1="175" y1="178" x2="130" y2="244"/>
+  <line class="dgm-edge" x1="385" y1="178" x2="340" y2="244"/>
+  <!-- nodes; search path 8 -> 3 -> 6 -> 7 -->
+  <circle class="dgm-accent-node" cx="220" cy="30" r="19"/><text class="dgm-text" x="220" y="36" text-anchor="middle" font-size="14">8</text>
+  <circle class="dgm-accent-node" cx="120" cy="103" r="19"/><text class="dgm-text" x="120" y="109" text-anchor="middle" font-size="14">3</text>
+  <circle class="dgm-node" cx="330" cy="103" r="19"/><text class="dgm-text" x="330" y="109" text-anchor="middle" font-size="14">10</text>
+  <circle class="dgm-node" cx="60" cy="175" r="19"/><text class="dgm-text" x="60" y="181" text-anchor="middle" font-size="14">1</text>
+  <circle class="dgm-accent-node" cx="175" cy="175" r="19"/><text class="dgm-text" x="175" y="181" text-anchor="middle" font-size="14">6</text>
+  <circle class="dgm-node" cx="385" cy="175" r="19"/><text class="dgm-text" x="385" y="181" text-anchor="middle" font-size="14">14</text>
+  <circle class="dgm-node" cx="130" cy="247" r="19"/><text class="dgm-text" x="130" y="253" text-anchor="middle" font-size="14">4</text>
+  <circle class="dgm-good-node" cx="220" cy="247" r="19"/><text class="dgm-text" x="220" y="253" text-anchor="middle" font-size="14">7</text>
+  <circle class="dgm-node" cx="340" cy="247" r="19"/><text class="dgm-text" x="340" y="253" text-anchor="middle" font-size="14">13</text>
+  <text class="dgm-accent-text" x="250" y="24" font-size="11">7&lt;8→左</text>
+  <text class="dgm-accent-text" x="148" y="97" font-size="11">7&gt;3→右</text>
+  <text class="dgm-accent-text" x="200" y="168" font-size="11">7&gt;6→右</text>
+  <text class="dgm-good-text" x="243" y="252" font-size="11">找到!</text>
+</svg>
+</div>
+<figcaption>查找 <code>7</code>:从根 8 出发,每一步只做一次比较就<strong>砍掉一半子树</strong>——8→3→6→7,共 3 步。这棵树的中序遍历是 1,3,4,6,7,8,10,13,14(升序)。</figcaption>
+</figure>
+
+<h2>二、查找 / 插入:沿着高度往下滑</h2>
+
+<p><strong>查找</strong>:拿目标和当前节点比,小了走左、大了走右、相等即命中,直到走到空。每一步比较后只保留一半子树,所以走过的步数不超过<strong>树高 h</strong>——这就是 O(h)。<strong>插入</strong>同理:用查找的走法一路下滑,直到落到一个空位,把新节点挂上去,也是 O(h)。这正是 BST 相对有序数组的红利:<strong>有序数组二分查也是 O(log n),但插入要搬 O(n) 个元素;BST 的插入只改几个指针,依然是 O(h)。</strong></p>
+
+<h2>三、为什么中序有序</h2>
+
+<p>把不变量和中序「左 → 根 → 右」摆一起看:递归到任意节点时,先访问完「全部比它小」的左子树,再访问它自己,最后访问「全部比它大」的右子树——每一层都严格「小的先出、大的后出」。层层如此,整体输出必然升序。<strong>这就是「BST + 中序 = 排序」的证明</strong>,不用背,推一遍就懂。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>二叉搜索树(BST, Binary Search Tree)</dt>
+<dd>每个节点满足「左子树全部 &lt; 本节点 &lt; 右子树全部」的二叉树;操作复杂度取决于<strong>树高 h</strong>。<em>避免</em>默认 BST 就是平衡的。</dd>
+<dt>树高 h(height)</dt>
+<dd>决定 BST 一切操作快慢的量。平衡时 h≈log n,退化成链时 h=n。谈 BST 复杂度请说 O(h),而非武断的 O(log n)。</dd>
+</dl>
+
+<h2>五、复杂度:平均漂亮,最坏危险</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>平均(随机/平衡)</th><th>最坏(退化成链)</th></tr></thead>
+<tbody>
+<tr><td class="op">查找 <code>search</code></td><td class="best">O(log n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">插入 <code>insert</code></td><td class="best">O(log n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">删除 <code>delete</code></td><td class="best">O(log n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">中序输出全部(有序)</td><td>O(n)</td><td>O(n)</td></tr>
+</tbody>
+</table>
+<p>三大操作本质都是 O(h)。表里写「平均 O(log n)、最坏 O(n)」,是因为 <strong>h 会随插入顺序波动</strong>:随机插入的树大致平衡 h≈log n;但若按有序序列插入,树就退化成一条只往一边长的链,h=n,BST 沦为链表。空间恒为 O(n)(每个值一个节点)。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>识别「该上 BST」的信号,和答对复杂度一样重要:</p>
+<ul>
+<li>题面同时要<strong>「保持有序」+「动态频繁增删」+「找第 k 小 / 范围查询 [a,b] / 前驱后继」</strong> → 强烈指向 BST(或它的平衡变体、跳表)。纯静态有序数据用有序数组二分即可,不必上树。</li>
+<li>被问复杂度,<strong>先说 O(h),再补一句「平衡时 O(log n),退化时 O(n)」</strong>——这比张口就说 O(log n) 显专业得多。</li>
+<li>常见追问:「怎么保证不退化?」 → 引出<strong>自平衡树(AVL、红黑树)</strong>,它们靠旋转把 h 强行压在 O(log n)(见后续「平衡树」一课,第 0047 课)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>BST 不会自动平衡</strong>——这是最常被忽视的致命点。「BST 查找 O(log n)」是<strong>有前提</strong>的近似说法,只在树大致平衡时成立。</p>
+<p>最经典的翻车场景:<strong>按已经有序的序列插入</strong>(如 1,2,3,4,5)。每个新值都比现有全部大,永远挂到最右,树长成一条向右的链,h=n,查找退化成 O(n)——和链表一模一样,白白丢掉了树结构的意义。真实系统里的输入常常「近乎有序」,所以工业界用的几乎都是<strong>自平衡</strong>的变体,而不是裸 BST。</p>
+</div>
+
+<div class="implement">
+<p>照仓库「二叉查找树」实现清单,先把最基础的一组写扎实:</p>
+<p><code>insert(x)</code>(下滑找空位)· <code>is_in_tree(x)</code> · <code>get_min()</code>(一路向左)· <code>get_max()</code>(一路向右)· <code>print_values()</code>(中序,验证升序)。</p>
+<p>做个小实验:分别用<strong>随机顺序</strong>和<strong>严格递增顺序</strong>各插入 1..1000,打印两棵树的高度——你会亲眼看到前者约 10~20、后者恰好 1000(退化成链),复杂度差异一目了然。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>BST 的一切都由那条不变量和树高 h 决定。答复杂度永远说 <strong>O(h)</strong>——平衡时 O(log n),退化时 O(n)。它<strong>不自动平衡</strong>,有序输入会把它打回链表。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:为什么 BST 的查找准确说是 O(h) 而不是 O(log n)?</summary>
+<div class="answer">
+<p>因为查找走过的步数等于树高 h,而 <strong>h 不一定等于 log n</strong>。只有当树平衡时 h≈log n;如果按有序序列插入,树退化成一条链,h=n,查找就退化成 O(n)。所以最严谨的说法是 <strong>O(h)</strong>,「O(log n)」只是「树平衡」这个特例下的结果。把前提说出来,才说明你真的理解 BST 的软肋。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪种插入顺序会让一棵 BST 退化成链表(最坏高度)?</summary>
+<div class="answer">
+<p><strong>严格递增的 1, 2, 3, 4, 5。</strong>每个新值都比树里现有的所有值大,于是一路走到最右、挂在最右下角,树只往右长,变成一条链,h=n。随机顺序或「先插中位数」会得到大致平衡的树(h≈log n);「5,3,8,1,4」这种也还算均匀。这也说明:<strong>BST 的性能取决于插入顺序,而它自己管不了这件事</strong>——所以才需要自平衡树。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题在仓库大纲「树 → 二叉查找树(BSTs)」小节。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.coursera.org/learn/data-structures/lecture/E7cXP/introduction">二叉搜索树 · 介绍(Coursera 视频)</a> —— 从不变量讲起。</li>
+<li><a href="https://www.youtube.com/watch?v=x6At0nzX92o&index=1&list=PLA5Lqm4uh9Bbq-E0ZnqTIa8LRaL77ica6">二叉搜索树复习(视频)</a> —— 系统过一遍 BST 操作。</li>
+<li><a href="https://www.youtube.com/watch?v=9Jry5-82I68">MIT · 二叉搜索树(视频)</a> —— 想深入看理论证明就看这条。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师随手给你一串数、让你画出插入后的 BST 形状,或对比「随机 vs 有序」两种插入下的树高。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0019-dfs-orders.html"><span class="dir">← 上一课</span>DFS 三种序:前序 / 中序 / 后序</a>
+  <a class="next" href="0021-bst-insert-delete-successor.html"><span class="dir">下一课 →</span>BST 的插入、删除与后继</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

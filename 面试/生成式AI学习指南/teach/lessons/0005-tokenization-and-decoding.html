@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0005 · token 化与解码控制:上下文窗口、temperature/top-p、KV cache</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第一部分 基础与 Transformer · 第 0005 课</p>
+<h1>token 化与解码控制:上下文窗口、temperature/top-p、KV cache</h1>
+<p class="lede">这节课把 AI 工程师面试里「一问就露馅」的一整片基础题一次性打通:<strong>「什么是 token,tokenization 为何重要?」「什么是上下文窗口,填满会怎样?」「temperature 与 top-p 各控制什么、怎么设?」「什么是 KV cache,为何首 token 之后生成变快?」「为什么 LLM 不擅长算术和字符级任务?」「两次相同的调用会不会保证相同输出?」</strong>(源:AI 工程师题库 Q1、Q2、Q3、Q10、Q11、Q14)。这些题不考公式,考的是你有没有真在生产里跟延迟、成本和「玄学抖动」搏斗过。</p>
+
+<div class="recall">
+<p>上一课我们讲了预训练机制与模型类型——decoder-only 模型的本质是「给定前面的 token,预测下一个 token」。<strong>先别往下看:既然模型是一个 token 一个 token 地吐,那它到底吞进去、吐出来的「一个 token」是一个字符、一个词,还是别的什么?这个粒度又凭什么决定了你的账单和延迟?</strong></p>
+</div>
+
+<h2>一、token:模型眼里的最小单位</h2>
+<p>模型不读字符,也不读完整的词。它读 <strong>token</strong>——通常是<strong>子词片段(subword)</strong>,由 BPE 之类的算法把文本切成常见的片段。常用词往往是一个 token,生僻词或长词会被拆成好几块。举个反直觉的例子:<code>"tokenization"</code> 这一个英文词,大约会被切成 3–4 个 token,而不是 1 个。</p>
+<p>为什么这件小事值得单开一节?因为<strong>模型世界里几乎所有的「量」都按 token 计</strong>:上下文上限按 token 算、延迟随 token 数涨、账单按 token 收。一个粗略但够用的经验换算:</p>
+<dl class="keydef">
+<dt>token 经验换算(英文)</dt>
+<dd>$1\ \text{token} \approx 4\ \text{字符} \approx 0.75\ \text{词}$</dd>
+<dd><em>反过来,大约每 100 个英文词 ≈ 130 个 token。中文、代码、数字的切分比例和这个不同,所以这只是估算,精确值要用对应模型的 tokenizer 实测。</em></dd>
+</dl>
+<p>把 token 当成「模型的计价单位和感知单位」——你写的 prompt 再漂亮,模型也是先被切成 token 才看得见的。这个切分方式,后面会一路解释为什么 LLM 算不好数学(见第五节)。</p>
+
+<h2>二、上下文窗口:装得下,不等于用得好</h2>
+<p>直觉:上下文窗口就是模型一次调用能「同时看在眼里」的 token 总量,而且<strong>输入 + 输出算在同一个预算里</strong>——你塞进去的 prompt 越长,留给模型生成回答的空间就越小。</p>
+<dl class="keydef">
+<dt>上下文窗口(Context Window)</dt>
+<dd>单次调用中模型能关注的 token 数上限,由 <strong>输入(prompt)+ 输出(生成)</strong> 共同占用。</dd>
+<dd><em>触顶后,要么早期的内容被截断丢弃,要么请求直接报错——取决于 provider 与你的截断策略。</em></dd>
+</dl>
+<p>面试真正想听的不是「窗口有多大」,而是你懂不懂它的<strong>陷阱</strong>:</p>
+<ul>
+<li><strong>越长越贵越慢</strong>:注意力的开销随序列长度增长,长上下文既烧钱又拖慢首字延迟。</li>
+<li><strong>质量常在触顶前就下降</strong>:不是填到 100% 才出问题。上下文越长,模型越容易被无关内容干扰、抓不住重点。</li>
+<li><strong>中间最容易被忽略</strong>:模型对上下文<strong>开头和结尾</strong>的信息利用得最好,<strong>正中间</strong>的信息最容易被「读漏」——这就是著名的「lost in the middle」现象。关键指令别埋在长文档正中央。</li>
+</ul>
+<p>所以工程目标不是「把窗口塞满」,而是<strong>「恰好、最小」的上下文</strong>:只放模型完成这次任务真正需要的东西。这一取向直接引出后面 RAG 与上下文工程的整套方法——与其塞进全部文档,不如精准检索最相关的几段。</p>
+
+<h2>三、解码控制:temperature 与 top-p</h2>
+<p>模型每一步其实吐出的是<strong>下一个 token 的概率分布</strong>,而不是一个确定的词。「解码」就是从这个分布里挑一个 token 出来的策略。你手上主要有两个旋钮。</p>
+<div class="trio">
+  <div class="cell"><strong>temperature(温度)</strong><br>缩放整个分布的「陡峭度」<br><em>低温更确定、聚焦;高温更多样、也更容易跑偏</em></div>
+  <div class="cell"><strong>top-p(核采样)</strong><br>只在累计概率达到 $p$ 的<br>最小 token 集合里采样<br><em>砍掉长尾里的低概率怪词</em></div>
+  <div class="cell"><strong>怎么配</strong><br>抽取 / 分类 / 工具调用<br>→ 用<strong>低温</strong><br><em>要发散(头脑风暴)才调高</em></div>
+</div>
+<p><strong>temperature</strong> 越低,概率分布越尖锐,模型越倾向于选那个「最可能」的 token,输出更确定、更保守;温度调高则把分布抹平,给低概率 token 更多机会,输出更有创意,但也更容易胡说。经验区间:<strong>0 ~ 0.3</strong> 适合需要稳定、可复现的任务。</p>
+<p><strong>top-p</strong> 是另一条思路:先按概率从高到低把 token 排队,累加到刚好达到阈值 $p$(比如 0.9)就停,只在这个「核」集合里采样。它的作用是<strong>动态砍长尾</strong>——分布集中时核很小,分布平坦时核会自动放大。</p>
+<div class="gotcha">
+<p><strong>一个实操纪律:一次只刻意调一个,另一个留默认。</strong>temperature 和 top-p 都在改「采样的随机性」,同时乱调两个,你会分不清输出变化到底是谁造成的,调参变成玄学。想要稳定输出,优先把 temperature 压低。</p>
+</div>
+
+<h2>四、KV cache:为什么第一个字最慢,后面越吐越顺</h2>
+<p>你一定注意过:调用大模型时,<strong>第一个字总要等一下,一旦冒出来后面就哗哗地流</strong>。这不是错觉,背后正是 <strong>KV cache</strong>。</p>
+<p>回忆自注意力:每生成一个新 token,都要拿它的 Query 去和<strong>前面所有 token 的 Key/Value</strong> 算注意力。如果每步都把整段历史重新算一遍 K/V,开销会随长度平方级膨胀。KV cache 的做法很朴素:<strong>把已经算过的 token 的 K 和 V 缓存下来</strong>,生成新 token 时只需要为这一个新 token 增量计算,历史部分直接查缓存。</p>
+<p>这把一次生成天然切成两个阶段,面试里能说清这两个词的差别就很加分:</p>
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">整个 prompt 一次性喂入</div>
+  <div class="arrow">→</div>
+  <div class="node bad"><strong>Prefill</strong><br>一次并行处理<br>整个 prompt<br>建立 KV cache</div>
+  <div class="arrow">→</div>
+  <div class="node">吐出<br>首个 token<br>(TTFT)</div>
+  <div class="arrow">→</div>
+  <div class="node good"><strong>Decode</strong><br>逐 token 生成<br>每步只算 1 个新 token<br>查 KV cache</div>
+</div>
+<figcaption>Prefill 是计算密集(compute-bound)、主导首 token 延迟 TTFT;Decode 是访存密集(memory-bound)、逐 token 便宜地流式产出。</figcaption>
+</figure>
+<dl class="keydef">
+<dt>Prefill(预填充)</dt>
+<dd>一次性并行处理整个输入 prompt,把所有输入 token 的 K/V 算好存进缓存。它<strong>计算密集</strong>,是<strong>首 token 延迟(TTFT)</strong>的主要来源——prompt 越长,prefill 越久。</dd>
+<dt>Decode(解码)</dt>
+<dd>逐个生成输出 token,每个新 token 只需增量计算并复用缓存。它<strong>访存密集</strong>(要反复读那块越来越大的 KV cache),但单步很便宜——所以生成一旦开始就顺。</dd>
+</dl>
+<p>这一个机制能一口气解释三件生产现象:</p>
+<ul>
+<li><strong>prompt caching 为什么省钱</strong>:相同前缀的 prefill 结果可以被复用,省掉重复计算。</li>
+<li><strong>长 prompt 为什么启动慢</strong>:TTFT 卡在 prefill,输入越长等得越久。</li>
+<li><strong>服务吞吐为什么受显存限</strong>:KV cache 要常驻显存,并发的每条请求都占一块,显存往往先于算力成为瓶颈。</li>
+</ul>
+
+<h2>五、为什么 LLM 算不好数学、数不清字母</h2>
+<p>「把 <code>strawberry</code> 里有几个 r 数一下」「9.11 和 9.9 谁大」——这类题模型经常翻车。面试想听的是<strong>根因</strong>,而根因恰恰是两条,都在前面埋好了伏笔:</p>
+<ol>
+<li><strong>tokenization 把数字和字母切成不对齐的碎片</strong>。一个多位数可能被切成几个奇怪的 token,单词也不是按字母存的,模型根本没有干净的「逐字符 / 逐位」视角去做进位、比大小或计数。</li>
+<li><strong>模型的训练目标是「预测像样的文本」,不是「执行算法」</strong>。它输出的是「看起来最像正确答案的文本」,而不是真的跑了一遍加法。</li>
+</ol>
+<div class="gotcha">
+<p><strong>关键结论(这是高分答法):</strong>解法不是「换个更聪明的 prompt」,而是<strong>把需要保证正确的部分外包给确定性工具</strong>——计算器、代码执行、数据库查询。凡是要求精确、可验证的子任务,交给工具去做,让模型负责它擅长的语言理解与编排。这条思路正是后面 Agent 与 tool use 章节的地基。</p>
+</div>
+
+<h2>六、同样的调用,会得到同样的输出吗?</h2>
+<p>很多人第一反应:「把 temperature 设成 0 不就确定了吗?」——<strong>不一定</strong>。即便 temperature=0,两次相同调用仍可能给出不同结果,原因不在采样这一层:</p>
+<ul>
+<li><strong>GPU 批处理的浮点非结合性</strong>:$(a+b)+c \neq a+(b+c)$ 在浮点下不严格成立;你的请求和别人的请求一起被打成不同的 batch,累加顺序变了,末位就可能抖动,进而改变被选中的 token。</li>
+<li><strong>MoE 路由依赖同批内容</strong>:混合专家模型里,某个 token 走哪个专家可能受<strong>同一 batch 内其他请求</strong>的影响,而那批里有谁你无法控制。</li>
+<li><strong>provider 会静默更新模型</strong>:同一个模型名,背后的权重/版本可能被悄悄升级,昨天的输出今天未必复现。</li>
+</ul>
+<p>所以在工程上要放弃「输出逐字节可复现」的幻想,改用稳健做法:</p>
+<div class="implement">
+<p>别用「朴素缓存 / 字符串精确匹配」来测 LLM,改成:</p>
+<pre><code># 反面:脆弱,输出抖一个字符就 miss / fail
+assert output == "expected exact string"
+cache[prompt] = output          # 相同 prompt 却可能对应多种合法输出
+
+# 正面:面向不确定性的工程习惯
+pin_model_version("provider-model@2026-01")   # 1) pin 住模型版本
+run_regression_eval(golden_set)               # 2) 留一套回归 eval,看指标而非逐字
+validate_structured_output(schema, output)    # 3) 校验结构(JSON schema / 字段),不比字符串</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「1 万字的文档大概多少 token、要花多少钱?」——用 $1\ \text{token}\approx 4\ \text{字符}$ 估算,并说明输入输出同占预算、按 token 计费。</li>
+<li>「上下文越大越好吗?」——不。越长越贵越慢,质量常在触顶前下降,中间信息易漏(lost in the middle);目标是「恰好、最小」。</li>
+<li>「temperature 和 top-p 有什么区别?抽取任务该怎么设?」——一个缩放分布陡峭度、一个按累计概率砍长尾;抽取/分类用低温,一次只调一个。</li>
+<li>「为什么首 token 慢、后面快?」——prefill(计算密集,主导 TTFT) vs decode(访存密集,逐 token 便宜),KV cache 让历史只算一次。</li>
+<li>「那 KV cache 的代价是什么?」——常驻显存,并发下显存往往先于算力成为吞吐瓶颈;也解释了 prompt caching 为何省钱。</li>
+<li>「让模型算个复利,它算错了怎么办?」——别磨 prompt,给它计算器/代码执行工具,把确定性任务外包。</li>
+<li>「temperature=0 就 100% 确定了吧?」——陷阱题。浮点非结合性、MoE 路由、provider 静默更新都会让输出抖动,别做逐字匹配测试。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞是扣分点):</strong></p>
+<ul>
+<li>token <strong>不是</strong>字符、<strong>也不是</strong>词,而是子词片段;别把「一个词 = 一个 token」当定律。</li>
+<li>别说「上下文窗口越大一定越好」——更长意味着更贵更慢,且质量可能下降。</li>
+<li>别把 temperature 和 top-p 混为一谈,更别同时乱调两个;它们从不同角度改随机性。</li>
+<li>别声称「temperature=0 就必然可复现」——批处理浮点、MoE 路由、模型静默更新都会破坏这一点。</li>
+<li>别指望「更好的 prompt」能根治算术错误——根因在 tokenization 与训练目标,正解是外包给工具。</li>
+<li>KV cache 加的是<strong>速度和吞吐</strong>,不是把复杂度降到零——它以显存占用为代价。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>一次 LLM 生成里,为什么「第一个 token 慢、后续 token 快」?</p>
+<details><summary>A. 第一个 token 要联网下载模型权重,之后走缓存</summary>与联网下载无关。权重早已加载,慢的是对整个 prompt 的一次性计算。</details>
+<details><summary>B. prefill 要一次性处理整个 prompt(计算密集,主导 TTFT),decode 阶段每个新 token 只增量计算并复用 KV cache ✅</summary>正确。prefill 建立 KV cache 且计算密集;之后 decode 逐 token,复用缓存,单步便宜。</details>
+<details><summary>C. 后续 token 被自动降低了精度,所以算得快</summary>不对。decode 快是因为复用了缓存的 K/V,不是降精度。</details>
+<details><summary>D. 第一个 token 需要额外做一次 softmax 归一化,后面不用</summary>不对。每一步都要算注意力与 softmax,差别在于历史 K/V 是否被缓存复用。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>你把 temperature 设成 0,同一个 prompt 连调两次,却拿到略有差异的两段输出。最合理的解释是?</p>
+<details><summary>A. temperature=0 只是把随机性调低而非归零,本质仍在采样</summary>不准确。0 温下本应贪心取最高概率;差异主要来自采样之外的系统性因素。</details>
+<details><summary>B. GPU 批处理的浮点非结合性、MoE 路由依赖同批内容、provider 静默更新模型,都可能让输出抖动 ✅</summary>正确。确定性无法仅靠 temperature=0 保证,要 pin 版本、留回归 eval、校验结构化输出。</details>
+<details><summary>C. 一定是你的 prompt 里带了时间戳或随机变量</summary>过于绝对。即便 prompt 完全一致,系统层因素仍会导致差异。</details>
+<details><summary>D. 说明该模型坏了,应立刻更换 provider</summary>不对。这是分布式推理的常见现象,不是故障。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Lost in the Middle: How Language Models Use Long Contexts</strong>(Liu et al., 2023)——用实验证明模型对上下文首尾利用最好、中间最差,是「上下文越长≠越好」的一手证据。</li>
+<li><strong>The Curious Case of Neural Text Degeneration</strong>(Holtzman et al., 2019)——nucleus sampling(top-p)的原始论文,解释为什么要按累计概率砍长尾。</li>
+<li><strong>Attention Is All You Need</strong>(Vaswani et al., 2017)——自注意力原理是理解 KV cache 为何存在的地基(见第 0002 课)。</li>
+<li>各 provider 的官方 tokenizer 工具与定价文档——用它实测「你的文本到底几个 token」,别只背经验换算。</li>
+<li>下一步:token 之外,模型内部如何用向量表示语义?这引出 Embedding(第 0006 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>一切按 token 计;上下文求「恰好最小」而非最大;temperature/top-p 一次只调一个;KV cache 把生成拆成 prefill(慢、定 TTFT)+ decode(快);算术交给工具;temperature=0 也不保证逐字复现。</strong></p>
+<nav class="lesson-nav">
+<a href="0004-pretraining-and-model-types.html">← 上一课:预训练机制与模型类型</a>
+<a class="next" href="0006-embeddings-explained.html">下一课:Embedding 本质 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

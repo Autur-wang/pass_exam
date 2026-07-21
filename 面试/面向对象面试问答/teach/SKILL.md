@@ -5,6 +5,27 @@ disable-model-invocation: true
 argument-hint: "What would you like to learn about?"
 ---
 
+<!-- ─────────────────────────────────────────────────────────────
+  本工作区已建成完整课程(2026-07-17)。默认动作:交互式授课,不要重建。
+
+  课程:面向对象(OOP)面试问答冲刺 · 精读课(Python 为主 + 跨语言对照)
+  真实源:同级 README.md《52 Important OOP Interview Questions in 2026》(Devinterview.io),
+         仓库只有前 15 题(Q1–Q15)完整答案;Q16–52 在付费墙后、仓库无原文。
+  用户决策:范围=面试全景版(15 题为骨 + SOLID/设计模式/语言机制 canon,共 26 节);语言=Python 为主。
+
+  26 节 · 8 部分(lessons/0001–0026):
+    ① 四大支柱 0001–0005      ② 类的机制 0006–0009
+    ③ 关系与耦合 0010–0012    ④ SOLID 0013–0015
+    ⑤ 设计模式 0016–0018      ⑥ Python 机制与跨语言 0019–0022
+    ⑦ 进阶工程 0023–0025      ⑧ 答题方法论 0026
+  资产:唯一 assets/style.css(装置 recall/keydef/interview/gotcha/implement/good/crosslang/quiz/paper/trio/pipeline/flow/lesson-nav);
+       本课无数学,不加载 KaTeX。门户 index.html;打印速查表 reference/cheatsheet.html;金标准母版 lessons/0002。
+  边界:补充的 canon 内容锚定 GoF / Robert C. Martin / 官方语言文档,在各节"📚权威出处与延伸"标注;源(README)只读原封。
+
+  未来默认:教 OOP 面试走这门课(复述→补缺→AskUserQuestion 出题校验),不要重建。加课从 0027 起。
+  详见 learning-records/0001。
+───────────────────────────────────────────────────────────── -->
+
 The user has asked you to teach them something. This is a stateful request - they intend to learn the topic over multiple sessions.
 
 ## Teaching Workspace

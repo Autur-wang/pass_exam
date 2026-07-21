@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0029 · 推理部署:vLLM / SGLang / PagedAttention 与显存估算</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第八部分 训练与推理工程 · 第 0029 课</p>
+<h1>推理部署:vLLM / SGLang / PagedAttention 与显存估算</h1>
+<p class="lede">模型训好、量化完,真正上线要回答的是另一类问题:一张卡能扛多少并发?延迟卡在哪?为什么同样的模型换个推理框架吞吐能翻几倍?这节课把推理服务的核心指标、vLLM 的看家本领 PagedAttention、以及面试必被追问的「显存怎么估」一次讲透。面试里这是「工程落地」段位的分水岭题。</p>
+
+<div class="recall">
+<p>上节课(量化)我们把权重从 FP16 压到 INT8/INT4,省的是<strong>模型权重</strong>那部分显存。但推理时显存的另一大头是随着对话越来越长而不断膨胀的 <strong>KV Cache</strong>。<strong>先别往下看,试着回忆:自回归生成时,每吐一个新 token 都要重算前面所有 token 的 K、V 吗?如果不重算,那些 K、V 存在哪、占多大?</strong></p>
+</div>
+
+<h2>一、先立指标:你在优化什么?</h2>
+<p>没有指标就没有优化。推理服务通常盯三个量,而且它们互相拉扯——这正是面试官想看你懂不懂权衡的地方。</p>
+
+<div class="trio">
+  <div class="cell"><strong>吞吐 Throughput</strong><br>单位时间处理的 token 数<br><em>看运营成本:每 token 多少钱</em></div>
+  <div class="cell"><strong>TTFT</strong><br>Time To First Token<br><em>看首字响应:用户等多久看到第一个字</em></div>
+  <div class="cell"><strong>TPOT</strong><br>Time Per Output Token<br><em>看吐字流畅度:后续每个字多快</em></div>
+</div>
+<p>生成过程天然分两段,两段的瓶颈完全不同,这是理解一切推理优化的前提:</p>
+<ul>
+<li><strong>Prefill(预填充)阶段</strong>:把整段 prompt 一次性喂进去,所有 token 可以并行计算——这是<strong>计算密集(compute-bound)</strong>的,GPU 算力吃满。TTFT 主要由这一段决定。</li>
+<li><strong>Decode(解码)阶段</strong>:一个一个往外吐 token,每步只算一个新 token,却要读取整份 KV Cache——这是<strong>访存密集(memory-bound)</strong>的,GPU 算力大量闲置,瓶颈在显存带宽。TPOT 由这一段决定。</li>
+</ul>
+<p>并发(concurrency)则是把很多请求塞在一起同时服务。提高并发能摊薄 decode 阶段的算力浪费、抬高吞吐,但会挤占显存、可能拉长单请求延迟。<strong>吞吐与延迟通常此消彼长</strong>——面试答「都要最好」是外行。</p>
+
+<h2>二、KV Cache:省了算力,却吃光显存</h2>
+<p>自回归生成靠 KV Cache 避免重复计算:已经算过的 token,它们的 Key 和 Value 存下来,新 token 只需算自己的 Q 去和缓存里的 K、V 做注意力。代价是显存——缓存随序列长度<strong>线性增长</strong>,而且每条并发请求都有自己的一份。</p>
+<p>单条请求的 KV Cache 大小可以直接估:</p>
+$$\text{KV bytes} = 2 \times L \times n_{\text{kv}} \times d_h \times s \times b_{\text{p}}$$
+<p class="formula-note">$2$ 是 K 和 V 各一份;$L$ 层数;$n_{\text{kv}}$ 是 KV 头数(用了 GQA/MQA 会远小于注意力头数);$d_h$ 每头维度;$s$ 序列长度;$b_{\text{p}}$ 每个数的字节数(FP16 为 $2$)。乘上 batch 就是总量。</p>
+<p>关键结论:KV Cache 正比于<strong>序列长度 × 并发数</strong>。这就是为什么「长上下文 + 高并发」是显存杀手,也是为什么 GQA(第 0004 课的多头变体)和量化 KV Cache 能救命——它们直接砍 $n_{\text{kv}}$ 或 $b_{\text{p}}$。</p>
+
+<h2>三、PagedAttention:把 KV Cache 当操作系统的内存来管</h2>
+<p>问题来了:传统实现会给每条请求<strong>预留一整块连续显存</strong>,按「可能的最大长度」分配。但请求实际生成多长事先不知道——按最大长度留,大部分是浪费(内部碎片);留得不够又要挪。不同请求长短不一,连续块之间还夹着用不上的空隙(外部碎片)。结果是显存利用率很低,能同时跑的请求数被硬生生压下来。</p>
+<p>vLLM 的 <strong>PagedAttention</strong> 借用了操作系统<strong>虚拟内存分页</strong>的思想来解决:把 KV Cache 切成固定大小的 <strong>block</strong>(vLLM 默认一个 block 存 16 个 token 的 KV),这些 block 在物理显存里<strong>不必连续</strong>,靠一张「块表(block table)」把逻辑上连续的 token 序列映射到分散的物理块。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">逻辑序列<br>token 0..N</div>
+  <div class="node">切成<br>固定大小 block</div>
+  <div class="node">块表<br>logical → physical</div>
+  <div class="node good">物理显存<br>分散的空闲块</div>
+</div>
+<figcaption>像 OS 分页:进程看到连续的虚拟地址,实际映射到分散的物理页;PagedAttention 让请求看到连续的 KV 序列,实际存在分散的显存块里。</figcaption>
+</figure>
+
+<p>这样带来两个直接收益:</p>
+<ul>
+<li><strong>几乎消除碎片</strong>:按需一块一块分配,只有最后一个块可能没填满,浪费上限就是「小于一个 block」的量,显存利用率大幅提升。</li>
+<li><strong>能装更多并发</strong>:省下的显存直接变成更多 KV Cache 空间,同一张卡能同时服务更多请求 → 吞吐上去了。</li>
+</ul>
+<p>额外好处:block 可以<strong>共享</strong>。多个请求若有相同前缀(比如同一个 System Prompt),它们的前缀 block 可以指向同一份物理内存,再配合 copy-on-write——这就引出了 prefix caching。</p>
+
+<h2>四、Continuous Batching:别让先跑完的请求干等</h2>
+<p>传统「静态批处理(static batching)」把一批请求凑齐一起发,必须<strong>等批里最慢那条生成完</strong>才能整批返回、再收下一批。可请求生成长度差异极大,短的早早算完却被锁在批里空转,GPU 利用率被拖垮。</p>
+<p>vLLM 的 <strong>continuous batching(连续/动态批处理,也叫 in-flight batching)</strong>把调度粒度从「一整批」降到「一步(iteration)」:每生成一步就检查一次,谁生成完了立刻踢出去返回、腾出的位置马上塞进排队的新请求。GPU 始终被填满,不用等最慢的那条。这是 vLLM 高吞吐的另一半功劳,和 PagedAttention 是绝配——后者提供了灵活分配显存的能力,前者才能灵活地换进换出请求。</p>
+
+<h2>五、Prefix Caching 与 SGLang 的 RadixAttention</h2>
+<p><strong>Prefix caching(前缀缓存)</strong>:很多场景下不同请求共享同一段开头——固定的 System Prompt(角色设定、工具定义)、few-shot 示例、多轮对话里不变的历史。这段前缀的 KV 只需算一次,后续命中缓存直接复用,不必重算。收益直接落在 <strong>TTFT</strong> 上:prefill 少算了一大截,首字更快。vLLM 开 <code>enable_prefix_caching=True</code> 即可。</p>
+<p><strong>SGLang</strong> 把前缀复用做到更极致:它的 <strong>RadixAttention</strong> 用一棵 <strong>radix tree(基数树/前缀树)</strong>来组织所有请求的 KV Cache,自动发现并复用任意请求之间的公共前缀——不只是「同一个 System Prompt」,而是树上任何一条共享路径。对多轮对话、树状搜索、大量共享上下文的 Agent 场景收益尤其明显。一句话记:<strong>vLLM 以 PagedAttention 管显存见长,SGLang 以 RadixAttention 做前缀复用见长</strong>(两者能力也在互相借鉴,别背成「谁只会什么」)。</p>
+
+<h2>六、推理显存估算:面试高频计算题</h2>
+<p>「部署这个模型要多大显存?」几乎必问。拆成三块,逐块估:</p>
+<table>
+<thead><tr><th>组成</th><th>怎么估</th><th>随什么增长</th></tr></thead>
+<tbody>
+<tr><td>模型权重</td><td>参数量 × 每参数字节数</td><td>模型大小、量化精度</td></tr>
+<tr><td>KV Cache</td><td>见上式 $2 L\, n_{\text{kv}} d_h\, s\, b_{\text{p}}$ × 并发</td><td>序列长度 × 并发数</td></tr>
+<tr><td>激活 / 中间结果 + 框架开销</td><td>较小但非零(临时张量、CUDA context、碎片余量)</td><td>batch、实现细节</td></tr>
+</tbody>
+</table>
+<p>权重那块最好算——每参数字节数由精度决定:</p>
+$$\text{权重显存} \approx P \times b_{\text{p}}, \qquad b_{\text{p}} = \begin{cases} 2 & \text{FP16 / BF16} \\ 1 & \text{INT8} \\ 0.5 & \text{INT4} \end{cases}$$
+<p class="formula-note">$P$ 是参数量。所以 FP16 下「参数量(以 B 为单位)× 2」就是权重显存(GB)的粗估:7B ≈ 14GB,72B ≈ 144GB。</p>
+<p>多卡时用 <strong>Tensor Parallelism(TP)</strong>把权重切到多张卡:$\text{每卡权重} \approx (P \times b_{\text{p}}) / N_{\text{gpu}}$。例如 72B FP16 共约 144GB,切到 8 卡每卡约 18GB,剩下的显存留给 KV Cache 装并发和长文本。<strong>注意这是粗估</strong>:实际还要扣掉激活、框架开销,并给碎片留余量——所以 vLLM 用 <code>gpu_memory_utilization</code>(默认 0.9 量级)显式控制占用比例,把剩余空间稳稳留给 KV block,避免运行中 OOM。</p>
+
+<dl class="keydef">
+<dt>PagedAttention</dt>
+<dd>vLLM 的 KV Cache 管理机制:仿照 OS 虚拟内存分页,把 KV Cache 切成固定大小、物理上不连续的 block,用块表映射。消除显存碎片、支持前缀块共享,从而在同一显存下装下更多并发。</dd>
+<dt>Continuous Batching</dt>
+<dd>以「每生成一步」为粒度动态调度:请求一完成立即返回并让新请求补位,GPU 不必等整批最慢的请求,显著提升吞吐与利用率。</dd>
+<dt>Prefix Caching / RadixAttention</dt>
+<dd>共享前缀的 KV 只算一次、后续复用。SGLang 用 radix tree 组织 KV,自动复用任意请求间的公共前缀,主要降低 TTFT。</dd>
+<dt>TTFT / TPOT</dt>
+<dd>TTFT 是首个 token 的延迟(由 prefill 主导);TPOT 是后续每个 token 的平均间隔(由 decode 主导)。</dd>
+</dl>
+
+<div class="implement">
+<p>用 vLLM 起一个兼容 OpenAI 接口的服务(单卡量化 + 多卡 TP 两种形态),这是最常见的部署骨架:</p>
+<pre><code># 单卡:AWQ 量化模型,显式控制显存占用与最大长度
+python -m vllm.entrypoints.openai.api_server \
+    --model /path/to/Model-AWQ \
+    --quantization awq \
+    --dtype half \
+    --max-model-len 16384 \
+    --gpu-memory-utilization 0.9 \
+    --enable-prefix-caching \
+    --port 8000
+
+# 多卡:Tensor Parallel 切到 N 张卡(多机再叠 Ray)
+python -m vllm.entrypoints.openai.api_server \
+    --model /path/to/Model \
+    --tensor-parallel-size 8 \
+    --distributed-executor-backend ray \
+    --host 0.0.0.0 --port 8000
+</code></pre>
+<p>多机时先起 Ray 集群(head 节点 <code>ray start --head</code>,worker 节点 <code>ray start --address=&lt;head-ip&gt;:6379</code>),vLLM 会自动检测集群并分发分片。<strong>坑</strong>:多机 TP 对节点间网络极敏感,没有 InfiniBand 而走普通以太网,跨机通信会把延迟拖高。</p>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「vLLM 为什么快?」——两根支柱:<strong>PagedAttention</strong> 消除 KV Cache 碎片、装下更多并发;<strong>continuous batching</strong> 让 GPU 不等最慢请求。别只答「它优化了」。</li>
+<li>「PagedAttention 到底解决了什么问题?」——传统连续预留 KV Cache 导致内外部碎片、显存利用率低;分页化按需分配,几乎零碎片,还能共享前缀块。</li>
+<li>「部署 X B 模型要多大显存?」——分三块:权重(参数×字节)+ KV Cache(正比序列长×并发)+ 激活/开销;多卡用 TP 摊权重。</li>
+<li>「prefill 和 decode 哪个是 compute-bound、哪个 memory-bound?」——prefill 计算密集(定 TTFT),decode 访存密集(定 TPOT)。</li>
+<li>「SGLang 和 vLLM 区别?」——都做高吞吐推理;SGLang 以 RadixAttention 前缀树复用见长,vLLM 以 PagedAttention 显存管理见长。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把吞吐和延迟当成能同时拉满——它们通常此消彼长,加大并发抬吞吐往往牺牲单请求延迟。</li>
+<li>估显存只算权重、忘了 KV Cache。长上下文 + 高并发时 KV Cache 可能比权重还大,而且是它先把你 OOM。</li>
+<li>把 PagedAttention 和 continuous batching 混为一谈:前者管「KV Cache 怎么放」,后者管「请求怎么调度」,是两件事。</li>
+<li>以为 prefix caching 能降吞吐上限——它主要省的是 prefill 重算,收益落在 TTFT;对不共享前缀的请求没用。</li>
+<li><code>gpu_memory_utilization</code> 设太高(逼近 1.0)反而危险,没给激活和碎片留余量会运行中 OOM。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>PagedAttention 借鉴操作系统的分页思想,最核心解决的是什么问题?</p>
+<details><summary>A. 让模型权重占用更少显存</summary>权重靠量化(第 0028 课)去压,PagedAttention 管的是 KV Cache 不是权重。</details>
+<details><summary>B. 把 KV Cache 切成不连续的固定块、消除显存碎片,从而装下更多并发 ✅</summary>正确。分页化让 KV Cache 按需分配、物理不连续,几乎消除内外部碎片,省出的显存变成更多并发能力。</details>
+<details><summary>C. 加快单个矩阵乘法的计算速度</summary>它改变的是显存<em>布局与分配</em>,不是矩阵乘的算力。</details>
+<details><summary>D. 减少模型的层数以降低延迟</summary>与模型结构无关,不改层数。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>一个 Agent 服务,每个请求都带一段很长且完全相同的 System Prompt(工具定义+角色设定),你最该开启下面哪项来降低 TTFT?</p>
+<details><summary>A. 提高 tensor_parallel_size</summary>TP 是把权重切到多卡、解决单卡放不下,并不专门复用相同前缀。</details>
+<details><summary>B. 调低 gpu_memory_utilization</summary>那只会减少可用 KV 空间、降低并发,和复用相同前缀无关。</details>
+<details><summary>C. 开启 prefix caching,让相同前缀的 KV 只算一次后续复用 ✅</summary>正确。固定 System Prompt 是天然共享前缀,缓存命中后省掉这段 prefill 重算,直接降 TTFT。</details>
+<details><summary>D. 关闭 continuous batching</summary>关掉它只会降吞吐、让 GPU 空等,毫无帮助。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Efficient Memory Management for Large Language Model Serving with PagedAttention</strong>(Kwon et al., 2023)——vLLM 与 PagedAttention 的原始论文,分页化 KV Cache 的动机与设计都在这里。</li>
+<li><strong>SGLang: Efficient Execution of Structured Language Model Programs</strong>(Zheng et al., 2024)——RadixAttention 前缀树复用的出处。</li>
+<li>KV Cache 的源头回看第 0006 课(KV Cache)与第 0004 课(MHA/GQA 如何砍 $n_{\text{kv}}$);压权重那一环见上一课第 0028 课(量化)。</li>
+<li>下一步:模型部署完怎么评测质量与性能(第 0030 课评测)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>vLLM 快在两根支柱——PagedAttention 把 KV Cache 当分页管、消碎片装并发,continuous batching 让 GPU 不等最慢请求;显存 = 权重 + KV Cache(正比序列长×并发) + 激活。</strong></p>
+<nav class="lesson-nav">
+<a href="0028-quantization.html">← 上一课:量化</a>
+<a href="0030-evaluation.html">下一课:评测 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

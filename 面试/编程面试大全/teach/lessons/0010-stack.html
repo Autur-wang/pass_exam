@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0010 · 栈:后进先出与调用栈</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0010 课 · 线性结构 · 预计 10 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>栈:后进先出与调用栈</h1>
+
+<p class="lede">栈只认一条规矩:<strong>只在一端进出</strong>。最后放进去的,最先被拿出来——后进先出(LIFO)。规矩简单到极致,用途却铺满整个计算机世界:括号匹配、表达式求值、DFS、撤销操作,乃至你写的每个函数调用背后那根「调用栈」。这节课把这条规矩和它的三个 O(1) 操作讲透,并弄清面试里那句口头禅:<strong>「递归都能改写成显式栈。」</strong></p>
+
+<div class="recall">
+<p>先回忆:前两课我们看了<a href="0007-array-dynamic-array.html">数组</a>(末尾 push/pop 摊还 O(1))和<a href="0009-doubly-linked-list.html">链表</a>(头部 push/pop 恒 O(1))。栈其实不是一种新的底层结构,而是给它们<strong>加一条使用纪律</strong>。先想想:数组的哪一端、链表的哪一端,天然适合当栈顶?</p>
+</div>
+
+<h2>一、直觉:一摞盘子</h2>
+
+<p>把栈想成一摞盘子:你只能往<strong>最上面</strong>放一个(<code>push</code>),或从<strong>最上面</strong>拿走一个(<code>pop</code>),想看最上面那个是什么就瞄一眼(<code>peek</code>/<code>top</code>)。你永远碰不到中间和底下的盘子。正因为只在一端操作、不涉及搬移,这三个操作全是 <strong>O(1)</strong>。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 340 250" width="340" role="img" aria-label="栈示意:元素竖直堆叠,只能在顶端 push/pop,顶端指向最后压入的元素">
+  <defs>
+    <marker id="arr10" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="dgm-accent"/>
+    </marker>
+  </defs>
+  <!-- 容器左右壁与底(开口朝上) -->
+  <path d="M95,55 L95,215 L215,215 L215,55" class="dgm-edge" stroke-width="2"/>
+  <!-- 盘子:从底到顶 5,3,8,1 -->
+  <rect x="97" y="179" width="116" height="34" class="dgm-node"/>
+  <text x="155" y="201" text-anchor="middle" class="dgm-text" font-size="15">5</text>
+  <rect x="97" y="143" width="116" height="34" class="dgm-node"/>
+  <text x="155" y="165" text-anchor="middle" class="dgm-text" font-size="15">3</text>
+  <rect x="97" y="107" width="116" height="34" class="dgm-node"/>
+  <text x="155" y="129" text-anchor="middle" class="dgm-text" font-size="15">8</text>
+  <!-- 栈顶元素高亮 -->
+  <rect x="97" y="71" width="116" height="34" class="dgm-accent-node"/>
+  <text x="155" y="93" text-anchor="middle" class="dgm-accent-text" font-size="15" font-weight="700">1</text>
+  <!-- top 指针 -->
+  <text x="290" y="82" text-anchor="middle" class="dgm-accent-text" font-size="12" font-weight="700">top</text>
+  <line x1="270" y1="88" x2="217" y2="88" class="dgm-edge" stroke-width="2" marker-end="url(#arr10)"/>
+  <!-- push / pop 箭头 -->
+  <text x="45" y="40" text-anchor="middle" class="dgm-good-text" font-size="12" font-weight="700">push</text>
+  <line x1="45" y1="46" x2="45" y2="88" class="dgm-edge" stroke-width="2"/>
+  <line x1="45" y1="88" x2="93" y2="88" class="dgm-edge" stroke-width="2" marker-end="url(#arr10)"/>
+  <text x="155" y="240" text-anchor="middle" class="dgm-muted" font-size="11">底部(最先压入,最后弹出)</text>
+</svg>
+</div>
+<figcaption>只在<strong>顶端</strong>进出。<code>1</code> 是最后压入的,也会最先被 <code>pop</code> 出去——这就是后进先出(LIFO)。底下的 <code>5</code> 最先进,却要等上面全走光才轮到它。</figcaption>
+</figure>
+
+<p>栈可以用<strong>数组</strong>实现(末尾当栈顶,push=末尾追加、pop=末尾删除),也可以用<strong>链表</strong>实现(头部当栈顶)。仓库大纲明说:<em>「可以不实现,因为使用数组来实现是微不足道的事」</em>——因为动态数组的末尾 push/pop 本来就是摊还 O(1),天然就是一个栈。</p>
+
+<h2>二、栈无处不在:调用栈</h2>
+
+<p>你写的每次函数调用,运行时都在一根<strong>调用栈(call stack)</strong>上压入一个「栈帧」(存局部变量、返回地址);函数返回就弹出栈帧。递归为什么会「栈溢出(stack overflow)」?就是压入的栈帧太多、把这根栈撑爆了。这也解释了那句面试口头禅——<strong>递归本质上是在用系统的隐式栈,你完全可以改用一个显式的栈手动模拟</strong>,把递归改成迭代。</p>
+
+<h2>三、关键定义</h2>
+
+<dl class="keydef">
+<dt>栈(Stack)</dt>
+<dd>后进先出(LIFO)的线性结构,只在一端(栈顶)push/pop。<em>避免</em>:把「栈(数据结构)」和「调用栈」的语义混为一谈时不加说明。</dd>
+<dt>peek / top</dt>
+<dd>查看栈顶元素但<strong>不弹出</strong>。与 pop 的区别:pop 会移除并返回,peek 只看不动。</dd>
+<dt>LIFO(Last In, First Out)</dt>
+<dd>栈的核心序:最后进入的元素最先离开。与之相对的是下一课队列的 FIFO(先进先出)。</dd>
+</dl>
+
+<h2>四、复杂度:三个操作都是常数</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>平均 / 摊还</th><th>最坏</th></tr></thead>
+<tbody>
+<tr><td class="op"><code>push</code>(压栈)</td><td class="best">O(1)</td><td class="warn">O(n) <small>(数组实现触发扩容)</small></td></tr>
+<tr><td class="op"><code>pop</code>(弹栈)</td><td class="best">O(1)</td><td class="best">O(1)</td></tr>
+<tr><td class="op"><code>peek</code> / <code>top</code>(看栈顶)</td><td class="best">O(1)</td><td class="best">O(1)</td></tr>
+<tr><td class="op">按值查找(非核心操作)</td><td class="warn">O(n)</td><td class="warn">O(n)</td></tr>
+</tbody>
+</table>
+<p>唯一的「不平坦」处在 <code>push</code>:数组实现遇到扩容那次是 O(n),但摊还仍是 O(1)——这正是<a href="0007-array-dynamic-array.html">动态数组</a>那一课的结论在栈上的复用。用链表实现则连这一下抖动都没有,push/pop 恒 O(1),代价是每节点多一根指针、缓存不如数组友好。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>栈是「用一个后进先出的容器化解嵌套/回溯」这类题的标配:</p>
+<ul>
+<li><strong>括号匹配 / 有效括号</strong>:遇左括号压栈,遇右括号弹栈比对——最经典的栈入门题。表达式求值、解码嵌套字符串同理。</li>
+<li><strong>最小栈(Min Stack)</strong>:要求 push/pop/top/getMin 全 O(1)。技巧:再开一个辅助栈同步记录「当前最小值」。这道题考的就是你能不能用「额外的栈」换时间。</li>
+<li><strong>用栈实现队列</strong>:两个栈倒来倒去,把 LIFO 拼成 FIFO(下一课会正面讲)。反向的「用队列实现栈」也常出。</li>
+<li><strong>把递归改成迭代</strong>:DFS、树的遍历,面试官可能要求「不用递归」,考的就是你会不会用显式栈替代系统调用栈。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>空栈还 pop / peek,是最常见的崩溃点。</strong>动手前一定先判空(或让 pop 在空栈时抛异常/返回哨兵),面试写代码时漏掉这个边界会直接被扣分。</p>
+<p>另一个坑:用<strong>数组</strong>实现栈时,别忘了它背后有扩容——单次 push 最坏是 O(n)(触发 resize),正确说法是「push <strong>摊还</strong> O(1)」。若面试场景对单次延迟敏感,这一下抖动就值得点出来。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>栈不是新结构,而是「只在一端进出」这条纪律。凡是问题带有<strong>嵌套、回溯、逆序、最近优先</strong>的味道(括号、递归、undo、DFS),先想栈——它几乎总是那个让 O(1) 成立的答案。</p>
+</div>
+
+<div class="implement">
+<p>仓库说栈「可以不实现」,但为了吃透 LIFO,建议至少各写一版:</p>
+<p>① <strong>数组版</strong>:复用动态数组,末尾即栈顶,写 <code>push</code> / <code>pop</code> / <code>peek</code> / <code>empty</code>,并让 <code>pop</code> 空栈时报错;② <strong>链表版</strong>:头部即栈顶。写完再做两道应用题:<strong>有效括号</strong>和<strong>最小栈</strong>(辅助栈让 <code>getMin</code> 也 O(1))。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:要在 O(1) 内随时取到栈中最小值(getMin),同时 push/pop 也保持 O(1),该怎么做?</summary>
+<div class="answer">
+<p>用一个<strong>辅助栈</strong>与主栈同步。每次 push 时,辅助栈压入「当前元素与辅助栈顶的较小者」;pop 时两个栈一起弹。这样辅助栈顶永远是当前主栈的最小值,<code>getMin</code> 只需 peek 辅助栈 → O(1)。核心思路:<strong>用额外空间(一个栈)换取查询时间</strong>,这是栈类题的常见套路。若只用一个栈,想找最小值就得遍历,退化成 O(n)。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:为什么说「任何递归都能改写成用显式栈的迭代」?这背后的原理是什么?</summary>
+<div class="answer">
+<p>因为递归本身就是<strong>在用系统的调用栈</strong>:每层递归 = 压入一个栈帧(保存局部状态与返回位置),返回 = 弹出栈帧。既然递归的控制流就是一根栈在进出,你完全可以拿一个<strong>自己维护的显式栈</strong>手动保存这些状态,把递归翻译成 <code>while(栈非空){ ... }</code> 的循环。好处:避开系统调用栈的深度上限(防止 stack overflow),且能更灵活地控制遍历。DFS 的递归版与栈版,正是同一件事的两种写法。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲的「堆栈(Stack)」小节:</p>
+<ul>
+<li><a href="https://www.coursera.org/learn/data-structures/lecture/UdKzQ/stacks">堆栈(Coursera 视频)</a> —— 系统讲栈的定义与操作。</li>
+<li><a href="https://youtu.be/KcT3aVgrrpU">3 分钟看懂栈(复习向视频)</a> —— 快速建立/回顾 LIFO 直觉。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师带你把「有效括号」在纸上跑一遍,看栈如何配对每一对括号;或用调试器观察一段递归时系统调用栈的压入弹出。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0009-doubly-linked-list.html"><span class="dir">← 上一课</span>双向链表:多一根指针换来什么</a>
+  <a class="next" href="0011-queue.html"><span class="dir">下一课 →</span>队列与环形缓冲区</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

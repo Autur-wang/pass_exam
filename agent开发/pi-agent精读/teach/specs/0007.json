@@ -1,0 +1,81 @@
+{
+ "num": "0007",
+ "slug": "why-loop-trace-and-turn",
+ "title": "为什么需要循环:三种用法与 Trace/Turn 嵌套",
+ "narrowTopic": "只讲一件事:Agent Loop 相比直接调用/Workflow 的本质区别(决策权交给模型),以及一次完整运行(Trace)如何由多个轮次(Turn)嵌套组成。",
+ "analogySeed": "把大模型想成一位专家:模式1是你问一句他答一句(直接调用);模式2是你当项目经理、把活拆成几步逐步派给他(Workflow);模式3是你只给他工具箱和目标、由他自己决定读哪个文件、改几处代码(Agent Loop)。而一次派活到彻底交付是一个 Trace,他每一次'开口+动手'是一个 Turn。",
+ "keyPoints": [
+  "三种用法的分水岭在'决策者是谁':直接调用=用户、Workflow=你的代码、Agent Loop=模型;Agent 模式下步骤流转由模型输出内容驱动,而非代码写死。",
+  "你的代码在 Agent 模式下只做两件事:把输入和工具结果喂给模型;模型输出里有工具调用就执行、没有就认为完成。'调几次工具'由模型定,'何时停'是人类定义的规则。",
+  "Trace 是从 agent_start 到 agent_end 的整个过程(一次完整运行),包含多个 Turn。",
+  "Turn 的精确定义:一次模型调用 + 这次调用触发的所有工具执行,由一对 turn_start / turn_end 包裹;一个 Turn 只有一次模型调用。",
+  "一个 Turn 里模型一口气要 3 个工具(read+grep+find),这 3 个都在同一 Turn(同一次模型调用的产物);把结果喂回去再调模型的那一刻就进入下一个 Turn。",
+  "首轮 Turn 的 turn_start 在 runAgentLoop() 入口就发出,runLoop() 内用 firstTurn 标志跳过首圈的 turn_start 以避免重复。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "§一末尾的三种模式对比表格(维度=决策者/模型调用次数/核心工作/模型角色/典型场景,三列=直接调用/Workflow/Agent Loop)",
+   "cite": "教程 §一 / 三种大模型用法对比表"
+  },
+  {
+   "desc": "§二 Turn 小节里展示'内层循环每一圈结构'的 while 伪代码块(含 emit turn_start、streamAssistantResponse、检查 stopReason、executeToolCalls、emit turn_end)",
+   "cite": "教程 §二 / agent-loop.ts 内层循环结构示意"
+  },
+  {
+   "desc": "§二末尾 Trace 与 Turn 关系的 ASCII 嵌套图(agent_start 外壳内嵌 Turn1/Turn2/Turn3,Turn3 为 stop 无工具、触发退出)",
+   "cite": "教程 §二 / Trace-Turn 嵌套结构图"
+  }
+ ],
+ "designRationale": [
+  "为什么把决策权交给模型:Agent 任务中你无法预知模型要读几个文件、改几处代码,所以流转不能写死在代码里,只能由模型输出驱动——这既是 Agent 的能力来源也是它与 Workflow 的本质分界。",
+  "为什么用'一次模型调用'来切分 Turn:模型每次调用是一个原子的'思考+决策'单元,以此为边界能让事件(turn_start/turn_end)精确对应一次可观测的推理,便于 UI 与 trace 追踪。",
+  "为什么首轮 turn_start 在入口就发、内层再跳过:入口需要在追加用户消息、发 agent_start 时同步开启首个 Turn,若内层不加 firstTurn 跳过会重复发出 turn_start,破坏事件配对。"
+ ],
+ "quiz": [
+  {
+   "stem": "在 Agent Loop 模式下,'该调用哪些工具、调几次'由谁决定?'何时停止循环'又由谁决定?",
+   "options": [
+    "都由模型决定,因为模型知道任务是否完成",
+    "调什么工具由模型输出决定;何时停是人类定义的规则(模型输出里没有工具调用时)",
+    "都由你的代码决定,模型只负责生成文本",
+    "调什么工具由代码决定;何时停由模型主动声明'我完成了'"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。决策(调什么)外包给模型输出,停止(何时停)是人类工程约定。延伸:正因如此,代码不需要任何'任务完成度'判断逻辑——这是 Agent 的优雅也是它的局限。",
+   "noMsg": "回看§一模式3与对比表:注意区分'调什么工具'和'何时停'这两件事分别由谁掌控,模型并不会真的说'我停了'。"
+  },
+  {
+   "stem": "模型在一次输出中同时要求了 read、grep、find 三个工具。关于它们属于哪个 Turn,正确的是?",
+   "options": [
+    "三个工具分属三个不同的 Turn,因为有三次工具执行",
+    "read 一个 Turn,grep 和 find 合成另一个 Turn",
+    "三个工具都在同一个 Turn,因为它们是同一次模型调用的产物",
+    "取决于是并行还是串行执行"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。Turn 的边界是'一次模型调用',不是'一次工具执行'。延伸:只有把这批工具结果喂回去再调模型的那一刻,才进入下一个 Turn。",
+   "noMsg": "回看 Turn 的精确定义:一个 Turn 只有几次模型调用?工具数量会改变 Turn 的划分吗?"
+  },
+  {
+   "stem": "关于 Trace 和 Turn 的关系,下面哪个描述准确?",
+   "options": [
+    "一个 Trace 就是一个 Turn,两者是同义词",
+    "一个 Turn 包含多个 Trace",
+    "一个 Trace(agent_start 到 agent_end)包含一个或多个 Turn,每个 Turn 由 turn_start/turn_end 包裹",
+    "Trace 只在出错时才产生,正常运行只有 Turn"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。Trace 是外壳(一次完整运行),Turn 是内嵌的心跳。延伸:一个 Trace 至少有一个 Turn——最后那个返回 stop 且无工具的 Turn 触发整个循环退出。",
+   "noMsg": "回看§二的嵌套图:谁在外(agent_start/agent_end)、谁在内(turn_start/turn_end)?包含关系的方向别弄反。"
+  }
+ ],
+ "_chapter": "3",
+ "_chapterCN": "Agent Loop —— 让模型转动起来的引擎",
+ "prevFile": "0006-dependency-direction-and-layer-boundaries.html",
+ "prevNum": "0006",
+ "nextFile": "0008-stopreason-the-only-signal.html",
+ "nextNum": "0008",
+ "crumbLabel": "第 3 章 · Agent Loop",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第3章-Agent-Loop-让模型转动起来的引擎.md",
+ "filename": "0007-why-loop-trace-and-turn.html"
+}

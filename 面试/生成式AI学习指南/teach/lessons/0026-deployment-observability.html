@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0026 · 部署决策与可观测:model routing、self-host、fallback、监控</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第九部分 生产工程、幻觉与安全 · 第 0026 课</p>
+<h1>部署决策与可观测:model routing、self-host、fallback、监控</h1>
+<p class="lede">上一课把「延迟-吞吐-成本」的物理约束讲清了,这节课把它落到<strong>系统怎么搭</strong>。一口气答清五道真实生产工程题:<strong>「怎么为某一步选模型?」「什么时候该自托管开源权重、而不是用托管 API?」「模型调用失败/超时/限流时怎么安全 fallback?」「生产可观测长什么样、成本怎么按功能和用户归因?」「API 大幅降价时架构该怎么改?」</strong>(源:AI 工程师题库 Q101、Q110、Q111、Q103、Q109、Q108)。目标是让你答得像一个<strong>见过线上事故的人</strong>,而不是只会调 API 的人。</p>
+
+<div class="recall">
+<p>回忆上一课:同一个功能,选 GPT 级大模型还是小模型、开不开 reasoning、要不要 streaming,直接决定了延迟和每次调用的钱。<strong>先别往下看:如果一个多步流程里,有的步骤很简单(抽个字段)、有的步骤很难(多跳推理),你会用同一个模型跑完全部,还是分开处理?为什么?</strong></p>
+</div>
+
+<h2>一、Model routing:用「能过线的最便宜模型」(Q101)</h2>
+<p>直觉先行:<strong>不是所有请求都值得同一档算力。</strong>把一个复杂任务的每一步都丢给最强的推理模型,等于用出租车送外卖——能送到,但贵得离谱且慢。反过来,全用最便宜的小模型,尾部的难例就会翻车。routing 要做的,就是给每一步<strong>匹配刚好够用的能力</strong>。</p>
+
+<dl class="keydef">
+<dt>Model routing(模型路由)</dt>
+<dd>按<strong>任务难度与约束</strong>把每个请求/每个步骤,分派给一组模型里<strong>能过该步质量线的、最小最便宜最快的那个</strong>。只有当便宜模型过不了线时,才把这个「难例」升级(escalate)到强模型或 reasoning 模型。</dd>
+</dl>
+
+<p>落地成一个<strong>路由器</strong>:它可以是<em>规则</em>(按输入长度、任务类型、是否含代码、用户档位分流),也可以是<em>轻量分类器</em>(一个小模型/打分器先判难度)。这样常见的易路径走便宜通道省钱,只有<strong>尾部的难请求才付大模型的钱</strong>——成本花在刀刃上。</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision"><strong>请求进来:这一步有多难?约束是什么(延迟/预算/是否要引用)?</strong></div>
+  <div class="down">↓ 路由器判定(规则 or 轻分类器)</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">易 / 常见路径(占大多数)</div>
+      <div class="step"><strong>→ 小 / 便宜 / 快模型</strong><br>抽字段、分类、改写、简单问答:能过质量线就到此为止,省钱省延迟</div>
+    </div>
+    <div class="branch">
+      <div class="label">难 / 尾部路径(少数)</div>
+      <div class="step"><strong>→ 强 / reasoning 模型</strong><br>多跳推理、长上下文综合、便宜模型过不了线的难例:才升级付大模型的钱</div>
+    </div>
+  </div>
+  <div class="down">↓ 前提</div>
+  <div class="step terminal"><strong>用 eval 验证:便宜模型在「你实际用它的地方」确实保质;并随模型变便宜变好,定期重估这条路由</strong></div>
+</div>
+<figcaption>routing 的核心不是「哪个模型最强」,而是「每一步能过线的最小模型是谁」。</figcaption>
+</figure>
+
+<p>两个容易被忽略、但资深面试官会点的前提:</p>
+<ul>
+<li><strong>用 eval 兜底</strong>:「便宜模型够用」不能靠感觉,要在你真正用它的那个环节上用评测集验证它确实过线。否则省下的钱会以质量事故的形式加倍还回来。</li>
+<li><strong>路由是会过期的决策</strong>:模型在持续变便宜、变强。今天必须用大模型的步骤,几个月后小模型可能就够了。要<strong>定期重估</strong>路由表,而不是一次配置永久不动。</li>
+</ul>
+
+<h2>二、自托管 vs 托管 API:别凭意识形态(Q110)</h2>
+<p>这题最容易答歪成「开源=省钱=牛」。资深的答法是:<strong>托管 API 通常是默认赢家,直到某个具体驱动因素强到压过它。</strong>自托管开源权重只有在下面几类情况才真正合理:</p>
+
+<div class="trio">
+  <div class="cell"><strong>数据 / 合规</strong><br>数据驻留、零留存要求<br><em>根本不允许把数据送给 provider</em></div>
+  <div class="cell"><strong>规模经济</strong><br>调用量大到按 token 的 API<br><em>比自己养硬件还贵</em></div>
+  <div class="cell"><strong>能力 / SLA</strong><br>需要 API 没有的微调/专用模型<br><em>或共享端点给不了的延迟/可用性保证</em></div>
+</div>
+
+<p>但自托管的代价是<strong>真实且持续</strong>的,面试时把这些说全才显得你真做过:</p>
+<ul>
+<li><strong>GPU 容量</strong>:要拿得到、养得起、扛得住峰值的显卡。</li>
+<li><strong>推理服务专长</strong>:批处理(batching)、KV cache 复用、自动扩缩容——这些不是装个开源权重就自动有的。</li>
+<li><strong>持续维护</strong>:监控、升级、故障处理,是一支团队的长期投入,不是一次性成本。</li>
+</ul>
+
+<p>所以正确的决策姿势是:<strong>用「总成本 + 需求」的具体比较来决定,而不是凭对开源/闭源的立场。</strong>还有一个常被忽视的中间选项——<strong>托管的开源权重端点</strong>(有人替你把开源模型跑成 API):它能给你开源模型的选择权,又免掉自己养 GPU 的重担,常常是「既要合规/选型自由、又不想自建机房」时的折中。</p>
+
+<div class="keydef">
+<dt>一句话决策框架</dt>
+<dd>默认托管 API;当<strong>合规排除送数据、规模让 API 更贵、需要 API 没有的能力、或需要共享端点给不了的 SLA</strong> 之一强到主导时,才考虑自托管;并把「托管开源端点」作为中间档一起比。</dd>
+</div>
+
+<h2>三、安全 fallback:先设计「不快乐路径」(Q111)</h2>
+<p>心态转变是这题的灵魂:<strong>假设每一次模型调用都可能失败</strong>——会超时、会限流(rate limit)、会 5xx、会返回坏结构。新手先写成功路径再补异常;资深工程师<strong>先设计失败路径</strong>。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">调用模型</div>
+  <div class="arrow">→</div>
+  <div class="node">超时 + 重试<br>指数退避</div>
+  <div class="arrow">→</div>
+  <div class="node">断路器<br>Circuit Breaker</div>
+  <div class="arrow">→</div>
+  <div class="node">降级行为<br>小模型/缓存/诚实提示</div>
+  <div class="arrow">→</div>
+  <div class="node good">校验输出<br>坏结构→回退</div>
+</div>
+<figcaption>每一层都在防一种失败:瞬时错、持续故障、无可用结果、坏输出。</figcaption>
+</figure>
+
+<ul>
+<li><strong>瞬时错误</strong>:超时 + 重试 + <strong>指数退避</strong>(exponential backoff)。别无脑重试——那会在 provider 已经过载时把它锤得更死。</li>
+<li><strong>持续故障</strong>:<strong>断路器</strong>。当失败率飙高,快速「跳闸」不再打这个 provider,给它喘息、也让你的功能快速失败而不是一直挂着。</li>
+<li><strong>降级行为(要提前定义)</strong>:切到更小/替代模型、返回缓存过的答案、或诚实地告诉用户「稍后再试」。三选一,但必须是<em>设计好的</em>,不是崩了才现想。</li>
+</ul>
+
+<div class="gotcha" style="margin-top:1rem">
+<p><strong>两条红线(说反了直接扣分):</strong></p>
+<ul>
+<li><strong>绝不</strong>让一个 provider 的故障拖垮整个功能、或把用户请求<strong>挂住</strong>不返回。局部失败要被隔离。</li>
+<li><strong>绝不</strong>静默返回坏的结构化输出。JSON 解析失败/字段缺失时要<strong>校验 + 回退</strong>,而不是把脏数据传给下游。</li>
+</ul>
+</div>
+
+<p>此外还要:<strong>记录每次失败及其对应的 fallback</strong>——这样你才能看清各 provider 的真实可靠性、据此调限额与超时。工程手法上用一层 <strong>provider 抽象</strong>(把「调哪个厂商/哪个模型」藏在统一接口后面),切换备用模型或备用厂商才便宜——这条同时也是下一节降价题的伏笔。</p>
+
+<h2>四、可观测 + 成本归因:别盲飞非确定性系统(Q103、Q109)</h2>
+<p>核心论点一句话:<strong>没有可观测,你就是在盲飞一个非确定性系统</strong>——同样的输入可能给出不同输出,出问题时你连「哪一步错了」都不知道。所以它必须<strong>从第一天就内建</strong>,不是上线后再补。</p>
+
+<div class="keydef">
+<dt>LLM 应用的端到端追踪(tracing)</dt>
+<dd>对<strong>每一次请求</strong>记录整条链路:拼装出的 prompt / 上下文、检索命中了哪些块及其分数、每一次工具调用及其结果、模型输出、token 数、<strong>各阶段延迟</strong>、成本。有了追踪面板,就能把一条多步 agent 的完整轨迹摊开看,定位到底哪一步出错。</dd>
+</div>
+
+<p>光有追踪还不够,可观测是三件事叠起来:</p>
+<div class="trio">
+  <div class="cell"><strong>记录(为可审计)</strong><br>完整存下每次请求的输入输出<br><em>出事能回溯、能复盘</em></div>
+  <div class="cell"><strong>抽样质检</strong><br>抽样输出做持续评估<br><em>非确定系统靠采样看质量漂移</em></div>
+  <div class="cell"><strong>告警</strong><br>对要紧指标漂移报警<br><em>幻觉信号、拒答率、延迟、成本、错误率</em></div>
+</div>
+
+<h3>成本归因:把「一张月账单」变成可查询维度(Q109)</h3>
+<p>光看一张月度总账单,你永远不知道钱花在哪。做法是给<strong>每一次调用打上元数据</strong>:功能(feature)、用户/租户(tenant)、模型、缓存 vs 非缓存 token;并记录输入/输出 token 数。这样成本就从「一个数字」变成<strong>可查询的维度</strong>。</p>
+<ul>
+<li>能看清<strong>哪个功能、哪个重度用户</strong>在驱动开销;</li>
+<li>能抓到回归——比如「有人改了个 prompt,让 token 数悄悄翻倍」;</li>
+<li>能给<strong>每租户设预算 / 限流</strong>。</li>
+</ul>
+<p>更进一步,资深答法会把开销<strong>绑到价值</strong>上:按 <span class="nowrap"><strong>每次成功交互的成本</strong></span> 来追踪,而不是只看总花销。省了钱但成功率掉了,那不是省,是亏。</p>
+
+<h2>五、API 大幅降价:把模型选择当「定期重估」(Q108)</h2>
+<p>这题考的是<strong>架构随外部条件演化</strong>的意识。降价意味着:<strong>昨天为了省成本而做的妥协,今天可能不再必要。</strong>该重估的有两类:</p>
+<ul>
+<li>曾经<strong>为省钱拆给便宜模型</strong>、或用重度 prompt 工程硬把任务压进小模型的那些步骤——现在可能在同样预算内直接跑更强模型,效果更好且更简单;</li>
+<li>那些当初精巧的<strong>省钱脚手架</strong>(多级路由、复杂缓存、prompt 压缩),降价后可能从「净收益」变成「净负担」——维护它的复杂度超过了它省的钱,该拆就拆。</li>
+</ul>
+
+<div class="gotcha" style="margin-top:1rem">
+<p><strong>但别矫枉过正,两条平衡:</strong></p>
+<ul>
+<li>别<strong>过早过度优化</strong>。与其押注某个模型价格,不如让架构<strong>保持灵活</strong>——provider 抽象 + routing 就绪,更便宜/更好的模型一到就能采纳(这就是第三节那层抽象的回报)。</li>
+<li>降价<strong>不等于</strong>成本自动下降。便宜 token 会<strong>招致更大规模</strong>的使用,总花销反而可能上涨——所以仍要盯着「每次交互成本」这个指标(回到第四节)。</li>
+</ul>
+</div>
+
+<p>一句话收束这整节的资深直觉:<strong>把模型选择、部署形态、路由策略,都当作「定期重估的决策」,而不是一次拍板的永久结论。</strong>五道题其实是同一件事的不同切面——生产系统是活的,你的架构也得是活的。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「routing 器本身怎么实现?」——规则(长度/类型/档位)或轻量分类器;要点是<strong>用 eval 证明便宜档在实际用处过线</strong>,别只答「用大模型判难度」——那本身就贵。</li>
+<li>「什么时候必须自托管?」——数据合规排除送 provider、规模让 API 更贵、需要专用/微调模型、需要 SLA;并主动补一句成本(GPU、服务专长、维护)和「托管开源端点」这个中间档。</li>
+<li>「provider 挂了你的功能会怎样?」——考的是断路器 + 降级行为 + 隔离;错误答法是「加个 try/except 重试」就完事。</li>
+<li>「重试要注意什么?」——指数退避,别在 provider 过载时无脑重试把它锤死;配合断路器。</li>
+<li>「怎么知道是哪个功能在烧钱?」——每次调用打元数据(feature/tenant/model/cache),token 数入库,成本变可查询维度;按「每次成功交互成本」追。</li>
+<li>「一次 agent 请求中间某步错了,你怎么查?」——端到端 trace 面板摊开整条轨迹逐步看,这就是为什么可观测要从一开始内建。</li>
+<li>「主力模型降价一半,你改不改架构?」——重估被省钱妥协过的步骤 + 拆掉变成净负担的脚手架,但保持抽象灵活、继续盯每次交互成本;强调「模型选择是定期重估」。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞是扣分点):</strong></p>
+<ul>
+<li>别说「开源自托管<strong>一定</strong>更省钱」——只有规模足够大时才可能;小规模下托管 API 通常更划算,还免掉运维。</li>
+<li>别说「<strong>所有</strong>请求都该用最强模型」或「<strong>所有</strong>请求都该用最便宜模型」——routing 的整个意义就是分而治之。</li>
+<li>别把 fallback 等同于「加个重试」。重试只解决瞬时错;持续故障要断路器,无结果要降级行为,坏输出要校验回退——四件事不是一件。</li>
+<li>别说「上线后再加监控也来得及」——非确定系统没有可观测就是盲飞,出事无法归因,应从一开始内建。</li>
+<li>别把「API 降价」直接等于「成本下降」——规模上涨可能吃掉降价红利,仍要按每次交互成本监控。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>一个多步流程里,大多数请求很简单、少数很难。下列哪种做法最符合 model routing 的思路?</p>
+<details><summary>A. 全部用最强的 reasoning 模型,保证质量最高</summary>成本和延迟都被拉爆——简单请求根本不需要这档算力。这正是 routing 要避免的浪费。</details>
+<details><summary>B. 默认走能过质量线的最便宜模型,只把便宜模型过不了线的难例升级到强模型 ✅</summary>正确。routing 就是「给每步匹配刚好够用的能力」,常见路径省钱、尾部难例才付大模型的钱,并用 eval 验证便宜档确实过线。</details>
+<details><summary>C. 全部用最便宜的小模型,省到极致</summary>尾部难例会翻车,省下的钱以质量事故的形式加倍还回来。</details>
+<details><summary>D. 随机分配模型以均衡负载</summary>routing 依据的是任务难度与约束,不是随机;随机分配和质量线无关。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于生产 LLM 应用的可观测与成本,哪句最准确?</p>
+<details><summary>A. 只要保存一张月度总账单,就能定位是哪个功能在烧钱</summary>总账单只是一个数字,无法归因。要给每次调用打 feature/tenant/model/cache 元数据,成本才成为可查询维度。</details>
+<details><summary>B. 可观测可以等系统稳定后再加,前期先跑起来要紧</summary>非确定系统没有可观测就是盲飞,出问题无法归因;应从第一天内建。</details>
+<details><summary>C. 端到端追踪每次请求(prompt/检索/工具/输出/token/各阶段延迟/成本)+ 按每次成功交互成本归因,是把非确定系统变得可诊断、可控成本的基础 ✅</summary>正确。追踪让多步轨迹可摊开定位错误,元数据让成本可查询,「每次成功交互成本」把开销绑到价值。</details>
+<details><summary>D. 只要模型输出正确,就不需要记录中间的检索和工具调用</summary>中间步骤正是多步系统出错的地方;不记录就无法在 agent 轨迹里定位哪一步失败。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向(部署与可观测是工程实践,经典来源多在系统可靠性与 agent 工程侧):</p>
+<ul>
+<li><strong>Release It!</strong>(Michael T. Nygard)——稳定性模式的经典,超时、重试、<strong>断路器(Circuit Breaker)</strong>、隔离(Bulkhead)都出自这里,本课 fallback 一节的骨架。</li>
+<li><strong>"Circuit Breaker"</strong>(Martin Fowler, martinfowler.com)——断路器模式的权威短文,配合上一本读。</li>
+<li><strong>Site Reliability Engineering</strong>(Google SRE Book, O'Reilly)——可观测、SLO/错误预算、告警的一手参考,把「对要紧指标漂移告警」讲透。</li>
+<li><strong>OpenTelemetry</strong> 官方文档——分布式 tracing 的开放标准,端到端追踪落地时的实现基座。</li>
+<li><strong>"Building Effective Agents"</strong>(Anthropic 工程博客)——多步 agent 的工程取舍,含对可观测/轨迹追踪重要性的讨论。</li>
+<li>下一步:第 0027 课把「幻觉」这一要紧指标单独拆开——成因、评估与缓解,正是本课「对幻觉信号告警」背后要监控的东西。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>routing = 用能过线的最便宜模型、难例才升级;自托管只在合规/规模/能力/SLA 主导时才赢;fallback 先设计失败路径(退避重试+断路器+降级+校验);可观测 = 端到端追踪+抽样质检+告警,成本按 feature/tenant 归因、盯每次成功交互成本;降价把模型选择当定期重估、但保持架构灵活。</strong></p>
+<nav class="lesson-nav">
+<a href="0025-cost-latency-triangle.html">← 上一课:延迟-吞吐-成本三角</a>
+<a class="next" href="0027-hallucination.html">下一课:幻觉:成因、评估与缓解 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

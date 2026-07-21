@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0004 · 位置编码:从正弦到 RoPE</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第一部分 Transformer 精讲 · 第 0004 课</p>
+<h1>位置编码:从正弦到 RoPE</h1>
+<p class="lede">自注意力有一个「先天缺陷」:它根本不知道词的<strong>先后顺序</strong>。「狗咬人」和「人咬狗」在它眼里可能是同一件事。这节课把位置信息怎么补进去讲透——从原始 Transformer 的正弦编码,到今天几乎所有主流大模型(LLaMA、Qwen、DeepSeek)都在用的 <strong>RoPE(旋转位置编码)</strong>。这是面试里「位置编码细讲一下」的标准答法。</p>
+
+<div class="recall">
+<p>上节课(多头注意力)我们把 <span class="nowrap">$\operatorname{softmax}(QK^\top/\sqrt{d_k})V$</span> 并行成了 $h$ 个头。<strong>先别往下看,盯着这个公式想一想:如果我把输入序列的词序打乱,再打乱回来,这个公式算出的注意力权重会变吗?</strong>换句话说,公式里有任何一处用到了「谁在前、谁在后」吗?</p>
+</div>
+
+<h2>一、问题:注意力对顺序「视而不见」</h2>
+<p>答案是——公式里<strong>没有</strong>任何一处依赖位置。$QK^\top$ 只看两个词的内容向量点积,softmax 只做归一化,加权求和只按权重取值。如果你把输入 $X$ 的行(token)重新排列,输出也只是跟着同样地重排,内容的对应关系一点不变。这个性质叫<strong>置换等变(permutation-equivariant)</strong>。</p>
+<p>直觉后果:对纯注意力而言,「狗 咬 人」和「人 咬 狗」的 token 集合完全一样,它算不出「谁是主语、谁是宾语」。而 RNN 靠一步步递推天然带着顺序,CNN 靠卷积核的相对位置也带顺序——唯独注意力把顺序信息丢了。<strong>所以必须显式地把位置注入进去。</strong></p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">token 内容<br>$x_{\text{词}}$</div>
+  <div class="node">? 位置信息 ?<br>$x_{\text{位置}}$</div>
+  <div class="node good">带位置的表示<br>送入注意力</div>
+</div>
+<figcaption>模型需要的输入 = 「这个词是什么」+「它在第几位」。位置编码就是在补右边这一块。</figcaption>
+</figure>
+
+<h2>二、第一版答案:正弦/余弦绝对位置编码</h2>
+<p>原始 Transformer 的做法是:为每个位置 $pos$ 造一个和词向量等长的向量 $PE_{pos}$,<strong>直接加到</strong>词嵌入上。这个向量用一组不同频率的正弦、余弦函数生成:</p>
+
+$$PE_{(pos,\,2i)}=\sin\!\left(\frac{pos}{10000^{\,2i/d_{\text{model}}}}\right),\qquad PE_{(pos,\,2i+1)}=\cos\!\left(\frac{pos}{10000^{\,2i/d_{\text{model}}}}\right)$$
+<p class="formula-note">$pos$ 是位置序号,$i$ 是维度对的索引($0\le i&lt;d_{\text{model}}/2$)。低维($i$ 小)频率高、转得快,负责刻画近距离差异;高维频率低、转得慢,负责跨越长距离。多个频率叠在一起,像时钟的秒针 / 分针 / 时针,一起把「第几位」编成一个唯一的向量。</p>
+
+<p>为什么用三角函数而不是直接写个整数 $pos$?因为 $\sin/\cos$ 有界(不会随序列变长而数值爆炸),而且相邻位置的编码是平滑变化的,模型比较容易利用。但它有两个在面试里必须点出的<strong>局限</strong>:</p>
+<ul>
+<li><strong>缺乏相对位置</strong>:它编的是「绝对第几位」。而语言里真正重要的往往是<em>相对距离</em>——「这个形容词修饰的是前面第 2 个名词」。绝对编码要靠模型自己从两个绝对位置里「减」出相对关系,并不直接。</li>
+<li><strong>外推差</strong>:训练时只见过 $0\sim L$ 的位置组合。虽然 $\sin/\cos$ 对任意 $pos$ 都能算出数值,但模型从没学过如何使用那些更远位置的编码,推理时序列一旦变长,效果通常明显下滑。</li>
+</ul>
+
+<h2>三、RoPE 的核心思想:用「旋转」编码位置</h2>
+<p>RoPE(Rotary Position Embedding,旋转位置编码)换了个思路:不再把位置向量<strong>加</strong>到词向量上,而是把词向量按位置<strong>旋转</strong>一个角度。</p>
+<p>具体做法:把 query / key 向量每相邻两维看作一个二维平面上的点 $(x^{(2i)}, x^{(2i+1)})$,位置在 $m$ 的向量,就把这个二维点<strong>逆时针旋转 $m\theta_i$</strong>:</p>
+
+<dl class="keydef">
+<dt>RoPE 二维旋转</dt>
+<dd>$$\begin{pmatrix}x'^{(2i)}\\[2pt] x'^{(2i+1)}\end{pmatrix}=\underbrace{\begin{pmatrix}\cos m\theta_i & -\sin m\theta_i\\[2pt] \sin m\theta_i & \phantom{-}\cos m\theta_i\end{pmatrix}}_{R_m^{(i)}}\begin{pmatrix}x^{(2i)}\\[2pt] x^{(2i+1)}\end{pmatrix}$$</dd>
+<dd><em>整个 $d$ 维向量被切成 $d/2$ 个二维平面,第 $i$ 个平面的旋转频率为 $\theta_i=10000^{-2i/d}$。低维($i$ 小)$\theta$ 大转得快,高维转得慢——和正弦编码一样是「多尺度」的设计,只是从「相加」换成了「旋转」。</em></dd>
+</dl>
+
+<h3>为什么旋转能让点积「自动」变成相对位置?</h3>
+<p>这是 RoPE 最漂亮的地方,也是面试必考的一句「为什么」。旋转矩阵有一个关键性质:两个旋转的转置相乘,等于它们角度之差的旋转:</p>
+$$R_m^\top R_n = R_{n-m}$$
+<p class="formula-note">因为 $R_m^\top=R_{-m}$(转置 = 反向旋转),而两次旋转相加,角度相减为 $n-m$。</p>
+
+<p>于是,位置 $m$ 的 query 和位置 $n$ 的 key 做点积时:</p>
+$$\langle R_m q,\; R_n k\rangle=(R_m q)^\top(R_n k)=q^\top R_m^\top R_n\, k=q^\top R_{n-m}\, k$$
+<p class="formula-note">结果只依赖 $n-m$,也就是<strong>相对位置</strong>,绝对位置 $m$、$n$ 各自是多少反而被消掉了。</p>
+
+<p>这就是核心:<strong>RoPE 施加的是绝对位置的旋转,但注意力分数(点积)只依赖两个词的相对距离。</strong>相对位置不再需要模型费劲去「减」,而是由点积的数学结构自然导出。同时它<strong>不引入任何额外可学习参数</strong>,也几乎不增加计算量。</p>
+
+<h2>四、为什么 RoPE 利于长度外推</h2>
+<p>把上面两点串起来就懂了:</p>
+<ul>
+<li><strong>它编的是相对距离,不是绝对坐标。</strong>训练时模型学到的是「相隔 $k$ 的两个词该怎么互相关注」这类相对模式。只要相对距离 $k$ 在训练见过的范围内,即使整段序列被平移到更靠后的位置,注意力模式依然成立。绝对编码做不到这一点——换个绝对位置,加进去的向量就变了。</li>
+<li><strong>旋转带来自然的远程衰减。</strong>RoFormer 论文给出:随着相对距离增大,注意力分数的上界会逐渐衰减,符合「离得越远、关联通常越弱」的语言直觉,让模型对超长距离不至于乱抓。</li>
+</ul>
+<p>需要诚实说明:朴素 RoPE 在<em>远超</em>训练长度时同样会退化,并非「无限外推」。真正把上下文从几 K 拉到几十上百 K,靠的是在 RoPE 基础上的<strong>位置插值</strong>类方法(Position Interpolation、NTK-aware scaling、YaRN 等)——它们调整旋转频率或缩放位置,让训练学到的相对模式覆盖更长的范围。RoPE 的相对位置结构,正是这些外推技巧能生效的前提。</p>
+
+<h2>五、对比一句 AliBi</h2>
+<p>ALiBi(Attention with Linear Biases)是另一条为外推设计的路线,思路更「省事」:它<strong>完全不加位置向量、也不旋转</strong>,而是在注意力分数上直接减去一个与相对距离成正比的惩罚——离得越远,分数被压得越低。一句话对比:<strong>RoPE 靠「旋转 Q/K」把相对位置藏进点积;ALiBi 靠「按距离加线性惩罚」直接压低远处注意力。</strong>两者都比正弦绝对编码更擅长处理比训练更长的序列,主流大模型目前更多选择 RoPE。</p>
+
+<div class="implement">
+<p>把 RoPE 敲一遍最能记住「旋转」到底怎么落到代码上(注意:只作用于 Q、K,不作用于 V):</p>
+<pre><code>import torch
+
+def rope_tables(d, seq_len, base=10000.0):
+    # θ_i = base^{-2i/d},i = 0..d/2-1
+    i = torch.arange(0, d, 2).float()
+    theta = base ** (-i / d)                  # [d/2]
+    pos = torch.arange(seq_len).float()       # [L]
+    angles = torch.outer(pos, theta)          # [L, d/2],元素 = m * θ_i
+    return angles.cos(), angles.sin()
+
+def apply_rope(x, cos, sin):
+    # x: [L, d];把相邻两维当作一个二维平面来旋转
+    x_even, x_odd = x[..., 0::2], x[..., 1::2]           # 偶/奇维
+    x_rot_even = x_even * cos - x_odd * sin              # 旋转矩阵第一行
+    x_rot_odd  = x_even * sin + x_odd * cos              # 第二行
+    return torch.stack([x_rot_even, x_rot_odd], -1).flatten(-2)
+
+# 用法:q, k 先各自 apply_rope,再照常算 softmax(qk^T/√d)v;v 保持原样</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「Transformer 为什么必须要位置编码?去掉会怎样?」——自注意力置换等变,不加位置就区分不了词序,「狗咬人 / 人咬狗」变得一样。</li>
+<li>「正弦编码和 RoPE 有什么区别?」——正弦是<em>加</em>在输入上的<em>绝对</em>编码;RoPE 是<em>乘</em>在 Q/K 上的旋转,相对位置由点积自然导出。</li>
+<li>「RoPE 凭什么能表达相对位置?写一下核心。」——就答 $R_m^\top R_n=R_{n-m}$,所以 $\langle R_m q,R_n k\rangle$ 只依赖 $m-n$。这一步答出来基本就过了。</li>
+<li>「$\theta_i=10000^{-2i/d}$ 为什么这样设计?」——不同维度不同频率,低维转得快抓近距离、高维转得慢抓远距离,是多尺度编码;base(10000)可调,长上下文常调大。</li>
+<li>「RoPE 和 ALiBi 谁更适合长序列?」——都为外推而生;ALiBi 加距离惩罚更简单,RoPE 靠相对旋转 + 插值(PI/NTK/YaRN)扩展,主流模型多用 RoPE。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>RoPE 只旋转 <strong>Q 和 K</strong>,<strong>不</strong>旋转 V——位置信息要进的是「打分」环节,不是「取值」环节。</li>
+<li>正弦编码是<em>加</em>在词嵌入上、只在输入层一次;RoPE 是<em>乘</em>旋转、作用在每一层注意力的 Q/K 上。两者施加位置的方式和位置完全不同。</li>
+<li>别说「正弦编码根本没法算更长的位置」——它是连续函数,任意 $pos$ 都能算出数值,问题在于模型<em>没学过</em>怎么用,所以外推<em>效果差</em>,不是「算不出」。</li>
+<li>RoPE 作用的角度 $m\theta_i$ 仍是<strong>绝对</strong>位置;「相对位置」是在点积那一步才涌现出来的,别混为一谈。</li>
+<li>朴素 RoPE 不是「天生能无限外推」;超出训练长度太多同样退化,长上下文要靠插值/缩放技巧。绝对话术在面试里要留余地。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>为什么 Transformer 必须显式加入位置编码?</p>
+<details><summary>A. 因为词嵌入维度不够,装不下语义信息</summary>维度与位置无关,加大维度也补不出词序。</details>
+<details><summary>B. 因为 softmax 在长序列上会损失数值精度</summary>数值精度不是位置编码要解决的问题。</details>
+<details><summary>C. 自注意力是置换等变的,对输入顺序不敏感,不加位置就分不清词序 ✅</summary>正确。$QK^\top$ 只看内容点积,打乱 token 顺序输出只是跟着重排,内容对应不变——顺序信息被丢掉了,必须显式补入。</details>
+<details><summary>D. 因为 RNN 太慢,位置编码是为了加速注意力计算</summary>位置编码不改变计算量,和加速无关。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>RoPE 能让注意力分数依赖相对位置,根本原因是?</p>
+<details><summary>A. 旋转矩阵满足 $R_m^\top R_n=R_{n-m}$,于是 $\langle R_m q,R_n k\rangle$ 只依赖位置差 $m-n$ ✅</summary>正确。绝对旋转在点积里两两抵消,只剩相对距离,这正是 RoPE 的数学核心。</details>
+<details><summary>B. RoPE 给每个位置学习一个可训练的位置向量</summary>那是可学习绝对编码;RoPE 不引入额外可学习参数。</details>
+<details><summary>C. RoPE 把位置编码直接加到 V 上,让取值带上位置</summary>RoPE 只旋转 Q、K,不作用于 V。</details>
+<details><summary>D. RoPE 用更大的 embedding 维度来存储绝对坐标</summary>RoPE 不增加维度,靠旋转而非扩容编码位置。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Attention Is All You Need</strong>(Vaswani et al., 2017)——§3.5 正弦/余弦绝对位置编码的原始出处,本课第二节的公式即出自此。</li>
+<li><strong>RoFormer: Enhanced Transformer with Rotary Position Embedding</strong>(Su et al., 2021)——RoPE 的原始论文,旋转矩阵、$\theta_i=10000^{-2i/d}$ 与远程衰减性质都在其中。</li>
+<li><strong>Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation</strong>(Press et al., 2022)——ALiBi 的论文,可对照理解另一条外推路线。</li>
+<li>顺着深挖长上下文:Position Interpolation、NTK-aware scaling、YaRN 是在 RoPE 之上扩展上下文长度的代表方法。</li>
+<li>下一步:位置编码之外,Transformer block 里的残差、LayerNorm 与 FFN(第 0005 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>注意力对顺序无感,必须补位置;正弦编码是「加」在输入的绝对坐标,RoPE 是「旋转」Q/K,让点积 $q^\top R_{n-m}k$ 只依赖相对距离,因而更利于外推。</strong></p>
+<nav class="lesson-nav">
+<a href="0003-multi-head-attention.html">← 上一课:多头注意力</a>
+<a href="0005-residual-layernorm-ffn.html">下一课:残差、LayerNorm 与 FFN →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

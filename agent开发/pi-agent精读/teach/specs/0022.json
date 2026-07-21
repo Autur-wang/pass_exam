@@ -1,0 +1,84 @@
+{
+ "num": "0022",
+ "slug": "event-nesting-and-two-layers",
+ "title": "10 种事件的 4 层嵌套与两层事件",
+ "narrowTopic": "10 种 AgentEvent 如何组织成 Agent→Turn→Message→Tool 的 4 层嵌套生命周期,以及为什么内核只放 10 种、Session 层再扩展 7 种",
+ "analogySeed": "就像 Linux 内核里找不到\"蓝牙已连接\"的通知——内核只管进程调度和内存管理,蓝牙是上层的事;Agent 内核也只管生命周期的 10 种事件,上下文压缩、自动重试这些\"产品级体验\"是 Session 层的事",
+ "keyPoints": [
+  "Agent 内核定义 10 种 AgentEvent,它们不是扁平列表,而是 4 层嵌套的生命周期:第1层 Agent(agent_start/end)、第2层 Turn(turn_start/end)、第3层 Message(message_start/update/end)、第4层 Tool Execution(tool_execution_start/update/end)",
+  "每层都是\"开始→更新(×N)→结束\"的配对,事件数 2+2+3+3=10;只有第3、4层有 update(流式增量、工具进度),第1、2层只有 start/end",
+  "回忆第3章:一个 Turn = 一次模型调用 + 这次调用触发的所有工具执行;turn_start 到 turn_end 之间模型被调用恰好一次;若某 Turn 没有工具调用,就没有第4层嵌套",
+  "为什么分 4 层:不同消费者关心不同粒度——TUI 要逐 token 渲染所以订阅 message_update,Session 管理器只关心一轮结束没有所以只看 turn_end,嵌套让每种消费者在\"刚刚好\"的粒度上响应",
+  "Pi 不只有 Agent 层,上面还有产品会话层 AgentSession,它要处理内核里不存在的事:上下文压缩、自动重试、队列状态管理",
+  "AgentSession 用联合类型扩展事件:基础 10 种(agent_end 被重载增加 willRetry 字段)+ Session 新增 7 种(queue_update、compaction_start/end、auto_retry_start/end、session_info_changed、thinking_level_changed),共 17 种",
+  "判断一个事件该放内核还是 Session 的标准很简单:去掉它后内核还能正常运行,它就属于外层——这就是\"两层事件\"设计:内核只管生命周期,产品在上面按需扩展用户体验"
+ ],
+ "codeRefs": [
+  {
+   "desc": "AgentEvent 联合类型的完整定义:带\"第1层~第4层\"注释的 10 种事件(agent_start/end、turn_start/end、message_start/update/end、tool_execution_start/update/end)及其字段",
+   "cite": "教程 §二 / types.ts:413-428"
+  },
+  {
+   "desc": "展示 4 层嵌套关系的 ASCII 树:Agent 运行 → Turn 1(turn_start、Message 的 start/update×N/end、Tool Execution 的 start/update×N/end、turn_end)→ Turn 2 → agent_end",
+   "cite": "教程 §二 10种事件4层嵌套"
+  },
+  {
+   "desc": "AgentSessionEvent 联合类型的扩展说明块:基础 10 种(agent_end 重载 willRetry)+ Session 新增 7 种(queue_update / compaction_start/end / auto_retry_start/end / session_info_changed / thinking_level_changed)",
+   "cite": "教程 §七 / agent-session.ts:126-150"
+  }
+ ],
+ "designRationale": [
+  "为什么用 4 层嵌套而不是扁平列出 10 种事件:不同消费者关心不同粒度,嵌套让 TUI(逐 token)和 Session(整轮)各取所需,而不是每个消费者都从一堆同级事件里过滤",
+  "为什么每层统一\"开始→更新→结束\"配对:给出一致的生命周期心智模型,10 种看着不少但规律清晰,只有需要流式/进度的第3、4层才有 update",
+  "为什么把 7 种产品事件放 Session 层而非内核:compaction/retry/queue 都是\"产品级体验\",和\"Agent 内核逻辑\"无关——去掉它们内核仍能跑,所以属于外层",
+  "为什么用联合类型扩展而不是往内核事件里塞:保持内核纯粹(只定义 4 层生命周期),产品层用类型叠加按需扩展,内核不被上层需求污染",
+  "类比:就像 Linux 内核里找不到\"蓝牙已连接\"——内核只管调度和内存,上层功能不该下沉进内核"
+ ],
+ "quiz": [
+  {
+   "stem": "Agent 内核的 10 种 AgentEvent 是按什么方式组织的?",
+   "options": [
+    "按字母顺序排列的一个扁平列表",
+    "按事件是否携带 message 字段分成两大类",
+    "按重要程度分成 3 个优先级档位",
+    "4 层嵌套生命周期(Agent→Turn→Message→Tool Execution),每层\"开始→更新→结束\"配对"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。4 层嵌套,事件数 2+2+3+3=10。延伸:如果某个 Turn 没有工具调用,它就没有第4层嵌套(tool_execution_* 那组)。",
+   "noMsg": "数一数每层各有几个事件,再看它们名字的后缀(_start/_update/_end)有什么共同规律——这提示了组织方式。"
+  },
+  {
+   "stem": "为什么要把事件分成 4 层,而不是把它们全部拍平成同级?",
+   "options": [
+    "为了让代码看起来更整齐",
+    "TypeScript 的联合类型强制要求分层",
+    "不同消费者关心不同粒度:TUI 订阅 message_update 逐 token 渲染,Session 只看 turn_end",
+    "为了减少事件的总数量"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。4 层让每种消费者在\"刚刚好\"的粒度上响应。延伸:一个 Turn = 一次模型调用 + 它触发的所有工具执行,turn_start 到 turn_end 之间模型恰好被调一次。",
+   "noMsg": "想想两个不同的消费者:逐 token 渲染文字的 TUI,和只关心\"这一轮结束没有\"的 Session 管理器——它们需要的颗粒度一样吗?"
+  },
+  {
+   "stem": "判断一个事件(如 compaction_start)应该放在 Agent 内核层还是 Session 层,标准是?",
+   "options": [
+    "去掉它之后内核还能正常运行,它就属于外层(Session)",
+    "看它是否携带 message 字段",
+    "看它的名字里有没有 start/end",
+    "所有 start/end 都在内核,其余都在 Session"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。内核只管生命周期,产品级体验(压缩/重试/队列)放 Session,用联合类型扩展。延伸:就像 Linux 内核里找不到\"蓝牙已连接\"——那是上层的事。",
+   "noMsg": "看看 Session 新增的 7 种事件都是些什么性质的事(压缩、重试、队列)——没有它们,Agent 内核的核心循环还转得动吗?"
+  }
+ ],
+ "_chapter": "第7章",
+ "_chapterCN": "事件驱动 —— Agent 的神经系统",
+ "prevFile": "0021-why-events-and-sync-barrier.html",
+ "prevNum": "0021",
+ "nextFile": "0023-text-delta-journey.html",
+ "nextNum": "0023",
+ "crumbLabel": "第 7 章 · 事件驱动",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第7章-事件驱动-Agent的神经系统.md",
+ "filename": "0022-event-nesting-and-two-layers.html"
+}

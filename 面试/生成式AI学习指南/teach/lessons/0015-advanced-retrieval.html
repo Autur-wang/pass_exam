@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0015 · 进阶检索:contextual retrieval、late chunking、HyDE、路由</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第五部分 RAG · 第 0015 课</p>
+<h1>进阶检索:contextual retrieval、late chunking、HyDE、路由</h1>
+<p class="lede">上一课搭好了 RAG 的基础管线,但「切块 → 嵌入 → 向量检索」这条朴素路线在真实语料上很快会撞墙。这节课把面试官在 RAG 环节最爱追的一串进阶题一次讲透:<strong>「contextual retrieval 解决什么」「它和 late chunking 有何不同」「HyDE / query rewriting 什么时候帮到检索」「metadata filtering 怎么提检索」「跨多数据源怎么路由」「表格 / PDF / 图像怎么做 RAG」</strong>(源:AI 工程师题库 Q45、Q46、Q47、Q48、Q52、Q51)。学完你能按「在管线的哪一段下手」把这些技术排进一张地图,而不是一堆孤立名词。</p>
+
+<div class="recall">
+<p>上一课我们把 RAG 拆成:切块 → 嵌入 → 向量检索 → 塞进 prompt → 生成。现在做个检索式热身。<strong>先别往下看:把一份财报按每 200 字硬切,其中「营收同比增长 3%」独立成一块、单独嵌入。用户问「Acme 公司 2023 第三季度营收表现如何?」——这一块的向量里,凭什么会带上「Acme」和「Q3」的信号,让检索器找到它?</strong></p>
+</div>
+
+<h2>一、一张地图:在管线的哪一段下手</h2>
+<p>进阶检索技术看着零散,其实都在回答同一个问题:<strong>基础管线里哪一步在丢信息,我在哪一步补回来。</strong>本课六道题正好落在三个位置——记住这张地图,面试时就能有条理地展开,而不是背名词。</p>
+
+<div class="trio">
+  <div class="cell"><strong>① 索引 / 块端</strong><br>块被切碎后脱离了上下文<br><em>contextual retrieval · late chunking · metadata filtering</em></div>
+  <div class="cell"><strong>② query 端</strong><br>用户的问法和文档措辞对不上<br><em>query rewriting · HyDE</em></div>
+  <div class="cell"><strong>③ 路由 / 摄入端</strong><br>多源异构,单一索引不够用<br><em>query routing · 表格 / PDF / 图像抽取</em></div>
+</div>
+
+<h2>二、块脱离上下文:contextual retrieval 与 late chunking</h2>
+<p><strong>直觉先行。</strong>回到热身题:标准分块把长文档切成互不相干的小块,每块<em>单独</em>嵌入。「营收同比增长 3%」这一块一旦离开原文,就丢了「哪家公司、哪个季度、什么口径」。它的向量里没有 Acme、没有 Q3,于是用户问 Acme Q3 时,这块很可能沉在检索结果之外。这就是分块的原罪:<strong>切得越碎,单块越缺上下文,检索越容易漏。</strong>两条技术路线都在治这个病,思路却相反。</p>
+
+<h3>路线 A:contextual retrieval——给块补一段话</h3>
+<p>Anthropic 提出的做法很直白:在嵌入 / 索引<em>之前</em>,让一个模型为每个块生成一小段「定位描述」,把这块放回全文语境里,再前置到块文本一起嵌入、并一起喂给 BM25 关键词索引。</p>
+<pre><code>原始块:  "营收同比增长 3%,主要由订阅业务拉动。"
+
+加上下文后:
+"本段出自 Acme 公司 2023 年第三季度财报,讨论其季度营收。
+ 营收同比增长 3%,主要由订阅业务拉动。"</code></pre>
+<p>现在「Acme」「2023 Q3」都进了这块的向量和关键词索引,检索自然对得上。Anthropic 报告这一手<strong>显著降低了 top-20 检索失败率</strong>(把该被召回却没被召回的比例压下来),再叠加 BM25 + rerank 效果更好。代价是<strong>一次性的摄入成本</strong>:每个块都要过一次模型来生成描述——用 prompt caching 复用整篇文档的上下文可以明显缓解。</p>
+
+<h3>路线 B:late chunking——先整篇编码,再切</h3>
+<p>Jina AI 提出的 late chunking 换了个思路:<em>不加任何文本</em>。它用一个长上下文 embedding 模型把<strong>整篇文档一次性编码</strong>,拿到每个 token 的 embedding——这些 token embedding 在编码时已经彼此「看过」全文;然后才按块边界,把落在每块内的 token embedding 池化(pooling)成一个块向量。于是每个块向量<strong>天生就带着全文语境</strong>,不需要额外描述文本。</p>
+
+<dl class="keydef">
+<dt>contextual retrieval vs. late chunking</dt>
+<dd><strong>何时介入:</strong>前者在嵌入<em>前</em>改写块文本(加显式描述),后者把上下文融进<em>嵌入过程本身</em>(先整篇编码后池化)。</dd>
+<dd><strong>代价:</strong>contextual retrieval 每块多一次 LLM 调用,较贵(prompt caching 缓解);late chunking 是纯嵌入期技术,<em>无额外 LLM 调用</em>,更便宜,但受限于 embedding 模型的上下文窗口上限。</dd>
+<dd><strong>共同点:</strong>两者都在治「块脱离上下文」这同一个病。选哪个取决于 embedding 模型的上下文上限与你的摄入预算——而且都要在<strong>你自己的检索 eval</strong> 上验证,别默认哪个更好。</dd>
+</dl>
+
+<h2>三、query 端:query rewriting 与 HyDE</h2>
+<p><strong>直觉先行。</strong>块修好了,问题也可能出在用户这一端。真实 query 常常又短、又含糊、还跟文档用词对不上:用户打「报销咋弄」,文档里写的是「员工费用报销流程管理规定」。dense 检索靠语义靠近取胜,但太短、太口语的 query 语义信号弱,容易检不准。于是在检索<em>前</em>先加工一下 query。</p>
+<ul>
+<li><strong>query rewriting(改写):</strong>重构或扩展 query——修错别字、补同义词、把「A 和 B 分别怎么样」这类多部分问题拆成几个子查询分别检索。</li>
+<li><strong>HyDE(Hypothetical Document Embeddings,假想文档嵌入):</strong>让模型先<em>草拟一个假想答案</em>(哪怕内容有错也没关系),然后嵌入这个假想答案去检索——而不是嵌入原始问题。</li>
+</ul>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">短 / 含糊 query</div>
+  <div class="arrow">→</div>
+  <div class="node">LLM 草拟<br>一段「假想答案」</div>
+  <div class="arrow">→</div>
+  <div class="node">嵌入<br>假想答案</div>
+  <div class="arrow">→</div>
+  <div class="node">向量检索</div>
+  <div class="arrow">→</div>
+  <div class="node good">命中真实段落</div>
+</div>
+<figcaption>HyDE 的赌注:一段完整的伪答案,在 embedding 空间里往往比一个简短的问题更靠近真实段落——「答案长得像答案」。</figcaption>
+</figure>
+
+<p>HyDE 为什么可能有效?因为向量检索本质是比「你的向量」和「文档向量」的距离,而<strong>一段完整的伪答案通常比一个简短问题更接近真实答案段落的写法</strong>。它对<em>口语化 / 含糊的 query</em> 和<em>词汇失配(vocabulary mismatch)的语料</em>最有帮助。但代价也实在:多一次 LLM 调用的延迟与成本,还有<strong>跑题风险</strong>——假想答案一旦编偏,会把检索带向错误方向。所以 HyDE 不是默认开关,<strong>必须在自己的检索 eval 上量化它到底提没提召回</strong>,再决定用不用。</p>
+
+<h2>四、metadata filtering:语义相似还不够</h2>
+<p><strong>直觉先行。</strong>光靠语义相似会犯一类错:用户问「2024 年的休假政策」,2019 年那份旧政策在语义上也高度相似,照样被召回——但那是<em>错的</em>答案。语义模型不懂「过期了」「你无权查看」。</p>
+<p>metadata filtering 用<strong>结构化字段</strong>(日期、作者、文档类型、部门、权限标签……)在向量检索前后限制候选集,让生成模型只看得到「合格」的段落。摄入时给每个块挂上丰富元数据,查询时把「元数据过滤 + 向量查询」组合起来——多数向量库原生支持这种带过滤条件的检索。</p>
+<dl class="keydef">
+<dt>metadata filtering 带来什么</dt>
+<dd><strong>提精度:</strong>直接筛掉陈旧的、越界的段落,不让它们参与排序。</dd>
+<dd><strong>支持约束:</strong>时效性(只看今年)、<strong>权限控制</strong>(只看你有权访问的文档)——后者是企业级 RAG 的硬需求,不是可选装饰。</dd>
+<dd><strong>省上下文:</strong>把不该出现的内容挡在门外,少浪费 token。</dd>
+</dl>
+<p>它是<strong>最便宜、杠杆最高的升级之一</strong>:实现简单,却同时解决了相关性和安全性两件事。</p>
+
+<h2>五、路由端:多源 query routing 与异构文档</h2>
+<p><strong>直觉先行。</strong>现实系统里往往不止一个语料:产品文档、代码库、工单系统、SQL 数据库……单一索引很少对所有 query 都合适。「上个月华东区退款总额是多少?」该去查 SQL,对着向量库做语义检索只会返回一堆「关于退款的文章」而算不出数。</p>
+<p><strong>query routing(查询路由):</strong>放一个路由器,先给 query 分类,再送到合适的数据源(有时扇出到多个源、再合并结果)。路由器可以用规则、轻量分类器、或直接让一个 LLM 判断该命中哪个工具 / 索引。这一步正是 <strong>RAG 通向 agentic 检索的边界</strong>——模型开始自己「决定去哪找」(下一课 0016 会顺着这条线讲 agentic RAG)。</p>
+<p>好处:提精度、让每个源用最适合它的检索法(SQL 走结构化查询、文档走向量、代码走符号检索)。代价:系统复杂度上升,还有<strong>误路由</strong>风险——路由错了,后面全错。所以要<strong>记录每次路由决策并持续评估</strong>路由准确率。</p>
+
+<h3>异构文档:表格、PDF、图像怎么做 RAG</h3>
+<p>这题的答案不在「用什么花哨的检索算法」,而在<strong>摄入(ingestion)质量——抽取这一步主导一切</strong>。核心心法一句话:<strong>垃圾抽取 = 垃圾检索(garbage extraction, garbage retrieval)。</strong>把内容正确解析出来,比后面怎么检索重要得多。</p>
+<ul>
+<li><strong>PDF:</strong>用布局感知(layout-aware)的抽取,保住标题层级、栏目、阅读顺序——别把双栏排版读成一锅乱码。</li>
+<li><strong>表格:</strong>存成结构化的行 / 单元格,保留行列关系;把表格拍平成一段散文,数字和表头就对不上了。</li>
+<li><strong>扫描件 / 图像页:</strong>先过 OCR 或视觉模型,把像素变成文本再进管线。</li>
+<li><strong>多模态:</strong>可以把图和文嵌入到一个共享向量空间;或者更稳妥地——对图 / 表<em>生成文本描述</em>,再对描述做检索。</li>
+</ul>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「contextual retrieval 和 late chunking 有什么区别、各自代价?」——一个嵌入前加描述文本(贵,每块一次 LLM 调用),一个纯嵌入期整篇编码后池化(便宜,受上下文窗口限);别答成同一个东西。</li>
+<li>「HyDE 什么时候反而<em>伤</em>检索?」——需要精确关键词 / 实体匹配时,假想答案容易跑题带偏,不如 BM25;含糊 / 词汇失配的 query 才是它的主场。</li>
+<li>「metadata filtering 是在向量检索<em>前</em>还是<em>后</em>做?」——pre-filter(先筛再搜,候选变小但可能漏)与 post-filter(先搜再筛,可能筛完不够 k 个)各有取舍,答得出这层说明你真用过。</li>
+<li>「多个数据源怎么路由?路由错了怎么办?」——规则 / 分类器 / LLM 三档路由器;记录决策、评估路由准确率、留降级兜底。</li>
+<li>「PDF 里的表格怎么做 RAG?」——重点砸在结构化抽取,而不是检索算法;引出「垃圾抽取 = 垃圾检索」。</li>
+<li>顺势把话题推向 agentic RAG:「如果让模型自己决定检不检索、检几轮呢?」(→ 第 0016 课)</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(凡是绝对化的说法,面试里都要给反例):</strong></p>
+<ul>
+<li>别说「contextual retrieval <strong>一定</strong>比 late chunking 好」——前者贵(逐块 LLM 调用),后者便宜但受 embedding 模型上下文上限约束;按预算与语料选,并在自己的 eval 上验。</li>
+<li>别说「HyDE <strong>总能</strong>提召回」——对需要精确关键词 / 实体匹配的查询,假想答案可能跑题反而伤检索,BM25 有时更靠谱。</li>
+<li>别把 metadata filtering 当「锦上添花」——它是<strong>企业级权限控制的必需项</strong>,不是可选装饰。</li>
+<li>别把 query routing 当银弹——它增加复杂度,误路由会让下游全盘出错;务必记录并评估路由决策。</li>
+<li>别以为「多模态 RAG = 把图片直接丢进向量库就行」——摄入 / 抽取质量才主导结果,垃圾抽取 = 垃圾检索。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>contextual retrieval 与 late chunking 最本质的区别是?</p>
+<details><summary>A. 前者用关键词检索,后者用向量检索</summary>都以向量检索为主;contextual retrieval 还会一并喂 BM25,但这不是二者的本质区别。</details>
+<details><summary>B. 前者在嵌入前给每块加一段模型生成的上下文描述文本;后者不加文本,靠整篇编码后再池化成块向量 ✅</summary>正确。一个改写块文本(需额外 LLM 调用、较贵),一个把上下文融进嵌入过程本身(纯嵌入期、更便宜但受上下文窗口限)。</details>
+<details><summary>C. 前者只能用于 PDF,后者只能用于纯文本</summary>两者都不限文档类型,与文件格式无关。</details>
+<details><summary>D. late chunking 需要给每个块单独调用一次 LLM</summary>恰恰相反——late chunking 不做额外 LLM 调用,「逐块调 LLM」是 contextual retrieval 的代价。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 HyDE,下列哪句最准确?</p>
+<details><summary>A. HyDE 直接把用户的原始问题嵌入去检索,省掉生成步骤</summary>不对,那是普通 dense 检索;HyDE 的关键正是先生成一段假想答案再嵌入。</details>
+<details><summary>B. HyDE 先让模型草拟一段假想答案再嵌入它,因为完整伪答案在向量空间常比简短问题更近真实段落;但对精确匹配的查询可能跑题 ✅</summary>正确。它对口语化 / 词汇失配的 query 最有用,代价是额外调用与跑题风险,须在 eval 上量化。</details>
+<details><summary>C. HyDE 通过给每个块挂元数据来过滤陈旧文档</summary>那是 metadata filtering,不是 HyDE。</details>
+<details><summary>D. HyDE 保证一定能提高召回率</summary>「保证一定」是幻觉信号;精确匹配场景它可能反伤检索,必须实测。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向(均为真实存在的来源):</p>
+<ul>
+<li><strong>Anthropic 工程博客:「Introducing Contextual Retrieval」</strong>——contextual retrieval 的原始出处,含「加上下文描述 + BM25 + rerank」的做法与降低检索失败率的报告。</li>
+<li><strong>Jina AI:late chunking</strong>——其官方博客与论文《Late Chunking: Contextual Chunk Embeddings Using Long-Context Embedding Models》,讲「整篇编码后再池化成块向量」。</li>
+<li><strong>HyDE 原论文</strong>:Gao et al.,《Precise Zero-Shot Dense Retrieval without Relevance Labels》(2022)——假想文档嵌入的提出。</li>
+<li><strong>RAG 原论文</strong>:Lewis et al.,《Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks》(2020),以及综述《Retrieval-Augmented Generation for Large Language Models: A Survey》(2023)——回顾进阶检索在整个 RAG 图景中的位置。</li>
+<li>动手方向:DeepLearning.AI × Chroma 的短课「Advanced Retrieval for AI」——rerank、hybrid search 与检索 eval 的实操。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>进阶检索按「在哪段补信息」分三处——索引端(contextual retrieval 加描述 / late chunking 整篇编码 / metadata 过滤)、query 端(rewriting / HyDE)、路由端(query routing / 结构化抽取);没有银弹,一切都要在自己的检索 eval 上验。</strong></p>
+<nav class="lesson-nav">
+<a href="0014-rag-pipeline.html">← 上一课:RAG 基础管线</a>
+<a class="next" href="0016-agentic-rag-graphrag.html">下一课:Agentic RAG 与 GraphRAG →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

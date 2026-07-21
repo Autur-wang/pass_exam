@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0013 · 思考档位:统一枚举 + 各家映射表</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 4 章 · 模型调用 ›
+  <a href="./0012-translator-five-steps-and-event-protocol.html">上一课</a> ›
+  <strong>Lesson 0013</strong>
+</div>
+
+<p class="kicker">Lesson 0013 · 第 4 章 模型调用</p>
+<h1>思考档位:统一枚举 + 各家映射表</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们拆开了翻译器的「五步流水线」和 12 种统一事件协议——那是<strong>处理响应</strong>的规则。
+  这一课回到<strong>发起请求</strong>这一侧,看 Pi 怎么把"让模型深度思考"这件事,从三种完全不同的 Provider 方言,
+  统一成一个上层只需说一句 <code>reasoning: "high"</code> 的干净接口。
+</div>
+
+<div class="recall">
+  🔁 <strong>先回忆上一课</strong>:翻译器把各家原始响应统一翻译成 12 种事件,上层永远只消费同一种格式——这是「响应方向」的统一。
+  这一课要看的是「请求方向」的对称问题:上层发指令时,又是怎么被统一的?
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 说清楚 <code>stream()</code> 和 <code>streamSimple()</code> 的分工区别,
+  并用"统一枚举 + 各家映射表"这一套设计法,同时解释思考级别<strong>和</strong>缓存控制两个看似不相关的功能——
+  它们其实是同一个设计模式的两次应用。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:一个五级思考旋钮</b>
+  想象一台万能遥控器,旋钮上刻着 <code>off → minimal → low → medium → high → xhigh</code> 六档。
+  你——上层调用者——只管把旋钮拧到 <b>high</b>,不用管你家到底是 Anthropic 电视、OpenAI 音响还是 Google 空调。
+  旋钮背后的翻译器自己查一张表,把"high"换成 Anthropic 要的 <code>budget_tokens</code>、
+  OpenAI 要的 <code>reasoning_effort</code>、Google 要的 <code>thinkingConfig</code>。
+  <b>你只需要会拧旋钮,不需要会说三门外语。</b>
+</div>
+
+<h2>1 · 为什么有 stream() 和 streamSimple() 两个版本?</h2>
+<p>
+  Agent Loop 实际调用的不是 <code>stream()</code>,而是 <code>streamSimple()</code>。为什么要分两层?
+</p>
+<table class="bd">
+  <thead><tr><th>版本</th><th>定位</th><th>做什么</th></tr></thead>
+  <tbody>
+    <tr><td><code>stream()</code></td><td>底层入口</td><td>只做"查表 + 派活":根据 <code>model.api</code> 查到对应翻译器,把工作派下去,不管思考级别翻译</td></tr>
+    <tr><td><code>streamSimple()</code></td><td>便捷层</td><td>在 <code>stream()</code> 之上包一层语法糖:自动处理 <code>reasoning</code> 翻译、clamp 回退、自动调整 <code>maxTokens</code>,再调用底层 <code>stream()</code></td></tr>
+  </tbody>
+</table>
+<p>Agent Loop 使用 <code>streamSimple()</code> 的典型代码:</p>
+<pre><span class="ln">1</span><span class="key">const</span> stream = <span class="fn">streamSimple</span>(model, context, { reasoning: <span class="str">"high"</span> });
+<span class="ln">2</span><span class="cm">// ↑ 告诉它"用高级别思考",streamSimple 会自动翻译成各 Provider 的具体参数</span>
+<span class="ln">3</span>
+<span class="ln">4</span><span class="key">for</span> <span class="key">await</span> (<span class="key">const</span> event <span class="key">of</span> stream) {
+<span class="ln">5</span>  <span class="cm">// 事件会按顺序到达:</span>
+<span class="ln">6</span>  <span class="cm">// start → thinking_start/delta/end → text_start/delta/end → done</span>
+<span class="ln">7</span>  <span class="key">switch</span> (event.<span class="fn">type</span>) {
+<span class="ln">8</span>    <span class="key">case</span> <span class="str">"text_delta"</span>:
+<span class="ln">9</span>      <span class="cm">// 文字增量,显示到终端</span>
+<span class="ln">10</span>      <span class="key">break</span>;
+<span class="ln">11</span>    <span class="key">case</span> <span class="str">"toolcall_end"</span>:
+<span class="ln">12</span>      <span class="cm">// 模型要调工具,拿到完整的工具调用信息</span>
+<span class="ln">13</span>      <span class="key">break</span>;
+<span class="ln">14</span>    <span class="key">case</span> <span class="str">"done"</span>:
+<span class="ln">15</span>      <span class="cm">// 本轮模型调用结束,看 stopReason 决定是否继续循环</span>
+<span class="ln">16</span>      <span class="key">break</span>;
+<span class="ln">17</span>    <span class="key">case</span> <span class="str">"error"</span>:
+<span class="ln">18</span>      <span class="cm">// 出错了(网络超时、API错误等),errorReason 是 "error" 或 "aborted"</span>
+<span class="ln">19</span>      <span class="key">break</span>;
+<span class="ln">20</span>  }
+<span class="ln">21</span>}
+</pre>
+<cite>🔎 出处:教程第4章 §三 / compat.ts:258-268(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第4章-模型调用-一行代码驾驭多个模型.md</code>)。</cite>
+<div class="why">
+  <b>为什么要分两层?</b> 底层 <code>stream()</code> 保持纯净,只做路由——这样它的行为始终可预测、可测试。
+  便捷层 <code>streamSimple()</code> 把"语法糖"(查表、clamp、调 maxTokens)集中在一处,
+  让最常见的调用场景一行代码搞定,又不会把这些"便利逻辑"污染进底层的核心派活逻辑。
+  实际开发中 <code>streamSimple</code> 是常用入口,直接用 <code>stream</code> 需要自己处理很多翻译细节。
+</div>
+
+<h2>2 · 三家方言:思考参数完全不同</h2>
+<p>不同 Provider 对"让模型深度思考"这件事,概念和参数完全不同:</p>
+<pre><span class="ln">1</span><span class="cm">// Anthropic:给一个 token 预算,让模型在这个预算内思考</span>
+<span class="ln">2</span>params.thinking = { type: <span class="str">"enabled"</span>, budget_tokens: <span class="sys">16384</span> };
+<span class="ln">3</span>
+<span class="ln">4</span><span class="cm">// OpenAI:给一个努力程度(low/medium/high)</span>
+<span class="ln">5</span>params.reasoning_effort = <span class="str">"high"</span>;
+<span class="ln">6</span>
+<span class="ln">7</span><span class="cm">// Google:用 thinkingConfig 配置</span>
+<span class="ln">8</span>config.thinkingConfig = { includeThoughts: <span class="key">true</span>, thinkingLevel: <span class="str">"high"</span> };
+</pre>
+<cite>🔎 出处:教程第4章 §四 / 思考参数三家方言。</cite>
+<p>
+  甚至 Anthropic 自己都有两种模式——新版模型用"自适应思考"(模型自己决定思考多少),
+  旧版模型用"预算思考"(给固定 token 上限)。三家参数名不同、语义粒度不同,上层代码如果直接暴露这些原生参数,
+  每接一个新模型就要多学一门外语。
+</p>
+
+<h2>3 · Pi 怎么统一:ThinkingLevel 五级刻度 + 映射表</h2>
+<p>Pi 定义了一套统一的思考级别枚举,每一级都标注了 token 上限:</p>
+<pre><span class="ln">1</span>  off    minimal    low    medium    high    xhigh
+<span class="ln">2</span>  │        │         │       │        │        │
+<span class="ln">3</span> 不思考  1024 tk   2048 tk  8192 tk  16384 tk  模型最大值
+</pre>
+<cite>🔎 出处:教程第4章 §四 / ThinkingLevel 五级刻度。</cite>
+<p>
+  上层代码只需说 <code>reasoning: "high"</code>,翻译器自己查表翻译成各 Provider 的具体参数。
+  <strong>每个 <code>Model</code> 对象自带一个 <code>thinkingLevelMap</code>(翻译表)</strong>,
+  声明"我这台模型,每个级别对应什么参数"——这就是旋钮背后的那张查表卡片。
+</p>
+<p>
+  如果请求的级别模型不支持(比如请求 <code>xhigh</code> 但只支持到 <code>high</code>),
+  <code>clampThinkingLevel()</code> 函数做回退——<strong>先向上找,找不到再向下找</strong>。
+  <code>streamSimple()</code> 就是帮你自动完成这套翻译的便捷函数:查表 + clamp + 调整 maxTokens,然后调用底层 <code>stream()</code>。
+</p>
+<div class="why">
+  <b>为什么用"统一枚举 + 映射表",而不是"取所有 Provider 的交集"?</b>
+  取交集的话,最终只能保留所有 Provider 都支持的档位——很可能只剩 <code>off</code>,太受限。
+  而"暴露每家原生参数"又会让上层代码记住 20 种参数名。
+  映射表两头讨好:每个 Model 自带 <code>thinkingLevelMap</code>,上层只说语义(<code>high</code>),
+  底层查表翻译成机制(<code>budget_tokens: 16384</code> 之类)——比交集灵活,比暴露原生参数简洁。
+</div>
+<div class="tradeoff">
+  🔑 <b>为什么 clamp 回退时先向上找?</b> 思考更多通常比思考更少安全——请求高档位说明用户认为这个任务需要更深的推理,
+  模型不支持时,宁可给它一个更高的可用档位,也不要悄悄降级到一个"想得不够"的档位。找不到更高的,才退而求其次向下找。
+</div>
+
+<h2>4 · 同款套路的第二次应用:缓存控制</h2>
+<p>
+  Pi 把缓存控制也抽象成三个语义级别:<code>type CacheRetention = "none" | "short" | "long"</code>。
+  上层只说"我要 long 缓存",翻译器自己翻译成各家的具体标记方式——这和 ThinkingLevel 是<strong>同一种"统一枚举 + 各家映射表"的套路</strong>,
+  但四家对"怎么标记不变内容"这件事,思路完全不同:
+</p>
+<table class="bd">
+  <thead><tr><th>Provider</th><th>none</th><th>short</th><th>long</th><th>打点位置</th></tr></thead>
+  <tbody>
+    <tr><td>Anthropic</td><td>不打标记</td><td><code>cache_control: {type:"ephemeral"}</code>(默认 5 分钟 TTL)</td><td>加 <code>ttl:"1h"</code></td><td>system 末尾 + 最后一个 tool + 最后一条 user message</td></tr>
+    <tr><td>Bedrock</td><td>不插节点</td><td>插入独立对象 <code>{cachePoint:{type:DEFAULT}}</code></td><td>加 <code>ttl:ONE_HOUR</code></td><td>system 块后面 + 最后一条消息后面</td></tr>
+    <tr><td>OpenAI Responses</td><td>不发 cache key</td><td>发送 <code>prompt_cache_key: sessionId</code></td><td>加 <code>prompt_cache_retention:"24h"</code></td><td>不打点——按 session key 自动匹配前缀</td></tr>
+    <tr><td>OpenAI 兼容(DeepSeek/Qwen 等)</td><td>不打标记</td><td>按 Anthropic 风格打 <code>cache_control</code></td><td>加 <code>ttl:"1h"</code>(如支持)</td><td>复用 Anthropic 的三处策略</td></tr>
+  </tbody>
+</table>
+<cite>🔎 出处:教程第4章 §五 / 缓存控制四家对照表。</cite>
+<p>
+  四家的思路可以对应成四种日常动作:Anthropic 像"贴便签"——在原内容上附加一个标签;
+  Bedrock 像"插路标"——插入一个独立、不含业务数据的占位对象;
+  OpenAI 原生像"按会员卡号查记录"——你不打标记,只报一个 key,后端自己按前缀匹配;
+  OpenAI 兼容厂商则直接抄 Anthropic 的便签协议。
+</p>
+<div class="why">
+  <b>为什么缓存也要走"统一枚举 + 各家映射表"?</b> 这是"语义统一,实现分散"的又一次应用:
+  <code>cacheRetention</code> 描述"做什么"(要长期缓存),各家的映射表描述"怎么做"(贴便签/插路标/按卡号查)。
+  语义接口与机制接口分离,上层代码不用关心自己在跟哪家 Provider 打交道。
+</div>
+
+<div class="diagram">"统一枚举 + 各家映射表" —— 同一套设计法的两次应用
+
+     语义层(上层只说这个)         机制层(各家翻译表管这个)
+  ┌─────────────────────┐      ┌─────────────────────────┐
+  │ reasoning: "high"    │ ──▶  │ Anthropic: budget_tokens │
+  │ (ThinkingLevel 五级) │      │ OpenAI: reasoning_effort │
+  │                       │      │ Google: thinkingConfig   │
+  ├─────────────────────┤      ├─────────────────────────┤
+  │ cacheRetention:"long"│ ──▶  │ Anthropic: 贴 cache_control│
+  │ (none/short/long)     │      │ Bedrock: 插 cachePoint    │
+  │                       │      │ OpenAI: 发 cache_key      │
+  └─────────────────────┘      └─────────────────────────┘
+        clampThinkingLevel():请求档位不支持时,先向上找,找不到再向下
+</div>
+
+<h2>5 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① stream() 和 streamSimple() 的核心区别是?</p>
+    <button class="opt">两者完全相同,只是名字不一样</button>
+    <button class="opt">stream() 负责处理思考级别,streamSimple() 反而不处理</button>
+    <button class="opt">stream() 是底层只做查表派活,streamSimple() 在其上加了自动思考级别翻译 + clamp + 调 maxTokens</button>
+    <button class="opt">streamSimple() 运行更慢所以不推荐用</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② Pi 为什么用"统一枚举 + 各家映射表",而不是"取所有 Provider 的交集"来做思考级别?</p>
+    <button class="opt">取交集可能只剩 off 太受限;每个 Model 自带 thinkingLevelMap,上层说 high 底层查表翻译,更灵活</button>
+    <button class="opt">取交集实现更简单,所以其实交集更好</button>
+    <button class="opt">映射表方案根本不需要写任何代码</button>
+    <button class="opt">因为取交集在运行时会报错</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">③ clampThinkingLevel 在模型不支持请求级别时,为什么"先向上找"?</p>
+    <button class="opt">向上找的代码写起来更短</button>
+    <button class="opt">请求级别不支持时先找更高档位,因为思考更多通常比更少安全,找不到再向下</button>
+    <button class="opt">随机选一个可用档位</button>
+    <button class="opt">直接报错,让用户重新选一个档位</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果一个 Model 的 thinkingLevelMap 只声明了 off 和 high 两档,请求 medium 时 clamp 会选哪个?</em>」
+  「<em>为什么 Anthropic 偏偏选 system 末尾 + 最后一个 tool + 最后一条 user message 这三处打点,而不是随便选?</em>」
+  「<em>缓存命中后 token 大约按几折计费,对一个 200K 上下文的长对话意味着什么?</em>」——
+  最后这个问题背后的成本账,也提醒我们:模型调用这一层的"省钱设计"到此告一段落,<strong>下一课</strong>要打开的是完全不同的黑盒——工具系统。
+</div>
+
+<h2>6 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第4章-模型调用-一行代码驾驭多个模型.md">第 4 章 · 模型调用——一行代码驾驭多个模型</a>——
+  原文 §四、§五 还讲了 SSE 解析为什么各家不同、错误处理如何"编码到流里不打断循环",值得通读建立全局观。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0014):</strong> 我们打开工具系统这个黑盒——<code>ToolCall</code> 到底谁来执行?
+  三层工具类型是怎么划分的?怎么保证参数正确与执行安全?这是 Agent 真正"动手做事"的地方。
+</p>
+
+<footer>
+  Lesson 0013 · 第 4 章 模型调用 ·
+  下一课:<a href="./0014-three-layer-tool-types.html">0014 三层工具类型 →</a> ·
+  上一课:<a href="./0012-translator-five-steps-and-event-protocol.html">0012 翻译器五步与事件协议</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。streamSimple 是"便捷封装",帮你把 reasoning: high 自动翻成各家参数并夹住范围。延伸:所以实际开发常用 streamSimple,直接用 stream 得自己处理很多翻译细节。',
+               '✓ 对。交集会被最弱的 Provider 拉到只剩 off;映射表让每台模型自己声明支持哪些档位。延伸:它也比"暴露各家原生参数"简洁——上层不用记 20 种参数名。',
+               '✓ 对。回退优先"多思考"是更安全的默认。延伸:这也是"语义统一、实现分散"的一部分——上层只说想要的语义,回退策略由底层兜底。'];
+  var msgNo = ['回看本章"场景一:调用模型":哪个是最底层、什么便利都没有,哪个帮你自动处理思考级别翻译和 token 上限?',
+               '想想如果只保留所有 Provider 都支持的档位会剩下什么?再想"暴露每家原生参数"会让上层多累。映射表是怎么两头讨好的?',
+               '回看回退策略那段:请求 xhigh 但只支持到 high 时,是宁可多思考还是少思考更保险?哪个方向先试?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

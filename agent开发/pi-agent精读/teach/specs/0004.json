@@ -1,0 +1,87 @@
+{
+ "num": "0004",
+ "slug": "five-packages-project-skeleton",
+ "title": "项目骨骼：五个包各管各的",
+ "narrowTopic": "只讲 Pi 的物理骨骼——克隆下来看到的五个包各自在干什么、以及那张直觉分层图，不碰依赖方向和类型细节。",
+ "analogySeed": "第一次克隆 Pi，在终端敲下 ls，看见 packages/ 下五个包整整齐齐排成一排——先别管它们怎么勾连，先像认识五个同事一样，搞清楚每个人各自负责哪一摊活。",
+ "keyPoints": [
+  "Pi 是标准的 npm workspaces monorepo：根 package.json 声明 \"workspaces\": [\"packages/*\"]，packages/ 下每个子目录是一个独立包。",
+  "核心三件套：pi-ai（管调模型）→ pi-agent-core（管跑循环）→ pi-coding-agent（管具体业务）。",
+  "pi-ai 只做一件事——抹平 30+ 提供商的差异，对外暴露统一类型和 streamSimple()；它的 index.ts 里没有 agent、tool、loop。",
+  "pi-agent-core 是 general-purpose 的：只知道怎么维护状态(AgentState)、跑循环(agentLoop)、发事件(AgentEvent)、做压缩(compact)，不知道自己在做哪种领域的 Agent。",
+  "pi-coding-agent 是最厚的一层（上百个源文件）：7 个编程工具、扩展系统、会话持久化、CLI，入口是 cli.ts。",
+  "pi-tui 是独立 UI 层，运行时依赖只有 marked + get-east-asian-width，不含任何 AI 包；只管显示。",
+  "pi-orchestrator 是 v0.80.x 新增的实验性外围编排层，站在 coding-agent 之上，学习主线暂不深入。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "第 1 节开头的 repo/ 目录结构树，列出 packages/ 下 ai、agent、coding-agent、orchestrator、tui 五个包及其 npm 包名，加根 package.json / tsconfig.json。",
+   "cite": "教程 §1 目录结构"
+  },
+  {
+   "desc": "第 2.1 节 packages/ai/src/index.ts（v0.80.x 节选）的导出清单，含顶部 Core only, side-effect free 注释与 export * from models.ts / types.ts / event-stream.ts。",
+   "cite": "教程 §2.1 / packages/ai/src/index.ts"
+  },
+  {
+   "desc": "第 2.3 节 cli.ts 入口（#!/usr/bin/env node, import main）以及紧随其后的 pi \"帮我改个 bug\" → cli.ts → main.ts → AgentSession → Agent → agentLoop() 启动链路图。",
+   "cite": "教程 §2.3 / packages/coding-agent/src/cli.ts"
+  },
+  {
+   "desc": "第 3 节的三层直觉分层 ASCII 图（coding-agent 最懂业务 / agent-core 只懂框架 / pi-ai 只懂模型，旁边独立的 pi-tui）。",
+   "cite": "教程 §3 直觉分层图"
+  }
+ ],
+ "designRationale": [
+  "为什么拆成多个包而非一个大文件：用 npm workspaces monorepo 让每个包职责单一、可独立发布复用，理解一套元结构即可延伸到全仓。",
+  "为什么 pi-ai 的 index.ts 里刻意没有 agent/tool/loop：它只承诺抹平 LLM API 差异，把\"调模型\"这件事做纯，才可能被上层无负担地复用。",
+  "为什么 pi-agent-core 强调 general-purpose：框架层不绑定任何领域，客服 Agent、编程 Agent 都能复用同一套循环/状态/压缩。",
+  "为什么 pi-tui 运行时不依赖任何 AI 包：显示与 Agent 逻辑彻底解耦，UI 换不换都不影响内核。"
+ ],
+ "quiz": [
+  {
+   "stem": "pi-agent-core 的 package.json 描述强调 \"general-purpose\"（通用的），这意味着什么？",
+   "options": [
+    "它自己实现了 read/bash/edit 等具体编程工具",
+    "它负责终端里的 Markdown 渲染和代码高亮",
+    "它不知道自己在做哪种领域的 Agent，只提供通用的循环、状态、事件、压缩",
+    "它直接调用 OpenAI SDK 完成对话"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。general-purpose 意味着框架层对业务一无所知——正因如此，它才能被编程 Agent、客服 Agent 等任意领域复用。延伸想一下：具体的 read/bash 工具其实住在 coding-agent 层。",
+   "noMsg": "回看 §2.2 pi-agent-core 做的四件事（状态/循环/事件/压缩），再对照 §2.3 里\"具体工具\"到底属于哪个包。"
+  },
+  {
+   "stem": "用户在终端输入 pi \"帮我改个 bug\" 后，本章给出的启动链路顺序是？",
+   "options": [
+    "cli.ts → main.ts → AgentSession → Agent → agentLoop()",
+    "main.ts → cli.ts → agentLoop() → Agent → AgentSession",
+    "Agent → agentLoop() → cli.ts → main.ts → AgentSession",
+    "AgentSession → cli.ts → Agent → main.ts → agentLoop()"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。cli.ts 解析参数，交给 main.ts 选运行模式，再由 AgentSession 组装工具、Agent 管状态、最后 agentLoop() 开跑。延伸：这条链会在后续讲 Agent Loop 的章节被逐段拆开。",
+   "noMsg": "看 §2.3 那段缩进的启动链路图，注意谁是最外层入口（带 #!/usr/bin/env node 的那个文件）。"
+  },
+  {
+   "stem": "为什么 pi-tui 被画在三层旁边、而不是当作三层之一？",
+   "options": [
+    "因为它是 v0.80.x 新增的实验性包",
+    "因为它运行时依赖里没有任何 AI 相关的包，只负责把工作过程展示给用户，和\"Agent 怎么工作\"没有直接关系",
+    "因为它依赖 pi-coding-agent，会和上层形成循环依赖",
+    "因为它已被官方在 commit b141e1fa 中移除"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。pi-tui 运行时只有 marked + get-east-asian-width，是个独立的终端渲染工具。延伸：被移除的是 pi-web-ui，实验性的是 pi-orchestrator，别记混。",
+   "noMsg": "看 §2.4 对 pi-tui 依赖的描述，再区分一下\"被移除的包\"和\"实验性的包\"分别是哪个。"
+  }
+ ],
+ "_chapter": "第2章：三层架构 —— Pi-Agent 项目的骨骼",
+ "_chapterCN": "三层架构：Pi-Agent 项目的骨骼",
+ "prevFile": "0003-run-modes-and-models-json.html",
+ "prevNum": "0003",
+ "nextFile": "0005-type-progression-across-layers.html",
+ "nextNum": "0005",
+ "crumbLabel": "第 2 章 · 三层架构",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第2章-三层架构-Pi-Agent项目的骨骼.md",
+ "filename": "0004-five-packages-project-skeleton.html"
+}

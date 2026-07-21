@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0021 · Agent 可靠性:误差累积、pass^k、反思与人机交接</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第六部分 Agents · 第 0021 课</p>
+<h1>Agent 可靠性:误差累积、pass^k、反思与人机交接</h1>
+<p class="lede">这节课把「怎么让 agent 真的可靠」拆成五道面试常考的硬题:<strong>「为何 agent 在长任务上会崩,即便每步都很可能成功?」「怎么评估 agent,为什么平均准确率不够?」「planning-first 与 reactive(ReAct)有什么区别?」「反思/自我批评何时真有用?」「coding harness 靠什么可靠、agent 该怎么把活交给人?」</strong>(源:AI 工程师题库 Q71、Q64、Q66、Q67、Q73、Q74)。一句话预告:<strong>可靠性不住在模型里,住在你围着模型搭的那圈 harness 里。</strong></p>
+
+<div class="recall">
+<p>上一课(0020)我们讲了 agent 的<strong>记忆与编排</strong>——用外置状态、compaction、子 agent 让它跨越单个上下文窗口活下来。那是「怎么让它跑得久」。<strong>先别往下看:一个能跑很久的 agent,如果每一步都有 95% 的把握,你觉得它跑完 20 步任务的整体成功率,大概是多少?凭直觉猜一个数。</strong></p>
+</div>
+
+<h2>一、误差累积:为何长任务会崩(Q71)</h2>
+<p>直觉陷阱在于:我们习惯把「每步 95% 可靠」当成「整体挺靠谱」。但多步任务里,<strong>误差是乘性叠加的</strong>,不是相加。要整件事成功,得每一步都成功——概率相乘,一路往下掉:</p>
+
+<dl class="keydef">
+<dt>误差累积(compounding / multiplicative error)</dt>
+<dd>$$P_{\text{success}} = p^{\,n}$$</dd>
+<dd><em>$p$ 是单步可靠度,$n$ 是步数。每步 95%、跑 20 步:$P=0.95^{20}\approx 0.36$,整体成功率只剩约 <strong>36%</strong>。单步看着很稳,链条一长就塌。</em></dd>
+</dl>
+
+<figure class="diagram">
+<div class="bars">
+  <div class="row"><span class="lbl">1 步</span><div class="track"><div class="val b" style="width:95%">95%</div></div></div>
+  <div class="row"><span class="lbl">5 步</span><div class="track"><div class="val b" style="width:77%">≈ 77%</div></div></div>
+  <div class="row"><span class="lbl">10 步</span><div class="track"><div class="val c" style="width:60%">≈ 60%</div></div></div>
+  <div class="row"><span class="lbl">20 步</span><div class="track"><div class="val a" style="width:36%">≈ 36%</div></div></div>
+  <div class="row"><span class="lbl">50 步</span><div class="track"><div class="val a" style="width:8%">≈ 8%</div></div></div>
+</div>
+<figcaption>单步 95% 可靠度下,任务成功率随步数 $0.95^{n}$ 指数式衰减。步数是 agent 的敌人。</figcaption>
+</figure>
+
+<p>而且现实比这条曲线更糟,因为失败并不「独立」——它<strong>级联</strong>:</p>
+<ul>
+<li><strong>污染下游</strong>:一个早期的错误观察或坏工具结果(读错文件、误解一个报错)会被喂进上下文,毒害其后所有推理步。错误不是孤立扣分,而是往后传染。</li>
+<li><strong>context rot</strong>:随着上下文被越堆越多的旧工具输出、过时推理塞满,模型的连贯性会退化,后面的步反而更容易出错——步数越多,单步可靠度本身也在悄悄下滑。</li>
+</ul>
+<p>所以核心结论:<strong>平均单步准确率会误导人。</strong>它掩盖了乘性衰减和级联。真正该测的是<em>端到端任务成功率</em>与下面要讲的 <em>pass^k</em>。缓解方向也顺势而出——用<strong>更少、更可靠的步骤</strong>,给<strong>每步加核验与恢复</strong>,做<strong>紧凑的上下文管理</strong>,并在高危处插<strong>人工检查点</strong>。</p>
+
+<h2>二、怎么评估 agent:pass^k 与轨迹(Q64)</h2>
+<p>评估 agent 不能只问「对没对」,要同时看两层:<strong>结果(outcome)+ 轨迹(trajectory)</strong>。</p>
+<div class="trio">
+  <div class="cell"><strong>结果</strong><br>任务完成了吗<br><em>最终产物对不对</em></div>
+  <div class="cell"><strong>轨迹</strong><br>是否「合理地」达成<br><em>用对工具、参数有效、忠于工具输出、没有浪费步</em></div>
+  <div class="cell"><strong>一致性</strong><br>换个种子还稳吗<br><em>pass^k 度量可预测性</em></div>
+</div>
+<p>为什么平均准确率不够?因为它把「稳定的 80%」和「时好时坏的 80%」混为一谈。生产环境要的是可预测,不是一个好看的均值——<strong>一个平均能用、却不可预测地失败的 agent,不能上线。</strong>量化「稳不稳」要用 pass^k:</p>
+
+<dl class="keydef">
+<dt>pass^k(一致性度量)</dt>
+<dd>让 agent 对同一任务做 $k$ 次<strong>独立</strong>尝试,<strong>全部成功</strong>才算这一题过。</dd>
+<dd><em>它逼出的是最坏情况下的可靠度,而不是「碰运气至少中一次」。注意别和大家更熟的 <strong>pass@k</strong>(Codex 论文里那个:$k$ 次里<em>至少一次</em>成功)搞混——pass@k 量的是「能力上限」,pass^k 量的是「稳定下限」。上线看后者。</em></dd>
+</dl>
+
+<p>具体怎么落地评估?两件工具:</p>
+<ul>
+<li><strong>trace-based 评估</strong>:把每一步(prompt、工具调用、返回结果)都记下来,人或自动化去看轨迹在哪一步偏离了预期判断。你修不了看不见的东西。</li>
+<li><strong>LLM-as-judge</strong>:用一个模型按 rubric 给轨迹打分(工具选得对不对、参数合不合理、回答是否 grounding 在工具输出上),但<strong>必须对人工标注做校准</strong>——judge 本身也会错,不校准就是拿噪声当尺子。</li>
+</ul>
+
+<h2>三、planning-first 与 reactive 的区别(Q66)</h2>
+<p>两种架构对应两种「什么时候想」的哲学:</p>
+<div class="trio">
+  <div class="cell"><strong>planning-first</strong><br>(plan-and-execute)<br><em>先出完整计划,再执行,必要时重规划</em></div>
+  <div class="cell"><strong>reactive</strong><br>(ReAct)<br><em>据最新观察,一步一步临场决</em></div>
+  <div class="cell"><strong>hybrid</strong><br>(现实里最常见)<br><em>粗计划保方向 + 步级反应处理计划外</em></div>
+</div>
+<p><strong>planning-first</strong> 先把整条路径想清楚再动手:给你<em>结构</em>、可以<em>并行</em>互不依赖的子任务、以及一份<em>可审计</em>的计划。适合任务形态<strong>可预知</strong>的场景(流程大致固定、需要事先审批一份计划)。代价是环境一旦跟计划不符,它会显得僵。</p>
+<p><strong>reactive(ReAct)</strong> 每一步都看着最新的观察再决定下一步:更能<em>应变</em>,适合环境难以预料的探索型任务。代价是它可能<strong>游走</strong>、绕圈、甚至陷入循环——没有一张全局地图兜底。</p>
+<p>所以很多真实系统是<strong>混合</strong>的:用一个粗粒度计划保住大方向,同时保留步级反应来吸收计划外的意外。<strong>怎么选?</strong>沿两个轴判断——任务的<em>可预测度</em>有多高,以及你是更需要<em>一份可审计的计划</em>还是<em>灵活应变</em>。没有哪种「总是更好」。</p>
+
+<h2>四、反思/自我批评何时真有用(Q67)</h2>
+<p><strong>反思(reflection / self-critique)</strong> 就是让 agent 回头批评自己的输出或轨迹,再据此修订。听起来总是好事,但它的价值高度依赖一个前提:<strong>有没有可对照的可验证信号。</strong></p>
+<div class="flow">
+  <div class="step decision">agent 有没有客观的检查信号可对照?<br>(测试结果 / 验证器 / rubric / 工具报错)</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">有 →</div>
+      <div class="step terminal">反思<strong>真有用</strong>:第二遍能把批评<em>锚定在证据上</em>,真抓到错。限次数、用 eval 验证它确实提升。</div>
+    </div>
+    <div class="branch">
+      <div class="label">没有 →</div>
+      <div class="step">反思<strong>常帮倒忙</strong>:白烧 token,甚至把一个<em>本来对的答案</em>「说服」成错的。</div>
+    </div>
+  </div>
+</div>
+<p>落地三条纪律:① 只把反思用在批评<strong>能被证据锚定</strong>的地方(比如编码有测试、检索有验证器);② <strong>限制修订次数</strong>,别让它无限自我怀疑;③ 用 <strong>eval 验证</strong>反思到底有没有真提升,而不是凭感觉觉得「多想想总没错」。</p>
+
+<h2>五、coding harness 与人机交接(Q73、Q74)</h2>
+<p><strong>coding harness</strong> 是把模型包进一个循环:让它能读写文件、跑命令、执行测试、搜索代码库——每次<strong>改动 → 观察结果(编译错 / 测试失败) → 迭代</strong>,直到通过或触到步数上限。</p>
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">读代码 / 搜库</div>
+  <div class="arrow">→</div>
+  <div class="node">改动<br>(写文件)</div>
+  <div class="arrow">→</div>
+  <div class="node">跑测试 / 编译</div>
+  <div class="arrow">→</div>
+  <div class="node good">真实反馈<br>喂回上下文</div>
+</div>
+<figcaption>可靠性来自这条闭环,而非模型独自「一次写对」。</figcaption>
+</figure>
+<p>关键洞见:<strong>可靠更多来自 harness,而不是模型。</strong>决定成败的是这些工程活——好的<em>工具设计</em>、把<em>真实反馈</em>(测试输出、类型错误)原样喂回去、让工作上下文<em>聚焦在相关文件</em>、以及给循环<em>设上限</em>。编码之所以特别适合 agent,正因为它天然带<strong>可验证信号</strong>(测试过没过),让上一节讲的反思能牢牢锚定在结果上。</p>
+
+<p><strong>人机交接(agent → 人)不该被当成「出错」,而应设计成一等路径。</strong>四件事:</p>
+<ul>
+<li><strong>定触发</strong>:低置信、高价值/高风险的动作、没有权限执行的操作、反复失败——这些时刻主动停下交给人。</li>
+<li><strong>打包上下文</strong>:交接时附上足够的信息,让人能<em>快速接手</em>,而不是从零重建现场。</li>
+<li><strong>保可恢复</strong>:人补上输入后,能把结果<em>喂回循环</em>让 agent 继续,而不是整条流程重来。</li>
+<li><strong>记录交接与结果</strong>:交接率本身就是「agent 在哪弱」的真信号——哪类任务总要人接手,那里就是下一轮该修 harness 的地方。</li>
+</ul>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「20 步、每步 95%,整体成功率多少?」——$0.95^{20}\approx 0.36$,乘性衰减;别答成「约 95%」或「相加」。</li>
+<li>「那为什么不直接堆一个更强的单步模型就好?」——边际收益递减,且失败会级联;更划算的是减步数、每步核验、加恢复与人工检查点。</li>
+<li>「怎么量化一个 agent<em>稳不稳</em>,而不是<em>准不准</em>?」——pass^k(k 次独立尝试全成),看一致性;平均准确率会掩盖不可预测的失败。</li>
+<li>「反思到底有没有用?」——有可验证信号(测试 / 验证器 / rubric)时有用,能锚定证据;没有信号时可能白烧 token 甚至把对的改错。</li>
+<li>「coding agent 为什么特别适合 agent 化?」——有可验证信号(测试通过与否),harness 能把反思锚定到真实结果上。</li>
+<li>「什么时候该交给人?交接怎么设计?」——低置信/高风险/无权限/反复失败触发;打包上下文、保可恢复、记录交接率。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞几乎都是坑):</strong></p>
+<ul>
+<li>「每步 95% 所以整体也差不多稳」——错,是 $0.95^{n}$ 乘性衰减,20 步就掉到约 36%。</li>
+<li>「平均准确率高就能上线」——不对,高均值 + 不可预测的失败 ≠ 可靠;上线看 pass^k 这类一致性指标。</li>
+<li>「反思一定让答案更好」——不一定;没有可验证信号时,它可能把正确答案「说服」成错误答案,或纯粹浪费 token。</li>
+<li>「planning-first 总比 ReAct 好(或反过来)」——都不对;按任务可预测度、是否需要可审计计划来选,现实常用混合。</li>
+<li>「coding agent 可靠全靠模型强」——错,可靠更多来自 harness:工具设计、把真实反馈喂回、聚焦上下文、限循环。</li>
+<li>「上下文越长越能扛长任务」——不一定;context rot 与「信息埋在长上下文中间被忽略」会反噬(见 Lost in the Middle)。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>一个 agent 任务需要 20 步,每步独立成功率 95%。整体成功率最接近哪个?</p>
+<details><summary>A. 约 95%,单步很稳所以整体也稳</summary>错。误差是乘性叠加,不是「取单步」。</details>
+<details><summary>B. 约 75%,大概打个折</summary>凭感觉打折不对;实际衰减比直觉快得多。</details>
+<details><summary>C. 约 36%,因为 $0.95^{20}\approx 0.36$ ✅</summary>正确。乘性衰减 + 级联失败,长任务是 agent 的软肋。</details>
+<details><summary>D. 约 0%,20 步必然失败</summary>过头了;是显著下降到约三分之一,不是归零。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于「反思/自我批评」何时真有用,下列哪句最准确?</p>
+<details><summary>A. 反思总能提升质量,应该无条件多加几轮</summary>不对。没有可验证信号时它可能帮倒忙、把对的改错。</details>
+<details><summary>B. 当有可验证信号(测试/验证器/rubric/工具报错)可锚定批评时才真有用,并要限次数、用 eval 验证 ✅</summary>正确。反思的价值取决于批评能否锚定到客观证据。</details>
+<details><summary>C. 反思只对创意写作有用,对代码没用</summary>恰恰相反,编码有测试这种可验证信号,反而是反思最有效的场景之一。</details>
+<details><summary>D. 反思能替代端到端评估,有它就不必测 pass^k 了</summary>无关且错误;反思是生成侧手段,评估仍要独立做。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>ReAct: Synergizing Reasoning and Acting in Language Models</strong>(Yao et al., 2022/2023)——reactive「推理 + 行动」交替的经典范式,本课 reactive 一侧的原型。</li>
+<li><strong>Reflexion</strong>(Shinn et al., 2023)与 <strong>Self-Refine</strong>(Madaan et al., 2023)——反思/自我批评的代表工作,注意它们的增益都依赖可对照的反馈信号。</li>
+<li><strong>Evaluating Large Language Models Trained on Code</strong>(Chen et al., 2021,Codex)——pass@k 指标的出处;本课的 pass^k(全成)是它面向可靠性的变体,方向相反,别混。</li>
+<li><strong>Lost in the Middle</strong>(Liu et al., 2023)——长上下文中间信息被忽略的实证,是「上下文越长越好」这一直觉的反例,呼应 context rot。</li>
+<li>Anthropic 工程博客 <strong>Building Effective Agents</strong> 与 <strong>Writing Effective Tools for AI Agents</strong>——loop / 工具设计 / 何时用 workflow 而非 agent 的工程判断,coding harness 与交接设计的实践参考。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>误差乘性衰减($0.95^{20}\approx 36\%$)让长任务变脆;所以少而可靠的步 + 每步核验 + pass^k 测一致性;planning 保结构、reactive 保应变、现实用混合;反思只在能锚定可验证信号时有用;可靠性主要来自 harness,而把「交给人」设计成一等路径。</strong></p>
+<nav class="lesson-nav">
+<a href="0020-agent-memory-orchestration.html">← 上一课:Agent 记忆与编排</a>
+<a class="next" href="0022-reasoning-models.html">下一课:推理模型 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

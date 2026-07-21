@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0027 · 堆排序与非比较排序</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0027 课 · 排序 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>堆排序与非比较排序</h1>
+
+<p class="lede">这节课收尾排序族谱,讲两类特别的排序。<strong>堆排序</strong>是三个 O(n log n) 里唯一「既原地又最坏有保证」的——听起来完美,却几乎没有库用它,为什么?<strong>非比较排序</strong>(计数、基数)则打破了上一节反复强调的 Ω(n log n) 下界,做到 O(n)——但这个「超能力」有严格的前提。理解「为什么堆排不受宠」和「非比较凭什么能突破下界」,你对排序的理解就真正立体了。</p>
+
+<div class="recall">
+<p>回忆<a href="0022-heap-priority-queue.html">堆那节</a>:堆是存在数组里的完全二叉树,大顶堆的堆顶永远是最大值,取堆顶 O(1)、下沉 sift-down 是 O(log n)。也回忆<a href="0023-sorting-overview.html">排序全景</a>里那道墙——比较排序下界 Ω(n log n)。这节两个主角,一个把堆变成排序,另一个则要<strong>翻过那道墙</strong>。</p>
+</div>
+
+<h2>一、堆排序:反复取堆顶</h2>
+
+<p>堆排序就两步。<strong>第一步建堆</strong>:把无序数组原地整理成一个大顶堆。<strong>第二步反复取极值</strong>:把堆顶(当前最大值)和数组末尾交换,末尾就此固定为已排序区;然后堆大小减一、对新堆顶做一次 sift-down 恢复堆序;重复 n-1 次,整个数组就从小到大排好了。全程在原数组里交换完成,所以<strong>原地</strong>。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node"><span class="n-title">无序数组</span><span class="n-sub">[3,7,2,8,5]</span></div>
+  <div class="arrow">→</div>
+  <div class="node bad"><span class="n-title">建堆 O(n)</span><span class="n-sub">自底向上 heapify</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">取顶×(n-1)</span><span class="n-sub">堆顶↔末尾,sift-down</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">有序</span><span class="n-sub">O(n log n) 原地</span></div>
+</div>
+<figcaption>建堆一次 <strong>O(n)</strong>,之后 n-1 次「取顶 + 下沉」,每次下沉 O(log n) → 主导项 <strong>O(n log n)</strong>。用大顶堆得到升序数组。</figcaption>
+</figure>
+
+<h2>二、建堆是 O(n) 不是 O(n log n)</h2>
+
+<p>一个反直觉但极高频的考点:<strong>把无序数组整理成堆(heapify)是 O(n),不是 O(n log n)</strong>。</p>
+
+<p>朴素想法是「插入 n 个元素,每次 O(log n)」得出 O(n log n)——但那是错的建堆方式。正确的建堆用<strong>自底向上</strong>:从最后一个非叶子节点往前,对每个节点做 sift-down。关键在于——<strong>绝大多数节点都靠近底层,下沉的高度很小</strong>。底层一半的节点高度为 0(不用动),上一层 1/4 的节点最多下沉 1 层……把「节点数 × 各自高度」求和,级数收敛到 <strong>O(n)</strong> 而非 O(n log n)。所以整个堆排序的 O(n log n) 是被第二阶段「n 次 O(log n) 下沉」主导的,建堆本身很便宜。</p>
+
+<h2>三、堆排序为什么不受库青睐</h2>
+
+<p>堆排序看似三全其美:O(n log n)、最坏也有保证、还原地。但主流标准库排序几乎都不用它,原因是<strong>缓存不友好</strong>。堆排序访问元素靠 <code>2i+1</code>/<code>2i+2</code> 这种下标跳转,在数组里是<strong>大跨步、无规律</strong>的访问,几乎每次都错过 CPU 缓存;而快排的分区是顺序扫描、局部性极好。同为 O(n log n),快排的<strong>实测常数因子</strong>明显更小。堆排还<strong>不稳定</strong>。所以它的位置很尴尬——真正需要「原地 + 最坏保证」时才轮到它(如 introsort 里作为快排退化时的兜底),常规场景快排更快、要稳定用归并。</p>
+
+<h2>四、非比较排序:翻过 Ω(n log n) 那道墙</h2>
+
+<p>上一节说过,只靠比较的排序逃不出 Ω(n log n)。<strong>非比较排序</strong>根本不做两两比较,而是利用元素值本身的结构直接把它归位,因此不受那道墙约束。</p>
+
+<p><strong>计数排序(Counting Sort)</strong>:当元素都是范围 <code>[0, k)</code> 的小整数时,开一个大小 k 的桶,先统计每个值出现几次,再按值从小到大依次填回。全程不比较,时间 <strong>O(n + k)</strong>、稳定(从后往前填能保序)。前提是<strong>值域 k 有界且不太大</strong>——若 k 远大于 n(如对 32 位整数直接计数要开 40 亿个桶),就退化成灾难。</p>
+
+<p><strong>基数排序(Radix Sort)</strong>:把「大值域」拆成「多位、每位小值域」。对多位数,从<strong>最低位到最高位</strong>逐位用稳定的计数排序排一遍(LSD)。d 位数就排 d 趟,时间 <strong>O(d·(n+k))</strong>。它依赖每一趟的<strong>稳定性</strong>来保住高位已排好的顺序——这正是稳定性在算法内部被用上的经典案例。</p>
+
+<figure class="diagram">
+<div class="bars">
+  <div class="row"><span class="lbl">快排(常数最小)</span><div class="track"><div class="val b" style="width:45%">O(n log n) · 缓存友好</div></div></div>
+  <div class="row"><span class="lbl">归并(要额外空间)</span><div class="track"><div class="val c" style="width:60%">O(n log n) · O(n) 辅助</div></div></div>
+  <div class="row"><span class="lbl">堆排(缓存不友好)</span><div class="track"><div class="val a" style="width:78%">O(n log n) · 大跨步访问</div></div></div>
+</div>
+<figcaption>三种 O(n log n) 排序<strong>渐进相同,实测常数不同</strong>的直觉示意(非精确基准):快排最快、堆排因缓存不友好通常最慢。条长仅表意。</figcaption>
+</figure>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>堆排序(Heapsort)</dt>
+<dd>建堆 O(n) + 反复取堆顶下沉。O(n log n)、原地、<em>不</em>稳定。缓存不友好,故实测常数大于快排。</dd>
+<dt>建堆 / heapify</dt>
+<dd>把无序数组自底向上整理成堆,<em>O(n)</em> 而非 O(n log n)——因大多数节点靠近底层、下沉高度小。</dd>
+<dt>计数排序(Counting Sort)</dt>
+<dd>对值域 <code>[0,k)</code> 小整数按值计数归位,O(n+k)、稳定。前提:值域 k 有界。</dd>
+<dt>基数排序(Radix Sort)</dt>
+<dd>按位(从低到高)反复用稳定排序,把大值域拆成多趟小值域,O(d·(n+k))。</dd>
+</dl>
+
+<h2>六、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">排序</th><th>时间</th><th>空间</th><th>稳定?</th><th>比较排序?</th></tr></thead>
+<tbody>
+<tr><td class="op">堆排 Heap</td><td class="best">O(n log n)<br><small>建堆 O(n)</small></td><td class="best">O(1)</td><td class="warn">不稳定</td><td>是</td></tr>
+<tr><td class="op">计数 Counting</td><td class="best">O(n+k)</td><td class="warn">O(n+k)</td><td class="best">稳定</td><td class="best">否(可破 n log n)</td></tr>
+<tr><td class="op">基数 Radix</td><td class="best">O(d·(n+k))</td><td class="warn">O(n+k)</td><td class="best">稳定</td><td class="best">否(可破 n log n)</td></tr>
+</tbody>
+</table>
+<p>计数/基数的时间不含 log n——这不违反下界,因为它们<strong>不是比较排序</strong>。代价写在空间(要额外的桶)和前提(值域/位数有界)上。天下没有免费的午餐,只是这次的账记在了别处。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong></p>
+<ul>
+<li><strong>「建堆的复杂度是多少?」</strong>——陷阱题。答 <strong>O(n)</strong>(自底向上),并能一句话说明「大多数节点在底层、下沉高度小,级数收敛到 O(n)」。答成 O(n log n) 是常见失分。</li>
+<li><strong>「既然堆排原地、最坏也 O(n log n),为什么库不用它?」</strong>——答缓存不友好(大跨步下标访问,缓存命中率低),实测常数大于快排;而且不稳定。</li>
+<li><strong>「什么时候用计数/桶/基数排序?」</strong>——当<strong>值域已知且不大</strong>(如给年龄排序、给成绩 0~100 排序、给字符串按固定长度排序)时,用非比较排序可达 O(n),吊打任何比较排序。面试官想听你说出「前提」。</li>
+<li><strong>「基数排序为什么必须用稳定的子排序?」</strong>——因为高位相同的元素要靠低位已排好的顺序,若子排序不稳定,前面几趟的成果会被打乱。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「建堆是 O(n log n)」——错,是 O(n)。</strong>逐个插入建堆才是 O(n log n);正确的自底向上 heapify 是 O(n)。堆排序整体的 O(n log n) 由第二阶段 n 次下沉主导,不是建堆。</p>
+<p><strong>「计数/基数排序总是 O(n),比快排强」——错,漏了前提。</strong>计数排序要求<strong>值域 k 有界且不太大</strong>:若 k ≫ n(如对任意 32 位/64 位整数),桶的空间和初始化开销爆炸,反而不如比较排序。基数排序也需要位数 d 可控。它们不是万能钥匙,只在特定值域下才划算。</p>
+<p><strong>别忘了堆排不稳定。</strong>取堆顶与末尾交换的动作会跨距离移动元素,打乱相等元素的相对顺序。</p>
+</div>
+
+<div class="implement">
+<p><strong>1) 堆排序</strong>:实现 <code>heapify(arr)</code>(自底向上,从最后一个非叶节点向前 sift-down)与 <code>heap_sort(arr)</code>(反复 swap 堆顶到末尾、缩小堆、下沉)。打印建堆时每个节点下沉的步数,亲眼验证总步数是 O(n) 量级而非 n log n。</p>
+<p><strong>2) 计数排序</strong>:对 <code>[0,100]</code> 内的整数排序,统计频次再归位。故意从后往前填回,验证它对带标签的相等元素保持稳定。</p>
+<p><strong>3) 基数排序</strong>:用计数排序作子过程,对多位整数从低位到高位逐位排,观察每趟如何保住高位顺序。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>三个 O(n log n) 排序渐进相同、常数不同——快排缓存友好最快,堆排缓存不友好故库不用它。想更快只能换赛道:值域有界时用非比较排序(计数/基数)突破 Ω(n log n) 到 O(n),代价是额外空间和对值域的前提。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:把一个无序数组用自底向上的方式整理成堆(heapify),时间复杂度是多少?为什么不是 O(n log n)?</summary>
+<div class="answer">
+<p>是 <strong>O(n)</strong>。自底向上建堆时,每个节点做的是 sift-down,代价正比于它到叶子的<strong>高度</strong>。而堆里<strong>大多数节点都靠近底层、高度很小</strong>:约一半节点是叶子(高度 0,不用动),1/4 高度 1,1/8 高度 2……把「该高度的节点数 × 高度」求和,得到 Σ (n/2^(h+1))·h,这个级数收敛到 <strong>O(n)</strong>。反之,「逐个 insert n 个元素」每次 O(log n) 才是 O(n log n),那是另一种(更慢的)建堆方式。堆排序整体的 O(n log n) 来自第二阶段 n 次取顶下沉,不是建堆。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:堆排序原地、最坏也是 O(n log n),看起来比快排还稳。为什么主流标准库排序几乎都不用它?</summary>
+<div class="answer">
+<p>核心原因是<strong>缓存不友好</strong>。堆排序靠 <code>2i+1</code>/<code>2i+2</code> 的下标跳转访问元素,在数组里是大跨步、无规律的访问,CPU 缓存命中率低;快排的分区是顺序扫描,局部性极好。二者渐进都是 O(n log n),但堆排的<strong>实测常数因子明显更大</strong>,实际更慢。再加上堆排<strong>不稳定</strong>。所以它的实用位置很窄——通常只作为「需要原地又要防止快排退化」的兜底(如 introsort 在快排递归过深时切到堆排)。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:一位候选人说「计数排序是 O(n),所以任何数据都该用它代替快排」。这句话在什么情况下站不住脚?</summary>
+<div class="answer">
+<p>当<strong>值域 k 远大于元素个数 n</strong> 时站不住脚。计数排序的复杂度是 O(n + k),空间也要 O(k) 个桶。若元素是任意 32 位整数(k ≈ 40 亿)而 n 只有几千,那么开桶和遍历值域的开销 k 完全主导,既慢又爆内存,远不如 O(n log n) 的快排。计数排序只在<strong>值域有界且不大</strong>(如年龄、成绩、固定长度字符)时才划算。它不违反 Ω(n log n) 下界(因为不是比较排序),但把成本转嫁到了空间和「值域前提」上——没有免费的午餐。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题对应仓库「排序」小节的堆排序视频与(补充部分的)基数排序系列。抽出的一手来源:</p>
+<ul>
+<li><a href="https://youtu.be/2DmK_H7IdTo">Heap sort in 4 minutes(视频)</a> —— README 收录的四分钟堆排序动画。</li>
+<li><a href="https://www.coursera.org/learn/algorithms-part2/lecture/2pi1Z/key-indexed-counting">Sedgewick · 键值索引计数 Key-Indexed Counting(视频)</a> —— 计数排序的严谨讲法,基数排序的基石。</li>
+<li><a href="https://www.youtube.com/watch?v=Nz1KZXbghj8&index=7&list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb">基数排序、计数排序(线性时间内)(视频)</a> —— README 补充部分的线性时间排序讲解。</li>
+<li><a href="https://archive.org/details/ucberkeley_webcast_pvbBMd-3NoI">CS 61B · 基数排序(UC Berkeley 视频)</a> —— 课堂视角的基数排序。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>排序族谱到此走完。有任何不清楚的,回到会话里问你的 AI 老师——可以让老师陪你把「自底向上建堆为什么是 O(n)」的级数在纸上算一遍,或让老师给一组值域已知的数据,你判断该用计数还是基数。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0026-quick-sort.html"><span class="dir">← 上一课</span>快速排序:分区与最坏退化</a>
+  <a class="next" href="0028-graph-representation.html"><span class="dir">下一课 →</span>图的表示:邻接表与邻接矩阵</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

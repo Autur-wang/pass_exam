@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0047 · 平衡查找树:对抗 BST 退化</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0047 课 · 更多结构与文本 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>平衡查找树:对抗 BST 退化</h1>
+
+<p class="lede">普通二叉搜索树的复杂度全押在<strong>树高</strong>上。往一棵 BST 里按顺序插 1,2,3,4,5,它就退化成一条链表,查找变 O(n)——之前埋下的伏笔在这里爆雷。<strong>平衡查找树</strong>用旋转把树高强行压在 O(log n),让查找/插入/删除即便在最坏情况也有保证。这节课不要求你手写旋转,而要讲清「<strong>为什么需要它</strong>」和「<strong>库里到底用哪种</strong>」。</p>
+
+<div class="recall">
+<p>先回忆<a href="0020-binary-search-tree.html">二叉搜索树</a>那节留的一个坑:BST 的所有操作都是 O(树高),而树高在<strong>最好情况是 log n、最坏情况是 n</strong>。先自己说出来——什么样的插入顺序会把 BST 退化成一条链?退化之后,它和一个普通链表还有区别吗?</p>
+</div>
+
+<h2>一、问题:BST 的复杂度是有条件的</h2>
+
+<p>BST 的美妙(左小右大、二分查找)只在树「够矮」时成立。可它对插入顺序毫无抵抗力:<strong>按有序序列插入,每个新节点都挂到最右下,树高一路涨到 n</strong>,查找退化成从头扫到尾的 O(n)。BST 教科书里写的 O(log n),其实是「平衡时」的复杂度,不是保证。</p>
+
+<p>平衡查找树的目标就一句话:<strong>在每次插入/删除后做少量局部调整,把树高钉在 O(log n)</strong>,从而让所有操作都拿到 O(log n) 的<strong>最坏</strong>保证。这个「局部调整」的基本动作叫<strong>旋转(rotation)</strong>。</p>
+
+<h2>二、旋转:一次 O(1) 的局部换根</h2>
+
+<p>旋转是在不破坏 BST「左小右大」序的前提下,把子树的父子关系重新挂一下,以降低高度。下图是最基础的一次<strong>左旋</strong>:右偏失衡的链,一步变成两边等高。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 480 226" role="img" aria-label="二叉搜索树的一次左旋:失衡链变平衡">
+  <text class="dgm-muted" x="110" y="18" text-anchor="middle" font-size="12">旋转前:右偏,高度 3</text>
+  <text class="dgm-muted" x="370" y="18" text-anchor="middle" font-size="12">左旋后:平衡,高度 2</text>
+  <!-- before: right-leaning chain A->B->C -->
+  <line class="dgm-edge" x1="66" y1="52" x2="104" y2="94"/>
+  <line class="dgm-edge" x1="128" y1="118" x2="166" y2="160"/>
+  <circle class="dgm-node" cx="60" cy="44" r="16"/>
+  <text class="dgm-text" x="60" y="49" text-anchor="middle" font-size="14">A</text>
+  <circle class="dgm-node" cx="116" cy="110" r="16"/>
+  <text class="dgm-text" x="116" y="115" text-anchor="middle" font-size="14">B</text>
+  <circle class="dgm-node" cx="176" cy="176" r="16"/>
+  <text class="dgm-text" x="176" y="181" text-anchor="middle" font-size="14">C</text>
+  <!-- after: B root, A left, C right -->
+  <line class="dgm-edge" x1="356" y1="62" x2="326" y2="102"/>
+  <line class="dgm-edge" x1="384" y1="62" x2="414" y2="102"/>
+  <circle class="dgm-good-node" cx="370" cy="50" r="16"/>
+  <text class="dgm-good-text" x="370" y="55" text-anchor="middle" font-size="14">B</text>
+  <circle class="dgm-node" cx="318" cy="116" r="16"/>
+  <text class="dgm-text" x="318" y="121" text-anchor="middle" font-size="14">A</text>
+  <circle class="dgm-node" cx="422" cy="116" r="16"/>
+  <text class="dgm-text" x="422" y="121" text-anchor="middle" font-size="14">C</text>
+</svg>
+</div>
+<figcaption>左旋把中间节点 <code>B</code> 提为新根,<code>A</code> 成为它的左孩子、<code>C</code> 仍是右孩子。由于 A&lt;B&lt;C 的大小序没变,BST 性质保持不变;而高度从 3 降到 2。一次旋转只改动常数个指针,是 O(1) 操作。</figcaption>
+</figure>
+
+<p>不同的平衡树,区别只在于「<strong>用什么规则判断失衡、失衡后转几下</strong>」。你不需要背旋转的每种情形,但要理解:平衡是靠<strong>旋转这种 O(1) 的局部修复</strong>持续维持的,不是一次性构造出来的。</p>
+
+<h2>三、AVL vs 红黑树:严格 vs 够用</h2>
+
+<p><strong>AVL 树</strong>:严格平衡——任一节点的左右子树高度差不超过 1。树最矮,<strong>查找最快</strong>;代价是插入/删除时为维持严格平衡,旋转更频繁。适合「构建一次、之后大量只读查询」的场景(如字典)。</p>
+
+<p><strong>红黑树</strong>:近似平衡——用「红/黑」着色规则保证「最长路径不超过最短路径的两倍」。它<strong>没那么平衡</strong>,但换来的是插入/删除时<strong>旋转次数更少</strong>(平均 O(1) 次旋转)。工程库几乎都选它:C++ 的 <code>std::map</code>/<code>std::set</code>、Java 的 <code>TreeMap</code>/<code>TreeSet</code>、Java 8 <code>HashMap</code> 冲突链过长时的转化,以及 Linux 内核的完全公平调度器(CFS)。</p>
+
+<figure class="diagram">
+<div class="trio">
+  <div class="cell"><div class="role">严格平衡</div><div class="head">AVL 树</div><div class="sub">查找最快 · 旋转多 · 读多写少</div></div>
+  <div class="cell"><div class="role">近似平衡</div><div class="head">红黑树</div><div class="sub">旋转少 · 写更快 · 库的默认选择</div></div>
+  <div class="cell"><div class="role">多路 / 磁盘</div><div class="head">B / B+ 树</div><div class="sub">高扇出 · 减少磁盘 IO · 数据库索引</div></div>
+</div>
+<figcaption>三种「保证 O(log n)」的树,面向不同权衡:内存里读多用 AVL、读写混合用红黑树;数据一大到进磁盘,就换成矮而宽的 B/B+ 树以压低 IO 次数。</figcaption>
+</figure>
+
+<p>再补一句 <strong>B / B+ 树</strong>:它不是二叉的,一个节点存多个键、有很多孩子(高扇出),树因此极矮。这正是<strong>磁盘/数据库索引</strong>要的——每读一个节点是一次昂贵的磁盘 IO,树矮就意味着 IO 少。MySQL 的 InnoDB 索引、文件系统都用它。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>自平衡二叉查找树(Self-balancing BST)</dt>
+<dd>在插入/删除后通过旋转等局部调整,把树高维持在 O(log n) 的 BST,从而保证操作的最坏复杂度。<em>避免</em>把「平衡」误解成「完全平衡/满二叉树」。</dd>
+<dt>旋转(rotation)</dt>
+<dd>在保持 BST 大小序不变的前提下,重挂常数个指针以改变局部父子关系、降低高度的 O(1) 操作。分左旋、右旋。</dd>
+<dt>AVL vs 红黑树</dt>
+<dd>AVL 严格平衡、查找更快但旋转多;红黑树近似平衡、插删旋转少,是标准库(<code>std::map</code>、<code>TreeMap</code>)与 Linux CFS 的默认选择。</dd>
+</dl>
+
+<h2>五、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>平衡查找树</th><th>普通 BST(退化)</th></tr></thead>
+<tbody>
+<tr><td class="op">查找 <code>search</code></td><td class="best">O(log n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">插入 <code>insert</code></td><td class="best">O(log n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">删除 <code>delete</code></td><td class="best">O(log n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">有序遍历 / 前驱后继</td><td class="best">O(n) / O(log n)</td><td>O(n) / O(n)</td></tr>
+</tbody>
+</table>
+<p>平衡查找树的三项核心操作都是 <strong>O(log n) 的最坏保证</strong>——这是它相对普通 BST 的全部价值。注意绿色写的是「最坏」,不是「平均」;普通 BST 只有「平均 O(log n)」,最坏会塌到 O(n)。空间都是 O(n)。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>这类题以<strong>概念题</strong>为主,几乎不会让你手写旋转:</p>
+<ul>
+<li><strong>「<code>std::map</code> / <code>TreeMap</code> 底层是什么」</strong>:红黑树。能顺带说出「保证 O(log n) 最坏、有序、支持范围查询」就完整了。</li>
+<li><strong>「为什么标准库用红黑树而不用 AVL」</strong>:红黑树平衡约束更松,插入/删除的旋转次数更少,通用容器写操作不少,综合更快;AVL 只在「几乎只读」时的查找上略占优。</li>
+<li><strong>「哈希表 vs 平衡树,选哪个」</strong>:只要等值查找 → 哈希表(平均 O(1));要有序、范围查询、前驱后继、按序遍历 → 平衡树(O(log n) 但有序)。</li>
+<li><strong>「数据库索引为什么用 B+ 树不用红黑树」</strong>:B+ 树扇出高、树矮,大幅减少磁盘 IO 次数;红黑树是二叉的,进磁盘会太高。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>别把「平衡」理解成「完全平衡」。</strong>平衡查找树只保证树高是 O(log n) 量级,并不要求像满二叉树那样每层填满。红黑树甚至允许最长路径是最短路径的两倍——它「够平衡」就行,不追求极致。</p>
+<p><strong>「AVL 一定比红黑树好,因为更平衡」——错。</strong>更平衡=查找略快,但插入/删除旋转更多、维护更贵。写操作占比不低的通用场景,红黑树的<strong>更少旋转</strong>反而整体更优,这就是标准库偏爱它的原因。「读多写少用 AVL、读写混合用红黑树」才是准确的取舍。</p>
+</div>
+
+<div class="implement">
+<p>这节以理解为主,动手核对即可(大纲也说面试基本不会要求手写平衡树):</p>
+<p>1. 往一棵普通 BST 里<strong>按有序</strong>插入 1..8,画出结果——确认它退化成一条链、树高 8。</p>
+<p>2. 手动对一个「右偏三节点」做一次左旋,验证左旋后 BST 的中序遍历不变(仍是升序)。</p>
+<p>3. 查一下你常用语言的有序容器(<code>std::map</code> / <code>TreeMap</code> / C# <code>SortedDictionary</code>)文档,确认它承诺的是 O(log n) 且底层为红黑树。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>平衡查找树用旋转把树高钉在 O(log n),给普通 BST 会退化的最坏情况上了保险。AVL 更平衡查找更快、红黑树少旋转写更快——标准库和 Linux CFS 都选红黑树;数据要进磁盘就换 B+ 树。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:往一棵空的普通(非自平衡)BST 里依次插入 1,2,3,4,5。查找元素 5 的最坏时间复杂度是?</summary>
+<div class="answer">
+<p><strong>O(n)</strong>。有序插入使每个新节点都挂到最右下,树退化成一条 1→2→3→4→5 的链,查 5 要一路走到底,和遍历链表无异。这正是需要自平衡树的理由——换成 AVL 或红黑树,插入过程中会旋转,树高始终保持在 O(log n),查 5 就是 O(log n)。答 O(log n) 的人忘了「普通 BST 的 log n 只是平均、不是保证」。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:C++ 的 <code>std::map</code> 和 Java 的 <code>TreeMap</code> 底层通常用哪种数据结构?为什么不用严格平衡的 AVL?</summary>
+<div class="answer">
+<p>底层是<strong>红黑树</strong>。不用 AVL 的原因:红黑树的平衡约束更宽松,插入/删除时需要的<strong>旋转次数更少</strong>(平均常数次),对读写混合的通用容器整体更快;AVL 更严格的平衡只在「构建后几乎只读」的查找上略有优势,但要为此付出更频繁的旋转。所以「更平衡」不等于「更好」,取舍取决于读写比例。补充:哈希表(<code>unordered_map</code>/<code>HashMap</code>)平均 O(1) 但无序;<code>map</code>/<code>TreeMap</code> 选红黑树正是为了拿到<strong>有序 + O(log n) 保证</strong>。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题在仓库大纲「平衡查找树」小节(含 AVL、红黑树、B 树多组视频)。推荐:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=FNeL18KsWPc&amp;list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb&amp;index=6">MIT AVL 树 / AVL 排序(视频)</a> —— 讲清严格平衡与旋转。</li>
+<li><a href="https://www.topcoder.com/community/data-science/data-science-tutorials/an-introduction-to-binary-search-and-red-black-trees/">二分查找及红黑树的介绍(文章)</a> —— 理解红黑树的着色规则与用途。</li>
+<li><a href="https://en.wikipedia.org/wiki/Self-balancing_binary_search_tree">自平衡二叉查找树(维基)</a> 与 <a href="https://en.wikipedia.org/wiki/B-tree">B 树(维基)</a> —— 补齐概念与磁盘索引场景。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI14 讲「红黑树凭什么用更松的平衡换更少的旋转」,或带你画出有序插入如何把 BST 拉成一条链。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0046-union-find.html"><span class="dir">← 上一课</span>并查集:近乎 O(1) 的连通性</a>
+  <a class="next" href="0048-bloom-filter-skip-list.html"><span class="dir">下一课 →</span>布隆过滤器与跳表</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

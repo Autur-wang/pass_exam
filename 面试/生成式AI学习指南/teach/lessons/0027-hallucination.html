@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0027 · 幻觉:为什么产生、如何评估与缓解</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第九部分 生产工程、幻觉与安全 · 第 0027 课</p>
+<h1>幻觉:为什么产生、如何评估与缓解</h1>
+<p class="lede">这节课把面试里最扎手的一组「诚实性」问题一次答清:<strong>「LLM 为什么会幻觉,能根除吗?」「幻觉怎么评估、怎么检测?」「怎么从模型拿到置信度/不确定信号?」「判断生成质量看哪些指标、为什么不能只看 perplexity?」以及压轴的系统设计题「设计一个检测并降低幻觉的系统」。</strong>(源:AI 工程师题库 Q4、Q12、Q133;60 题·训练与推理 第 4、5、7 题)。答这几道题的底色只有一句:<strong>幻觉是要「界定并管理」的风险,不是能「修好」的 bug。</strong></p>
+
+<div class="recall">
+<p>上一课(0026)讲部署与可观测——上线后靠监控、日志、trace 去发现问题。但幻觉是所有故障里<strong>最难被观测</strong>的一种:它不报错、不崩溃、延迟正常,输出还流畅自信。<strong>先别往下看:如果一段回答语法完美、语气笃定,你怎么判断它是不是在编?模型自己「知道」它错了吗?</strong></p>
+</div>
+
+<h2>一、为什么会幻觉,能不能根除</h2>
+<p>直觉先行:LLM 的训练目标是<strong>预测像样的下一个词</strong>,不是「说真话」。它没有内建的真值观(no built-in notion of truth),也没有一个「我不知道」的开关。当训练数据对某话题很薄、或 prompt 把它推到它所知之外时,它照样会产出<strong>流畅但虚假</strong>的文本——因为在它的目标函数看来,一段通顺合理的编造和一段通顺正确的事实,长得一模一样。</p>
+<p>所以正确的框定是:<strong>幻觉无法根除,只能管理。</strong>三条管理路径,后面几节会逐一展开——</p>
+<div class="trio">
+  <div class="cell"><strong>Reduce(减少)</strong><br>grounding(RAG)、约束输出、更好的上下文<br><em>从源头压概率</em></div>
+  <div class="cell"><strong>Detect(检测)</strong><br>eval、引用核验、上线监控<br><em>抓漏网的</em></div>
+  <div class="cell"><strong>Contain(兜底)</strong><br>显示来源、允许纠正、高危/低置信路由给人<br><em>控制爆炸半径</em></div>
+</div>
+<dl class="keydef">
+<dt>幻觉(Hallucination)</dt>
+<dd>模型生成的、<strong>看似合理却与事实或所给上下文不符</strong>的内容。注意区分两类:与世界事实冲突(factuality),与所给来源冲突(faithfulness / 不忠实)。RAG 系统里后者更可控,也更该优先测——因为你有明确的「来源」当裁判。</dd>
+</dl>
+<p>面试里如果对方追「那能不能靠更大的模型/更多数据彻底解决?」——软化作答:更强的模型和更干净的数据能<strong>降低</strong>发生率,但只要目标仍是「预测像样文本」,残留风险就不会归零。把它当成要 <em>bound</em>(界定上界)的风险,而不是要 <em>fix</em> 的缺陷。</p>
+
+<h2>二、先谈评估:判断生成质量看什么,perplexity 为何不够</h2>
+<p>要治幻觉,先得会「测」。面试常问「判断生成质量有哪些指标」——把常见的几类摆清楚,并说明各自量的是什么:</p>
+<ul>
+<li><strong>Perplexity(困惑度)</strong>:模型预测下一个词有多好,越低越好。是语言建模的内在指标。</li>
+<li><strong>Human evaluation(人工评估)</strong>:人读、人打分。贵、慢,但对连贯性、事实性这类维度最可靠。</li>
+<li><strong>BLEU</strong>:偏机器翻译,比对与参考译文的 n-gram 重叠。</li>
+<li><strong>ROUGE</strong>:偏摘要,比对与参考摘要的重叠(召回向)。</li>
+<li><strong>Diversity(多样性)</strong>:输出是否重复、单调。</li>
+<li><strong>Truthfulness(真实性)</strong>:如 TruthfulQA,专门测模型是否会重复常见误解、说假话。</li>
+</ul>
+<dl class="keydef">
+<dt>Perplexity(困惑度)</dt>
+<dd>$$\mathrm{PPL}(x)=\exp\!\left(-\frac{1}{N}\sum_{i=1}^{N}\log p\!\left(x_i \mid x_{&lt;i}\right)\right)$$
+<em>本质是模型在测试文本上平均每步「有多意外」。越低 = 预测越准。但请盯住它<strong>只</strong>量了「预测下一个词好不好」这一件事。</em></dd>
+</dl>
+<p><strong>为什么过度依赖 perplexity 有问题?</strong>因为它主要测<strong>下一词预测的准度</strong>,可能忽略:整体<strong>连贯性</strong>、<strong>事实性</strong>、以及细微的<strong>含义/含意</strong>(nuance/implication)。一段 perplexity 很低的文本,完全可以是流畅、通顺、又在一本正经地胡说——低困惑度和「说真话」根本不是一回事。对需要深层理解或创造性的任务,perplexity 更不反映真实表现。所以它适合当训练/建模的健康度指标,<strong>不适合</strong>单独用来判断「这段回答对不对、好不好」。</p>
+
+<h2>三、怎么检测幻觉:五种技术</h2>
+<p>60 题里这道「幻觉如何检测」给出一套很实用的工具箱,按「有没有概率信号」「是不是黑箱」分档来记最省力:</p>
+<dl class="keydef">
+<dt>1) Log Probability(序列对数概率 / Seq-Logprob)</dt>
+<dd>用<strong>长度归一化的序列对数概率</strong>当置信度:$\frac{1}{L}\sum_{t=1}^{L}\log p\!\left(y_t \mid y_{&lt;t}\right)$。整段生成的平均 logprob 越低,越可疑。前提是你能拿到 token 概率。</dd>
+<dt>2) Sentence Similarity(源贡献占比)</dt>
+<dd>评估输出与<strong>来源</strong>的语义相似/蕴含程度——源的贡献占比低,就怀疑是幻觉。工具如 LASER、LaBSE(跨语句嵌入)或 XNLI(自然语言推理判蕴含)。</dd>
+<dt>3) SelfCheckGPT(采样一致性,黑箱可用)</dt>
+<dd>当拿不到概率、只有一个黑箱 API 时:对同一问题<strong>多次采样</strong>,看几次回答彼此是否一致——不一致 = 大概率在编。一致性可用 BERTScore 或 QA 方式来度量。</dd>
+<dt>4) GPT-4 Prompting(用强模型逐句核事实)</dt>
+<dd>用一个强模型 + CoT / 逐句提示,去检查目标输出的<strong>事实一致性</strong>(fact consistency)。本质是「LLM 当裁判」的一种。</dd>
+<dt>5) G-EVAL(结构化打分)</dt>
+<dd>用 GPT-4 + CoT + form-filling(表单式打分)来评 NLG 生成质量,把「好不好」拆成可打分的维度,输出更稳定。</dd>
+</dl>
+<p>记忆锚:<strong>有概率信号</strong>→ 用 Seq-Logprob;<strong>有明确来源</strong>→ 用 Sentence Similarity / NLI 蕴含;<strong>黑箱无概率</strong>→ 用 SelfCheckGPT 采样一致性;<strong>要更强判据</strong>→ 用 GPT-4 Prompting / G-EVAL 当裁判。</p>
+
+<h2>四、怎么从模型拿到置信度/不确定信号</h2>
+<p>这是 AI 工程师 Q12。先破一个误区:LLM <strong>没有</strong>一个内建的、可直接读出的「这句话是对的的概率」。你只能<strong>近似</strong>。几条常见近似路径,各有陷阱:</p>
+<ul>
+<li><strong>Token 对数概率(logprobs)</strong>:API 暴露时,可聚合成每 token / 整段的粗略置信。陷阱:<strong>流畅却错的文本经常拿高分</strong>——模型对自己的编造一样很「自信」。</li>
+<li><strong>Self-consistency(自一致性)</strong>:同题多次采样,看回答稳不稳。答案飘忽本身就暴露了不确定。</li>
+<li><strong>Verbalized confidence(让模型自评)</strong>:显式要求「给出你的置信度,不确定就直说」。能拿到粗信号,但这个自报数<strong>必须</strong>拿真实结果去<strong>校准</strong>(calibrate)才可信。</li>
+<li><strong>RAG 检索分</strong>:在 RAG 系统里,检索器的相关性分往往比生成器自报的置信<strong>更诚实</strong>——检索没命中好文档,就是个直接的「我可能要编了」的预警。</li>
+</ul>
+<div class="keydef">
+<dt>核心纪律:先校准,再据此门禁</dt>
+<dd>无论 verbalized confidence 还是 logprobs,都<strong>要在你自己的数据上验证</strong>它是否真的与「答对」相关,校准通过后才拿它做门禁(阈值以下就拒答/转人工)。直接信模型自报的数字,是新手常踩的坑。</dd>
+</div>
+
+<h2>五、把它做成系统:reduce → detect → contain</h2>
+<p>压轴题 Q133「设计一个检测并降低幻觉的系统」。别指望一个开关——答成<strong>分层</strong>的:源头减少 + 事后检测 + 兜底控制,并<strong>测残留率</strong>。</p>
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">用户提问</div>
+  <div class="arrow">→</div>
+  <div class="node">Reduce<br>检索源 + 「只据此答」<br>约束输出 · 干净最小上下文</div>
+  <div class="arrow">→</div>
+  <div class="node">生成</div>
+  <div class="arrow">→</div>
+  <div class="node">Detect<br>逐 claim 对引文核验<br>NLI/LLM judge · 引用覆盖 · 置信信号</div>
+  <div class="arrow">→</div>
+  <div class="node good">Contain<br>显示来源 · 弱时拒答<br>高危低置信 → 转人工</div>
+</div>
+<figcaption>三层各司其职:Reduce 从源头压概率,Detect 抓漏网的,Contain 控制爆炸半径。offline eval 与 online 抽样都要跑。</figcaption>
+</figure>
+<h3>Reduce(减少)</h3>
+<p>grounding:先检索可信来源,把「<strong>只根据下面材料回答,材料没有就说不知道</strong>」写进指令;约束输出(schema / 受限选项);给<strong>干净、最小</strong>的上下文——上下文越杂、越长,越容易诱发跑偏(呼应 Lost in the Middle)。</p>
+<h3>Detect(检测)</h3>
+<p><strong>忠实度 / 蕴含检查</strong>:把回答拆成一条条 claim,<strong>逐 claim 对引用材料核验</strong>——用 NLI(判蕴含/矛盾)或 LLM judge;再加<strong>引用覆盖检查</strong>(每个论断是否都挂到了来源)和置信信号。关键:<strong>offline eval(上线前跑测试集)和 online 抽样(线上抽查真实流量)都要跑</strong>,只做其一都会漏。</p>
+<h3>Contain(兜底)</h3>
+<p>显示来源让用户能自己核验;支持不足时<strong>拒答</strong>而不是硬编;高危场景 + 低置信 → <strong>路由给人</strong>审核。把「测残留幻觉率」当成一个持续跟踪的线上指标,而不是上线前跑一次就完。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「LLM 为什么会幻觉?」——目标是预测像样文本、无内建真值观;数据薄或被推到所知之外就产出流畅假话。</li>
+<li>「那能根除吗?」——不能,只能管理;答 reduce/detect/contain 三层,并强调「界定风险上界,不是修 bug」。</li>
+<li>「怎么检测?」——分档答:有概率用 Seq-Logprob、有来源用相似度/NLI、黑箱用 SelfCheckGPT 采样一致性、要强判据用 GPT-4 Prompting / G-EVAL。</li>
+<li>「怎么拿模型的置信度?」——logprobs / self-consistency / verbalized confidence / RAG 检索分,且都要在自己数据上校准;点出「流畅却错的文本常拿高分」这个坑。</li>
+<li>「评估生成质量用什么、为什么不能只看 perplexity?」——列 perplexity/人工/BLEU/ROUGE/diversity/truthfulness;perplexity 只测下一词预测,忽略连贯性、事实性、nuance。</li>
+<li>「给我设计一个降幻觉系统」——上面那张 reduce→detect→contain 图,强调 offline+online 都跑、持续测残留率。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞是扣分点):</strong></p>
+<ul>
+<li>别说「用了 RAG 就不会幻觉」——RAG 显著<strong>降低</strong>幻觉,但检索错源、或模型无视上下文照编,依然会幻觉;所以才需要 Detect 层的引用核验。</li>
+<li>别说「logprob 高就代表答案对」——流畅的编造常拿高 logprob;置信信号必须校准后才可用。</li>
+<li>别说「perplexity 越低模型越好/回答越对」——它只量下一词预测,和事实正确性不是一回事。</li>
+<li>别说「幻觉能彻底根除」——只要目标是预测像样文本,残留风险就不归零;正确说法是「界定并管理」。</li>
+<li>别把 detection 只放在上线前——offline eval 抓不到真实分布的问题,必须配 online 抽样。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>面试官问「为什么不能只用 perplexity 判断一段回答的质量?」下列哪句最准确?</p>
+<details><summary>A. perplexity 计算太慢,不适合线上使用</summary>速度不是核心问题,它其实很好算。</details>
+<details><summary>B. perplexity 主要量「下一词预测有多准」,可能忽略连贯性、事实性和细微含意,低困惑度也能是流畅的胡说 ✅</summary>正确。低 perplexity ≠ 说真话,它测的是建模好坏而非正确性。</details>
+<details><summary>C. perplexity 只能用于翻译任务,不能用于摘要</summary>那是 BLEU 的偏向;perplexity 是通用的语言建模指标。</details>
+<details><summary>D. perplexity 越高说明模型越好</summary>反了,perplexity 越低越好。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>你在一个<strong>只能黑箱调用、拿不到 token 概率</strong>的 API 上做幻觉检测,下列哪种方法最对口?</p>
+<details><summary>A. Seq-Logprob:用长度归一化的序列对数概率当置信度</summary>需要 token 概率,黑箱拿不到,用不了。</details>
+<details><summary>B. 直接读模型内建的「正确概率」字段</summary>LLM 没有这种内建字段,这是常见误解。</details>
+<details><summary>C. SelfCheckGPT:对同一问题多次采样,看回答彼此是否一致 ✅</summary>正确。无概率、黑箱场景就靠采样一致性,不一致即大概率幻觉。</details>
+<details><summary>D. 降低温度到 0,输出稳定就说明没幻觉</summary>输出稳定只代表确定性,稳定地编造依然是幻觉。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>SelfCheckGPT</strong>(Manakul et al., 2023)——黑箱、无概率场景下用采样一致性检测幻觉的方法。</li>
+<li><strong>G-EVAL</strong>(Liu et al., 2023)——用 GPT-4 + CoT + form-filling 评 NLG 质量。</li>
+<li><strong>TruthfulQA</strong>(Lin et al., 2022)——衡量模型是否重复常见误解、说假话的真实性基准。</li>
+<li><strong>Lost in the Middle</strong>(Liu et al., 2023)——长/杂上下文如何让模型「看不见」中间信息,呼应本课 Reduce 层「干净最小上下文」。</li>
+<li>NLI 蕴含判断可参考 XNLI;跨句嵌入相似度可参考 LaBSE / LASER。RAG 忠实度评估延伸到第 0017 课(RAG evaluation & trust)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>幻觉源于「预测像样文本、无真值观」,不能根除只能管理——reduce(grounding+约束) → detect(逐 claim 对引文核验+置信信号,offline+online) → contain(显来源/拒答/转人工);置信信号都要先校准,perplexity 只测下一词、别拿来判对错。</strong></p>
+<nav class="lesson-nav">
+<a href="0026-deployment-observability.html">← 上一课:部署决策与可观测</a>
+<a class="next" href="0028-safety-and-security.html">下一课:安全与负责任 AI →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

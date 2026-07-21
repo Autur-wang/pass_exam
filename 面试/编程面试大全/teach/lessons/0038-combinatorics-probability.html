@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0038 · 组合与概率:面试要的那点数学</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0038 课 · 工程与设计 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>组合与概率:面试要的那点数学</h1>
+
+<p class="lede">面试不会考你证明中心极限定理,但会以两种方式塞给你概率与组合:一是<strong>「把样本空间数清」</strong>的分析题(这台机器出故障的概率、抽到某组合的概率),二是<strong>「写一个等概率随机」</strong>的编码题(洗牌、抽样、用一个随机数造另一个)。这两类的失分点惊人地集中——区间写错一格、有序无序混淆。这节把面试真正用得上的那点数学收拢成一张可背的表和三个必会算法。</p>
+
+<div class="recall">
+<p>回忆<a href="0033-backtracking.html">回溯</a>那课:我们在决策树上系统地枚举所有<strong>组合</strong>与<strong>排列</strong>。当时关心的是「怎么把它们一个不漏地生成出来」;这节换个问题——「一共有<strong>多少</strong>个?」以及「随机取一个,每个被取到的概率相等吗?」枚举和计数是同一枚硬币的两面。</p>
+</div>
+
+<h2>一、排列 vs 组合:先问一句「顺序算不算」</h2>
+
+<p>这是全部组合数学的分水岭,也是面试最常混的地方。判据只有一句:<strong>取出来之后,顺序不同算不算不同的结果?</strong></p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">从 n 个里取 k 个 —— 顺序不同算不同结果吗？</div>
+  <div class="down">▼</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">算 → 有序</div>
+      <div class="step terminal"><strong>排列 P(n,k)</strong><br>= n! / (n−k)!<br><small>密码、赛道名次、排队</small></div>
+    </div>
+    <div class="branch">
+      <div class="label">不算 → 无序</div>
+      <div class="step terminal"><strong>组合 C(n,k)</strong><br>= n! / (k!·(n−k)!)<br><small>抽奖、选委员、发牌</small></div>
+    </div>
+  </div>
+</div>
+<figcaption>组合比排列少了一个 k!——因为排列把「同一组 k 个元素的 k! 种排序」都算成不同结果,组合把它们算成一个。</figcaption>
+</figure>
+
+<table>
+<thead><tr><th>量</th><th>公式</th><th>直觉</th></tr></thead>
+<tbody>
+<tr><td>阶乘 <code>n!</code></td><td>n·(n−1)···2·1</td><td>n 个元素全排列的种数</td></tr>
+<tr><td>排列 <code>P(n,k)</code></td><td>n! / (n−k)!</td><td>取 k 个<strong>并排好序</strong>:第 1 位 n 选,第 2 位 n−1 选…</td></tr>
+<tr><td>组合 <code>C(n,k)</code></td><td>n! / (k!(n−k)!)</td><td>取 k 个<strong>不管序</strong>:排列数再除以 k! 消掉内部顺序</td></tr>
+</tbody>
+</table>
+
+<p>两个好用的等式:<code>C(n,k) = C(n,n−k)</code>(选 k 个留下 = 选 n−k 个丢掉);<code>C(n,0) = C(n,n) = 1</code>(一种都不选、全选,各一种)。杨辉三角的每一行就是 <code>C(n,0)…C(n,n)</code>。</p>
+
+<h2>二、概率的三块地基</h2>
+
+<p>面试概率题几乎只用到三样东西,把它们分清就够用:</p>
+
+<dl class="keydef">
+<dt>独立事件(Independent)</dt>
+<dd>一个发生与否不影响另一个。此时 <code>P(A 且 B) = P(A)·P(B)</code>(概率相乘)。掷两次骰子、连续抽后放回都是独立。</dd>
+<dt>条件概率(Conditional)</dt>
+<dd><code>P(A|B) = P(A 且 B) / P(B)</code>——「已知 B 发生,A 的概率」。抽牌不放回、贝叶斯类题都靠它。<em>避免</em>把 <code>P(A|B)</code> 和 <code>P(B|A)</code> 当成一回事。</dd>
+<dt>期望(Expectation)</dt>
+<dd><code>E[X] = Σ x·P(X=x)</code>,即所有取值按概率的加权平均。杀手锏是<strong>期望的线性性</strong>:<code>E[X+Y] = E[X]+E[Y]</code>,无论 X、Y 是否独立——很多看着吓人的期望题拆成一堆小指示变量相加就秒了。</dd>
+</dl>
+
+<p>还有两条互斥/加法的常识:互斥事件(不可能同时发生)<code>P(A 或 B) = P(A)+P(B)</code>;一般情形要减去重叠 <code>P(A)+P(B)−P(A 且 B)</code>(容斥)。以及最省事的技巧:<strong>正难则反</strong>,「至少一个」用 <code>1 − P(一个都没有)</code> 往往比直接算简单得多。</p>
+
+<h2>三、面试三件套(等概率随机)</h2>
+
+<p><strong>1. Fisher-Yates 洗牌</strong>——把数组原地打乱成均匀随机排列。从后往前,每一步把当前位置和「它及它之前」范围内随机挑的一个元素交换:</p>
+
+<pre><code>for i from n-1 downto 1:
+    j = random_int(0, i)   // 闭区间 [0, i]，务必含 i 自己
+    swap(a[i], a[j])</code></pre>
+
+<p>为什么均匀?第 i 步从 <code>i+1</code> 个候选里等概率选一个放到位置 i,乘下来恰好是 <code>n!</code> 种排列各 <code>1/n!</code>。区间一旦写成 <code>random(0, n-1)</code>(整个数组),就变成 <code>n<sup>n</sup></code> 种等概率路径映射到 <code>n!</code> 种排列——不整除,必然有偏。</p>
+
+<p><strong>2. 蓄水池抽样(Reservoir Sampling)</strong>——从一个<strong>长度未知或超大</strong>的流里等概率抽 1 个(或 k 个),只用 O(1) 额外空间。先留住第 1 个,看到第 i 个元素时,以概率 <code>1/i</code> 用它替换当前保留者:</p>
+
+<pre><code>keep = stream[0]
+for i from 1 to n-1:          // 0-indexed，i 是「第 i+1 个」
+    if random_int(0, i) == 0: // 命中概率 1/(i+1)
+        keep = stream[i]</code></pre>
+
+<p>归纳可证每个元素最终被留下的概率都是 <code>1/n</code>。它的美在于:你不需要事先知道 n,读到哪算到哪——处理日志流、大文件采样的标配。</p>
+
+<p><strong>3. 用 rand5 造 rand7</strong>——只有等概率 1~5 的随机源,要造等概率 1~7。核心思路:<strong>先合成一个更大的均匀范围,再拒绝掉多出来的尾巴</strong>(拒绝采样):</p>
+
+<pre><code>do {
+    v = 5 * (rand5() - 1) + rand5();  // 均匀落在 1..25
+} while (v > 21);                     // 拒绝 22..25，保持均匀
+return (v - 1) % 7 + 1;               // 1..21 均匀 → 映射到 1..7</code></pre>
+
+<p>21 是 7 的倍数,所以 <code>1..21</code> mod 7 后 7 个余数各出现 3 次、完全均匀;剩下的 <code>22..25</code> 不是整倍数,直接丢弃重来。丢弃看似浪费,但期望重试次数很小(21/25 一次成功)。</p>
+
+<h2>四、复杂度速记</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">算法</th><th>时间</th><th>额外空间</th></tr></thead>
+<tbody>
+<tr><td class="op">Fisher-Yates 洗牌</td><td class="best">O(n)</td><td class="best">O(1) <small>(原地)</small></td></tr>
+<tr><td class="op">蓄水池抽样(抽 1)</td><td class="best">O(n)</td><td class="best">O(1)</td></tr>
+<tr><td class="op">rand5 造 rand7</td><td class="best">O(1) 期望</td><td class="best">O(1)</td></tr>
+</tbody>
+</table>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>三种形态:</p>
+<ul>
+<li><strong>数样本空间</strong>:「一副牌抽 5 张是同花的概率」——分子是「有利结果数」,分母是「总结果数」,两个都用组合数数清,别数重也别数漏。</li>
+<li><strong>等概率编码</strong>:直接让你写洗牌 / 抽样 / <code>randM→randN</code>,并要你<strong>证明均匀性</strong>。能讲清「为什么每种结果概率相等」比写对代码更关键。</li>
+<li><strong>期望计算</strong>:抛硬币直到正面的期望次数、随机游走步数——先想能不能用<strong>期望线性性</strong>把它拆成小块相加。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>Fisher-Yates 的区间只要错一格就不均匀。</strong>正确是从 <code>[0, i]</code>(含 i 自己)里选;写成 <code>[0, i-1]</code> 或固定 <code>[0, n-1]</code> 都会引入偏差,而且这种偏差肉眼看不出来、只有统计几万次才现形——面试官专挑这里问「你确定含不含 i?为什么」。</p>
+<p><strong>有序无序别混。</strong>「密码锁 3 位」是排列(1-2-3 ≠ 3-2-1),「从 5 人选 3 人组队」是组合(顺序无关)。一句自检:换个顺序还是同一个结果吗?是 → 组合,否 → 排列。</p>
+<p><strong>拒绝采样别偷懒省掉拒绝。</strong>用 <code>rand5()%7</code> 之类直接取模而不合成大范围、不拒绝尾巴,余数分布必然不均——这是最常见的错解。</p>
+</div>
+
+<div class="implement">
+<p>写代码 + 用统计验证均匀性(这一步才是重点):</p>
+<p>① 实现 Fisher-Yates,对 <code>[0,1,2]</code> 洗牌一百万次,统计 6 种排列各出现的频率——应各约 1/6。再故意把区间改成 <code>[0, n-1]</code>,看频率如何倾斜。② 实现单元素蓄水池抽样,对长度 10 的流跑百万次,验证每个元素约 1/10 被选中。③ 实现 <code>rand7()</code>(用一个假的均匀 <code>rand5()</code>),统计 1~7 的频率是否均匀,并数一下平均重试几次。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>组合题先问「顺序算不算」定排列还是组合;随机题的正确性不在代码在证明——洗牌的区间必须含当前位、造随机数必须「合成大范围 + 拒绝尾巴」保持整除均匀。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一个班 30 人,要选出「班长、副班长、学习委员」各一名(一人一职)。这是排列还是组合?共几种?若改成「选 3 名普通委员」呢?</summary>
+<div class="answer">
+<p>选三种<strong>不同职务</strong>:换个顺序(张当班长 vs 张当副班长)是不同结果 → <strong>排列</strong>,<code>P(30,3) = 30·29·28 = 24360</code> 种。选 3 名<strong>不分职务</strong>的普通委员:{张,李,王} 无论谁先谁后都是同一组 → <strong>组合</strong>,<code>C(30,3) = 30·29·28 / 3! = 4060</code> 种。两者正好差一个 <code>3! = 6</code> 倍,这个 6 就是三个人内部的排序数。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:有人这样写洗牌:<code>for i in 0..n-1: j = random(0, n-1); swap(a[i], a[j])</code>。它错在哪?为什么结果不均匀?</summary>
+<div class="answer">
+<p>每一步都从<strong>整个数组</strong> <code>[0, n-1]</code> 里随机挑,共产生 <code>n<sup>n</sup></code> 条等概率的执行路径。但排列只有 <code>n!</code> 种,而 <code>n<sup>n</sup></code> <strong>不能被 <code>n!</code> 整除</strong>(n≥3 时),所以必然有些排列被更多路径命中、概率偏高。正确的 Fisher-Yates 第 i 步只从 <code>[0, i]</code> 里挑,总路径数恰是 <code>n·(n-1)···1 = n!</code>,与排列一一对应,均匀。这题就是把「候选范围」写死成整段导致的经典 bug。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:连续掷一枚均匀硬币,直到第一次出现正面。问「至少掷 2 次」的概率;再问期望掷几次。</summary>
+<div class="answer">
+<p><strong>至少掷 2 次</strong>等价于「第 1 次是反面」——正难则反,<code>P = 1 − P(第一次就正面) = 1 − 1/2 = 1/2</code>。<strong>期望次数</strong>:这是几何分布,成功概率 <code>p = 1/2</code>,期望 <code>1/p = 2</code> 次。也可用「首步分析」列方程 <code>E = 1 + (1/2)·0 + (1/2)·E</code>(一半概率这次成功、一半白掷一次重来),解得 <code>E = 2</code>。会用「1/p」或首步方程任一条都行。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲的「组合 &amp; 概率」小节。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=8RRo6Ti9d0U">数据技巧:如何找出阶乘、排列和组合(视频)</a> —— 把「顺序算不算」讲透的一条,先看这个。</li>
+<li><a href="https://www.youtube.com/watch?v=sZkAAk9Wwa4">来点学校的东西:概率(视频)</a> —— 概率地基。</li>
+<li><a href="https://www.youtube.com/watch?v=dNaJg-mLobQ">来点学校的东西:概率和马尔可夫链(视频)</a> —— 进阶到随机过程。</li>
+<li><a href="https://www.khanacademy.org/math/probability/probability-and-combinatorics-topic">可汗学院:概率理论基础</a> —— 系统课程,配 <a href="https://www.youtube.com/watch?v=uzkc-qNVoOk&list=PLC58778F28211FA19">概率解释系列(41 个短视频)</a> 逐个啃。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI14 讲「为什么组合要除 k!」,或带你把 Fisher-Yates 的均匀性在 n=3 的小例子上手推一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0037-oop-design-patterns.html"><span class="dir">← 上一课</span>OOP 与常见设计模式</a>
+  <a class="next" href="0039-np-completeness.html"><span class="dir">下一课 →</span>NP 完全:识别「大概没有多项式解」</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

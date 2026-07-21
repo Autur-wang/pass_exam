@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>现代 Python 建类 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第七部分 · 进阶工程 · 第 0024 节</p>
+<h1>现代 Python 建类:dataclass、slots、Enum</h1>
+<p class="lede">前面几节讲了封装、不可变、可变默认坑这些"机制"。这一节把它们落地成一件事——<strong>Pythonic 地写一个类</strong>。面试里当场用 <code>@dataclass</code> 消掉一屏样板,再顺手讲清它背后挡住的坑,是很稳的加分项。</p>
+
+<div class="recall">
+<p>你要写一个只装 <code>x</code>、<code>y</code> 两个字段的 <code>Point</code> 类,要求:打印出来好看、能用 <code>==</code> 比较相等、还能塞进 <code>set</code>。凭直觉,你得<strong>手写几个方法</strong>?分别是哪几个?先在心里列出来——这一节教你怎么<strong>一个都不写</strong>。</p>
+</div>
+
+<h2>一、直觉:样板(boilerplate)是噪声</h2>
+
+<p>一个"纯数据容器"类,90% 的代码都是抄的:<code>__init__</code> 把参数逐个塞进 <code>self</code>、<code>__repr__</code> 拼一个好看的字符串、<code>__eq__</code> 逐字段比较……字段一多,这些方法又长又容易漏、容易和字段列表不同步。这些代码<strong>不表达任何业务意图</strong>,纯粹是噪声。</p>
+
+<p>现代 Python 的思路是:<strong>你只声明"有哪些字段",样板方法交给工具自动生成。</strong>你把注意力留给真正的业务逻辑。这一簇工具有四件,先建立地图,再逐个看。</p>
+
+<div class="keydef">
+<dl>
+<dt>@dataclass</dt>
+<dd>装饰一个类,<strong>按你声明的字段自动生成</strong> <code>__init__</code> / <code>__repr__</code> / <code>__eq__</code> 等样板。可选 <code>frozen=True</code>(不可变)、<code>slots=True</code>(省内存)、<code>order=True</code>(可排序)。适合需要方法或可变状态的数据容器。</dd>
+<dt>namedtuple / NamedTuple</dt>
+<dd><strong>带名字字段的元组</strong>:轻量、不可变、可解包。适合小型、只读的记录。<code>collections.namedtuple</code> 是老写法,<code>typing.NamedTuple</code> 支持类型注解。</dd>
+<dt>__slots__</dt>
+<dd>在类里声明 <code>__slots__ = ('x', 'y')</code>,<strong>限定实例只能有这几个属性</strong>。省内存(不给每个实例建 <code>__dict__</code>)、禁止动态加属性;代价是失去 <code>__dict__</code>、多继承与弱引用有坑。</dd>
+<dt>Enum</dt>
+<dd>定义一组<strong>具名常量</strong>(<code>class Color(Enum): RED = 1</code>)。比裸整数 / 裸字符串更安全、更可读、可用 <code>is</code> 比较。</dd>
+</dl>
+</div>
+
+<h2>二、@dataclass:从"手抄"到"声明"</h2>
+
+<p>先看手写一个 <code>Point</code> 要付出什么——注意里面没有一行是业务逻辑:</p>
+
+<pre><code># ❌ 手写:三个魔术方法全靠抄,还容易和字段列表不同步
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __repr__(self):
+        return f"Point(x={self.x!r}, y={self.y!r})"
+
+    def __eq__(self, other):
+        if not isinstance(other, Point):
+            return NotImplemented
+        return (self.x, self.y) == (other.x, other.y)
+</code></pre>
+
+<p>换成 <code>@dataclass</code>,你只写"有哪些字段",三个方法自动到位:</p>
+
+<pre><code># ✅ @dataclass:声明字段即可,__init__/__repr__/__eq__ 全自动
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+p = Point(1, 2)
+print(p)                 # Point(x=1, y=2)   ← 自动 __repr__
+print(p == Point(1, 2))  # True              ← 自动 __eq__
+</code></pre>
+
+<p>字段可以给默认值(<code>x: int = 0</code>)。但一旦默认值是<strong>可变对象</strong>,坑就来了——这正是上一节(值 / 引用 / 可变性)那个经典陷阱:</p>
+
+<pre><code>from dataclasses import dataclass, field
+
+# ❌ 直接给可变默认:dataclass 在类定义时就报 ValueError
+@dataclass
+class Cart:
+    items: list = []          # ValueError: mutable default ... is not allowed
+
+# ✅ 用 default_factory:每个实例拿到一个"新建"的 list
+@dataclass
+class Cart:
+    items: list = field(default_factory=list)
+</code></pre>
+
+<p>注意 dataclass 的贴心之处:它<strong>直接把这个坑变成报错</strong>,逼你写 <code>default_factory</code>,而不是让你悄悄踩进"所有实例共享同一个 list"的雷。这是它帮你挡下的第一个坑。</p>
+
+<p>再看 <code>frozen=True</code>:让实例<strong>不可变</strong>,并因此<strong>自动可哈希</strong>——呼应"不可变才能安全地哈希"那一节:</p>
+
+<pre><code>from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Money:
+    amount: int
+    currency: str
+
+m = Money(100, "CNY")
+# m.amount = 200      # ❌ FrozenInstanceError:frozen 后不能再赋值
+seen = {m}            # ✅ 可哈希 → 能进 set、能当 dict 的 key
+print(m)              # Money(amount=100, currency='CNY')  ← __repr__ 照样有
+</code></pre>
+
+<h2>三、slots、namedtuple、Enum</h2>
+
+<p><strong>slots</strong>:海量实例要省内存时,让实例不再各自带一个 <code>__dict__</code>。Python 3.10+ 的 dataclass 可以直接 <code>slots=True</code>,等价于手写 <code>__slots__</code>:</p>
+
+<pre><code>from dataclasses import dataclass
+
+@dataclass(slots=True)        # Python 3.10+
+class Pixel:
+    x: int
+    y: int
+
+# 手写等价物:
+class Pixel:
+    __slots__ = ('x', 'y')    # 不再为每个实例建 __dict__
+
+px = Pixel(0, 0)
+# px.z = 5   # ❌ AttributeError:slots 禁止动态加没声明过的属性
+</code></pre>
+
+<p><strong>namedtuple</strong>:如果这条记录<strong>只读、还想像元组一样解包</strong>,namedtuple 比 dataclass 更轻:</p>
+
+<pre><code>from collections import namedtuple
+from typing import NamedTuple
+
+Point = namedtuple("Point", ["x", "y"])   # 老写法
+
+class Point(NamedTuple):                   # 带类型注解的新写法
+    x: int
+    y: int
+
+p = Point(1, 2)
+print(p.x)          # 1        ← 按名字取字段
+a, b = p            # (1, 2)   ← 还能像普通元组一样解包
+# p.x = 9           # ❌ 元组不可变,不能改
+</code></pre>
+
+<p><strong>Enum</strong>:一组固定取值(状态、颜色、方向……),用 Enum 而不是裸常量:</p>
+
+<pre><code>from enum import Enum
+
+class Color(Enum):
+    RED = 1
+    GREEN = 2
+    BLUE = 3
+
+print(Color.RED)          # &lt;Color.RED: 1&gt;
+print(Color.RED.name)     # 'RED'
+print(Color.RED.value)    # 1
+print(Color.RED is Color.RED)   # True  ← 成员是单例,可用 is 比较
+</code></pre>
+
+<p>为什么不用 <code>RED = 1</code> 这种裸常量?因为裸常量里 <code>1</code> 和别处的 <code>1</code> 没法区分,函数收到 <code>color=5</code> 也不报错;Enum 给了一个受约束的类型,拼错名字直接 <code>AttributeError</code>,可读性和安全性都更好。</p>
+
+<h2>四、到底用哪个?一张决策表</h2>
+
+<table>
+<tr><th>你的场景</th><th>首选工具</th><th>理由</th></tr>
+<tr><td>需要方法 / 可变状态的数据类</td><td><code>@dataclass</code></td><td>普通类,能加方法、能继承,默认可变</td></tr>
+<tr><td>小型、只读、还想解包的记录</td><td><code>namedtuple</code> / <code>NamedTuple</code></td><td>元组子类,最轻,天然不可变</td></tr>
+<tr><td>不可变值对象、要进 set / dict</td><td><code>@dataclass(frozen=True)</code></td><td>不可变 + 自动可哈希</td></tr>
+<tr><td>要创建海量实例、省内存</td><td><code>__slots__</code> / <code>slots=True</code></td><td>去掉 per-instance <code>__dict__</code></td></tr>
+<tr><td>一组固定取值(状态 / 类别)</td><td><code>Enum</code></td><td>具名、可读、类型受约束</td></tr>
+</table>
+
+<div class="interview">
+<p><strong>高频追问链(数据类几乎必被问):</strong></p>
+<ul>
+<li>"dataclass 和 namedtuple 有什么区别,该用哪个?" → namedtuple 是 <strong>tuple 子类</strong>:不可变、可解包、更轻,适合小型只读记录;dataclass 是<strong>普通类</strong>:默认可变(要不可变加 <code>frozen</code>)、加方法 / 继承更自然。要"不可变 + 解包"→ NamedTuple;要"行为 / 可变 / 灵活"→ dataclass。</li>
+<li>"<code>@dataclass</code> 到底帮你生成了哪些方法?" → 默认 <code>__init__</code>、<code>__repr__</code>、<code>__eq__</code>;<code>order=True</code> 再加 <code>__lt__</code> 等比较方法;<code>frozen=True</code> 加 <code>__hash__</code> 并封锁赋值。每一项都能单独开关。</li>
+<li>"为什么 dataclass 不让我写 <code>items: list = []</code>?" → 默认值在<strong>类定义时只求值一次</strong>,会被所有实例共享(上一节的可变默认坑);dataclass 检测到 list / dict / set 默认值直接抛 <code>ValueError</code>,逼你改用 <code>default_factory</code>。</li>
+<li>"<code>__slots__</code> 为什么省内存、是不是也更快?" → 主要收益是<strong>不给每个实例建 <code>__dict__</code></strong>,实例一多内存下降明显(具体幅度看属性数量与实现,别背死数字);属性走描述符,常被说"略快",但这不是它的主卖点。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:dataclass 里可变默认必须用 <code>default_factory</code>。</strong>直接写 <code>x: list = []</code> 会在类定义时就 <code>ValueError</code>——这是 dataclass 主动帮你挡住"共享可变默认"的雷,别绕过它。</p>
+<p><strong>坑二:只有 <code>frozen=True</code> 才自动 <code>__hash__</code>。</strong>普通(可变)dataclass 的 <code>__hash__</code> 被设为 <code>None</code>,进 set / 当 key 会 <code>TypeError</code>。要它可哈希,就得 <code>frozen=True</code>(且 <code>eq</code> 保持默认的 <code>True</code>)。而且即便 frozen,若某个字段本身不可哈希(如里面装了 list),哈希那一刻仍会报错。</p>
+<p><strong>坑三:<code>__slots__</code> 遇上继承会"漏"。</strong>子类如果<strong>没有</strong>也定义 <code>__slots__</code>,它的实例又会冒出一个 <code>__dict__</code>,省内存的效果就没了。要完全生效,继承链上每一层都得声明 <code>__slots__</code>。</p>
+<p><strong>附赠坑:字段顺序。</strong>有默认值的字段不能排在没默认值的字段前面,否则 dataclass 生成的 <code>__init__</code> 参数非法,直接 <code>TypeError</code>——和普通函数"默认参数必须靠后"是同一个道理。</p>
+</div>
+
+<div class="crosslang">
+<p>"消除数据类样板"是各语言的共同诉求,记住这张对照:</p>
+<table>
+<tr><th>语言</th><th>消除样板的工具</th><th>对应 Python 思路</th></tr>
+<tr><td><strong>Java</strong></td><td><code>record</code>(16+)</td><td>≈ <code>frozen dataclass</code> / <code>NamedTuple</code>:不可变值载体,自动 <code>equals</code>/<code>hashCode</code>/<code>toString</code></td></tr>
+<tr><td><strong>Java</strong></td><td>Lombok <code>@Data</code></td><td>≈ <code>@dataclass</code>:生成构造器 / getter/setter / equals / toString(可变)</td></tr>
+<tr><td><strong>C#</strong></td><td><code>record</code></td><td>≈ <code>frozen dataclass</code>:值语义、带 <code>with</code> 复制</td></tr>
+<tr><td><strong>C#</strong></td><td><code>struct</code></td><td>值类型;语义上像"小的不可变记录",但底层机制与 Python 不同</td></tr>
+</table>
+<p>一句话:Python 的 <code>dataclass</code> / <code>namedtuple</code> 和 Java <code>record</code>、Lombok、C# <code>record</code> 是<strong>同一类思路</strong>——把"纯数据类"的样板交给语言 / 库生成。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,写三个小类练手:</p>
+<ul>
+<li>用 <code>@dataclass</code> 写一个 <code>Student</code>:字段 <code>name: str</code>、<code>scores: list</code>(默认空列表——想想该怎么写默认值)。</li>
+<li>把它改成不可变值对象:加 <code>frozen=True</code>,再试着把两个 <code>Student</code> 放进一个 <code>set</code>——会成功还是报错?为什么?(提示:字段里有 <code>list</code>。)</li>
+<li>用 <code>Enum</code> 定义 <code>Grade</code>(<code>A</code>/<code>B</code>/<code>C</code>),让 <code>Student</code> 多一个 <code>grade: Grade</code> 字段;打印实例看看 <code>__repr__</code> 长什么样。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:下面这段代码会发生什么?为什么?<code>@dataclass\nclass C:\n    tags: list = []</code></summary>
+<div class="answer">
+<p><strong>答案:在类定义时就抛 <code>ValueError</code>(mutable default ... is not allowed),类根本创建不出来。</strong></p>
+<p>原因:默认值只在类定义时求值一次,如果允许,这个 <code>[]</code> 会被<strong>所有实例共享</strong>(上一节的可变默认坑)。dataclass 检测到 list / dict / set 这类可变默认就主动报错,正确写法是 <code>tags: list = field(default_factory=list)</code>,让每个实例各拿一个新列表。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:四个场景配四件工具——① 表示"订单状态只能是 待付款/已付款/已发货" ② 要创建上千万个只有 x、y 的坐标点、内存吃紧 ③ 一个需要 <code>total()</code> 方法、字段还会变的购物车 ④ 一条只读、要解包成 <code>lat, lng = pos</code> 的经纬度记录</summary>
+<div class="answer">
+<p><strong>① → <code>Enum</code></strong>:一组固定取值,具名且类型受约束。</p>
+<p><strong>② → <code>__slots__</code> / <code>@dataclass(slots=True)</code></strong>:海量实例去掉 per-instance <code>__dict__</code> 省内存。</p>
+<p><strong>③ → <code>@dataclass</code></strong>(可变):要加方法、字段会变,普通 dataclass 最合适。</p>
+<p><strong>④ → <code>NamedTuple</code> / <code>namedtuple</code></strong>:只读 + 可解包,元组子类最轻。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>写纯数据类别再手抄样板——需要方法 / 可变用 <code>@dataclass</code>,只读小记录用 <code>namedtuple</code>,不可变值对象用 <code>frozen=True</code>(顺带可哈希),海量实例省内存用 <code>__slots__</code>,固定取值用 <code>Enum</code>。记住三个坑:可变默认要 <code>default_factory</code>、可哈希要 <code>frozen</code>、<code>__slots__</code> 继承每层都要写。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>canon(权威锚定):</strong>本节属于"把机制落成 Pythonic 写法"的补充,不出自某道源题,全部锚定 Python 官方文档——<a href="https://docs.python.org/3/library/dataclasses.html">dataclasses</a>(自动生成的方法、<code>field(default_factory=...)</code>、<code>frozen</code>、<code>slots</code>、字段顺序规则)、<a href="https://docs.python.org/3/library/collections.html#collections.namedtuple">collections.namedtuple</a> 与 <a href="https://docs.python.org/3/library/typing.html#typing.NamedTuple">typing.NamedTuple</a>、<a href="https://docs.python.org/3/reference/datamodel.html#slots">Data model · __slots__</a>、<a href="https://docs.python.org/3/library/enum.html">enum</a>。</li>
+<li><strong>跨语言对照:</strong><a href="https://docs.oracle.com/en/java/javase/17/language/records.html">Oracle Java · Records</a>;C# <code>record</code> / <code>struct</code> 见微软官方文档。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 讲清"为什么可变默认会被所有实例共享",或者拿你写的 <code>Student</code> / <code>frozen</code> 代码来评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>把类写得又干净又 Pythonic 之后,下一节退一步看全局:OOP 只是众多编程范式之一,它和函数式、过程式各自解决什么、边界在哪。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0023-value-reference-mutability.html"><span class="dir">← 上一课</span>0023 · 值、引用与可变性</a>
+<a class="next" href="0025-oop-vs-other-paradigms.html"><span class="dir">下一课 →</span>0025 · OOP vs 其他编程范式</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

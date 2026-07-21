@@ -1,0 +1,76 @@
+// s13 · 权限与审批 —— 在"模型意图"和"真副作用"之间加一层确定性闸
+//
+// 模型想 rm、想 git push、想读 .env。总不能每次都弹窗问用户（烦死），
+// 也不能全放行（迟早出事）。中间这层是一条【声明式、有序】的规则链：
+//   按 命令前缀 / 路径 glob 匹配，第一个命中的规则说了算。
+// verdict 三态：allow（直接放行）/ deny（硬拒）/ ask（问用户）。
+//
+// 移植自 Reina 的 packages/core/src/permissions.ts（evaluatePermission 首匹配），
+// 做了教学化精简。核心就一句：把"这次到底准不准"从模型的自由心证，
+// 变成一条可预测、可复现、workspace 覆盖 global 的规则求值。
+
+// ─── 一个极简 glob：只认 ** / * ，够覆盖 .env* / src/** 这类日常规则 ──────
+export function globMatch(glob, path) {
+  // **/ → 零个或多个目录层（"**/.env*" 也要拦得住根目录的 .env.local）；
+  // ** → 任意（含 /）；* → 任意（不含 /）。转成正则。
+  const re = new RegExp(
+    "^" +
+      glob
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&") // 转义正则元字符（保留 * ）
+        .replace(/\*\*\//g, "\u0000") // **/ 先占位
+        .replace(/\*\*/g, "\u0001") // 裸 ** 再占位
+        .replace(/\*/g, "[^/]*") // * → 不跨目录
+        .replace(/\u0000/g, "(?:.*/)?") // **/ → 零层或多层目录都算
+        .replace(/\u0001/g, ".*") + // ** → 跨目录
+      "$",
+  );
+  return re.test(path);
+}
+
+// ─── 规则匹配：一条规则命中当前请求吗 ──────────────────────────────────
+// 规则形如 { verdict, tool?, commandPrefix?, pathGlob? }。
+//   - tool 限定工具名（不填 = 任意工具）
+//   - commandPrefix 匹配 run_shell 的命令前缀
+//   - pathGlob 匹配 read_file/write_file/edit_file 的目标路径
+// 一条规则里给了哪些选择器，就都要命中（AND）。
+export function ruleMatches(rule, req) {
+  if (rule.tool && rule.tool !== req.tool) return false;
+
+  if (rule.commandPrefix != null) {
+    const cmd = (req.input?.command ?? "").trimStart();
+    if (!cmd.startsWith(rule.commandPrefix)) return false;
+  }
+
+  if (rule.pathGlob != null) {
+    const path = req.input?.path ?? "";
+    if (!globMatch(rule.pathGlob, path)) return false;
+  }
+
+  return true;
+}
+
+// ─── 求值：首匹配。规则从上到下，第一个命中的 verdict 生效 ────────────────
+// 没有任何规则命中 → 落到 defaultVerdict（通常是 "ask"：不认识的操作就问）。
+export function evaluatePermission(rules, req, defaultVerdict = "ask") {
+  for (const rule of rules) {
+    if (ruleMatches(rule, req)) {
+      return { verdict: rule.verdict, rule };
+    }
+  }
+  return { verdict: defaultVerdict, rule: null };
+}
+
+// ─── 合并两层规则：deny 先于一切，然后 workspace 覆盖 global ──────────────
+// 光靠"workspace 在前 + 首匹配"是不够的：workspace 写一条 allow "git push"
+// 就能抢在全局 deny 前面命中——项目配置拆掉了全局的闸。所以 deny 单独提到
+// 链首（不分层级），allow/ask 才按"workspace 在前"分层覆盖。
+// 放权是加白名单，不是拆闸：这条边界由合并顺序保证，不靠自觉。
+export function mergeRules(globalRules, workspaceRules) {
+  const isDeny = (r) => r.verdict === "deny";
+  return [
+    ...workspaceRules.filter(isDeny),
+    ...globalRules.filter(isDeny),
+    ...workspaceRules.filter((r) => !isDeny(r)),
+    ...globalRules.filter((r) => !isDeny(r)),
+  ];
+}

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>接口隔离与依赖倒置 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第四部分 · SOLID · 第 0015 节</p>
+<h1>SOLID(三):接口隔离与依赖倒置</h1>
+<p class="lede">SOLID 收尾的 I 与 D 常被一起考,而且最容易背混:ISP 讲"接口别太胖",DIP 讲"依赖别太具体"。这一节把它们讲透,顺带拆掉那个几乎人人踩的坑——把 DIP 和 DI 当成同义词。</p>
+
+<div class="recall">
+<p>先想一个真实场景:你写了个 <code>NotificationService</code>,构造函数里直接 <code>self.sender = EmailSender()</code>。现在产品说"也要支持短信和 Slack",而且测试时不想真发邮件。你现在这个写法,改起来疼在哪?先在心里回答,再往下看。</p>
+</div>
+
+<h2>一、ISP:不要强迫别人依赖用不到的方法</h2>
+
+<p>Interface Segregation Principle(接口隔离原则)一句话:<strong>客户端不该被迫依赖它用不到的方法</strong>。宁可要多个小而专的接口,也不要一个大而全的"胖接口"(fat interface)。</p>
+
+<p>直觉类比:瑞士军刀什么都有,但你只想拧一颗螺丝时,得攥着开瓶器、剪刀、锯子一起使——多出来的功能不是免费的,它们是你必须"扛着"的重量。接口也一样:一个方法一旦写进接口,<strong>所有实现类都得对它负责</strong>,哪怕它根本用不上。</p>
+
+<p>经典反例是一个胖 <code>Worker</code> 接口:</p>
+
+<pre><code># ❌ 胖接口:work() 和 eat() 被塞进同一个接口
+from abc import ABC, abstractmethod
+
+class Worker(ABC):
+    @abstractmethod
+    def work(self): ...
+    @abstractmethod
+    def eat(self): ...
+
+class HumanWorker(Worker):
+    def work(self): print("写代码")
+    def eat(self):  print("吃午饭")
+
+class RobotWorker(Worker):
+    def work(self): print("焊接")
+    def eat(self):
+        # 机器人不吃饭,却被接口逼着实现 eat()
+        raise NotImplementedError("机器人不吃饭")   # ← 坏味道
+</code></pre>
+
+<p><code>RobotWorker</code> 被迫实现一个它根本不需要的 <code>eat()</code>,只能抛异常或写个空实现。这就是"被迫依赖用不到的方法"——而且一旦有人真去调用它,程序在运行时才炸。ISP 的解法是<strong>按客户端的实际需要把接口拆开</strong>:</p>
+
+<pre><code># ✅ 拆成小而专的接口,谁需要谁实现
+class Workable(ABC):
+    @abstractmethod
+    def work(self): ...
+
+class Eatable(ABC):
+    @abstractmethod
+    def eat(self): ...
+
+class HumanWorker(Workable, Eatable):   # 人既能干活也能吃饭
+    def work(self): print("写代码")
+    def eat(self):  print("吃午饭")
+
+class RobotWorker(Workable):            # 机器人只承诺它做得到的
+    def work(self): print("焊接")
+</code></pre>
+
+<p>现在 <code>RobotWorker</code> 不再背负 <code>eat()</code>,契约诚实了。注意 ISP 是站在<strong>客户端(调用方)的视角</strong>看接口粒度:接口应该小到"用它的人不会被迫拖着废方法走"。</p>
+
+<h2>二、DIP:高层和低层都去依赖"抽象"</h2>
+
+<p>Dependency Inversion Principle(依赖倒置原则)有两句话:</p>
+<ul>
+<li>高层模块和低层模块<strong>都应依赖抽象</strong>,而不是高层直接依赖低层的具体实现。</li>
+<li><strong>抽象不应依赖细节,细节应依赖抽象。</strong></li>
+</ul>
+
+<p>"倒置"倒的是什么?传统写法里,高层模块(业务逻辑)直接 <code>new</code> 一个低层的具体类,依赖方向是"高层 → 低层具体"。DIP 在中间插一层抽象接口,让<strong>两端都指向它</strong>——低层实现反过来去"实现"这个抽象。于是那条从高层伸向低层的箭头被掰了回来,这就是"倒置"。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node bad"><span class="n-title">NotificationService</span><span class="n-sub">高层模块</span></div>
+  <span class="arrow">─ new →</span>
+  <div class="node bad"><span class="n-title">EmailSender</span><span class="n-sub">低层具体类</span></div>
+</div>
+<div class="pipeline">
+  <div class="node good"><span class="n-title">NotificationService</span><span class="n-sub">高层</span></div>
+  <span class="arrow">→</span>
+  <div class="node"><span class="n-title">MessageSender</span><span class="n-sub">抽象接口</span></div>
+  <span class="arrow">←</span>
+  <div class="node good"><span class="n-title">EmailSender</span><span class="n-sub">低层实现</span></div>
+</div>
+<figcaption>上:依赖顺着"高层 → 低层具体"流,想换实现就得改高层。下:两端都指向抽象,依赖方向被"倒置"。</figcaption>
+</figure>
+
+<p>回到开场那个疼点。反例是高层把低层"焊死"在自己体内:</p>
+
+<pre><code># ❌ 高层直接依赖低层具体类
+class EmailSender:
+    def send(self, msg): print(f"Email: {msg}")
+
+class NotificationService:
+    def __init__(self):
+        self.sender = EmailSender()   # 硬编码依赖:想换 SMS/Slack 就得改这一行
+    def notify(self, msg):
+        self.sender.send(msg)
+</code></pre>
+
+<p>问题不止"改代码":测试 <code>NotificationService</code> 时你被迫真的去发邮件,因为它自己 <code>new</code> 了发送器,你插不进手。DIP 的解法是让高层只认一个抽象 <code>MessageSender</code>,具体实现<strong>从外部传进来</strong>:</p>
+
+<pre><code>from typing import Protocol
+
+class MessageSender(Protocol):              # 抽象:只规定"能 send"
+    def send(self, msg: str) -&gt; None: ...
+
+class EmailSender:                         # 注意:不必显式继承 MessageSender
+    def send(self, msg: str) -&gt; None: print(f"Email: {msg}")
+
+class SlackSender:
+    def send(self, msg: str) -&gt; None: print(f"Slack: {msg}")
+
+class NotificationService:
+    def __init__(self, sender: MessageSender):   # 依赖抽象,实现从外部注入
+        self.sender = sender
+    def notify(self, msg: str) -&gt; None:
+        self.sender.send(msg)
+
+# 组装:由调用方决定用哪个实现
+NotificationService(EmailSender()).notify("hi")
+NotificationService(SlackSender()).notify("hi")   # 换实现,Service 一行不改
+</code></pre>
+
+<p>现在换实现、加实现,<code>NotificationService</code> 都不用动;测试也变简单了——注入一个假实现即可,根本不碰真网络:</p>
+
+<pre><code># 测试:注入 FakeSender,断言"发了什么",不真的发送
+class FakeSender:
+    def __init__(self): self.sent = []
+    def send(self, msg: str) -&gt; None: self.sent.append(msg)
+
+fake = FakeSender()
+NotificationService(fake).notify("test")
+assert fake.sent == ["test"]              # ✅ 可测、快、无副作用
+</code></pre>
+
+<h2>三、DI:落地 DIP 的常用手段</h2>
+
+<p>上面那句"实现从外部传进来",名字就叫 <strong>Dependency Injection(依赖注入,DI)</strong>:不在对象内部自己 <code>new</code> 依赖,而是让外界把依赖递进来。最常见的是<strong>构造器注入</strong>(像上面那样从 <code>__init__</code> 传),此外还有方法注入(当参数传给某个方法)和属性注入(实例化后赋给某个属性)。</p>
+
+<p>DI 是把 DIP 从"原则"变成"代码"的常用手段之一。它属于一个更大的概念——<strong>IoC(Inversion of Control,控制反转)</strong>:本来"该由谁创建依赖"的控制权在对象自己手里,现在被反转交给了外部(调用方或框架)。DI 是 IoC 的一种实现形式。</p>
+
+<div class="keydef">
+<dl>
+<dt>ISP · 接口隔离原则</dt>
+<dd>不应强迫类依赖它用不到的方法;宁可多个小而专的接口,也不要一个胖接口。视角在<strong>客户端</strong>。</dd>
+<dt>DIP · 依赖倒置原则</dt>
+<dd>高层与低层都依赖<strong>抽象</strong>,而非具体实现;抽象不依赖细节,细节依赖抽象。它倒置了"高层直接依赖低层具体类"的方向。</dd>
+<dt>DI · 依赖注入</dt>
+<dd>把对象所需的依赖<strong>从外部传入</strong>(构造器 / 方法 / 属性注入),而非内部自己 <code>new</code>。是落地 DIP 的常用<strong>手段</strong>。</dd>
+<dt>IoC · 控制反转</dt>
+<dd>"谁来创建/装配依赖"的控制权从对象自身反转给外部。DI 是 IoC 的一种实现。</dd>
+</dl>
+</div>
+
+<div class="interview">
+<p><strong>高频追问链(ISP/DIP 常被连环问):</strong></p>
+<ul>
+<li>"DIP 和 DI 是一回事吗?" → <strong>不是。</strong>DIP 是<em>原则</em>(依赖抽象),DI 是<em>手段</em>(从外部传入依赖)。你可以遵守 DIP 却用别的方式注入,也可能用了 DI 但依赖的仍是具体类(那就没真做到 DIP)。这是本节头号考点,见易错点。</li>
+<li>"为什么叫'倒置'?到底倒了什么?" → 传统上依赖方向是"高层 → 低层具体类";插入抽象后两端都指向抽象、低层反过来实现抽象,那条箭头被掰回来了。</li>
+<li>"ISP 和 SRP(单一职责)有什么区别?" → SRP 关注<strong>类</strong>只有一个变化原因(内聚);ISP 关注<strong>接口</strong>的粒度、以及客户端只依赖它需要的部分。角度不同,但常常一起把大东西拆小。</li>
+<li>"Python 没有 <code>interface</code> 关键字,怎么做 ISP/DIP?" → 用 <code>abc.ABC</code>、<code>typing.Protocol</code>,或干脆鸭子类型。见跨语言对照与易错点。</li>
+<li>"一定要上 IoC 容器 / DI 框架吗?" → 不必。IoC 是大概念,DI 是其一种;很多场景手动在入口处构造并注入就够了。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:把 DIP 和 DI 当同义词。</strong>它们不在一个层面。DIP 是"依赖抽象"的<em>设计原则</em>;DI 是"从外部把依赖递进来"的<em>具体手段</em>。判断题:一个类用构造器注入了依赖,但注入进来的类型标注是具体的 <code>EmailSender</code> 而非抽象 <code>MessageSender</code>——它用了 DI,却没遵守 DIP。反过来也成立。面试时把这层区分讲清,立刻显出功底。</p>
+<p><strong>坑二:以为 Python 要"面向抽象"就必须写 ABC。</strong>不一定。Python 的鸭子类型 + <code>typing.Protocol</code>(结构化子类型)同样满足 DIP:上面的 <code>EmailSender</code> / <code>SlackSender</code> <strong>没有</strong>显式继承 <code>MessageSender</code>,只要"长得像"(有对应签名的 <code>send</code>)就被接受。别把 Java 式"必须 <code>implements</code> 接口"的思维硬套到 Python 上。当然,想要更强的显式约束或抽象基类默认逻辑时,用 <code>ABC</code> 也完全可以——两条路都行。</p>
+</div>
+
+<div class="crosslang">
+<p>"这门语言怎么落地 DIP?"是跨语言必问题:</p>
+<table>
+<tr><th>语言</th><th>抽象怎么表达</th><th>注入怎么做</th><th>典型依赖</th></tr>
+<tr><td><strong>Python</strong></td><td><code>typing.Protocol</code> / <code>abc.ABC</code> / 鸭子类型</td><td>构造器注入,入口处手动装配</td><td>通常<strong>不需要</strong>重型 DI 容器</td></tr>
+<tr><td><strong>Java</strong></td><td><code>interface</code></td><td>多用 DI 框架自动装配</td><td>常配 Spring 等 IoC 容器</td></tr>
+<tr><td><strong>C#</strong></td><td><code>interface</code></td><td>构造器注入 + 内置容器</td><td>常配 .NET 内置 DI</td></tr>
+</table>
+<p>一句话:<strong>Java/C# 常靠 <code>interface</code> + DI 框架来落地 DIP;Python 靠构造器注入 + Protocol/鸭子类型,多数情况下不用请出重型容器。</strong>原则相同,手段更轻。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写一个小报表模块,把 DIP 走一遍:</p>
+<ul>
+<li>定义抽象 <code>DataSource</code>(用 <code>Protocol</code> 或 <code>ABC</code> 均可),约定一个 <code>fetch()</code> 返回一组记录。</li>
+<li>写两个实现:<code>CsvSource</code> 和 <code>ApiSource</code>(内容随便造)。</li>
+<li>高层 <code>ReportBuilder(source: DataSource)</code> 用<strong>构造器注入</strong>拿到数据源,<code>build()</code> 里只调用 <code>source.fetch()</code>,绝不自己 <code>new</code> 任何具体源。</li>
+<li>写个 <code>FakeSource</code> 注入进去做测试,断言 <code>build()</code> 的结果——全程不碰真文件或真网络。</li>
+</ul>
+<p>写完自问:如果哪天要加 <code>DbSource</code>,你需要改 <code>ReportBuilder</code> 吗?(答案应该是"不需要"——这正是 DIP 给你的礼物。)</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:下面这段代码遵守 DIP 吗?<code>class OrderService:</code> 的 <code>__init__(self, mailer: SmtpMailer)</code> 用构造器把 <code>SmtpMailer</code> 传了进来。</summary>
+<div class="answer">
+<p><strong>答案:用了 DI,但没有真正遵守 DIP。</strong></p>
+<p>它确实做了依赖注入(从外部传入 <code>mailer</code>),但注入的类型是<strong>具体类</strong> <code>SmtpMailer</code>,高层 <code>OrderService</code> 依然被钉死在一个具体实现上。想满足 DIP,应把参数类型改成<strong>抽象</strong>(如 <code>Mailer</code> 的 <code>Protocol</code>/<code>ABC</code>),让 <code>SmtpMailer</code>、<code>FakeMailer</code> 等都能替换进来。这正说明:<strong>DI ≠ DIP</strong>——有注入的形式,不代表依赖了抽象。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:一个 <code>MultiFunctionPrinter</code> 接口同时声明了 <code>print()</code>、<code>scan()</code>、<code>fax()</code>,结果一台只会打印的老式打印机类被迫给 <code>scan()</code>/<code>fax()</code> 写空实现或抛异常。这违反了哪条原则?怎么改?</summary>
+<div class="answer">
+<p><strong>违反 ISP(接口隔离原则)。</strong>它是个胖接口,强迫实现类依赖它用不到的方法。</p>
+<p><strong>改法:</strong>按客户端需要拆成 <code>Printer</code>、<code>Scanner</code>、<code>Fax</code> 三个小接口。多功能一体机同时实现三个,老式打印机只实现 <code>Printer</code>。这样没有谁再被迫背负废方法,契约变诚实。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>ISP 让接口小到"用它的人不被迫拖着废方法走";DIP 让高层与低层都依赖抽象、把"高层→低层具体"的箭头倒过来。而 <strong>DIP 是原则、DI 是手段、IoC 是更大的概念</strong>——三者别混。Python 里,构造器注入 + <code>Protocol</code>/鸭子类型就能轻量落地,不必套 Java 式接口或重型容器。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层(如实标注):</p>
+<ul>
+<li><strong>canon(权威锚定,本节主来源):</strong>ISP 与 DIP 是 Robert C. Martin(Uncle Bob)提出的 SOLID 五原则中的 I 与 D,系统阐述见其著作《Agile Software Development, Principles, Patterns, and Practices》(2002)与《Clean Architecture》(2017);稳定索引见 <a href="https://en.wikipedia.org/wiki/SOLID">Wikipedia · SOLID</a> 与 <a href="https://en.wikipedia.org/wiki/Dependency_inversion_principle">Dependency inversion principle</a>、<a href="https://en.wikipedia.org/wiki/Interface_segregation_principle">Interface segregation principle</a>。</li>
+<li><strong>canon(DI 与 IoC 的区分):</strong>Martin Fowler,<a href="https://martinfowler.com/articles/injection.html">《Inversion of Control Containers and the Dependency Injection pattern》</a>——DI 是 IoC 的一种实现、构造器/方法/属性注入的经典出处。</li>
+<li><strong>canon(Python 机制):</strong><a href="https://docs.python.org/3/library/typing.html#typing.Protocol"><code>typing.Protocol</code></a> 与 <a href="https://peps.python.org/pep-0544/">PEP 544(结构化子类型)</a> 说明"不必显式继承即可满足抽象";抽象基类见 <a href="https://docs.python.org/3/library/abc.html"><code>abc</code> 模块文档</a>。</li>
+</ul>
+<p>说明:本节属 canon 层内容,不直接对应课程 README 源题;上面所列均为一手权威出处。有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"倒置"到底倒了什么、或者把你写的 <code>ReportBuilder</code> 代码拿来评一评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>SOLID 五原则到此讲完。下一节起进入设计模式——先从"怎么创建对象"这一簇创建型模式开始。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0014-solid-lsp.html"><span class="dir">← 上一课</span>0014 · SOLID(二):里氏替换原则(LSP)</a>
+<a class="next" href="0016-design-patterns-creational.html"><span class="dir">下一课 →</span>0016 · 创建型设计模式:工厂 / 单例 / 建造者</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>has-a 关系 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第三部分 · 关系与耦合 · 第 0011 节</p>
+<h1>关联、聚合与组合:has-a 关系</h1>
+<p class="lede">"has-a"不是一句话就能打发的。它其实有三档强度:关联 &lt; 聚合 &lt; 组合。这一节把三者钉在同一条"耦合强度轴"上,让你知道分水岭到底是什么——以及为什么把所有 has-a 都叫"组合"会被面试官抓包。</p>
+
+<div class="recall">
+<p>先想三个"has-a":你的手机 <em>has-a</em> 电池、一家公司 <em>has-a</em> 员工、一篇文章 <em>has-a</em> 段落。它们真的是同一种关系吗?换个问法:哪个"部分"能被单独拆出来、放到另一个"整体"里继续用?哪个一旦"整体"没了、"部分"就失去了存在的意义?先在心里分好类,再往下看。</p>
+</div>
+
+<h2>一、直觉:同样是"拥有",生死不一样</h2>
+
+<p>对象很少孤立存在。一个对象常常<strong>用到</strong>另一个对象,或者<strong>由</strong>另一些对象<strong>构成</strong>。这类"对象之间的连线"统称<strong>关联(Association)</strong>。但"关联"太粗了——就像说"这两个人有关系",没说是同事、亲人还是路人。OOP 把 has-a 关系按<strong>捆得有多紧</strong>细分成两档:</p>
+
+<ul>
+<li><strong>聚合(Aggregation)</strong>:典型的"has-a"。整体<strong>拥有/包含</strong>部分,但部分是<strong>独立的个体</strong>——它可以先于整体存在、可以被多个整体共享、也可以在整体消失后继续活着。<br>比喻:公司 has 员工。公司倒闭了,员工还在,还能去别家。</li>
+<li><strong>组合(Composition)</strong>:更强的聚合。部分<strong>不能脱离整体独立存在</strong>——整体一旦销毁,部分也随之消亡。<br>比喻:人 has 心脏。人没了,那颗"作为这个人一部分"的心脏也就不成其为这个人的心脏了。</li>
+</ul>
+
+<p>把它们排到一条线上,你就得到了这节课的骨架——一条从"擦肩而过"到"生死与共"的耦合强度轴:</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">依赖 Dependency</span><span class="n-sub">临时用到<br>(方法参数)</span></div>
+  <span class="arrow">→</span>
+  <div class="node"><span class="n-title">关联 Association</span><span class="n-sub">长期持有<br>A 用到 B</span></div>
+  <span class="arrow">→</span>
+  <div class="node"><span class="n-title">聚合 Aggregation</span><span class="n-sub">整体-部分<br>部分可独立/共享</span></div>
+  <span class="arrow">→</span>
+  <div class="node good"><span class="n-title">组合 Composition</span><span class="n-sub">整体-部分<br>部分随整体消亡</span></div>
+</div>
+<p class="meta" style="text-align:center">耦合强度:左弱 → 右强。越往右,"部分"的命运越被"整体"绑定。</p>
+
+<div class="keydef">
+<dl>
+<dt>关联 (Association)</dt>
+<dd>对象之间"有一条线"的最一般说法:A 用到 B、或 A 与 B 相互引用。聚合和组合都是关联的<strong>特例</strong>。</dd>
+<dt>聚合 (Aggregation) —— "has-a"</dt>
+<dd>整体拥有部分的<strong>整体-部分</strong>关系,但部分<strong>能独立存在、可被共享</strong>。整体只是"持有一个引用",不负责部分的生死。</dd>
+<dt>组合 (Composition) —— 更强的聚合</dt>
+<dd>同样是整体-部分,但部分的<strong>生命周期依赖整体</strong>:整体创建它、整体销毁时它也一起消失,通常也不被别的整体共享。</dd>
+<dt>依赖 (Dependency) —— 最弱</dt>
+<dd>只是<strong>临时</strong>用到,用完即弃(例如把 B 作为方法参数传进来、方法里用一下就丢),不作为长期持有的成员字段。</dd>
+</dl>
+</div>
+
+<h2>二、分水岭:不是"感觉多紧",而是"能否独立存在"</h2>
+
+<p>初学者最容易犯的错,是凭"感觉"判断:"这个关系很重要,应该是组合吧?"——错。聚合与组合的分界线是一个<strong>客观问题</strong>:</p>
+
+<blockquote style="border-left:4px solid var(--accent); margin:1.2rem 0; padding:.4em 1em; color:var(--ink)">
+<strong>部分能不能脱离整体独立存在、或被别的整体共享?</strong><br>
+能 → 聚合;不能 → 组合。
+</blockquote>
+
+<p>用经典的"大学"例子把这条线走一遍:</p>
+
+<ul>
+<li><strong>大学 has 系</strong> → <strong>组合</strong>。系是大学内部设立的,<strong>随大学撤销而消失</strong>——一个"系"脱离了它所属的大学,就不再是那个系了。整体销毁,部分随之销毁。</li>
+<li><strong>系 has 教授</strong> → <strong>聚合</strong>。教授是独立的人,<strong>可以从计算机系转去数学系</strong>,也可以同时挂在两个系(共享),系解散了教授照样存在。部分独立于整体。</li>
+</ul>
+
+<p>看到没?<strong>同一个"大学-系-教授"链条里,上一层是组合,下一层是聚合。</strong>决定它的不是关系"重不重要",而是"部分的生命线是否被整体攥在手里"。</p>
+
+<h2>三、UML 记号:一眼认出这是哪种关系</h2>
+
+<p>面试和读代码时,你会遇到 UML 类图。三种 has-a(以及作为对照的 is-a 继承)各有一个固定记号,<strong>菱形永远画在"整体"那一端</strong>:</p>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 580 360" role="img" aria-label="UML 关系记号:关联实线、聚合空心菱形、组合实心菱形、继承空心三角">
+  <!-- Row 1: Association -->
+  <text class="dgm-muted" font-size="11" x="8" y="44">
+    <tspan x="8" dy="0">关联 Association</tspan>
+    <tspan x="8" dy="14">实线</tspan>
+  </text>
+  <line class="dgm-edge" x1="230" y1="50" x2="430" y2="50" stroke-width="1.5"/>
+  <rect class="dgm-node" x="120" y="29" width="110" height="42" rx="5"/>
+  <text class="dgm-text" font-size="13" x="175" y="50" text-anchor="middle" dominant-baseline="central">A</text>
+  <rect class="dgm-node" x="430" y="29" width="120" height="42" rx="5"/>
+  <text class="dgm-text" font-size="13" x="490" y="50" text-anchor="middle" dominant-baseline="central">B</text>
+
+  <!-- Row 2: Aggregation (hollow diamond) -->
+  <text class="dgm-muted" font-size="11" x="8" y="129">
+    <tspan x="8" dy="0">聚合 Aggregation</tspan>
+    <tspan x="8" dy="14">空心菱形</tspan>
+  </text>
+  <line class="dgm-edge" x1="270" y1="135" x2="430" y2="135" stroke-width="1.5"/>
+  <polygon points="230,135 250,127 270,135 250,143" style="fill:var(--paper);stroke:var(--muted);stroke-width:1.5"/>
+  <rect class="dgm-node" x="120" y="114" width="110" height="42" rx="5"/>
+  <text class="dgm-text" font-size="13" x="175" y="135" text-anchor="middle" dominant-baseline="central">整体</text>
+  <rect class="dgm-node" x="430" y="114" width="120" height="42" rx="5"/>
+  <text class="dgm-text" font-size="13" x="490" y="135" text-anchor="middle" dominant-baseline="central">部分(可共享)</text>
+
+  <!-- Row 3: Composition (filled diamond) -->
+  <text class="dgm-muted" font-size="11" x="8" y="214">
+    <tspan x="8" dy="0">组合 Composition</tspan>
+    <tspan x="8" dy="14">实心菱形</tspan>
+  </text>
+  <line class="dgm-edge" x1="270" y1="220" x2="430" y2="220" stroke-width="1.5"/>
+  <polygon points="230,220 250,212 270,220 250,228" style="fill:var(--muted);stroke:var(--muted);stroke-width:1.5"/>
+  <rect class="dgm-node" x="120" y="199" width="110" height="42" rx="5"/>
+  <text class="dgm-text" font-size="13" x="175" y="220" text-anchor="middle" dominant-baseline="central">整体</text>
+  <rect class="dgm-node" x="430" y="199" width="120" height="42" rx="5"/>
+  <text class="dgm-text" font-size="13" x="490" y="220" text-anchor="middle" dominant-baseline="central">部分(不可脱离)</text>
+
+  <!-- Row 4: Inheritance (hollow triangle) — 对照:is-a -->
+  <text class="dgm-muted" font-size="11" x="8" y="299">
+    <tspan x="8" dy="0">继承 Inheritance</tspan>
+    <tspan x="8" dy="14">is-a · 空心三角</tspan>
+  </text>
+  <line class="dgm-edge" x1="255" y1="305" x2="430" y2="305" stroke-width="1.5"/>
+  <polygon points="230,305 255,295 255,315" style="fill:var(--paper);stroke:var(--muted);stroke-width:1.5"/>
+  <rect class="dgm-node" x="120" y="284" width="110" height="42" rx="5"/>
+  <text class="dgm-text" font-size="13" x="175" y="305" text-anchor="middle" dominant-baseline="central">父类</text>
+  <rect class="dgm-node" x="430" y="284" width="120" height="42" rx="5"/>
+  <text class="dgm-text" font-size="13" x="490" y="305" text-anchor="middle" dominant-baseline="central">子类</text>
+</svg>
+</div>
+<figure class="diagram"><figcaption>记忆口诀:<strong>菱形认整体</strong>(空心=可拆分,实心=生死绑定);<strong>三角认父类</strong>。前三行都是 has-a,最后一行是 is-a——两套<strong>正交</strong>的关系。</figcaption></figure>
+
+<h2>四、代码:组合"自己造",聚合"外面给"</h2>
+
+<p>在 Python 里,组合和聚合<strong>都是"持有引用"</strong>,语法上没有关键字区分。真正的区别落在一个设计问题上:<strong>这个"部分"是谁创建的、谁负责它的生死?</strong></p>
+
+<p><strong>组合:整体在 <code>__init__</code> 里亲手创建部分</strong>,部分不从外面来,也不交给外面——生命周期绑定在一起。</p>
+
+<pre><code># ✅ 组合(Composition):House 亲手造 Room,二者生死与共
+class Room:
+    def __init__(self, name: str):
+        self.name = name
+
+class House:
+    def __init__(self):
+        # 部分由整体在内部创建,不接收外部传入,也不外泄
+        self.rooms = [Room("客厅"), Room("卧室")]
+
+h = House()
+print(h.rooms[0].name)   # 客厅
+del h                    # House 不再被引用 → 它内部的 Room 也没有别的引用,一起被回收
+# 你无法把某个 Room 单独"拿出来"塞进另一栋房子 —— 它本就是这栋房子的一部分
+</code></pre>
+
+<p><strong>聚合:部分从外部传进来</strong>,在整体出生之前就已经存在,整体只是"借用/持有"它的引用。</p>
+
+<pre><code># ✅ 聚合(Aggregation):Department 只是持有外部已存在的 Professor
+class Professor:
+    def __init__(self, name: str):
+        self.name = name
+
+class Department:
+    def __init__(self, professors: list):
+        # 部分由外部注入,早已独立存在;系只持有引用,不管它的生死
+        self.professors = professors
+
+alice = Professor("Alice")          # 教授先独立存在
+bob = Professor("Bob")
+
+cs = Department([alice, bob])        # 系"拥有"这些已存在的教授
+del cs                              # 系解散了……
+print(alice.name)                   # Alice —— 教授照样活着,还能转去别的系
+math = Department([alice])           # 甚至被另一个系共享
+</code></pre>
+
+<p>一句话记住这段代码:<strong>组合是"我生的孩子"(<code>Room</code> 在 <code>House</code> 内部 <code>new</code> 出来),聚合是"我雇的人"(<code>Professor</code> 从门外走进来)。</strong>孩子随家庭聚散,雇员来去自由。</p>
+
+<div class="interview">
+<p><strong>高频追问链(关系题几乎必考):</strong></p>
+<ul>
+<li>"聚合和组合到底怎么区分?" → 看<strong>部分能否脱离整体独立存在 / 被共享</strong>。能→聚合,不能→组合。别答"组合更紧"这种没边界的话。</li>
+<li>"为什么不把所有 has-a 都叫组合?" → 因为记号、语义、生命周期都不同。UML 里空心菱形≠实心菱形;把聚合说成组合,等于承诺了一个你并不打算维护的"生死绑定"契约。</li>
+<li>"has-a 和 is-a 有什么区别?" → 两套<strong>正交</strong>关系。has-a 是"拥有/包含"(关联/聚合/组合),is-a 是"属于某类型"(继承)。"组合优于继承"说的正是:能用 has-a 表达时,别硬凑 is-a(详见上一节)。</li>
+<li>"UML 里这几种关系怎么画?" → 关联=实线;聚合=空心菱形(整体端);组合=实心菱形(整体端);继承=空心三角(父类端);依赖=虚线箭头。</li>
+<li>"依赖和关联的区别?" → 依赖是<strong>临时</strong>用到(方法参数、局部变量),关联是<strong>长期持有</strong>(成员字段)。字段 vs 参数,是最实用的判别法。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>翻车点一:把所有 has-a 都叫"组合"。</strong>这是最常见的不精确。"组合"是有生命周期承诺的强关系;大多数日常的"拥有"其实是<strong>聚合</strong>(部分能独立存在)。分水岭是"能否独立存在",不是"我觉得它俩关系铁不铁"。</p>
+<p><strong>翻车点二:菱形画反端。</strong>菱形永远在<strong>整体/容器</strong>那一端,不是部分那一端。记"大鱼吃小鱼"——菱形是大嘴,长在吞并方(整体)。</p>
+<p><strong>翻车点三:以为 Python 能在语言层面保证"整体销毁,部分随之销毁"。</strong>不能。Python 里对象都是引用,由 GC(引用计数 + 循环回收)管理;<code>del h</code> 只是去掉一个引用,只有当<strong>再没有任何引用</strong>指向那个 <code>Room</code> 时它才会被回收。所以 Python(和 Java)里,组合与聚合更多是一种<strong>设计意图/约定</strong>,而不是语法强制。真正能在语言层面体现"部分随整体确定性销毁"的,是 C++ 的值成员(见下)。别把这点说死。</p>
+</div>
+
+<div class="crosslang">
+<p>"这几种关系在不同语言里怎么落地?"——重点在<strong>谁管部分的生命周期</strong>:</p>
+<table>
+<tr><th>语言</th><th>组合(Composition)</th><th>聚合(Aggregation)</th><th>部分的生命周期由谁管</th></tr>
+<tr><td><strong>Python</strong></td><td>整体内部创建、不外泄引用</td><td>外部注入、可共享引用</td><td>GC(引用计数 + 循环回收),<strong>无确定性析构</strong>;组合/聚合靠设计约定</td></tr>
+<tr><td><strong>Java</strong></td><td>内部 <code>new</code>、不泄漏引用</td><td>传入外部对象引用</td><td>JVM GC,同样无确定性析构;靠设计表达语义</td></tr>
+<tr><td><strong>C++</strong></td><td>值成员 / <code>unique_ptr&lt;Part&gt;</code>(独占)</td><td>裸指针 / <code>shared_ptr&lt;Part&gt;</code> 指向外部对象</td><td>值成员随整体析构而<strong>确定性销毁</strong>——C++ 能在语言层面体现组合的生命周期</td></tr>
+</table>
+<p>一句话:<strong>Python/Java 里组合是"承诺",C++ 里组合可以是"契约"</strong>(值成员/独占指针把生死写进了析构语义)。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写两个类,用"谁创建部分"来区分组合与聚合:</p>
+<ul>
+<li><code>Engine</code> 与 <code>Car</code>:<code>Car</code> 在 <code>__init__</code> 里<strong>自己创建</strong> <code>Engine</code>(组合)。想一想:你能把这台 <code>Engine</code> 单独拆下来装到别的车上吗?按你的设计,不该能。</li>
+<li><code>Garage(cars)</code>:车从<strong>外部传入</strong>(聚合)。同一辆 <code>Car</code> 今天停这个车库、明天停那个,车库拆了车还在。</li>
+</ul>
+<p>自测:哪个类里的"部分"是从参数进来的?哪个是内部 <code>new</code> 出来的?——这一个问题就能判定组合还是聚合。</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:"大学 has 系"和"系 has 教授",分别是聚合还是组合?为什么?</summary>
+<div class="answer">
+<p><strong>大学 has 系 = 组合。</strong>系是大学内部设立的,随大学撤销而消失,不能脱离所属大学独立存在。整体销毁 → 部分随之销毁。</p>
+<p><strong>系 has 教授 = 聚合。</strong>教授是独立的人,可以从一个系转到另一个系、甚至同时挂在两个系(共享),系解散后教授照样存在。部分独立于整体。</p>
+<p>关键:判据不是"关系重不重要",而是"<strong>部分能否脱离整体独立存在 / 被共享</strong>"。同一条链上,层与层的关系可以不同。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:一个方法 <code>def render(self, printer):</code> 接收一个 <code>printer</code> 参数,在方法内部调用一下 <code>printer.print(...)</code> 就结束,并不把它存成 <code>self</code> 的字段。这属于关联、聚合、组合,还是依赖?</summary>
+<div class="answer">
+<p><strong>依赖(Dependency),耦合最弱的一档。</strong></p>
+<p><code>printer</code> 只是临时用一下、用完即弃,没有被作为<strong>成员字段长期持有</strong>。判别法:<strong>存进 <code>self</code>(字段)= 关联/聚合/组合;只在方法里用一下(参数/局部变量)= 依赖。</strong>如果换成 <code>self.printer = printer</code> 长期持有,才升级为关联/聚合。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 3(判断):"组合比聚合更紧,所以只要两个对象关系很重要,就该用组合。"这句话对吗?</summary>
+<div class="answer">
+<p><strong>不对。</strong>"重要"是主观的,不是判据。组合的真正含义是<strong>部分的生命周期依赖整体、通常不被共享</strong>。如果那个"部分"其实可以独立存在或被别处复用,你却建成组合(比如内部 <code>new</code> 死、不允许外部替换),就会得到一个僵硬、难测试、难复用的设计。<strong>先问"部分能不能独立活",再决定档位</strong>,而不是凭感情用事。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>has-a 有三档强度——关联 &lt; 聚合 &lt; 组合。分水岭是客观的:<strong>部分能否脱离整体独立存在 / 被共享</strong>(能→聚合,不能→组合)。UML 里菱形画在整体端(空心=聚合,实心=组合)。别把所有 has-a 都叫组合;也别忘了 has-a(拥有)与 is-a(继承)是两套<strong>正交</strong>关系。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《OOP Interview Questions》Q1 的 Associations 小节——"对象常与其他对象有关系"、聚合(Aggregation)= has-a、组合(Composition)= 更强的聚合且"子对象不能脱离父对象存在",这些定义与结论取自源题原文。</li>
+<li><strong>canon(补充锚定):</strong>UML 记号(实线/空心菱形/实心菱形/空心三角/虚线)出自 <a href="https://www.omg.org/spec/UML/">OMG UML 规范</a>;聚合 vs 组合的"生命周期/可共享"判据参见 <a href="https://en.wikipedia.org/wiki/Object_composition">Wikipedia: Object composition</a>;Python 的引用/垃圾回收语义见 <a href="https://docs.python.org/3/reference/datamodel.html">Python 数据模型</a> 与 <a href="https://docs.python.org/3/library/gc.html"><code>gc</code> 模块文档</a>;C++ 值成员/RAII 的确定性析构见 <a href="https://en.cppreference.com/w/cpp/language/raii">cppreference: RAII</a>。"组合优于继承"的经典论述见 GoF《Design Patterns》(1994),留待上一节 <code>0010-composition-vs-inheritance</code> 展开。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想要我用 ELI5 再讲一遍"聚合 vs 组合",或者把你写的 <code>Car/Engine/Garage</code> 代码拿来判档、评设计,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节把"耦合强度轴"这条线抽象成一条更普适的设计准则:高内聚、低耦合——好设计到底"好"在哪。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0010-composition-vs-inheritance.html"><span class="dir">← 上一课</span>0010 · 组合优于继承:为什么少用 is-a</a>
+<a class="next" href="0012-cohesion-and-coupling.html"><span class="dir">下一课 →</span>0012 · 内聚与耦合:好设计的度量</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

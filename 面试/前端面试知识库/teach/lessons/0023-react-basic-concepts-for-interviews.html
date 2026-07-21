@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0023 · React 基础概念必考点</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0023 课 · 6 React 面试专题 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>React 基础概念必考点</h1>
+
+<p class="lede">上一课讲了 React 从 2011 年一路演变到今天的时间线,但面试官很少真的按年份考你——他们更常直接问:"说说组件、JSX、props、state 都是什么,渲染的时候到底发生了什么"。这节课不追年份,只把这几个最基础、却也最容易被追问细节的概念一次讲透:组件为什么是核心、JSX 到底是不是 HTML、props 和 state 有什么区别、React 从 JSX 到屏幕上的真实 DOM 走了哪几步。</p>
+
+<div class="recall">
+<p>回忆一下上一课:React 的每一次大改动,都是在回应上一代方式暴露出的具体问题——比如类组件在状态管理上的痛点催生了 Hooks。这节课往回退一步,不讲"为什么会变成这样",只讲"现在这套东西——组件、JSX、props、state、渲染——本身分别是什么"。这是更基础的一层,几乎每场 React 面试都会用某种方式碰到它。</p>
+</div>
+
+<h2>一、组件:UI 拆分与组合的基本单位</h2>
+
+<p>React 围绕<strong>组件</strong>构建,这不是随意的设计选择。源文件把组件的好处拆成好几条,核心逻辑是:一旦 UI 被拆成一个个独立、可复用的小块,应用规模变大时暴露的各种问题——重复代码、牵一发动全身的改动、测不动的巨大页面——都能被结构性地缓解。</p>
+
+<div class="trio">
+  <div class="cell"><span class="role">好处 1</span><span class="head">可重用 + 模块化</span><span class="sub">封装好的 UI 逻辑能在应用各处复用,复杂界面拆成小块更容易管理</span></div>
+  <div class="cell"><span class="role">好处 2</span><span class="head">封装 + 可维护</span><span class="sub">改动只影响该组件及其子组件,团队可以并行推进不同组件而不互相破坏</span></div>
+  <div class="cell"><span class="role">好处 3</span><span class="head">声明式 + 易测试</span><span class="sub">UI 只反映当前状态,组件天然适合单独做单元/集成测试</span></div>
+</div>
+
+<p>就像程序由函数调用栈搭出来一样,现代应用是靠组件嵌套组件搭出来的,嵌套深度取决于应用本身的复杂度。这个模式甚至跳出了 Web:iOS 和 Android 各自发展出了自己的"React"——SwiftUI 和 Jetpack Compose,说明"组件化"不是 React 一家的偏好,而是整个现代 UI 开发趋同选择的方向。</p>
+
+<h2>二、两种写法:函数组件 vs 类组件</h2>
+
+<p>写 React 组件有两种方式,面试时都可能被问到,但地位并不对等:</p>
+
+<div class="codecompare">
+<div class="side good"><p class="label">函数组件(现代标准)</p><pre><code>function Greeting({ name }) {
+  return &lt;h1&gt;Hello, {name}!&lt;/h1&gt;;
+}</code></pre></div>
+<div class="side"><p class="label">类组件(旧版,仍会被问到)</p><pre><code>class Greeting extends React.Component {
+  render() {
+    return &lt;h1&gt;Hello, {this.props.name}!&lt;/h1&gt;;
+  }
+}</code></pre></div>
+</div>
+
+<p>类组件靠 <code>componentDidMount()</code>、<code>componentDidUpdate()</code> 这类生命周期方法管理状态和副作用,是 React 最初发布时采用的写法——在 Hooks 出现之前,函数组件只能用来写不带状态的简单展示,状态和生命周期都要靠类组件承担。2018 年 React 16.8 引入 Hooks(<code>useState</code>、<code>useEffect</code> 等)之后,函数组件不再局限于"没有状态的简单展示",样板代码更少,逐渐成为编写组件的事实标准——上一课时间线里 2018 年那次转折,落地到写法层面就是这张对比图。类组件在最新版本的 React 里仍然可以运行,也仍然大量存在于较旧的代码库里,这是它还会出现在面试里的原因。</p>
+
+<h2>三、JSX:好用的语法糖,不是 HTML 本身</h2>
+
+<p>组件里那些看起来像 HTML 的标记(<code>&lt;h1&gt;</code>)看起来像 HTML,但实际上是 <strong>JSX</strong>(JavaScript XML)——JavaScript 的语法扩展,允许在 JS 代码里写类似 HTML 的标记。它不是 React 运行的必需品,但因为让 UI 代码更直观、更易读,被广泛采用。</p>
+
+<p>浏览器并不认识 JSX,必须先经过 <a href="https://babeljs.io/">Babel</a> 或 <a href="https://www.typescriptlang.org/tsconfig/#jsx">TypeScript Compiler</a> 这类编译器,把它转换成浏览器认识的东西。转换的目标是 <code>React.createElement()</code> 函数调用——用哪个具体函数由编译器配置决定。要生成这样一段 HTML:</p>
+
+<pre><code>&lt;div&gt;
+  &lt;h1&gt;Hello world!&lt;/h1&gt;
+  &lt;p&gt;Goodbye earth!&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+
+<p>不用 JSX、直接手写 <code>React.createElement()</code> 是这样的:</p>
+
+<pre><code>const element = React.createElement('div', null, [
+  React.createElement('h1', null, 'Hello world!'),
+  React.createElement('p', null, 'Goodbye earth!'),
+]);</code></pre>
+
+<p>用 JSX 写同一段东西,几乎和目标 HTML 长得一样:</p>
+
+<pre><code>const element = (
+  &lt;div&gt;
+    &lt;h1&gt;Hello world!&lt;/h1&gt;
+    &lt;p&gt;Goodbye earth!&lt;/p&gt;
+  &lt;/div&gt;
+);</code></pre>
+
+<p>几个容易被追问的要点:JSX 是 <code>React.createElement()</code> 的语法糖,在浏览器运行之前就已经被转换掉;组件必须返回单个根元素;大括号 <code>{}</code> 里可以写任意 JavaScript 表达式;JSX 和 HTML 存在具体差异(<code>className</code> 而不是 <code>class</code>、<code>style</code> 接对象而不是字符串、自闭合标签写法等)。</p>
+
+<h2>四、Props vs State:两种数据,两种规则</h2>
+
+<p>Props 和 state 都是组件渲染时要用到的数据,但角色和规则完全不同。</p>
+
+<table>
+<tr><th>维度</th><th>Props</th><th>State</th></tr>
+<tr><td>来源</td><td>从父组件传入,类似函数的参数</td><td>在组件内部自行管理</td></tr>
+<tr><td>可变性</td><td>接收它的组件不能修改</td><td>可以通过对应的 setter 更新</td></tr>
+<tr><td>更新时</td><td>由父组件重新传入新值触发</td><td>更新会触发该组件重新渲染</td></tr>
+<tr><td>用途</td><td>配置组件、组件间共享数据</td><td>组件实例自己的"记忆"</td></tr>
+</table>
+
+<pre><code>// Props:从外部传入,只读
+function Welcome({ name }) {
+  return &lt;h1&gt;Hello, {name}!&lt;/h1&gt;;
+}
+
+// State:组件自己的记忆,更新会触发重新渲染
+function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    &lt;button onClick={() =&gt; setCount(count + 1)}&gt;Clicked {count} times&lt;/button&gt;
+  );
+}</code></pre>
+
+<p>state 可以理解成组件实例的"记忆":每个组件实例的 state 都是各自隔离的,不能从外部直接修改,只能通过组件自己暴露的方式(比如上面的 <code>setCount</code>)去更新。在 react.dev 上进一步阅读:<a href="https://react.dev/learn/passing-props-to-a-component">将 Props 传递给组件</a>、<a href="https://react.dev/learn/state-a-components-memory">状态:组件的记忆</a>。</p>
+
+<h2>五、渲染:从 JSX 到真实 DOM 的四步</h2>
+
+<p>日常说"渲染网页"通常指浏览器把 HTML/CSS/JS 转成屏幕上的可视页面。但在 React 的上下文里,"渲染"专指 React 把组件转换成实际 DOM 元素这一步——为了不混淆,这节课沿用源文件的做法:"渲染"专指 React 的这一步,"把内容画到屏幕上"另称"浏览器绘制"。</p>
+
+<div class="pipeline">
+<div class="node"><span class="n-title">写 JSX</span><span class="n-sub">类似 HTML 的标记,浏览器不认识</span></div>
+<div class="arrow">→</div>
+<div class="node"><span class="n-title">编译器转换</span><span class="n-sub">Babel / TS Compiler → React.createElement() 调用</span></div>
+<div class="arrow">→</div>
+<div class="node"><span class="n-title">生成虚拟 DOM</span><span class="n-sub">一个描述 UI 该长什么样的普通 JS 对象</span></div>
+<div class="arrow">→</div>
+<div class="node good"><span class="n-title">协调 + 提交</span><span class="n-sub">diff 新旧虚拟 DOM,只把变化的部分写回真实 DOM</span></div>
+</div>
+
+<p>首次渲染时,React 创建初始虚拟 DOM,再用 <code>document.createElement()</code>、<code>document.appendChild()</code> 这类 DOM 方法把组件挂载到真实 DOM 里。之后每当组件的 props 或 state 变化,组件会重新渲染:React 生成一棵新的虚拟 DOM 树,拿它和上一次的虚拟 DOM 树比较,只把发生变化的部分(新增、删除、不同的属性)更新到真实 DOM 上——这个比较和决策的过程就是<strong>协调</strong>。整条链路合起来一句话:React 组件从不直接改 DOM,每一次都是先算出虚拟 DOM、再靠协调决定真实 DOM 最少需要改哪里。在 react.dev 上进一步阅读:<a href="https://react.dev/learn/render-and-commit">渲染和提交</a>。</p>
+
+<h2>六、面试官到底想听到什么</h2>
+
+<p>源文件用一份清单收束了这节课的范围,每一条都能对应到上面已经讲过的内容:</p>
+
+<ul>
+<li><strong>组件</strong>:能写出函数组件,知道怎么从 props 读数据、怎么加 state——对应第一、四节。</li>
+<li><strong>JSX</strong>:说清楚 JSX 是什么、为什么需要编译——对应第三节。</li>
+<li><strong>渲染</strong>:能讲出 React 渲染组件的大致过程——对应第五节。</li>
+<li><strong>虚拟 DOM</strong>:知道虚拟 DOM 是什么、它的作用是什么——对应第五节。</li>
+<li><strong>协调</strong>:能解释协调这个过程本身——对应第五节。</li>
+</ul>
+
+<h2>七、关键定义</h2>
+
+<dl class="keydef">
+<dt>JSX</dt>
+<dd>JavaScript 的语法扩展,允许在 JS 代码里写类似 HTML 的标记;浏览器不能直接识别它,必须先经过 Babel 或 TypeScript Compiler 这类编译器转换成 <code>React.createElement()</code> 调用。<em>避免</em>把 JSX 等同于 HTML 本身——<code>className</code>、内联大括号表达式、自闭合标签等写法和 HTML 并不一致,而且组件返回的 JSX 必须收敛成单个根元素。</dd>
+<dt>虚拟 DOM(Virtual DOM)</dt>
+<dd><code>React.createElement()</code> 生成的、描述"UI 该长什么样"的轻量 JS 对象,不是真实 DOM 节点,本身也不会被浏览器绘制。<em>避免</em>把虚拟 DOM 说成"真实 DOM 的一份副本"——它是渲染流程里先算出来的中间表示,先于任何真实 DOM 操作存在。</dd>
+<dt>协调(Reconciliation)</dt>
+<dd>组件因 props 或 state 变化重新渲染时,React 生成新的虚拟 DOM 树并与上一次的树比较,只把发生变化的部分写回真实 DOM 的过程。<em>避免</em>把协调和"重新渲染"划等号——重新渲染是生成新虚拟 DOM 树这一步,协调是紧接着的比较和更新决策,两者是渲染流程里前后相邻但不同的阶段。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>面试官仍然可能拿一段类组件代码(比如带 <code>componentDidMount()</code> 的)让你解释,但源文件的态度很明确——函数组件已经是写组件的事实标准超过五年了,没写过类组件不该成为心虚的理由;如果你确实没用过类组件,不需要为此专门去补课,直接告诉面试官"我一直用函数组件 + Hooks,没有类组件的实战经验",这就是源文件认可的诚实回答。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把 React 的"渲染"和浏览器的"绘制"混为一谈。</strong>日常语境里"渲染网页"指浏览器把代码变成可视页面,但 React 里的"渲染"专指组件转换成虚拟 DOM 表示这一步,和"把内容画到屏幕上"不是同一件事。混用这两个词,面试时被追问"渲染和重新绘制有什么关系"就容易说不清楚自己指的是哪一层。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>挑一个自己写过的、只有一两个 JSX 标签的简单组件,手动把它翻译成不用 JSX 的 <code>React.createElement()</code> 调用写法,对着这节课第三节的例子核对结果。翻译不出来,就说明"JSX 只是语法糖"这句话你还没有真的理解,只是记住了这个说法。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>React 组件不会直接改 DOM,固定要走"写 JSX → 编译成 <code>createElement()</code> 调用 → 生成虚拟 DOM → 协调比对 → 提交到真实 DOM"这条链路;Props 是父组件传入、不可变的配置,State 是组件自己管理、变化会触发重渲染的记忆——这两条区分清楚,这节课列的所有必考点都能顺着往下推。</p>
+</div>
+
+<h2>八、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于 JSX,下面哪个说法最准确? (A) JSX 就是 HTML 的另一种写法,浏览器可以直接识别和渲染 (B) JSX 是 JavaScript 的语法扩展,浏览器不识别,需要编译器(例如 Babel 或 TypeScript Compiler)先转换成 React.createElement() 调用 (C) JSX 是一种独立于 JavaScript 的模板语言,运行时由 React 在浏览器里动态解析</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。JSX 需要先经过编译器转换,才能在浏览器里以 <code>React.createElement()</code> 调用的形式运行。(A) 错在两处:浏览器不能直接识别 JSX,而且 JSX 和 HTML 存在具体差异(<code>className</code>、自闭合标签等),不是"另一种写法"就能一笔带过的;(C) 错在把 JSX 当成了运行时才解析的模板语言——实际上转换发生在编译期,浏览器运行时看到的已经是转换完的 <code>React.createElement()</code> 调用产生的结果,不存在"运行时解析 JSX"这一步。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:组件因为 props 或 state 变化重新渲染时,React 具体做了什么(协调过程)? (A) React 生成新的虚拟 DOM 树,与上一次的虚拟 DOM 树比较,只把发生变化的部分更新到真实 DOM 上 (B) React 直接清空整个真实 DOM 树,再根据新的虚拟 DOM 从零重新挂载所有节点 (C) React 跳过虚拟 DOM 比较,直接根据新的 props/state 值原地覆写对应的真实 DOM 属性</summary>
+<div class="answer">
+<p>正确答案是 <strong>(A)</strong>。协调就是 React 在重新渲染时比较新旧虚拟 DOM 树、只做必要更新的过程。(B) 描述的是"整棵树推倒重来",这种做法开销巨大,恰恰是虚拟 DOM 加协调机制想要避免的;(C) 错在它跳过了虚拟 DOM 比较这一环节,而虚拟 DOM 比较正是协调的核心步骤,不是可以省略的可选项。</p>
+</div>
+</details>
+</div>
+
+<h2>九、主推资源</h2>
+
+<ul>
+<li><a href="https://react.dev/learn/passing-props-to-a-component">将 Props 传递给组件</a> —— react.dev 官方指南,对应第四节 Props 的部分。</li>
+<li><a href="https://react.dev/learn/state-a-components-memory">状态:组件的记忆</a> —— react.dev 官方指南,对应第四节 State 的部分。</li>
+<li><a href="https://react.dev/learn/render-and-commit">渲染和提交</a> —— react.dev 官方指南,对应第五节渲染四步的官方版本说明。</li>
+<li><a href="https://babeljs.io/">Babel</a> —— 把 JSX 转换成浏览器认识的 JavaScript 的主流编译器之一,对应第三节。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"虚拟 DOM 和真实 DOM 到底差在哪",也可以让老师带你把一个自己写的组件手动翻译成 <code>React.createElement()</code> 调用,当场核对理解对不对。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0022-react-landscape-and-history.html"><span class="dir">← 上一课</span>React 为什么长这样:发展历程</a>
+  <a class="next" href="0024-thinking-declaratively-in-react.html"><span class="dir">下一课 →</span>用声明式思维回答 React 问题</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

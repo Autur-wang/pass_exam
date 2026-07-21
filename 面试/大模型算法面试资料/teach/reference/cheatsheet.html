@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型算法面试速查表 · 注意力 / 微调 / 对齐 / RAG / 推理 / 评估</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}],
+    throwOnError: false
+  });
+});
+</script>
+<style>
+main { max-width: 54rem; }
+h2 { margin-top: 1.8rem; font-size: 1.12rem; }
+table { font-size: .84em; margin: .6rem 0; }
+th, td { padding: .35em .55em; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+@media (max-width: 42rem) { .two { grid-template-columns: 1fr; } }
+.tag { display:inline-block; font-family:"SF Mono",Menlo,monospace; font-size:.8em; background:var(--code-bg); border:1px solid var(--border); border-radius:4px; padding:.05em .4em; }
+@media print { .lesson-footer, .toplinks { display:none; } body{font-size:10pt;} h2{margin-top:1rem;} }
+</style>
+</head>
+<body>
+<main>
+<p class="meta">大模型算法面试 · 精读课 · 速查表 · <a href="../index.html">门户</a> · <a href="../GLOSSARY.md">术语表</a> · 建议打印随身</p>
+<h1>大模型算法面试速查表</h1>
+<p class="lede">面试前 10 分钟扫一遍。注意力公式、微调决策、对齐算法、RAG 链路、推理工程、评估指标,一页收齐。每一条都能在对应微课里展开。</p>
+
+<h2>一、注意力核心公式</h2>
+<p>缩放点积注意力(除以 $\sqrt{d_k}$ 防 softmax 饱和):</p>
+$$\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V,\qquad d_k=d_{model}/h$$
+<p>多头:$\operatorname{MultiHead}=\operatorname{Concat}(\text{head}_1,\dots,\text{head}_h)W_O$,时间/空间复杂度 $O(n^2 d)$(瓶颈在 $n\times n$ 分数矩阵)。</p>
+
+<h2>二、注意力变体 & KV Cache</h2>
+<table class="bigo">
+<thead><tr><th class="op">变体</th><th>K/V 头</th><th>KV Cache</th><th>质量</th><th>代表</th></tr></thead>
+<tbody>
+<tr><td class="op">MHA</td><td>每头独立</td><td class="warn">最大</td><td class="best">最好</td><td class="op">原始 Transformer</td></tr>
+<tr><td class="op">MQA</td><td>全部共享 1 组</td><td class="best">最小</td><td class="warn">略降</td><td class="op">PaLM</td></tr>
+<tr><td class="op">GQA</td><td>分组共享</td><td>折中</td><td>接近 MHA</td><td class="op">LLaMA 2/3</td></tr>
+<tr><td class="op">MLA</td><td>压成低维 latent</td><td class="best">很小</td><td class="best">好</td><td class="op">DeepSeek</td></tr>
+</tbody>
+</table>
+<p style="font-size:.85em;color:var(--muted)">KV Cache 显存 $\approx 2\times L_{\text{层}}\times n_{\text{序列}}\times h\times d_{\text{head}}\times \text{bytes}$。压它的三条路:变体(MQA/GQA/MLA)、PagedAttention(消碎片)、prefix caching(复用前缀)。<strong>FlashAttention</strong> 不改显存量级但省 HBM 读写、更快,且是精确非近似。</p>
+
+<h2>三、微调决策</h2>
+<div class="two">
+<table class="bigo">
+<thead><tr><th class="op">方法</th><th>训练参数</th><th>显存</th><th>推理开销</th></tr></thead>
+<tbody>
+<tr><td class="op">全参微调</td><td class="warn">100%</td><td class="warn">最高</td><td class="best">无</td></tr>
+<tr><td class="op">LoRA</td><td class="best">&lt;1%</td><td>低</td><td class="best">可合并=0</td></tr>
+<tr><td class="op">QLoRA</td><td class="best">&lt;1%</td><td class="best">最低(4bit)</td><td>解量化略增</td></tr>
+<tr><td class="op">Prefix/P-Tuning</td><td class="best">少</td><td>低</td><td>占上下文</td></tr>
+</tbody>
+</table>
+<table>
+<thead><tr><th>要点</th><th>口径</th></tr></thead>
+<tbody>
+<tr><td>LoRA 公式</td><td class="tag">W'=W₀+BA, r≪d</td></tr>
+<tr><td>B/A 初始化</td><td>B=0, A 高斯 → 起点=原模型</td></tr>
+<tr><td>关键超参</td><td>r、lora_alpha(α/r 缩放)</td></tr>
+<tr><td>常作用层</td><td>q/v 投影</td></tr>
+<tr><td>SFT loss</td><td>只算 assistant 段</td></tr>
+</tbody>
+</table>
+</div>
+<p style="font-size:.85em;color:var(--muted)"><strong>改知识 → RAG</strong>(时效/私域/可溯源);<strong>改能力·风格·格式 → 微调</strong>;常两者结合。微调后变差:灾难性遗忘 → 混通用数据 + 小学习率 + 早停。</p>
+
+<h2>四、对齐算法</h2>
+<table class="bigo">
+<thead><tr><th class="op">算法</th><th>要奖励模型?</th><th>要价值网络?</th><th>一句话</th></tr></thead>
+<tbody>
+<tr><td class="op">PPO</td><td class="warn">要</td><td class="warn">要(critic)</td><td class="op">clip 限制新旧策略比 + KL 惩罚</td></tr>
+<tr><td class="op">DPO</td><td class="best">不要</td><td class="best">不要</td><td class="op">偏好对直接做分类式损失,隐式奖励</td></tr>
+<tr><td class="op">GRPO</td><td>要(或规则奖励)</td><td class="best">不要</td><td class="op">组内相对优势,省 critic(推理模型)</td></tr>
+</tbody>
+</table>
+<p style="font-size:.85em;color:var(--muted)"><strong>RLHF 三阶段</strong>:SFT → 训 RM(成对偏好 chosen/rejected)→ RL(PPO)最大化 RM 打分。为什么用 RL 不用 SFT:偏好是相对的、难监督单条最优、需要探索。</p>
+
+<h2>五、RAG 链路与检索</h2>
+<div class="flow">
+  <div class="step">① 文档解析 → 预处理</div><div class="down">↓</div>
+  <div class="step">② 分块 chunking(定长+重叠 / 语义 / 结构)</div><div class="down">↓</div>
+  <div class="step">③ 向量化 embedding → 建索引(HNSW/IVF)</div><div class="down">↓</div>
+  <div class="step">④ 检索召回:混合(向量 + BM25,RRF 融合)</div><div class="down">↓</div>
+  <div class="step">⑤ Rerank 精排(cross-encoder)</div><div class="down">↓</div>
+  <div class="step terminal">⑥ 拼进 prompt → 生成(带引用溯源)</div>
+</div>
+<p style="font-size:.85em;color:var(--muted)"><strong>BM25 三要素</strong>:词频饱和(TF)× 逆文档频率(IDF)× 文档长度归一。<strong>召回 vs 精排</strong>:召回求不漏、精排求排得准。<strong>降幻觉</strong>:RAG 给证据 + prompt 约束 + 结构化校验 + RLHF/DPO + 引用溯源。</p>
+
+<h2>六、推理工程 & 分布式</h2>
+<div class="two">
+<table>
+<thead><tr><th>量化</th><th>定位</th></tr></thead>
+<tbody>
+<tr><td class="tag">FP16/BF16</td><td>训练/高质量推理基线</td></tr>
+<tr><td class="tag">INT8</td><td>省显存,质量损失小</td></tr>
+<tr><td class="tag">INT4/AWQ</td><td>激活感知保护重要通道</td></tr>
+<tr><td class="tag">GGUF</td><td>llama.cpp 格式,偏 CPU/本地</td></tr>
+</tbody>
+</table>
+<table>
+<thead><tr><th>ZeRO</th><th>切分什么</th></tr></thead>
+<tbody>
+<tr><td class="tag">阶段 1</td><td>优化器状态</td></tr>
+<tr><td class="tag">阶段 2</td><td>+ 梯度</td></tr>
+<tr><td class="tag">阶段 3</td><td>+ 参数</td></tr>
+<tr><td class="tag">DP vs DDP</td><td>DDP 多进程各卡一模型,梯度 all-reduce</td></tr>
+</tbody>
+</table>
+</div>
+<p style="font-size:.85em;color:var(--muted)"><strong>vLLM 为什么快</strong>:PagedAttention(像 OS 分页管 KV Cache、消碎片)+ continuous batching(动态插入请求)。<strong>推理显存</strong> ≈ 权重 + KV Cache + 激活。<strong>延迟指标</strong>:TTFT(首 token)/ TPOT(每 token)。</p>
+
+<h2>七、评估</h2>
+<p>分类/抽取:$\text{Precision}=\dfrac{TP}{TP+FP}$,$\text{Recall}=\dfrac{TP}{TP+FN}$,$F_1=\dfrac{2PR}{P+R}$。生成类:BLEU/ROUGE 有局限 → 人评 / LLM-as-judge。RAG:检索命中率 + 答案忠实度(faithfulness)/相关度。</p>
+<p style="font-size:.85em;color:var(--muted)"><strong>让业务相信</strong>:把效果对齐到业务 KPI、做 A/B、可解释 + 抽样人审。这是评估类问题的高频落点。</p>
+
+<h2>八、高频「会被追问」清单</h2>
+<ul style="font-size:.9em">
+<li>为什么除以 $\sqrt{d_k}$?→ 点积方差随维度增大,防 softmax 饱和/梯度消失。</li>
+<li>Q、K 为什么用不同权重?→ 否则注意力对称退化、只关注自己。</li>
+<li>为什么现在都是 decoder-only?→ 训练高效、zero-shot 泛化、KV Cache 友好、生成天然自回归。</li>
+<li>LoRA 为什么不增推理延迟?→ $BA$ 可合并回 $W$。r=8 vs 16 看任务难度/数据量权衡。</li>
+<li>DPO 为什么比 PPO 省?→ 跳过显式 RM 与 critic,单阶段优化偏好。</li>
+<li>这个需求微调还是 RAG?→ 改知识 RAG、改能力微调,常结合。</li>
+<li>微调/RAG 效果怎么评?怎么让业务相信?→ 可量化指标 + A/B + 人审(极高频)。</li>
+<li>vLLM/PagedAttention 解决什么?→ KV Cache 显存碎片与利用率。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>每一行的展开都在对应微课里。回<a href="../index.html">门户</a>按主题深入,或让 AI 老师就任一条追问「为什么」。</p>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0018 · Agent 本质:agent vs workflow 与自主-控制权衡</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第六部分 Agents · 第 0018 课</p>
+<h1>Agent 本质:agent vs workflow 与自主-控制权衡</h1>
+<p class="lede">进入 Agents 部分的第一课,先把最基础也最容易答飘的四道题钉死:<strong>「什么让某物成为 agent 而非单次 LLM 调用?何时真需要?」「workflow 与 agent 有什么区别,为什么能用 workflow 就用?」「怎么决定给 agent 多少自主?」「agent = model + harness 是什么意思?」</strong>(源:AI 工程师题库 Q56、Q63、Q72;agents_101 核心心智模型)。这节课不讲 ReAct、不讲 MCP——那是下一课(0019)。这节课只回答一个更前置的问题:<strong>你到底该不该上 agent,上到什么程度。</strong></p>
+
+<div class="recall">
+<p>上一课(0017)我们讲 RAG 评估与可信:一个 RAG 系统好不好,不能只看 retriever 的召回,要评<strong>端到端</strong>——检索、拼接、生成、引用忠实度一起看。这个「评整个系统而非单个部件」的思路,这节课会原封不动地复用到 agent 上。<strong>先别往下看:如果我给一个 LLM 接上「搜航班」的工具,它就成 agent 了吗?差在哪一步?</strong></p>
+</div>
+
+<h2>一、什么让它成为 agent(而不是单次调用)</h2>
+<p>先看两个请求。「巴黎下周天气如何?」——一次调用就能答完:问题进去,答案出来,结束。但「帮我规划一趟 10 天的欧洲行,要历史古迹、当地美食、预算 3000 美元」——这需要<strong>规划、查多个来源、在多步之间记住预算和偏好、再根据中间结果调整</strong>。第一个是问答,第二个才是 agent 的活。</p>
+<p>差别不在「有没有工具」,而在<strong>有没有循环</strong>。单次调用是 text in → text out,一锤子买卖;agent 是给 LLM 加上工具、记忆和一个循环,让它能<strong>行动 → 观察结果 → 迭代逼近目标</strong>,而不是答一次就撒手。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node"><span class="n-title">目标</span><span class="n-sub">要做成的事</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">规划</span><span class="n-sub">下一步做什么</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">行动</span><span class="n-sub">调工具</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">观察</span><span class="n-sub">结果回上下文</span></div>
+  <div class="arrow">↺</div>
+  <div class="node good"><span class="n-title">达标?</span><span class="n-sub">是→停 / 否→再规划</span></div>
+</div>
+<figcaption>agent 的骨架就是这个循环:规划 → 行动 → 观察 → 再规划,直到满足停止条件。单次调用没有这个「↺」。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>Agent(智能体)</dt>
+<dd>一个被赋予「行动能力」而非只「回答能力」的 LLM 系统:在推理核心之外接上<strong>工具、记忆和一个循环</strong>,使其能试探、观察结果、再试,直到任务完成。</dd>
+<dd><em>何时真需要:任务需<strong>多步</strong>、需<strong>外部动作或数据</strong>、或需<strong>根据中间结果动态调整路径</strong>时。反过来,单次调用或固定流程能搞定的,就别上 agent——agent 会带来额外成本、延迟和新的失败模式。</em></dd>
+</dl>
+
+<h2>二、agent = model + harness(记住这一个等式)</h2>
+<p>关于 agent 最好用的心智模型只有一句:<strong>agent = model + harness</strong>。model 是推理核心(大脑);harness 是你在它周围搭的一切,好让它能真正干活——工具、记忆、循环,以及决定它能做什么的门控(gate)。</p>
+<p>为什么这个拆分重要?因为它划清了「你买什么」和「你建什么」的边界:</p>
+<ul>
+<li><strong>model 可以买</strong>,而且正在快速商品化——今天最强的基座,过几个月人人都能调用。</li>
+<li><strong>harness 要你自己建</strong>,它才是护城河。这里有一句业内的狠话:<strong>「若你不是模型,你就是 harness」</strong>——你能动手做的、有价值的、难的工作,几乎全在 harness 这一层。</li>
+</ul>
+
+<p>harness 通常拆成四个部件(此为 NVIDIA《Introduction to LLM Agents》的常用划分):</p>
+<dl class="keydef">
+<dt>① Agent core(决策核心 / 大脑)</dt>
+<dd>中央决策循环:持有目标、决定何时用哪个工具、拉取相关记忆,常带一个 persona 或操作规则。推理模型出现后,过去手工搭的规划,很多挪进了模型自己的思维链里。</dd>
+<dt>② Memory(记忆)</dt>
+<dd>短期记忆装当前任务的工作上下文;长期记忆存跨会话的事实与历史,通常按<strong>语义相似度 + 时效(recency)+ 重要性</strong>检索。管好「什么进上下文窗口、什么留在外面」,就是如今说的 context engineering。</dd>
+<dt>③ Tools(工具)</dt>
+<dd>agent 能采取的动作:网页搜索、代码执行、检索(RAG)、任意 API。工具怎么设计、返回什么,是下一课的重点。</dd>
+<dt>④ Planning(规划)</dt>
+<dd>把难任务拆成步骤、对自己的产出做反思(reflection)、决定下一步。任务分解 + 反思是主力打法。</dd>
+</dl>
+
+<div class="keydef">
+<dt>关键原则:评估整个系统,而非只评模型</dt>
+<dd>这正是上一课「端到端评 RAG」的同一条思路。<strong>更强的基座救不了坏掉的 harness、缺失的工具、或 agent 根本看不到的上下文。</strong>面试里被问「你的 agent 效果不好怎么排查」,先想到的不该是「换个更大的模型」,而是「harness 哪一层漏了」。</dd>
+</div>
+
+<h2>三、workflow vs agent:能用 workflow 就用</h2>
+<p>这是 agent 部分最高频的一道分辨题。两者都能「用 LLM 做多步的事」,区别在<strong>控制流由谁定</strong>:</p>
+
+<dl class="keydef">
+<dt>Workflow(工作流)</dt>
+<dd>步骤序列在<strong>代码里预先写死</strong>:先做 A,再做 B,然后 C。控制流固定、可预测。LLM 只在每一步里被调用,但「下一步走哪」不由它决定。</dd>
+<dt>Agent</dt>
+<dd>控制流在<strong>运行时由模型自己决定</strong>:它看当前状态,自选下一步动作。更灵活,但也更难预测、更难测试、更难给保证。</dd>
+</dl>
+
+<p>判断法则就一条——<strong>步骤能不能预先枚举</strong>:</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">这个任务的步骤,我能不能在写代码时就大致列全?</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">能,路径基本固定</div>
+      <div class="step terminal">用 workflow<br>更便宜、更快、更好调、更容易给保证</div>
+    </div>
+    <div class="branch">
+      <div class="label">不能,路径依赖运行时才知道的中间结果</div>
+      <div class="step">才上 agent<br>换灵活性,代价是可预测性</div>
+    </div>
+  </div>
+</div>
+<figcaption>成熟的默认姿势:选「最简单能用的那个」。prompt → workflow → 确实需要动态控制流,才 agent。</figcaption>
+</figure>
+
+<p>为什么反复强调「能用 workflow 就用」?因为 agent 的灵活是有价的:它更贵、更慢、更难复现,还多出一堆只在运行时才暴露的失败模式。workflow 的固定路径反过来给你便宜、快、可调试、可保证。<strong>agent 不是更高级的 workflow,而是当你「无法预先枚举路径」时才被迫付出的成本。</strong></p>
+
+<h2>四、agency-control 权衡:给最小够用的自主</h2>
+<p>就算决定要 agent,还有一个连续的旋钮要拧:<strong>给它多少自主(autonomy / agency)</strong>。这往往才是 agentic 系统真正的设计决策——而不是「选哪个模型」。</p>
+
+<dl class="keydef">
+<dt>Agency–Control 权衡</dt>
+<dd><strong>自主越高</strong> = 模型自己做更多决定:更灵活、你写的代码更少,但更难预测、更难给保证。<br><strong>控制越高</strong> = 路径更多写死在代码里:可靠、可测,但更僵、迁移到新场景更费劲。</dd>
+</dl>
+
+<p>怎么拧这个旋钮?按两把尺子缩放自主:</p>
+<ul>
+<li><strong>犯错代价</strong>:动作的风险有多大、可不可逆。低风险、已被充分理解(well-understood)的任务,可以放更多自主;高风险、不可逆的动作(删数据、发钱、对外发消息)要收紧控制,并加<strong>人审(human review)</strong>。</li>
+<li><strong>路径可指定性</strong>:你越能把正确路径写清楚,就越该用控制(写死);越写不清、越依赖临场判断,才越需要放权给模型。</li>
+</ul>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">按「犯错代价 + 路径可指定性」定位这个任务</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">低风险 / 路径说得清</div>
+      <div class="step terminal">更多控制<br>写死路径,自主留最小</div>
+    </div>
+    <div class="branch">
+      <div class="label">高风险 / 不可逆</div>
+      <div class="step">紧控制 + 人审<br>关键动作要 review-before-act</div>
+    </div>
+    <div class="branch">
+      <div class="label">路径说不清 / 依赖临场</div>
+      <div class="step">才放更多自主给模型</div>
+    </div>
+  </div>
+</div>
+<figcaption>资深直觉:先给<strong>最小够用</strong>的自主,再随 eval 和线上监控证明它可靠,才逐步放权——而不是一上来就全自主。</figcaption>
+</figure>
+
+<p>把这条讲透就能压过大多数候选人:面试官问「你会给这个 agent 多大自主」,弱答是「看情况」或直接「全自主,现在模型很强」;强答是——<strong>默认给最小够用的自主,用犯错代价和路径可指定性两把尺子缩放,高风险动作加人审,再靠 eval 与监控拿到可靠性证据后逐步放权。</strong>注意:这套判断和「选 GPT 还是 Claude」几乎无关,它是 harness 层的设计,不是模型选型。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「agent 和一次 LLM 调用差在哪?」——差在<strong>循环</strong>:行动→观察→迭代;别答成「agent 就是接了工具」,接了工具但没有循环仍是 workflow 的一步。</li>
+<li>「那 agent 和 workflow 呢?」——控制流由谁定:workflow 代码写死、可预测;agent 运行时模型自决、灵活但难测。<strong>能预先枚举步骤就用 workflow。</strong></li>
+<li>「什么时候才真的需要 agent?」——多步 + 外部动作/数据 + 需按中间结果动态调整路径,三者叠加才划算。</li>
+<li>「你会给它多少自主?」——最小够用起步,按犯错代价 + 路径可指定性缩放,高风险动作加人审,eval/监控证明可靠再放权。</li>
+<li>「agent 效果不好你先查什么?」——评<strong>整个系统</strong>:harness 哪层漏了(缺工具?上下文没喂到?记忆检索错?),而非第一反应换更大模型。</li>
+<li>「'agent = model + harness' 里 harness 指什么?」——工具、记忆、循环、门控四类机制;model 可买、harness 要建,是护城河。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞是面试扣分点,注意软化):</strong></p>
+<ul>
+<li>别说「agent 一定比 workflow 强」。agent 换来的是<strong>灵活性</strong>,代价是成本、延迟、可预测性和新增失败模式;<strong>步骤已知时 workflow 通常更优</strong>。</li>
+<li>别说「接了工具就是 agent」。缺了<strong>循环</strong>(观察结果再迭代)的多半仍是 workflow 里的一次工具调用。</li>
+<li>别说「模型越强 agent 就越好」。更强的基座<strong>救不了</strong>坏 harness、缺工具、或 agent 看不到的上下文——要评整个系统。</li>
+<li>别把「给多少自主」当成「选哪个模型」。这通常是 <strong>harness 层的设计决策</strong>,和模型选型是两件事。</li>
+<li>别默认「越自主越好」。资深做法是<strong>给最小够用的自主</strong>,拿到可靠性证据再放权;高风险 / 不可逆动作要留人审。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>下面哪个场景<strong>最</strong>应该用 agent 而不是固定 workflow?</p>
+<details><summary>A. 把用户上传的发票 PDF 按固定字段抽成 JSON,每张流程都一样</summary>字段和步骤都能预先枚举,路径固定——这正是 workflow 的主场,更便宜也更好保证。</details>
+<details><summary>B. 每天定时把一段文本翻译成英文并存库</summary>单一、可预测的步骤,一次调用 + 一段代码即可,上 agent 是徒增成本与失败面。</details>
+<details><summary>C. 排查一个陌生代码库的 bug:要读文件、跑测试、看报错、据结果决定下一步查哪里 ✅</summary>正确。下一步查什么依赖运行时才知道的中间结果,路径无法预先枚举——这才需要「行动→观察→再规划」的循环。</details>
+<details><summary>D. 把一个固定的三步报表流程串起来:取数 → 汇总 → 发邮件</summary>步骤已知且固定,workflow 更快、更易调、更易给保证;不需要模型运行时自决控制流。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于「给 agent 多少自主」,下列哪句最贴近资深工程师的做法?</p>
+<details><summary>A. 现在模型很强,默认给全自主,少写代码最省事</summary>忽略了犯错代价和可预测性;高风险 / 不可逆动作全自主会带来难以挽回的失败。</details>
+<details><summary>B. 全部路径写死在代码里最安全,能不给自主就不给</summary>过度控制会让系统僵化、迁移困难,也放弃了 agent 本该带来的灵活性;该按风险缩放而非一刀切。</details>
+<details><summary>C. 先给最小够用的自主,按犯错代价与路径可指定性缩放,高风险动作加人审,靠 eval/监控证明可靠再放权 ✅</summary>正确。自主是可缩放的旋钮,拿证据逐步放权,而不是一上来就拉满或锁死。</details>
+<details><summary>D. 自主多少取决于选了哪个基座模型,换更强的模型就能多放权</summary>这主要是 harness 层的设计决策,和模型选型基本无关;更强的模型不改变风险与可指定性这两把尺子。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Building Effective Agents</strong>(Anthropic 工程博客)——workflow 与 agent 的经典分辨:agent 就是「模型在循环里用工具」;能用更简单的模式就别上 agent。本课第三节的判断法则出自此思路。</li>
+<li><strong>Introduction to LLM Agents</strong>(NVIDIA developer blog)——harness 四部件(agent core / memory / tools / planning)的常用划分,本课第二节即据此。</li>
+<li><strong>The Anatomy of an Agent Harness</strong>(LangChain 博客)——把 harness 拆成 loop / context / tools / memory / gates,理解「agent = model + harness」的细化读物。</li>
+<li><strong>The Engineering of AI Agents</strong>(Birgitta Böckeler, Thoughtworks)——agency-control 权衡、按风险(可能性 × 影响 × 可察觉性)缩放监督力度的实操框架。</li>
+<li>下一步:0019 课讲 <strong>agent 机制</strong>——ReAct 的「推理+行动」循环、工具调用、以及 MCP 这个连接工具与数据的标准协议。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>agent = model + harness;加了「行动→观察→迭代」的循环才叫 agent;能预先枚举步骤就用 workflow;自主给最小够用的,按犯错代价 + 路径可指定性缩放、拿 eval 证据再放权。</strong></p>
+<nav class="lesson-nav">
+<a href="0017-rag-evaluation-trust.html">← 上一课:RAG 评估与可信</a>
+<a class="next" href="0019-agent-mechanics.html">下一课:Agent 机制:ReAct/工具/MCP →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

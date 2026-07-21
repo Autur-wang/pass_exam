@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0008 · stopReason:驱动循环的唯一信号灯</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 3 章 · Agent Loop ›
+  <a href="./0007-why-loop-trace-and-turn.html">上一课</a> ›
+  <strong>Lesson 0008</strong>
+</div>
+
+<p class="kicker">Lesson 0008 · 第 3 章 Agent Loop</p>
+<h1>stopReason<br>—— 驱动循环的唯一信号灯</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课你认识了 Trace / Turn 这两层容器,知道一个 Turn 是「模型调用 + 工具执行」的闭环。
+  这节课只回答一个更具体的问题——<strong>Turn 之间到底靠什么决定「继续转」还是「停下来」?</strong>
+  答案挂在一个叫 <code>stopReason</code> 的字段上,但它没你想的那么单纯。
+</div>
+
+<div class="recall">
+  ⏪ <strong>先回忆上一课</strong>:一个 Turn 只有一次模型调用,模型返回后要么带着 toolCall(去执行工具、开下一个 Turn),
+  要么不带(准备结束这个 Trace)。上一课我们只说了「有没有 toolCall」,这节课要拆开:
+  这个「有没有」到底是谁在判断、判断的依据叫什么、又为什么不能完全信任它字面的值。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 说清 <span class="sys-pill">stopReason</span> 的五种取值分别来自哪里、
+  各自什么含义,并且能反驳一个常见的误解——「循环是靠 <code>stopReason === "toolUse"</code> 驱动的」。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:十字路口的信号灯,和交警的应急手势</b>
+  把 <code>stopReason</code> 想成十字路口的信号灯——但这盏灯有个秘密:它显示的颜色<b>一半来自真实路况</b>
+  (模型 API 的 <code>stop</code> / <code>toolUse</code> / <code>length</code>,是路口探测器测出来的),
+  <b>另一半是交警在灯坏时手动打出的应急手势</b>(框架注入的 <code>error</code> / <code>aborted</code>,
+  是路况探测器本身罢工了,交警不得不出来指挥)。而司机(Loop)真正看的其实不是灯色本身,
+  而是「<b>前面路上还有没有要执行的工具</b>」——灯只是参考,不是唯一依据。
+</div>
+
+<h2>1 · 关键认知:模型不会说「我要停了」</h2>
+<p>
+  模型只是一个 token 预测器——给定上下文,猜下一个 token,如此反复。它不「知道」任务做完了没有。
+  <code>stopReason</code> 这个字段虽然挂在模型每次返回的 <code>AssistantMessage</code> 上,
+  但它的值来自<strong>两个不同的地方</strong>:一部分是模型 API 自己上报的,另一部分是框架事后「兜底」贴上去的。
+</p>
+
+<h2>2 · 模型 API 真正返回的三种</h2>
+<table class="bd">
+  <thead><tr><th>stopReason</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td><code>"toolUse"</code></td><td>模型输出了工具调用 JSON,API 检测到后返回</td></tr>
+    <tr><td><code>"stop"</code></td><td>生成自然终止(遇到了结束标记),没有工具调用</td></tr>
+    <tr><td><code>"length"</code></td><td>token 数达到 maxTokens 上限,被截断</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · 框架流式层注入的两种</h2>
+<p>
+  下面两种<strong>模型 API 本身不会返回</strong>——它们发生在框架层,模型根本感知不到:
+</p>
+<table class="bd">
+  <thead><tr><th>stopReason</th><th>含义</th><th>谁注入的</th></tr></thead>
+  <tbody>
+    <tr><td><code>"error"</code></td><td>调用过程异常(网络断了、API 报错等)</td><td>流式层的 catch 块:<code>output.stopReason = "error"</code></td></tr>
+    <tr><td><code>"aborted"</code></td><td>用户主动中止(AbortSignal 触发)</td><td>流式层的 catch 块:<code>output.stopReason = "aborted"</code></td></tr>
+  </tbody>
+</table>
+<pre><span class="cm"><span class="ln">1</span>// packages/ai/src/ —— streamSimple 内部调用抛异常时的 catch 块</span>
+<span class="ln">2</span><span class="key">catch</span> (err) {
+<span class="hl"><span class="ln">3</span>  output.stopReason = options?.signal?.aborted ? <span class="str">"aborted"</span> : <span class="str">"error"</span>;</span>
+<span class="ln">4</span>  <span class="cm">// ↑ 这不是模型说的,是框架替它"兜底"的</span>
+<span class="ln">5</span>}
+</pre>
+<div class="why">
+  <b>为什么要区分 stopReason 的两个来源?</b> 模型 API 只能报告它自己知道的三种终止;
+  网络异常和用户中止发生在框架层、模型根本感知不到,所以流式层的 catch 块必须替它「兜底」注入
+  <code>error</code> / <code>aborted</code>,否则 Loop 无法得知这次调用其实已经失败了。
+</div>
+
+<h2>4 · 真正驱动循环的不是 stopReason 本身</h2>
+<p>
+  这是本课最容易被误解的一点。Loop 实际上只看一件事——<strong>模型输出里有没有工具调用(且未全部 terminate)</strong>。
+  背后是一条<strong>人类定义的工程约定</strong>:如果模型一次输出中没有工具调用,就认为本轮不需要更多操作,循环可以停了。
+  换句话说:<strong>不是模型在说「我完成了」,而是我们在说「你没要工具,那就当你完成了」。</strong>
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 简化逻辑(实际见 agent-loop.ts:202-216)</span>
+<span class="ln">2</span><span class="key">const</span> toolCalls = message.content.<span class="fn">filter</span>(c =&gt; c.type === <span class="str">"toolCall"</span>);
+<span class="ln">3</span>hasMoreToolCalls = <span class="key">false</span>;
+<span class="ln">4</span><span class="key">if</span> (toolCalls.length &gt; 0) {
+<span class="ln">5</span>  <span class="key">const</span> executedToolBatch = <span class="key">await</span> <span class="fn">executeToolCalls</span>(...);
+<span class="hl"><span class="ln">6</span>  hasMoreToolCalls = !executedToolBatch.terminate;  <span class="cm">// 任何一个工具 terminate 则停止</span></span>
+<span class="ln">7</span>}
+</pre>
+<div class="tradeoff">
+  🔑 <b>注意</b>:实际驱动循环的不是 <code>stopReason === "toolUse"</code>,而是
+  <code>toolCalls 数组长度 &gt; 0 && !terminate</code>。这意味着:即使
+  <code>stopReason === "length"</code>(被截断),只要 content 里有 toolCall 块,循环仍会执行工具;
+  反之,即使 <code>stopReason === "toolUse"</code>,如果所有工具结果都设置 <code>terminate: true</code>,循环也会停。
+  <b>为什么用「有没有 toolCall」而不是 stopReason 本身?</b> stopReason 是描述性的元信息,可能与实际内容脱节;
+  以 content 里真实的 toolCall 块为准更鲁棒,不会因元信息偏差误判。
+</div>
+<div class="why">
+  <b>为什么不让代码更聪明地判断「任务完成没」?</b> 这正是 Agent 与 Workflow 的分界——Agent 模式下你无法预知步数,
+  唯一能稳定依赖的信号就是「输出里有没有工具调用」,用最简单的判断换取通用性,是局限也是优雅。
+</div>
+
+<h2>5 · 循环的所有退出路径</h2>
+<p>把上面两件事(stopReason 的来源、toolCall 驱动)拼起来,循环一共有四条退出路径:</p>
+<table class="bd">
+  <thead><tr><th>退出路径</th><th>触发条件</th><th>原因</th></tr></thead>
+  <tbody>
+    <tr><td><b>正常退出</b></td><td><code>stop</code> / <code>length</code> + 无 followUp + 无 pendingMessages</td><td>最常见。模型没要工具,也没追加任务</td></tr>
+    <tr><td><b>硬停止</b></td><td><code>error</code> / <code>aborted</code></td><td>模型调用本身出了问题,继续跑没意义,不检查 followUp</td></tr>
+    <tr><td><b>外部钩子停</b></td><td><code>shouldStopAfterTurn()</code> 返回 true</td><td>上下文快满了、达到最大 Turn 数等</td></tr>
+    <tr><td><b>工具终止</b></td><td>一批工具的执行结果全部 <code>terminate: true</code></td><td>所有工具都同意停止(是 <code>every</code> 不是 <code>some</code>)</td></tr>
+  </tbody>
+</table>
+<div class="tradeoff">
+  <b>为什么工具终止用 every 而非 some?</b> 只要有一个工具还在正常工作就不该中断,必须整批全部
+  <code>terminate</code> 才停——这是保守策略,避免单个工具的意见误杀整个循环。
+</div>
+
+<div class="diagram">stopReason 的两个来源 vs 真正驱动循环的信号
+
+  模型 API 真实路况              框架层应急手势(catch 块注入)
+  toolUse / stop / length        error / aborted
+        │                              │
+        └──────────┬───────────────────┘
+                    ▼
+         stopReason(信号灯,仅供参考)
+                    │
+                    │   司机真正看的不是灯色,而是——
+                    ▼
+     content 里有没有 toolCall 块 && !terminate
+                    │
+        ┌───────────┴───────────┐
+        ▼                       ▼
+   有 → 继续转下一个 Turn    无/全 terminate → 准备停 / 硬停止
+</div>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 以下哪一组 stopReason 是框架的流式层「注入」的,而非模型 API 本身返回的?</p>
+    <button class="opt">toolUse 和 stop</button>
+    <button class="opt">error 和 aborted</button>
+    <button class="opt">stop 和 length</button>
+    <button class="opt">length 和 toolUse</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">② 模型返回 stopReason==='length'(被截断),但 content 里仍然有一个 toolCall 块。Loop 会怎么做?</p>
+    <button class="opt">因为不是 toolUse,立即停止,不执行任何工具</button>
+    <button class="opt">仍会执行那个工具,因为真正驱动循环的是 toolCalls 数组长度&gt;0 且未 terminate</button>
+    <button class="opt">报错退出,因为 length 和 toolCall 不能共存</button>
+    <button class="opt">只把截断的文本展示给用户,忽略 toolCall</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ 一批工具执行完,其中 2 个返回 terminate:true、1 个返回 terminate:false。Loop 会继续还是停止?为什么?</p>
+    <button class="opt">停止,因为已有工具喊停(some 逻辑)</button>
+    <button class="opt">停止,因为大多数工具都要求终止</button>
+    <button class="opt">继续,因为工具终止用的是 every——必须全部 terminate 才停,只要有一个没喊停就继续</button>
+    <button class="opt">继续,但会跳过那 2 个 terminate 的工具结果</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>硬停止为什么连 followUp 都不检查,而正常退出要检查?</em>」
+  「<em>shouldStopAfterTurn 这个外部钩子,和 stopReason 是不是同一层判断?</em>」
+  「<em>既然 Loop 只看 toolCall,那流式过程中的文本增量(text_delta)是靠什么机制被替换成最终完整消息的?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第3章-Agent-Loop-让模型转动起来的引擎.md">第 3 章 · Agent Loop —— 让模型转动起来的引擎</a>——
+  原文 §四还给出了最简 Loop 的完整源码级解读(executeToolCalls 的并行/串行调度、prepareNextTurn、steering 队列),值得通读一遍。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0009):</strong> 我们要拆开「内核 vs 洋葱式叠加」这个结构——
+  最简 Loop 的十几行内核之上,coding-agent 是怎么一层层叠加 steering、followUp、prepareNextTurn 的?
+  以及流式过程中 text_delta 最终怎么被「替换」成完整消息?
+</p>
+
+<footer>
+  Lesson 0008 · 第 3 章 Agent Loop ·
+  下一课:<a href="./0009-kernel-onion-and-streaming-replace.html">0009 内核洋葱与流式替换 →</a> ·
+  上一课:<a href="./0007-why-loop-trace-and-turn.html">0007 为什么要有 Loop / Trace / Turn</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。error/aborted 由流式层 catch 块注入(output.stopReason = signal?.aborted ? "aborted" : "error")。延伸:它们触发"硬停止",连 followUp 都不检查,因为调用本身已失败。',
+               '✓ 对。驱动循环的是 content 里有没有 toolCall 块(且未全部 terminate),不是 stopReason 的字面值。延伸:反过来即使 stopReason==="toolUse",若工具结果全部 terminate,循环也会停。',
+               '✓ 对。terminate 用 every 不用 some,是保守策略:只要有一个工具还在正常工作就不中断。延伸:这和"四条退出路径"里的工具终止一致——"所有工具都同意停止"才算数。'];
+  var msgNo = ['回看§三两张表的分栏:模型 API 只知道它自己的三种终止;网络断、用户中止发生在框架层,模型感知不到——哪两种属于后者?',
+               '回看§三"注意:实际驱动循环的不是 stopReason===toolUse"那段。stopReason 和实际 content 可能脱节,Loop 以哪个为准?',
+               '回看§四执行工具那节的 terminate 机制:Loop 是"任何一个喊停就停"还是"全部喊停才停"?注意 every 与 some 的区别。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型算法面试 · 精读课 · 门户</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+.hero { border:1.5px solid var(--link); background:var(--code-bg); border-radius:10px; padding:1.1em 1.3em; margin:1.4rem 0 2rem; text-align:center; font-family:"PingFang SC",sans-serif; }
+.hero .eq { font-size:1.1rem; font-weight:700; }
+.hero .eq b { color:var(--link); }
+.hero .sub { color:var(--muted); font-size:.9rem; margin-top:.4em; }
+.part { border:1px solid var(--border); border-radius:10px; padding:1em 1.3em 1.2em; margin:1.3rem 0; }
+.part h2 { margin-top:.3rem; font-size:1.16rem; display:flex; align-items:baseline; gap:.5rem; }
+.part .pn { color:var(--accent); font-family:"SF Mono",Menlo,monospace; font-size:.9rem; }
+.part .blurb { color:var(--muted); font-size:.9rem; margin:.2em 0 .8em; }
+.lessons { list-style:none; padding:0; margin:0; columns:2; column-gap:1.4rem; font-family:"PingFang SC",sans-serif; font-size:.92rem; }
+.lessons li { break-inside:avoid; margin:.25em 0; }
+.lessons a { text-decoration:none; color:var(--link); display:flex; gap:.5em; align-items:baseline; }
+.lessons a:hover { text-decoration:underline; }
+.lessons .ln { color:var(--muted); font-family:"SF Mono",Menlo,monospace; font-size:.78rem; flex:0 0 auto; }
+@media (max-width:34rem) { .lessons { columns:1; } }
+.toplinks { font-size:.85rem; font-family:"PingFang SC",sans-serif; }
+.toplinks a { margin-right:1rem; }
+</style>
+</head>
+<body>
+<main>
+<p class="meta">大模型算法工程师面试 · 精读课 · 共 31 节</p>
+<h1>大模型算法面试 · 精读课</h1>
+<p class="lede">把本仓库的大模型面试资料(专题笔记 + 68 篇公司面经)重述成 31 节可离线阅读的图文微课。每节 10~12 分钟、只攻一个窄主题,前半建直觉、后半落到<strong>面试怎么考、怎么答</strong>。数学公式由本地 KaTeX 渲染,全程零外网依赖。</p>
+
+<div class="hero">
+  <div class="eq">懂<b>原理</b> → 讲清<b>为什么</b> → 落到<b>工程取舍</b> → 答得住<b>追问</b></div>
+  <div class="sub">大模型面试考的不是背名词,而是这条链子能不能当场跑通</div>
+</div>
+
+<p class="toplinks"><a href="MISSION.md">🎯 Mission</a><a href="GLOSSARY.md">📖 术语表</a><a href="RESOURCES.md">🔗 资源</a><a href="reference/cheatsheet.html">🗂 速查表</a></p>
+
+<p class="meta" style="margin-top:1.5rem">按下面顺序循序学,也可跳到任一主题。上一课/下一课在每节底部串联。</p>
+
+  <section class="part">
+    <h2><span class="pn">01</span>Transformer 精讲</h2>
+    <p class="blurb">地基一节一节拆:整体结构、自注意力与 QKV、多头、位置编码、残差归一化</p>
+    <ol class="lessons">
+      <li><a href="lessons/0001-transformer-overview.html"><span class="ln">0001</span>Transformer 整体结构与数据流</a></li>
+      <li><a href="lessons/0002-self-attention-qkv.html"><span class="ln">0002</span>自注意力与 QKV</a></li>
+      <li><a href="lessons/0003-multi-head-attention.html"><span class="ln">0003</span>多头注意力:为什么要多头</a></li>
+      <li><a href="lessons/0004-positional-encoding-rope.html"><span class="ln">0004</span>位置编码:从正弦到 RoPE</a></li>
+      <li><a href="lessons/0005-residual-layernorm-ffn.html"><span class="ln">0005</span>残差、归一化、FFN 与激活</a></li>
+    </ol>
+  </section>
+  <section class="part">
+    <h2><span class="pn">02</span>注意力与架构进阶</h2>
+    <p class="blurb">省显存与提速的演化:KV Cache、MHA/MQA/GQA/MLA、FlashAttention、MoE</p>
+    <ol class="lessons">
+      <li><a href="lessons/0006-kv-cache.html"><span class="ln">0006</span>KV Cache:自回归推理的显存账</a></li>
+      <li><a href="lessons/0007-attention-variants-mha-gqa-mla.html"><span class="ln">0007</span>注意力变体:MHA/MQA/GQA/MLA</a></li>
+      <li><a href="lessons/0008-flash-attention-sparse.html"><span class="ln">0008</span>FlashAttention 与稀疏/长上下文</a></li>
+      <li><a href="lessons/0009-moe-load-balancing.html"><span class="ln">0009</span>MoE 与专家负载均衡</a></li>
+    </ol>
+  </section>
+  <section class="part">
+    <h2><span class="pn">03</span>预训练模型家族</h2>
+    <p class="blurb">三种范式与为什么 decoder-only,开源架构与 Tokenizer 的取舍</p>
+    <ol class="lessons">
+      <li><a href="lessons/0010-gpt-bert-t5-decoder-only.html"><span class="ln">0010</span>GPT/BERT/T5 与为什么 decoder-only</a></li>
+      <li><a href="lessons/0011-open-model-architectures.html"><span class="ln">0011</span>开源架构对比与 Tokenizer/BPE</a></li>
+    </ol>
+  </section>
+  <section class="part">
+    <h2><span class="pn">04</span>微调 PEFT</h2>
+    <p class="blurb">全参 vs 高效微调、LoRA/QLoRA 数学、SFT 数据与微调的坑</p>
+    <ol class="lessons">
+      <li><a href="lessons/0012-full-vs-peft.html"><span class="ln">0012</span>全参微调 vs 参数高效微调</a></li>
+      <li><a href="lessons/0013-lora.html"><span class="ln">0013</span>LoRA 原理与数学</a></li>
+      <li><a href="lessons/0014-qlora-adapter-prefix.html"><span class="ln">0014</span>QLoRA 与 Adapter/Prefix/P-Tuning</a></li>
+      <li><a href="lessons/0015-sft-data.html"><span class="ln">0015</span>SFT 数据构建与格式</a></li>
+      <li><a href="lessons/0016-finetune-pitfalls.html"><span class="ln">0016</span>微调的坑:遗忘/变差/过拟合</a></li>
+    </ol>
+  </section>
+  <section class="part">
+    <h2><span class="pn">05</span>对齐与强化学习</h2>
+    <p class="blurb">为什么要对齐:RLHF 全流程、RL 基础、PPO、DPO/GRPO</p>
+    <ol class="lessons">
+      <li><a href="lessons/0017-rlhf-pipeline.html"><span class="ln">0017</span>对齐与 RLHF 全流程</a></li>
+      <li><a href="lessons/0018-rl-basics.html"><span class="ln">0018</span>强化学习基础:马尔科夫/贝尔曼</a></li>
+      <li><a href="lessons/0019-ppo.html"><span class="ln">0019</span>PPO:近端策略优化</a></li>
+      <li><a href="lessons/0020-dpo-grpo-gspo.html"><span class="ln">0020</span>DPO/GRPO/GSPO:更轻的对齐</a></li>
+    </ol>
+  </section>
+  <section class="part">
+    <h2><span class="pn">06</span>RAG 与知识库</h2>
+    <p class="blurb">检索增强全链路:分块、向量库、混合检索、rerank、幻觉治理</p>
+    <ol class="lessons">
+      <li><a href="lessons/0021-rag-pipeline.html"><span class="ln">0021</span>RAG 全流程与为什么要 RAG</a></li>
+      <li><a href="lessons/0022-chunking-embedding-vectordb.html"><span class="ln">0022</span>分块、Embedding 与向量库</a></li>
+      <li><a href="lessons/0023-hybrid-retrieval-rerank.html"><span class="ln">0023</span>混合检索、Rerank 与多跳</a></li>
+      <li><a href="lessons/0024-hallucination.html"><span class="ln">0024</span>幻觉治理与知识时效</a></li>
+    </ol>
+  </section>
+  <section class="part">
+    <h2><span class="pn">07</span>Agent 智能体</h2>
+    <p class="blurb">范式与工具调用、记忆与多智能体编排</p>
+    <ol class="lessons">
+      <li><a href="lessons/0025-agent-paradigms.html"><span class="ln">0025</span>Agent 范式与工具调用</a></li>
+      <li><a href="lessons/0026-agent-memory-multiagent.html"><span class="ln">0026</span>记忆与多智能体</a></li>
+    </ol>
+  </section>
+  <section class="part">
+    <h2><span class="pn">08</span>训练与推理工程</h2>
+    <p class="blurb">分布式训练、量化、推理部署——为什么快、省在哪</p>
+    <ol class="lessons">
+      <li><a href="lessons/0027-distributed-training.html"><span class="ln">0027</span>多卡与分布式:DP/DDP/ZeRO</a></li>
+      <li><a href="lessons/0028-quantization.html"><span class="ln">0028</span>量化:INT8/INT4/AWQ/GGUF</a></li>
+      <li><a href="lessons/0029-inference-serving.html"><span class="ln">0029</span>推理部署:vLLM/PagedAttention</a></li>
+    </ol>
+  </section>
+  <section class="part">
+    <h2><span class="pn">09</span>评估与数据</h2>
+    <p class="blurb">效果怎么评、怎么让业务相信,微调 vs RAG 抉择与数据工程</p>
+    <ol class="lessons">
+      <li><a href="lessons/0030-evaluation.html"><span class="ln">0030</span>效果评估:指标与让业务相信</a></li>
+      <li><a href="lessons/0031-finetune-vs-rag-data.html"><span class="ln">0031</span>微调 vs RAG 抉择与数据工程</a></li>
+    </ol>
+  </section>
+
+<footer class="lesson-footer">
+<p>源:本仓库《大模型算法面试资料》。本精读课是它的图文重述 + 面试要点提炼,一手论文入口在每节「📄 论文与延伸」区。</p>
+<p>学习方式:回到会话里让 AI 老师带你循序过每一节——复述你的理解 → 补缺 → 出题校验。不必一次读完 31 节。</p>
+</footer>
+</main>
+</body>
+</html>

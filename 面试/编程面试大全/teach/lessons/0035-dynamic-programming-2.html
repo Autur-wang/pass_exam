@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0035 · 动态规划(下):经典模型与优化</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0035 课 · 算法范式 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>动态规划(下):经典模型与优化</h1>
+
+<p class="lede">上一课把「暴力递归 → DP」这条主线走通了。但面试里真正拉开差距的,是<strong>认出眼前这道题属于哪个经典模型</strong>——因为大多数 DP 题都是四五个母题的变形。这节课过四个必会模型(0/1 背包、LCS、编辑距离、LIS),讲清二维 DP 的表格思维,以及怎么用<strong>滚动数组</strong>把空间从 O(n²) 压到 O(n)。</p>
+
+<div class="recall">
+<p>先回忆:上一课<a href="0034-dynamic-programming-1.html">动态规划(上)</a>给了四步流水线——定义状态、写状态转移方程、定 base、定遍历顺序;还有一句「DP 时间 = 状态数 × 每状态转移代价」。这节的每个模型,你都可以拿这四步去套。先自己想:如果状态从「一维 <code>dp[i]</code>」变成「二维 <code>dp[i][j]</code>」,状态数变成多少?</p>
+</div>
+
+<h2>一、二维 DP:从一条线到一张表</h2>
+
+<p>上一课的斐波那契只有一维状态。但很多问题要同时盯住<strong>两个下标</strong>——比如比较两个字符串时,得知道「word1 看到第 i 个、word2 看到第 j 个」这个组合的答案。于是状态变成 <code>dp[i][j]</code>,填的不再是一行,而是<strong>一张二维表格</strong>。绝大多数字符串 DP(LCS、编辑距离、序列比对)都是这个套路。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node"><span class="n-title">① 认出模型</span><span class="n-sub">像背包?像 LCS?</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">② 写转移方程</span><span class="n-sub">dp[i][j] 由谁来?</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">③ 填表</span><span class="n-sub">按序填满二维表</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">④ 滚动降空间</span><span class="n-sub">O(mn)→O(n)</span></div>
+</div>
+<figcaption>二维 DP 的固定流程。第 ① 步「认出模型」是本课重点——认对了,②③ 几乎是套公式。</figcaption>
+</figure>
+
+<h2>二、编辑距离:二维表怎么填(README 明确点名)</h2>
+
+<p><strong>编辑距离(Edit Distance / Levenshtein)</strong>:把字符串 A 改成 B,最少需要几次「插入 / 删除 / 替换」。这是 README 里 Skiena 专门用两讲讲的模型。状态 <code>dp[i][j]</code> = 「A 的前 i 个字符」变成「B 的前 j 个字符」的最少操作数。转移只看<strong>三个邻居</strong>:</p>
+
+<ul>
+<li>若 <code>A[i]==B[j]</code>:不用操作,<code>dp[i][j] = dp[i-1][j-1]</code>(左上角直接抄过来);</li>
+<li>否则 <code>dp[i][j] = 1 + min(</code> <code>dp[i-1][j]</code>(删)<code>, dp[i][j-1]</code>(插)<code>, dp[i-1][j-1]</code>(替)<code>)</code>。</li>
+</ul>
+
+<figure class="diagram">
+<table>
+<thead><tr><th></th><th>∅</th><th>e</th><th>a</th><th>t</th></tr></thead>
+<tbody>
+<tr><th>∅</th><td>0</td><td>1</td><td>2</td><td>3</td></tr>
+<tr><th>s</th><td>1</td><td>1</td><td>2</td><td>3</td></tr>
+<tr><th>e</th><td>2</td><td>1</td><td>2</td><td>3</td></tr>
+<tr><th>a</th><td>3</td><td>2</td><td>1</td><td><strong>2</strong></td></tr>
+</tbody>
+</table>
+<figcaption>把 <code>"sea"</code> 改成 <code>"eat"</code> 的编辑距离表。首行首列是 base(空串要靠纯插入/删除,值就是长度)。每个内部格子看它<strong>左、上、左上</strong>三个邻居。右下角 <strong>2</strong> 就是答案:删掉 s、末尾加 t。</figcaption>
+</figure>
+
+<h2>三、其余三个必会模型</h2>
+
+<dl class="keydef">
+<dt>0/1 背包(0/1 Knapsack)</dt>
+<dd>n 件物品各有重量和价值、每件只能选或不选,容量 W 下求最大价值。状态 <code>dp[i][w]</code>=前 i 件、容量 w 时的最大价值;转移 = 「不选第 i 件 <code>dp[i-1][w]</code>」与「选它 <code>dp[i-1][w-wᵢ]+vᵢ</code>」取大。是「选 / 不选」型 DP 的母题。</dd>
+<dt>最长公共子序列(LCS, Longest Common Subsequence)</dt>
+<dd>两串里都出现、且顺序一致(可不连续)的最长子序列长度。<code>A[i]==B[j]</code> 时 <code>dp[i][j]=dp[i-1][j-1]+1</code>,否则取 <code>max(dp[i-1][j], dp[i][j-1])</code>。与编辑距离是「亲戚」。<em>避免</em>把子序列(可不连续)和子串(必须连续)混为一谈。</dd>
+<dt>最长递增子序列(LIS, Longest Increasing Subsequence)</dt>
+<dd>一个序列里最长的严格递增子序列长度。基础 DP 是 O(n²);另有<strong>贪心 + 二分</strong>的 O(n log n) 经典优化。</dd>
+</dl>
+
+<h2>四、优化:滚动数组把空间压下来</h2>
+
+<p>观察编辑距离的转移——<code>dp[i][j]</code> 只用到<strong>第 i 行和第 i-1 行</strong>,根本用不到更早的行。既然如此,没必要存整张 O(mn) 的表,只留「上一行 + 当前行」两行,甚至压成一行滚动更新,空间就从 <strong>O(mn) 降到 O(n)</strong>。这就是<strong>滚动数组(rolling array)</strong>。0/1 背包同理:把二维 <code>dp[i][w]</code> 压成一维 <code>dp[w]</code>,但要<strong>倒序遍历容量</strong>,否则会把「同一件物品」重复选进去。</p>
+
+<h2>五、复杂度:四个模型一张表</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">模型</th><th>时间</th><th>空间(滚动优化后)</th></tr></thead>
+<tbody>
+<tr><td class="op">0/1 背包</td><td>O(n·W)</td><td class="best">O(W)</td></tr>
+<tr><td class="op">最长公共子序列 LCS</td><td>O(m·n)</td><td class="best">O(min(m,n))</td></tr>
+<tr><td class="op">编辑距离</td><td>O(m·n)</td><td class="best">O(min(m,n))</td></tr>
+<tr><td class="op">最长递增子序列 LIS(基础 DP)</td><td class="warn">O(n²)</td><td>O(n)</td></tr>
+<tr><td class="op">最长递增子序列 LIS(贪心 + 二分)</td><td class="best">O(n log n)</td><td>O(n)</td></tr>
+</tbody>
+</table>
+<p>注意 0/1 背包的 O(n·W) 是<strong>伪多项式</strong>——它随容量数值 W 增长,而 W 的编码长度是 log W,所以严格说不算多项式时间。这个细节在讲 NP 相关话题时会用到,先记住「背包快是因为 W 不大」。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>DP 题的胜负手在「认模型」:</p>
+<ul>
+<li><strong>先归类,再动手</strong>:「两个字符串比来比去」→ 大概率 LCS / 编辑距离;「一堆物品选或不选、带容量约束」→ 背包;「一个序列里挑最长的递增段」→ LIS。认对模型,状态和转移基本是现成的。</li>
+<li><strong>能默写状态转移方程</strong>:面试官常直接问「你的 <code>dp[i][j]</code> 表示什么、方程怎么写」。把编辑距离的「相等抄左上、不等 1 + 三者最小」讲利落,是硬功。</li>
+<li><strong>主动提优化</strong>:写完二维版,补一句「因为只依赖上一行,可以用滚动数组把空间降到 O(n)」;遇到 LIS 补一句「还有 O(n log n) 的贪心 + 二分做法」。这两句几乎是标配加分项。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:背包「恰好装满」vs「不超过容量」初始化不同。</strong>求「容量内最大价值」(不超过)时,<code>dp</code> 全初始化为 0;但求「<strong>恰好</strong>装满容量」的方案时,除 <code>dp[0]=0</code> 外其余要初始化为 <code>-∞</code>(表示「暂时无法恰好装满」),否则会把不可达状态误当作合法解。两种题面初始化不一样,张冠李戴必错。</p>
+<p><strong>坑二:一维背包遍历方向。</strong>0/1 背包压成一维后,容量必须<strong>从大到小</strong>倒序遍历;若正序,第 i 件物品会被在同一轮里重复选取,悄悄变成了「完全背包」。</p>
+<p><strong>坑三:子序列 ≠ 子串。</strong>LCS 求的是「可以不连续、但保持相对顺序」的子序列;最长公共<strong>子串</strong>要求连续,转移方程不同(不匹配就归零)。读题时先分清这两个词。</p>
+</div>
+
+<div class="implement">
+<p>四个模型各写一遍,并都做一次空间优化:</p>
+<p><strong>0/1 背包</strong>:先写二维 <code>dp[i][w]</code>,再压成一维并改倒序遍历,对拍两版结果一致。<strong>LCS</strong>(LeetCode 1143)· <strong>编辑距离</strong>(72,照上面那张表把每格填出来验证)· <strong>LIS</strong>(300):先写 O(n²) DP,再实现 O(n log n) 的「维护一个可被二分替换的递增尾数组」版本,对拍。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>DP 题先做「模型识别」——两字符串→LCS/编辑距离,选或不选带容量→背包,最长递增段→LIS。认出模型,状态转移方程就到手了;写完二维版顺手想「能不能滚动数组降空间」。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:编辑距离中,当 <code>A[i] == B[j]</code>(当前两字符相同)时,<code>dp[i][j]</code> 等于什么?</summary>
+<div class="answer">
+<p><strong><code>dp[i][j] = dp[i-1][j-1]</code>(直接取左上角的值,不加操作)。</strong></p>
+<p>因为这两个字符已经对齐、不需要任何编辑,当前这一格的代价就等于「去掉这对相同字符后」子问题的代价,即左上角 <code>dp[i-1][j-1]</code>。只有在字符<strong>不同</strong>时才是 <code>1 + min(左, 上, 左上)</code>,分别对应插入、删除、替换。把「相等抄左上、不等 1 + 三者最小」记牢,编辑距离就稳了。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:把 0/1 背包从二维 <code>dp[i][w]</code> 压成一维 <code>dp[w]</code> 后,为什么容量 <code>w</code> 必须<strong>倒序</strong>遍历?</summary>
+<div class="answer">
+<p><strong>为了保证计算 <code>dp[w]</code> 时,用到的 <code>dp[w-wᵢ]</code> 还是「上一件物品」的旧值,从而每件物品最多被选一次。</strong></p>
+<p>若正序遍历,<code>dp[w-wᵢ]</code> 在本轮可能已经被第 i 件物品更新过,于是第 i 件会被「叠加选取多次」,这恰好变成了完全背包(每件可选无限次)的语义,与 0/1 背包(每件只能选一次)不符。倒序遍历让每个 <code>dp[w-wᵢ]</code> 保持上一轮的值,才守住「0/1」。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:有人说「LIS 的最优复杂度就是 O(n²),没法再快」。对吗?</summary>
+<div class="answer">
+<p><strong>不对。</strong>最长递增子序列除了朴素的 O(n²) DP,还有经典的 <strong>O(n log n)</strong> 做法:维护一个数组存「长度为 k 的递增子序列的最小可能结尾」,对每个新元素用<strong>二分查找</strong>找到它该替换/追加的位置。它求出的是 LIS 的<strong>长度</strong>(要还原具体序列需额外记录)。「某模型最快只能 X」这类绝对说法要警惕——LIS 就是反例。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题在仓库大纲的「更多知识 → 动态规划」小节,编辑距离与序列比对是其中的重头戏。推荐:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=T3A4jlHlhtA&list=PLOtl7M3yp-DX6ic0HGT0PUX_wiNmkWkXx&index=19">Skiena CSE373 · 讲座20 · 编辑距离(视频)</a> 及其 <a href="https://www.youtube.com/watch?v=iPnPVcZmRbE&list=PLOtl7M3yp-DX6ic0HGT0PUX_wiNmkWkXx&index=20">续集</a> —— 把编辑距离这张表从头推一遍,和本课那张表对着看最有效。</li>
+<li><a href="https://www.coursera.org/learn/algorithmic-thinking-2/lecture/UZ7o6/global-pairwise-sequence-alignment">全局成对序列比对(视频)</a> —— 编辑距离/LCS 在生物信息里的同源问题,帮你看清模型的通用性。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师带你把 <code>"horse"→"ros"</code> 的编辑距离表整张填出来,或把 0/1 背包的一维滚动逐轮打印,亲眼看倒序为什么必要。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0034-dynamic-programming-1.html"><span class="dir">← 上一课</span>动态规划(上):状态与递推</a>
+  <a class="next" href="0036-greedy-vs-dp.html"><span class="dir">下一课 →</span>贪心 vs 动态规划</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

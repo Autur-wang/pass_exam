@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0030 · 拓扑排序与环检测</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0030 课 · 图 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>拓扑排序与环检测</h1>
+
+<p class="lede">「学操作系统前得先学数据结构」「编译 A 模块前得先编译它依赖的 B」——这类<strong>有依赖关系、要排出一个合法执行顺序</strong>的问题,标准答案就是拓扑排序。这节课攻透:它解决什么问题、两种主流实现(Kahn 入度法 / DFS 后序法),以及一个漂亮的副产品——它天然就是<strong>有向图的环检测器</strong>。</p>
+
+<div class="recall">
+<p>先回忆<a href="0029-graph-traversal.html">上一课的 DFS(第 0029 课)</a>:一路探到底再回退,并且我们强调图必须记 <code>visited</code> 防环。这节你会看到 DFS 的一个精妙用法——它的<strong>回退顺序(后序)</strong>反过来,恰好就是一个拓扑序。先想想:如果 A 依赖 B,那 DFS 从 A 出发时,会先「完成」谁?</p>
+</div>
+
+<h2>一、问题:给依赖关系排出执行顺序</h2>
+
+<p>把任务画成<strong>有向图</strong>:一条边 <code>A → B</code> 读作「A 必须排在 B 前面」(A 是 B 的前置)。<strong>拓扑排序</strong>就是把所有顶点排成一条线,使得<em>每一条边都从前指向后</em>——没有任何一条边往回指。这样从左到右执行,任何任务开工时它的前置都已完成。</p>
+
+<p>但这有个前提:图里<strong>不能有环</strong>。如果 A 依赖 B、B 又依赖 A,那谁先谁后都自相矛盾——根本排不出来。所以拓扑排序只对 <strong>DAG(有向无环图)</strong>有意义,而「能不能排出拓扑序」正好等价于「这张图有没有环」。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 340 200" width="340" role="img" aria-label="一个有向无环图,边 0→1、0→2、1→3、2→3、3→4">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" class="dgm-accent"/>
+    </marker>
+  </defs>
+  <line class="dgm-edge" x1="57" y1="90" x2="113" y2="60" stroke-width="2" marker-end="url(#arr)"/>
+  <line class="dgm-edge" x1="57" y1="110" x2="113" y2="140" stroke-width="2" marker-end="url(#arr)"/>
+  <line class="dgm-edge" x1="147" y1="60" x2="203" y2="90" stroke-width="2" marker-end="url(#arr)"/>
+  <line class="dgm-edge" x1="147" y1="140" x2="203" y2="110" stroke-width="2" marker-end="url(#arr)"/>
+  <line class="dgm-edge" x1="240" y1="100" x2="278" y2="100" stroke-width="2" marker-end="url(#arr)"/>
+  <circle class="dgm-node" cx="40" cy="100" r="20" stroke-width="2"/>
+  <circle class="dgm-node" cx="130" cy="50" r="20" stroke-width="2"/>
+  <circle class="dgm-node" cx="130" cy="150" r="20" stroke-width="2"/>
+  <circle class="dgm-node" cx="220" cy="100" r="20" stroke-width="2"/>
+  <circle class="dgm-node" cx="300" cy="100" r="20" stroke-width="2"/>
+  <text class="dgm-text" x="40" y="106" text-anchor="middle" font-size="17">0</text>
+  <text class="dgm-text" x="130" y="56" text-anchor="middle" font-size="17">1</text>
+  <text class="dgm-text" x="130" y="156" text-anchor="middle" font-size="17">2</text>
+  <text class="dgm-text" x="220" y="106" text-anchor="middle" font-size="17">3</text>
+  <text class="dgm-text" x="300" y="106" text-anchor="middle" font-size="17">4</text>
+</svg>
+</div>
+<figcaption>DAG:边 0→1、0→2、1→3、2→3、3→4。所有边都从左指向右。一个合法拓扑序是 <code>0, 1, 2, 3, 4</code>(<code>0, 2, 1, 3, 4</code> 也合法——拓扑序不唯一)。</figcaption>
+</figure>
+
+<h2>二、法一:Kahn 算法(入度为 0 反复出队)</h2>
+
+<p>直觉:一个<strong>入度为 0</strong> 的顶点,表示「没有任何前置」,可以马上执行。执行掉它,就等于把它指出去的边全删掉,于是它的后继们入度各减 1——有些后继因此也变成入度 0,轮到它们了。反复这个过程:</p>
+
+<ol>
+<li>算出每个顶点的入度,把所有入度 0 的顶点放进队列;</li>
+<li>队列弹出一个顶点 <code>u</code>,加入结果序列,并把 <code>u</code> 的每个后继入度减 1,减到 0 的入队;</li>
+<li>重复,直到队列空。</li>
+</ol>
+
+<p>上图的入度初始为:<code>0:0, 1:1, 2:1, 3:2, 4:1</code>。只有顶点 0 入度为 0,先出。删 0 后 1、2 入度变 0……最终排出 <code>0,1,2,3,4</code>。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node good"><span class="n-title">0</span><span class="n-sub">入度0,先出</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">1</span><span class="n-sub">0出后入度0</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">2</span><span class="n-sub">0出后入度0</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">3</span><span class="n-sub">1、2都出后</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">4</span><span class="n-sub">最后</span></div>
+</div>
+<figcaption>Kahn 算法产出的一个拓扑序。若某一步队列空了但还没排完所有顶点,说明剩下的顶点互相成环——这就是环检测。</figcaption>
+</figure>
+
+<h2>三、法二:DFS 后序逆序</h2>
+
+<p>对每个未访问顶点跑 DFS,在一个顶点的所有后继都递归完成、即将<strong>回退</strong>它时,把它压入一个栈(这叫记录「完成时间」/后序)。全部跑完后,<strong>把栈倒出来</strong>(后序的逆序),就是一个拓扑序。直觉:一个顶点只有在它所有下游都处理完后才被压栈,所以它在倒序里必然排在下游前面。检测环的话,DFS 过程中若遇到一个「正在递归栈上、尚未完成」的顶点,就发现了一条<strong>后向边</strong>,即存在环。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>拓扑排序(Topological Sort)</dt>
+<dd>有向无环图(DAG)顶点的一种线性排列,使每条边都从前指向后。存在<strong>当且仅当</strong>图无环。<em>避免</em>在有环图上谈拓扑排序。</dd>
+<dt>入度(In-degree)</dt>
+<dd>指向某顶点的边数。Kahn 算法靠反复取「入度 0」的顶点推进。</dd>
+<dt>DAG(有向无环图,Directed Acyclic Graph)</dt>
+<dd>有向且没有任何有向环的图。依赖关系、任务调度、编译顺序建模出来的都是 DAG(前提是没有循环依赖)。</dd>
+</dl>
+
+<h2>五、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">方法</th><th>时间</th><th>额外空间</th></tr></thead>
+<tbody>
+<tr><td class="op">Kahn(入度 + 队列)</td><td class="best">O(V+E)</td><td>O(V) <small>(入度数组 + 队列)</small></td></tr>
+<tr><td class="op">DFS 后序逆序</td><td class="best">O(V+E)</td><td>O(V) <small>(递归栈 + 结果栈)</small></td></tr>
+</tbody>
+</table>
+<p>两种法都是 <strong>O(V+E)</strong>——每个顶点、每条边各处理一次,和一次普通遍历同量级。选哪种看手感:Kahn 更直观、天然给出「是否有环」和一种 BFS 式的分层顺序;DFS 法代码更短。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>拓扑排序的题面几乎都有固定「暗号」,听到就该联想:</p>
+<ul>
+<li><strong>「有先修/依赖关系,求一个可行的完成顺序」</strong>(课程表 II、编译顺序、构建系统)→ 直接拓扑排序,返回排出的序列。</li>
+<li><strong>「判断能否全部完成 / 有没有循环依赖」</strong>(课程表 I)→ 拓扑排序做<strong>环检测</strong>:能排出全部 V 个顶点就无环(可完成),否则有环(不可完成)。Kahn 版判据:最终出队顶点数 &lt; V 即有环。</li>
+<li><strong>追问「顺序唯一吗?」</strong>→ 一般<strong>不唯一</strong>(同一层的顶点先后可换)。若每一步入度 0 的顶点始终只有一个,则唯一。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「拓扑序是唯一的」——通常错。</strong>只要某一步有多个入度 0 的顶点可选,顺序就有多种合法排法。上图里 0 之后先排 1 还是先排 2 都对。面试官问唯一性,答「一般不唯一,除非每一步都恰好只有一个可选顶点」。</p>
+<p><strong>「有环也能拓扑排序」——错。</strong>环意味着循环依赖,排不出线性序。用 Kahn 判环最简单:算法结束时若<strong>出队的顶点数少于 V</strong>,说明有一批顶点因为互相牵制永远入度降不到 0,即存在环。别忘了这个「计数比对」的收尾检查——很多人写完 Kahn 却漏了它,于是环检测功能失灵。</p>
+<p>还有个方向坑:边 <code>A → B</code> 到底是「A 依赖 B」还是「A 先于 B」?不同题设方向相反。动手前先明确边的语义,否则拓扑序会整个反过来。</p>
+</div>
+
+<div class="implement">
+<p>照仓库大纲实现(大纲把「检查环」和「拓扑排序」列为基于 DFS 的算法,并注明先查环再排序):</p>
+<p><code>topo_sort_kahn(graph)</code>:算入度 → 入度 0 入队 → 反复出队减度 → 结果长度 &lt; V 则报告有环。<code>topo_sort_dfs(graph)</code>:DFS 记后序 → 逆序输出;用「访问中 / 已完成」三色标记检测后向边(环)。</p>
+<p>动手核对:先在无环 DAG 上验证两种法都产出合法序列(可写个校验函数确认每条边都前指后);再故意加一条制造环的边,确认两种法都能报出「有环」。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>「依赖关系求执行顺序」用拓扑排序(Kahn 入度法 / DFS 后序逆序,均 O(V+E));它同时是有向图的环检测器——排不出全部顶点就说明有环,顺序一般不唯一。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:有 n 门课和一组先修关系 <code>[a, b]</code>(表示学 a 前必须先学 b)。只问「这些课能不能全部修完」,不要求给出顺序。核心在判断什么?</summary>
+<div class="answer">
+<p><strong>判断这张有向图有没有环</strong>(循环依赖)。把课程建成有向图跑拓扑排序:如果能把全部 n 门课都排进拓扑序(Kahn 版:出队数 == n),就无环、能修完;若排不全,说明存在循环依赖,修不完。这道题(LeetCode「课程表 I」)本质就是<em>用拓扑排序做环检测</em>,连顺序都不用输出。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:用 Kahn 算法跑一张 5 顶点的图,算法正常结束,但结果序列里只有 3 个顶点。这说明什么?</summary>
+<div class="answer">
+<p><strong>图里有环。</strong>剩下的 2 个顶点因为处在一个环里、互相指着对方,入度永远降不到 0,所以从没被入队。Kahn 的环检测判据就是这条:<em>最终出队(结果序列)的顶点数 &lt; V,即有环</em>。这也提醒你 Kahn 写完必须补一步「结果长度 vs V」的比对,否则检测不出环。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:对上文那张 DAG(边 0→1、0→2、1→3、2→3、3→4),下面哪个<strong>不是</strong>合法拓扑序?</summary>
+<div class="answer">
+<p>合法的有 <code>0,1,2,3,4</code> 和 <code>0,2,1,3,4</code>(1 和 2 谁先都行,因为它们之间没有边)。<strong>不合法</strong>的例子是 <code>0,3,1,2,4</code>——因为存在边 1→3、2→3,3 必须排在 1 和 2 之后,这里 3 却跑到了它俩前面,违反了「边从前指后」。判断合法性只需检查:每条边的起点在序列中是否都排在终点之前。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题在仓库大纲「图」小节,并在「基于 DFS 的算法」中明确列出「检查环 → 拓扑排序」。一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=i_AQT_XfvD8&index=6&list=PLFDnELG9dpVxQCxuD-9BSy2E7BWY3t5Sm">Aduni 图算法 I · 拓扑排序、最小生成树、Prim(讲座 6,视频)</a> —— 直接讲拓扑排序。</li>
+<li><a href="https://www.youtube.com/watch?v=S23W6eTcqdY&list=PLOtl7M3yp-DV69F32zdK7YJcNXpTunF2b&index=13">Skiena CSE373 2012 · 课程 13 · 图的算法(视频)</a></li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「为什么 DFS 后序倒过来就是拓扑序」,或带你在那张 DAG 上手动跑一遍 Kahn 算法、逐步记录入度变化。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0029-graph-traversal.html"><span class="dir">← 上一课</span>图的遍历:BFS 求最短、DFS 探连通</a>
+  <a class="next" href="0031-shortest-path-dijkstra.html"><span class="dir">下一课 →</span>最短路:Dijkstra 与它的边界</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

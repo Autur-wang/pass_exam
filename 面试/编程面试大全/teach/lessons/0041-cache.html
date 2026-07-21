@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0041 · 缓存:局部性与命中率</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0041 课 · 工程与设计 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>缓存:局部性与命中率</h1>
+
+<p class="lede">缓存(cache)是整个计算机系统里最重要的一句谎言:让慢而大的存储「看起来」既快又大。这节课把两个东西讲透——<strong>为什么缓存有效(局部性)</strong>,以及面试里最高频的一道设计题:<strong>怎么用哈希表 + 双向链表实现 O(1) 的 LRU 缓存</strong>。它同时会回收前面两处伏笔:数组为什么「缓存友好」,以及双向链表在这里到底救了什么。</p>
+
+<div class="recall">
+<p>先回忆两件旧事。<a href="0007-array-dynamic-array.html">数组</a>那节我们说「连续内存带来一个表里看不见的红利——缓存友好」,当时先记了个账;这节要还。另外 <a href="0012-hash-table-intro.html">哈希表</a>让我们有了平均 O(1) 的按键存取——它是 LRU 缓存的一半骨架。先自己想想:<strong>为什么按顺序遍历数组,会比按指针跳着遍历链表快好几倍?明明都是读 n 个元素。</strong></p>
+</div>
+
+<h2>一、直觉:一座速度与容量成反比的金字塔</h2>
+
+<p>存储不是一层,而是一座<strong>层级金字塔</strong>。越靠顶,越快、越贵、容量越小;越往底,越慢、越便宜、容量越大。CPU 每次要数据,先问最快的一层,没有再往下问。缓存的全部工作,就是<strong>把「马上又要用」的数据尽量留在靠上的层</strong>。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 560 300" role="img" aria-label="存储层级金字塔:寄存器、L1、L2、L3、内存、磁盘">
+  <polygon class="dgm-accent-node" points="205,12 315,12 345,54 175,54"></polygon>
+  <polygon class="dgm-accent-node" points="175,56 345,56 375,98 145,98"></polygon>
+  <polygon class="dgm-link-node" points="145,100 375,100 405,142 115,142"></polygon>
+  <polygon class="dgm-link-node" points="115,144 405,144 435,186 85,186"></polygon>
+  <polygon class="dgm-good-node" points="85,188 435,188 465,230 55,230"></polygon>
+  <polygon class="dgm-node" points="55,232 465,232 495,274 25,274"></polygon>
+
+  <text class="dgm-text" x="260" y="38" text-anchor="middle" font-size="13">寄存器 · &lt;1ns</text>
+  <text class="dgm-text" x="260" y="82" text-anchor="middle" font-size="13">L1 缓存 · ~1ns</text>
+  <text class="dgm-text" x="260" y="126" text-anchor="middle" font-size="13">L2 缓存 · ~4ns</text>
+  <text class="dgm-text" x="260" y="170" text-anchor="middle" font-size="13">L3 缓存 · ~10ns</text>
+  <text class="dgm-text" x="260" y="214" text-anchor="middle" font-size="13">主存 DRAM · ~100ns</text>
+  <text class="dgm-text" x="260" y="258" text-anchor="middle" font-size="13">磁盘 / SSD · ~0.1ms 起</text>
+
+  <text class="dgm-accent-text" x="512" y="40" font-size="11">快 · 贵 · 小</text>
+  <text class="dgm-muted" x="512" y="262" font-size="11">慢 · 廉 · 大</text>
+</svg>
+</div>
+<figcaption>相邻两层的速度差常是<strong>一个数量级</strong>:内存比 L1 慢约 100 倍,磁盘比内存又慢上万倍。CPU 主频高到「访问一次内存要等几百个时钟周期」,缓存就是用来填这个鸿沟的。</figcaption>
+</figure>
+
+<h2>二、缓存为什么有效:两种局部性</h2>
+
+<p>如果程序访问内存是纯随机的,缓存一点用都没有。缓存能生效,靠的是真实程序几乎都有<strong>局部性(locality)</strong>:</p>
+
+<ul>
+<li><strong>时间局部性</strong>:刚用过的数据,很可能马上又用(循环里的计数器、反复调用的函数)。→ 把它留在缓存里别急着赶走。</li>
+<li><strong>空间局部性</strong>:用了某个地址,很可能接着用它旁边的地址(顺序遍历数组、连续的结构体字段)。→ 每次不只取一个字节,而是取一整条<strong>缓存行(cache line,通常 64 字节)</strong>一起搬上来。</li>
+</ul>
+
+<p>这两条合起来,正好回答了开头那个问题。顺序遍历数组时,读第一个元素就顺手把它后面 63 字节(十几个 <code>int</code>)一起装进了缓存行,接下来十几次访问全是缓存命中,近乎免费。链表节点散落在内存各处,每跳一个指针就可能是一次全新的、慢几十倍的内存访问——这就是<strong>「数组缓存友好」的真正含义</strong>,也是它常常在实测中吊打链表的原因,哪怕两者大 O 相同。</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell on">a[0]</div>
+  <div class="cell on">a[1]</div>
+  <div class="cell on">a[2]</div>
+  <div class="cell on">a[3]</div>
+  <div class="cell hi">a[4]</div>
+  <div class="cell hi">a[5]</div>
+  <div class="cell hi">a[6]</div>
+  <div class="cell hi">a[7]</div>
+</div>
+<figcaption>读 <code>a[0]</code> 触发一次未命中,CPU 把整条缓存行(绿格这 4 个)一起搬进 L1;接着读 <code>a[1]</code>/<code>a[2]</code>/<code>a[3]</code> 全部命中。读到 <code>a[4]</code> 再拉下一条(红格)。<strong>一次慢访问,摊给一整行的快访问。</strong></figcaption>
+</figure>
+
+<h2>三、命中、未命中与淘汰:LRU</h2>
+
+<p>缓存容量有限,装满后再来新数据,必须<strong>踢掉(evict)</strong>一个旧的。踢谁?最常用的策略是 <strong>LRU(Least Recently Used,最近最少使用)</strong>:淘汰「最久没被碰过」的那个,赌它接下来也不会被用——这正是时间局部性的直接应用。</p>
+
+<p>面试要你手写 <code>get</code>/<code>put</code> 都是 O(1) 的 LRU。难点在于:要 O(1) 按 key 找到值(<strong>哈希表</strong>擅长),又要 O(1) 地把某个节点「移到最近端」和「从最久端删除」(<strong>双向链表</strong>擅长)。两者合体,各补对方的短板:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node"><span class="n-title">哈希表</span><span class="n-sub">key → 节点指针<br>O(1) 定位</span></div>
+  <div class="arrow">+</div>
+  <div class="node good"><span class="n-title">双向链表</span><span class="n-sub">头=最近 / 尾=最久<br>O(1) 移动与删除</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">LRU 缓存</span><span class="n-sub">get/put 都 O(1)</span></div>
+</div>
+<figcaption>为什么必须是<strong>双向</strong>链表?因为要删一个节点、并接上它的前驱与后继,得同时知道 prev 和 next。单链表删除需要先 O(n) 找前驱,就废了。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>缓存(Cache)</dt>
+<dd>把慢速存储中「可能再次用到」的数据,临时存一份到更快存储里的机制。核心指标是<strong>命中率</strong>。</dd>
+<dt>时间 / 空间局部性(Temporal / Spatial Locality)</dt>
+<dd>时间:刚用的很可能再用;空间:用了某地址很可能用其邻居。缓存有效的两大前提。<em>避免</em>把两者混为一谈。</dd>
+<dt>缓存行(Cache Line)</dt>
+<dd>缓存与内存之间搬运的最小单位(常见 64 字节),而非单个字节。空间局部性的硬件兑现方式。</dd>
+<dt>命中率(Hit Rate)</dt>
+<dd>命中次数 ÷ 总访问次数。平均访问时间 ≈ 命中率 × 快层延迟 + 未命中率 × 慢层延迟。<em>避免</em>只谈缓存大小不谈访问模式。</dd>
+<dt>LRU(Least Recently Used)</dt>
+<dd>淘汰「最久未使用」项的缓存替换策略;用哈希表 + 双向链表可做到 get/put 均 O(1)。</dd>
+</dl>
+
+<h2>四、复杂度:O(1) 从哪来</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">LRU 操作</th><th>平均</th><th>最坏</th></tr></thead>
+<tbody>
+<tr><td class="op"><code>get(key)</code>(查+移到头部)</td><td class="best">O(1)</td><td class="warn">O(n) <small>(哈希冲突退化)</small></td></tr>
+<tr><td class="op"><code>put(key, val)</code>(插入/更新+可能淘汰)</td><td class="best">O(1)</td><td class="warn">O(n) <small>(哈希冲突退化)</small></td></tr>
+<tr><td class="op">淘汰最久项(删链表尾)</td><td class="best">O(1)</td><td class="best">O(1)</td></tr>
+</tbody>
+</table>
+<p>空间 <strong>O(capacity)</strong>:哈希表和链表各存一份指向同一批节点的引用,常数不影响量级。注意「平均 O(1)」里的「平均」来自哈希表——冲突严重时理论最坏是 O(n),说清楚这一点比死记「O(1)」更能体现你懂原理。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>缓存在面试里有两副面孔,都很高频:</p>
+<ul>
+<li><strong>直接手写 LRU(LeetCode 146)</strong>:几乎是数据结构综合题的「国民题」。考官看你能否想到「哈希表 + 双向链表」这对组合,并把移动/删除的指针操作写对不出错。进阶会问 LFU(按频率淘汰)怎么做。</li>
+<li><strong>概念追问「数组遍历为什么比链表快」</strong>:标准答案不是大 O,而是<strong>局部性 + 缓存行</strong>——数组连续,一条缓存行命中一片;链表节点散,几乎每跳一次都未命中。能答到这一层,面试官立刻知道你理解硬件而不只是背复杂度。</li>
+<li><strong>系统设计里</strong>:缓存无处不在(浏览器、CDN、Redis、数据库 buffer pool)。会被问缓存淘汰策略、缓存穿透/雪崩、写策略(write-through vs write-back)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「缓存越大越好」是错的。</strong>缓存变大,命中率提升会边际递减,而每一层做大都要付出成本和延迟代价(更大的 SRAM 更慢也更贵)。真正决定命中率的往往不是容量,而是<strong>访问模式</strong>:一个反复顺序扫过超过缓存容量的大数组(cache thrashing),缓存基本帮不上忙——它每装满就被后面的数据整片冲刷掉。</p>
+<p>另一个坑:<strong>别把「堆(数据结构)」和「缓存」混谈,也别以为 LRU 用单链表就行。</strong>单链表删任意节点要先 O(n) 找前驱,达不到 O(1);必须双向链表(或哨兵节点简化边界)。</p>
+</div>
+
+<div class="implement">
+<p>手写一个 <code>LRUCache</code>,构造参数 <code>capacity</code>,实现两个方法都要 O(1):</p>
+<p><code>get(key)</code> —— 命中返回值并把该节点移到链表头(标记为最近);未命中返回 -1 / null。<br><code>put(key, val)</code> —— 已存在则更新值并移到头;不存在则新建插到头,若超容则删链表尾节点、并从哈希表里同步删掉它的 key。</p>
+<p>关键技巧:链表两端各放一个<strong>哨兵节点(dummy head / dummy tail)</strong>,插入删除就不用处理「头尾为空」的边界。写完拿 <code>capacity=2</code>、序列 <code>put(1,1) put(2,2) get(1) put(3,3) get(2)</code> 手跑一遍,验证 <code>get(2)</code> 返回未命中。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>缓存靠的不是「大」,而是<strong>局部性</strong>——把马上要用的留在快层。数组比链表快的深层原因是缓存行 + 空间局部性,而不是大 O;LRU 的 O(1) 来自「哈希表管定位、双向链表管顺序」这对黄金搭档。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:两个程序都遍历一个含 100 万个 <code>int</code> 的容器各一遍,总大 O 都是 O(n)。为什么用数组的那个在实测中往往快数倍?</summary>
+<div class="answer">
+<p><strong>因为空间局部性 + 缓存行。</strong>数组元素在内存里连续,读一个就把相邻一整条缓存行(约 64 字节 ≈ 16 个 <code>int</code>)一起搬进 L1,接下来十几次访问几乎全命中。链表节点散落各处,每跳一次指针都可能触发一次比 L1 慢几十倍的内存访问。大 O 忽略了常数,而这里的常数差别正是缓存命中率带来的。这就是数组被称为「缓存友好」的原因。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:实现 LRU 缓存,为什么是「哈希表 + 双向链表」,而不是「哈希表 + 单链表」或「只用哈希表」?</summary>
+<div class="answer">
+<p><strong>因为要同时满足两种 O(1)。</strong>只用哈希表能 O(1) 按 key 取值,但哈希表本身不记录「谁最近用过」的顺序,找不到该淘汰谁。链表能维护使用顺序(头=最近、尾=最久),但要在淘汰或命中时删掉/移动任意一个节点,必须知道它的前驱——<strong>单链表找前驱要 O(n)</strong>,只有双向链表能 O(1) 摘除并重接。哈希表负责「O(1) 定位到节点」,双向链表负责「O(1) 调整顺序」,缺一不可。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:下面关于缓存的说法,哪一个是<strong>正确</strong>的?<br>A. 缓存越大命中率一定越高,所以应尽量做大<br>B. 平均访问时间 ≈ 命中率×快层延迟 + 未命中率×慢层延迟<br>C. 只要程序对,缓存对性能没有影响<br>D. LRU 一定比其它策略命中率高</summary>
+<div class="answer">
+<p><strong>B 正确。</strong>这就是缓存性能的基本估算式,命中率是主角。A 错:命中率随容量边际递减,而更大缓存更慢更贵,且顺序扫过超容大数组时容量再大也救不了(thrashing)。C 错:局部性好坏能让同一份正确代码相差数倍。D 错:LRU 只是常用启发式,遇到「循环扫过略大于容量的数据」这类模式反而可能全未命中,此时其它策略更好——没有普适最优的淘汰策略。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲的「缓存(Cache)」小节,分 LRU 缓存与 CPU 缓存两组。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=R5ON3iwx78M">LRU 的魔力(100 Days of Google Dev,视频)</a> —— 把 LRU 的直觉与实现讲得最顺的一条。</li>
+<li><a href="https://www.youtube.com/watch?v=8-FZRAjR7qU">LeetCode 146 · LRU Cache(C++,视频)</a> —— 跟着把哈希表 + 双向链表的代码敲一遍。</li>
+<li><a href="https://www.youtube.com/watch?v=vjYF_fAZI5E&list=PLrRW1w6CGAcXbMtDFj205vALOGmiRc82-&index=24">MIT 6.004 L15 · 存储体系(视频)</a> —— 想深入硬件层级与缓存行,看这门课。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「缓存行为什么是 64 字节而不是 1 字节」,或带你把 LRU 的 <code>put</code> 超容淘汰在纸上跑一遍指针操作。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0040-how-programs-run.html"><span class="dir">← 上一课</span>程序如何运行:从源码到内存布局</a>
+  <a class="next" href="0042-process-thread.html"><span class="dir">下一课 →</span>进程与线程:并发的两种单位</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

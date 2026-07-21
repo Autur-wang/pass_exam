@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>什么是 OOP · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第一部分 · 四大支柱 · 第 0001 节</p>
+<h1>什么是 OOP:对象、类与四大支柱</h1>
+<p class="lede">这是全课的开篇总览。目标不是把四大支柱一次讲满,而是让你先建立一张"地图":OOP 到底在解决什么、类和对象是什么关系、四根支柱各管一件什么事——每根支柱后面都有专节深挖。</p>
+
+<div class="recall">
+<p>开始前先自问:如果不用 class,只用一堆函数和全局变量,也能把程序写出来。那"面向对象"到底多出来了什么、值得单独拿出来讲?先给自己一个答案,再往下看。</p>
+</div>
+
+<h2>一、直觉:把"数据"和"操作数据的代码"绑在一起</h2>
+
+<p>过程式编程里,数据是数据、函数是函数,两者分家。你有一堆变量描述一辆车(<code>fuel</code>、<code>speed</code>),再有一堆函数去操作它们(<code>drive(car)</code>、<code>refuel(car)</code>)。程序一大,"哪个函数能改哪个变量"就没人说得清了。</p>
+
+<p><strong>OOP(Object-Oriented Programming,面向对象编程)</strong>换了个组织方式:把程序拆成一个个<strong>自包含的对象</strong>,每个对象<strong>把自己的数据、以及操作这些数据的方法捆在一起</strong>。一辆车对象既装着 <code>fuel</code>,也带着 <code>drive()</code>——想让车跑,就叫这辆车自己 <code>car.drive()</code>,而不是把车丢给外部函数处理。</p>
+
+<p>这样带来四个好处(这四个词几乎是面试标准答案):<strong>模块化</strong>(每个对象是一个独立单元)、<strong>可复用</strong>(类可以被继承、被复用)、<strong>可扩展</strong>(加新类型不必推翻旧代码)、<strong>灵活</strong>(改内部实现不影响外部调用)。</p>
+
+<h2>二、两个最基本的名词:类 与 对象</h2>
+
+<p>OOP 里一切从这对概念开始,面试也几乎必问它俩的区别(源题 Q7、Q8)。</p>
+
+<div class="keydef">
+<dl>
+<dt>类 (Class)</dt>
+<dd>创建对象的<strong>蓝图 / 模板</strong>。它定义两样东西:<strong>属性(attributes,数据,描述状态)</strong> 和 <strong>方法(methods,行为,操作数据)</strong>。类本身不占"具体那辆车"的内存,它只规定"车应该长什么样"。</dd>
+<dt>对象 (Object)</dt>
+<dd>类的一次<strong>具体实例(instance)</strong>,把数据与行为真正装进内存。对象有三大特征:<br>
+<strong>① identity(身份)</strong>——独一无二,能和别的对象区分(即使内容一样);<br>
+<strong>② state(状态)</strong>——由属性的当前值定义,可变;<br>
+<strong>③ behavior(行为)</strong>——由方法定义,是它能做的动作。</dd>
+</dl>
+<p style="margin:.6em 0 0;font-size:.9em;color:var(--muted)"><em>一句话类比:<strong>类是设计图,对象是照着图盖出来的房子。</strong>一张图能盖很多栋房子,每栋房子有自己的门牌号(identity)和住户(state)。</em></p>
+</div>
+
+<p>用 Python 看清楚这层关系——注意 <code>identity</code>、<code>state</code>、<code>behavior</code> 分别对应哪一行:</p>
+
+<pre><code>class Dog:                     # 类:蓝图
+    species = "Canis"          # 类属性:所有实例共享
+
+    def __init__(self, name):  # 构造器:实例化时自动调用
+        self.name = name       # 实例属性 → state(状态)
+
+    def bark(self) -&gt; str:     # 方法 → behavior(行为)
+        return f"{self.name}: Woof!"
+
+d1 = Dog("Rex")                # 对象 = 类的实例(instantiation)
+d2 = Dog("Rex")                # 同名,但是另一个对象
+
+print(d1.name)                 # Rex           —— state
+print(d1.bark())               # Rex: Woof!    —— behavior
+print(d1 is d2)                # False —— 名字一样,身份不同(identity)
+print(id(d1) == id(d2))        # False —— 内存里是两个不同对象
+</code></pre>
+
+<p><strong>对象的生命周期</strong>(源题 Q8 的追问点):<strong>创建</strong>(实例化,如 <code>Dog("Rex")</code>)→ <strong>操作</strong>(改状态、调方法)→ <strong>销毁</strong>。在 CPython 里,销毁靠<strong>引用计数为主 + 分代回收处理循环引用</strong>自动完成,你一般不用手动释放(这点后面还会再碰到)。</p>
+
+<h2>三、四大支柱:一句话地图</h2>
+
+<p>OOP 的能力集中在四根支柱上。先记住这张卡片,建立整体感;每根支柱都有独立一节做深挖:</p>
+
+<div class="trio four">
+  <div class="cell">
+    <div class="role">Encapsulation</div>
+    <div class="head">封装</div>
+    <div class="sub">捆绑数据+方法,藏起内部,只留受控接口 → 0002</div>
+  </div>
+  <div class="cell">
+    <div class="role">Inheritance</div>
+    <div class="head">继承</div>
+    <div class="sub">基于已有类建新类,复用+建立层次(is-a) → 0003</div>
+  </div>
+  <div class="cell">
+    <div class="role">Polymorphism</div>
+    <div class="head">多态</div>
+    <div class="sub">同一调用,子类各自表现(重载/重写) → 0004</div>
+  </div>
+  <div class="cell">
+    <div class="role">Abstraction</div>
+    <div class="head">抽象</div>
+    <div class="sub">只暴露必要功能,藏起复杂实现(抽象类/接口) → 0005</div>
+  </div>
+</div>
+
+<p>还有一个常被算作"第五点"的概念:<strong>关联(Association)</strong>——描述对象<em>之间</em>的关系,而不是对象内部。它有两种强度:<strong>聚合(Aggregation,has-a,部分能独立存在)</strong>,比如"班级 has-a 学生",班级没了学生还在;<strong>组合(Composition,更强的 has-a,部分不能独立存在)</strong>,比如"房子 has-a 房间",房子拆了房间也不复存在。这块本课先点到,后面讲"组合优于继承"时再展开。</p>
+
+<h2>四、一个例子,同时看见四根支柱</h2>
+
+<p>下面这段 Python 把四根支柱串在一起。看代码时对照右侧注释,想清楚"哪一行是哪根支柱"——这正是面试官喜欢让你逐行讲的题:</p>
+
+<pre><code>from abc import ABC, abstractmethod
+
+# 抽象(Abstraction):Animal 是抽象基类,规定"动物必须会叫",但自己不能被实例化
+class Animal(ABC):
+    def __init__(self, name):
+        self._name = name              # 封装(Encapsulation):状态藏进对象,前缀 _ 表"内部"
+
+    @property                          # 受控访问:对外只读地暴露 name
+    def name(self) -&gt; str:
+        return self._name
+
+    @abstractmethod                    # 抽象方法:子类必须实现,否则子类也没法实例化
+    def speak(self) -&gt; str:
+        ...
+
+    def introduce(self):               # 复用:所有子类共享这段逻辑,不必各写一遍
+        print(f"I am {self._name}. {self.speak()}")
+
+# 继承(Inheritance):Lion 基于 Animal,是一种 Animal(is-a)
+class Lion(Animal):
+    def speak(self) -&gt; str:            # 多态(Polymorphism):重写(override)成自己的行为
+        return "Roar!"
+
+class Parrot(Animal):
+    def speak(self) -&gt; str:
+        return "Squawk!"
+
+# a = Animal("???")   # ❌ TypeError:抽象类不能直接实例化
+
+zoo = [Lion("Leo"), Parrot("Rio")]
+for a in zoo:                          # 运行时多态:同一句 a.introduce(),各自表现不同
+    a.introduce()
+# I am Leo. Roar!
+# I am Rio. Squawk!
+</code></pre>
+
+<ul>
+<li><strong>抽象</strong>:<code>Animal(ABC)</code> + <code>@abstractmethod</code> 让 <code>Animal</code> 只定义"契约"(必须会 <code>speak</code>),不能被直接 <code>new</code> 出来。</li>
+<li><strong>封装</strong>:名字存进 <code>self._name</code>,只通过 <code>@property</code> 的 <code>name</code> 受控暴露。</li>
+<li><strong>继承</strong>:<code>Lion</code>、<code>Parrot</code> 复用了 <code>introduce()</code>,不用重复写。</li>
+<li><strong>多态</strong>:同一行 <code>a.introduce()</code>,遍历时对 <code>Lion</code> 打印 Roar、对 <code>Parrot</code> 打印 Squawk——调用方<strong>不需要知道</strong> <code>a</code> 具体是谁。</li>
+</ul>
+
+<div class="interview">
+<p><strong>高频追问链(开篇总览最容易被这样连环问):</strong></p>
+<ul>
+<li>"类和对象的区别?" → 类是<strong>蓝图/模板</strong>(定义结构与行为、不占具体内存);对象是<strong>按蓝图造出的实例</strong>(占内存、有独立身份和状态)。一个类能造出无数对象。</li>
+<li>"能各用一句话说四大支柱吗?" → 封装=藏数据留接口;继承=复用+建层次;多态=同接口不同实现;抽象=只露必要功能。(能秒答这句,基本盘就稳了。)</li>
+<li>"OOP 比过程式好在哪?一定更好吗?" → 好在模块化/复用/扩展/灵活;但<strong>不是银弹</strong>——小脚本、数据管道类任务里,过度 OOP 反而是负担(过度设计)。要按场景选,别为了 OOP 而 OOP。</li>
+<li>"Python 里一切都是对象吗?" → 是——整数、函数、类本身都是对象,都能赋值/传参。这跟 Java 不同(Java 的 <code>int</code> 等基本类型不是对象)。</li>
+<li>"对象什么时候被销毁?" → CPython 里引用计数归零即回收,循环引用由分代 GC 处理;可定义 <code>__del__</code> 但<strong>不保证调用时机</strong>,别依赖它做关键清理(用 <code>with</code> / 上下文管理器更稳)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:把"类"和"对象"说反。</strong>紧张时最容易口误成"对象是蓝图、类是实例"。记死类比——<strong>类=设计图,对象=盖出来的房子</strong>,一图多房。</p>
+<p><strong>坑二:以为"用了 <code>class</code> 关键字 = 面向对象"。</strong>把一堆只有 getter/setter 的"贫血对象"配上一大坨面条式流程,本质还是过程式思维,只是穿了 class 的外衣。OOP 的精髓是<strong>用对象为"职责"和"协作"建模</strong>,而不是把变量塞进 class 里。</p>
+<p><strong>坑三:背得出四大支柱,却讲不清彼此关系。</strong>面试官几乎必追问区别(封装 vs 抽象、重载 vs 重写、继承 vs 组合)。本课先建地图,后面每节就是专攻这些"区别题"。</p>
+</div>
+
+<div class="crosslang">
+<p>"OOP 是哪种语言的专利吗?"——不是。不同语言对 OOP 的<strong>定位</strong>差别很大,这是跨语言常考点:</p>
+<table>
+<tr><th>语言</th><th>范式定位</th><th>说明</th></tr>
+<tr><td><strong>Java</strong></td><td>以 OOP 为中心</td><td>代码几乎都得写在类里,连 <code>main</code> 都在类中;但基本类型(<code>int</code> 等)不是对象,所以并非严格意义的"一切皆对象"。</td></tr>
+<tr><td><strong>Python</strong></td><td>多范式</td><td>支持 OOP,也支持过程式与函数式,可自由混用;而且一切皆对象(连函数、类都是)。</td></tr>
+<tr><td><strong>JavaScript</strong></td><td>多范式</td><td>基于<strong>原型(prototype)</strong>的 OOP + 函数式;<code>class</code> 关键字是原型机制的语法糖。</td></tr>
+<tr><td><strong>C#</strong></td><td>多范式(强 OOP)</td><td>强类型 OOP,同时支持泛型、函数式等。</td></tr>
+<tr><td><strong>C</strong></td><td>过程式</td><td>无原生类;可用 <code>struct</code> 把数据分组、配函数指针来<em>模拟</em>部分 OOP,但语言本身不原生支持完整 OOP。</td></tr>
+</table>
+<p>一句话:OOP 是一种<strong>思想/范式</strong>,不是某门语言的独家功能。想找"更纯粹一切皆对象"的语言,通常会举 Smalltalk、Ruby;Java 常被说"围绕 OOP",但也留了基本类型这个例外。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己敲一个最小可跑的例子,把类/对象/四大支柱各点到一次:</p>
+<ul>
+<li>写一个抽象基类 <code>Shape</code>(用 <code>abc.ABC</code> + <code>@abstractmethod</code>),规定必须实现 <code>area()</code>。</li>
+<li>派生 <code>Circle</code> 和 <code>Rectangle</code>,各自实现 <code>area()</code>(<strong>多态</strong>)。</li>
+<li>半径/边长存成 <code>self._r</code> 这样的内部属性(<strong>封装</strong>),用 <code>@property</code> 只读暴露。</li>
+<li>放进一个列表遍历,统一调用 <code>s.area()</code>,验证同一句代码对不同形状给出不同结果。</li>
+</ul>
+<p>自测:试着 <code>Shape()</code> 直接实例化,应当报 <code>TypeError</code>——想清楚这属于四大支柱里的哪一根。</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:在上面的动物例子里,<code>for a in zoo: a.introduce()</code> 对狮子打印 Roar、对鹦鹉打印 Squawk。这最直接体现的是哪一根支柱?</summary>
+<div class="answer">
+<p><strong>答案:多态(Polymorphism),具体是运行时多态 / 方法重写(override)。</strong></p>
+<p>关键特征是"<strong>同一个调用接口,针对不同对象产生不同行为</strong>",而且调用方不必知道 <code>a</code> 具体是哪个子类。</p>
+<p>这里当然也用到了继承(<code>Lion</code>/<code>Parrot</code> 继承 <code>Animal</code>)和抽象(<code>speak</code> 是抽象方法),但"同调用、异行为"这一现象本身,就是多态的定义。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:判断——"只要用了 <code>class</code> 关键字写代码,就算是在做面向对象编程。"这句话对吗?</summary>
+<div class="answer">
+<p><strong>答案:不对。</strong></p>
+<p>用 <code>class</code> 只是语法;是不是 OOP,取决于你有没有用对象去<strong>封装职责、组织协作、利用多态/抽象</strong>。如果只是把一堆全局变量塞进一个 class、逻辑仍写成一长串过程,那本质还是过程式,只是换了层壳(这类"贫血对象 + 面条逻辑"是常见反模式)。</p>
+<p>反过来讲:OOP 是一种<strong>组织与建模的思路</strong>,语法只是承载它的工具。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>OOP 把"数据 + 操作数据的方法"捆进自包含的对象,好处是模块化/复用/扩展/灵活。<strong>类是蓝图,对象是实例</strong>(有 identity/state/behavior)。四大支柱=封装(藏)、继承(复用)、多态(同接口异行为)、抽象(只露必要)。这一节是地图,后面 0002–0005 逐根钻透。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层(如实标注):</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《52 OOP Interview Questions》Q1(What is Object-Oriented Programming?)、Q7(What is a class?)、Q8(What is an object?)——OOP 定义与四大好处、四大支柱一句话、类/对象定义、对象三特征(identity/state/behavior)与生命周期,均取自源题原文;Animal/Lion/Parrot 例子由源题的 Java 版本改写为 Python。</li>
+<li><strong>canon(补充锚定,用于校准机制准确性):</strong><a href="https://docs.python.org/3/tutorial/classes.html">Python 官方教程 · Classes</a>、<a href="https://docs.python.org/3/library/abc.html">abc 模块文档</a>(抽象基类机制);<a href="https://docs.oracle.com/javase/tutorial/java/concepts/">Oracle Java · OOP Concepts</a>(类/对象定义、跨语言对照)。</li>
+<li><strong>诚实声明:</strong>"四大支柱"是 OOP 领域广泛采用的<strong>通识共识</strong>,并非出自某一本经典专著(GoF《设计模式》讲的是模式,不是这四根支柱);各语言机制细节以上述官方文档为准。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 讲"类和对象到底差在哪",或者把你写的 <code>Shape</code> 练习贴来点评、或者直接跳去 0002 深挖封装,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节钻进第一根支柱——封装,看 Python 为什么"没有真正的私有"。</p>
+<nav class="lesson-nav">
+<span class="none"></span>
+<a class="next" href="0002-encapsulation.html"><span class="dir">下一课 →</span>0002 · 封装:信息隐藏、访问控制与 Python 的"伪私有"</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

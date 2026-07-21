@@ -1,0 +1,85 @@
+{
+ "num": "0026",
+ "slug": "tool-output-truncation",
+ "title": "工具输出截断策略",
+ "narrowTopic": "只讲减法——truncateHead/truncateTail 的双重限制、双向策略、UTF-8 边界安全与兜底逃生,不重复提示词组装与历史侧机制",
+ "analogySeed": "把工具输出截断比作\"剪报\":一篇 8000 行的报纸没法整版贴进笔记本,读文件像只剪保留\"开头的标题导语\"(truncateHead),看报错像只剪保留\"末尾的结论\"(truncateTail);而且剪刀不能把一个汉字或 emoji 剪成半个(UTF-8 边界)",
+ "keyPoints": [
+  "问题:单次工具调用就可能几十 KB(npm test 输出 8000 行日志、read 一个 3000 行源文件),不加控制几轮就把窗口塞满",
+  "双重限制先触者胜:DEFAULT_MAX_LINES=2000 行 + DEFAULT_MAX_BYTES=50*1024(50KB),哪个先触发就用哪个(truncate.ts:11-13)",
+  "为什么要双限制:只限行数会被超长单行(压缩 JS/minified CSS)3 行就爆字节;只限字节可能把 200 行大文件的某行切一半——行数管展示可读性,字节管硬性体积,互相兜底",
+  "两种方向策略:truncateHead 保留开头(用在 read 文件,import/类定义/接口签名信息密度最高),truncateTail 保留末尾(用在 bash 输出,错误堆栈/最终结果最有信号),核心差异只是遍历方向(for 方向 + push/unshift)",
+  "bash 工具契约里的\"last\"是关键:bash.ts:284 写明 Output is truncated to last 2000 lines or 50KB (whichever is hit first)",
+  "UTF-8 边界安全:逐字符累加字节,遇到 4 字节 emoji 就当不可分割整体(要么完整保留要么完全不要),避免切出无效字符 �(truncateStringToBytesFromEnd,truncate.ts:295)",
+  "兜底与逃生:若第一行单独就超 maxBytes,取该行末尾 maxBytes 字节并置 lastLinePartial 标志(不返回空);grep 另用 truncateLine 把超长行截到 500 字符(GREP_MAX_LINE_LENGTH);截断都会追加 [Full output: /tmp/...] 提示进上下文,LLM 可按需 read",
+  "埋钩子:截断只是减法的一层;历史侧的 Compaction 与分支摘要都反复依赖一个概念——Session Tree,为什么对话历史不是线性数组而是一棵树?下一章\"会话管理\"揭晓"
+ ],
+ "codeRefs": [
+  {
+   "desc": "§三 truncateTail 核心思路的伪代码(从 lines.length-1 往回 for 循环,kept.length>=maxLines 或 bytes+lineBytes>maxBytes 就 break,unshift 保持原顺序)",
+   "cite": "教程 §三 / truncate.ts:247-266"
+  },
+  {
+   "desc": "§三 bash 工具描述的引用块 Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file.",
+   "cite": "教程 §三 / bash.ts:284"
+  },
+  {
+   "desc": "§三 截断后追加的逃生通道提示行 [Showing lines 6501-8500 of 8500. Full output: /tmp/pi-bash-xxx.log]",
+   "cite": "教程 §三 / bash.ts:362-374"
+  }
+ ],
+ "designRationale": [
+  "为什么用双重限制而非单一限制:行数与字节各有失败模式(超长单行 3 行爆字节 vs 大文件把某行切半),两个上限互为兜底",
+  "为什么 read 截头、bash 截尾:信息密度分布不同——文件头部是 import/接口最有信息,bash 末尾是错误堆栈/最终结果最有信号,截断要保留\"最有价值\"的那一段",
+  "为什么逐字符处理 UTF-8 而非直接 slice:直接按字节切会把 emoji 切成无效 �,污染后续编码,所以把多字节字符当成不可分割的整体",
+  "为什么单行超限要\"部分行兜底\"而非返回空:返回空等于工具结果丢失,取末尾 maxBytes 字节 + lastLinePartial 标志,至少让 LLM 看到有信号的一段并知道完整输出在哪",
+  "为什么截断要留\"逃生通道\"提示:截断是有损的,默认省 token 但把主动权还给 LLM——需要时它自己 read 完整文件,兼顾省钱与不丢信息;而且 Pi 不偷偷干,元信息全记在 TruncationResult 里"
+ ],
+ "quiz": [
+  {
+   "stem": "truncateHead 和 truncateTail 的核心差异是什么?",
+   "options": [
+    "一个会压缩内容、一个不压缩",
+    "遍历方向不同(保留开头 vs 保留末尾)",
+    "一个处理文件、一个处理网络请求",
+    "两者限制的 KB 数不一样"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对,双重限制完全一样,差别只在 for 遍历方向和 push/unshift——read 用 head(开头 import 最密),bash 用 tail(末尾堆栈最有信号)。延伸:同一套算法两个方向复用,是很干净的设计。",
+   "noMsg": "回看 §三\"两种策略\"小节,两个函数除了从哪头开始收集,别的逻辑其实一模一样。"
+  },
+  {
+   "stem": "Pi 为什么同时用\"行数上限\"和\"字节上限\"两个限制?",
+   "options": [
+    "为了兼容不同操作系统",
+    "行数管可读性、字节管硬体积,互相兜底各自的失败模式",
+    "字节限制只是给旧模型用的",
+    "是历史遗留代码,其实没用"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对,只限行数会被超长单行(压缩 JS)3 行爆字节,只限字节会把大文件某行切一半——双限制先触者胜。延伸:2000 行是可读性上限,50KB 是体积硬上限。",
+   "noMsg": "回看 §三\"双重限制\"小节列出的两个单一限制各自的失败模式,答案就藏在它们互补的地方。"
+  },
+  {
+   "stem": "截断后 Pi 在输出末尾追加 [Full output: /tmp/...] 提示的作用是?",
+   "options": [
+    "方便运维事后删除临时文件",
+    "给日志系统采集用的",
+    "作为\"逃生通道\":告诉 LLM 完整输出在哪,它可按需 read",
+    "占位符,没有实际用途"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对,这行字也会进 LLM 上下文——默认截断省 token,需要时 LLM 自己 read 完整内容,兼顾省钱和不丢信息。延伸:截断从不偷偷干,元信息全记在 TruncationResult 结构里。",
+   "noMsg": "回看 §三\"截断后的提示\"小节,想想这行字为什么特意说明\"也会进 LLM 上下文\"。"
+  }
+ ],
+ "_chapter": "第8章",
+ "_chapterCN": "上下文工程 —— 让有限窗口装下无限对话",
+ "prevFile": "0025-system-prompt-assembly-and-pipeline.html",
+ "prevNum": "0025",
+ "nextFile": "0027-why-compact-and-when-to-trigger.html",
+ "nextNum": "0027",
+ "crumbLabel": "第 8 章 · 上下文工程",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第8章-上下文工程-让有限窗口装下无限对话.md",
+ "filename": "0026-tool-output-truncation.html"
+}

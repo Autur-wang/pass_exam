@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0021 · BST 的插入、删除与后继</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0021 课 · 树 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>BST 的插入、删除与后继</h1>
+
+<p class="lede">上一课我们立了 BST 的不变量。这节把它「用起来」:插入很简单(找到空位挂上),但<strong>删除</strong>是 BST 里唯一有点绕的操作——尤其删一个「有两个孩子」的节点,你不能直接拔掉它,而要请一个替身来接班。这个替身就是<strong>中序后继</strong>。还有一道几乎必考的追问:<strong>怎么验证一棵树真的是合法 BST?</strong>——它的标准错解,恰恰是很多人第一反应写出来的那个。</p>
+
+<div class="recall">
+<p>先回忆:上一课(<a href="0020-binary-search-tree.html">二叉搜索树</a>)的不变量是「左子树全部 &lt; 根 &lt; 右子树全部」,且它是对<strong>整棵子树</strong>成立、而非只对直接孩子。先记住这句话——这节的删除要靠它选替身,验证要靠它设上下界,全都从这条不变量长出来。</p>
+</div>
+
+<h2>一、插入:一路下滑,挂到空位</h2>
+
+<p>插入就是<strong>一次失败的查找</strong>:拿新值和当前节点比,小走左、大走右,直到走到一个空指针——那就是它该待的位置,挂上去即可。全程沿高度下降,O(h)。因为新节点总是挂在<strong>叶子位置</strong>,不会破坏任何已有节点的左右关系,所以插入天然保持不变量。</p>
+
+<h2>二、删除:三种情形,难在「双子」</h2>
+
+<p>删除要先找到目标节点,然后按它的孩子数量分三种情形处理:</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">要删的节点有几个孩子?</div>
+  <div class="down">▼</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">0 个(叶子)</div>
+      <div class="step terminal">直接删掉,父指针置空</div>
+    </div>
+    <div class="branch">
+      <div class="label">1 个(单子)</div>
+      <div class="step terminal">用唯一的孩子顶替自己</div>
+    </div>
+    <div class="branch">
+      <div class="label">2 个(双子)</div>
+      <div class="step">用<strong>中序后继</strong>的值替换,再去右子树删掉那个后继</div>
+    </div>
+  </div>
+</div>
+<figcaption>叶子和单子都是「一步搞定」;双子情形不能直接删,得请一个不破坏有序性的替身来接班。</figcaption>
+</figure>
+
+<p><strong>为什么双子要用中序后继?</strong>中序后继 = 「比被删值大的那些里最小的一个」= 右子树里的最小值(从右孩子一路向左走到底)。让它来接替被删节点的位置,恰好继续满足「左边全部比它小、右边全部比它大」——不变量丝毫不破。用<strong>中序前驱</strong>(左子树最大值)同样可行,是对称的选择。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 440 300" role="img" aria-label="删除有两个孩子的节点 3,用其中序后继 4 替换">
+  <line class="dgm-edge" x1="220" y1="32" x2="120" y2="100"/>
+  <line class="dgm-edge" x1="220" y1="32" x2="330" y2="100"/>
+  <line class="dgm-edge" x1="120" y1="106" x2="60" y2="172"/>
+  <line class="dgm-edge" x1="120" y1="106" x2="175" y2="172"/>
+  <line class="dgm-edge" x1="330" y1="106" x2="385" y2="172"/>
+  <line class="dgm-edge" x1="175" y1="178" x2="130" y2="244"/>
+  <line class="dgm-edge" x1="175" y1="178" x2="220" y2="244"/>
+  <line class="dgm-edge" x1="385" y1="178" x2="340" y2="244"/>
+  <!-- successor arrow: 4 -> 3 -->
+  <line style="stroke:var(--accent);stroke-width:2" x1="132" y1="228" x2="122" y2="126" stroke-dasharray="4 3"/>
+  <polygon class="dgm-accent" points="122,118 117,129 127,129"/>
+  <!-- nodes -->
+  <circle class="dgm-node" cx="220" cy="30" r="19"/><text class="dgm-text" x="220" y="36" text-anchor="middle" font-size="14">8</text>
+  <circle class="dgm-accent-node" cx="120" cy="103" r="19"/><text class="dgm-text" x="120" y="109" text-anchor="middle" font-size="14">3</text>
+  <circle class="dgm-node" cx="330" cy="103" r="19"/><text class="dgm-text" x="330" y="109" text-anchor="middle" font-size="14">10</text>
+  <circle class="dgm-node" cx="60" cy="175" r="19"/><text class="dgm-text" x="60" y="181" text-anchor="middle" font-size="14">1</text>
+  <circle class="dgm-node" cx="175" cy="175" r="19"/><text class="dgm-text" x="175" y="181" text-anchor="middle" font-size="14">6</text>
+  <circle class="dgm-node" cx="385" cy="175" r="19"/><text class="dgm-text" x="385" y="181" text-anchor="middle" font-size="14">14</text>
+  <circle class="dgm-good-node" cx="130" cy="247" r="19"/><text class="dgm-text" x="130" y="253" text-anchor="middle" font-size="14">4</text>
+  <circle class="dgm-node" cx="220" cy="247" r="19"/><text class="dgm-text" x="220" y="253" text-anchor="middle" font-size="14">7</text>
+  <circle class="dgm-node" cx="340" cy="247" r="19"/><text class="dgm-text" x="340" y="253" text-anchor="middle" font-size="14">13</text>
+  <text class="dgm-accent-text" x="146" y="100" font-size="11">删除(双子)</text>
+  <text class="dgm-good-text" x="150" y="252" font-size="11">中序后继=右子树最小值</text>
+</svg>
+</div>
+<figcaption>删 <code>3</code>(有 1、6 两个孩子):它的中序后继是右子树 6 一路向左到底的 <code>4</code>。把 4 的值抬上来填 3 的位置,再删掉原来那个 4 节点(它至多只有一个右孩子,退化成简单情形)。删完中序仍是 1,4,6,7,8,10,13,14——依旧升序。</figcaption>
+</figure>
+
+<h2>三、验证 BST:上下界法(而非只比父子)</h2>
+
+<p>怎么判断一棵二叉树是不是合法 BST?<strong>直觉上很多人写「每个节点只比它自己的左孩子、右孩子」——这是错的。</strong>因为不变量要求的是「整棵左子树都小于根」,一个深处的孙子完全可能违反祖先的约束,却没违反它父亲的。正确做法是<strong>递归时带上一对上下界 (low, high)</strong>:进入某节点时它的值必须落在 (low, high) 开区间内;往左走时把上界收紧为当前值,往右走时把下界收紧为当前值。等价地,也可以<strong>中序遍历看是否严格递增</strong>。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>中序后继 / 前驱(in-order successor / predecessor)</dt>
+<dd>后继=中序序列里紧跟其后的节点=右子树的最小值(有右子树时);前驱对称,是左子树的最大值。双子删除靠它接班。</dd>
+<dt>上下界验证(bounds check)</dt>
+<dd>验证 BST 的正确方法:递归携带 (low, high),每个节点值须严格落在区间内。<em>避免</em>只比较节点与其直接左右孩子。</dd>
+</dl>
+
+<h2>五、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>平均(平衡)</th><th>最坏(退化)</th></tr></thead>
+<tbody>
+<tr><td class="op">插入 <code>insert</code></td><td class="best">O(log n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">删除 <code>delete_value</code>(含找后继)</td><td class="best">O(log n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">求后继 <code>get_successor</code></td><td class="best">O(log n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">验证 <code>is_binary_search_tree</code> / 求高度 <code>get_height</code></td><td>O(n)</td><td>O(n)</td></tr>
+</tbody>
+</table>
+<p>插入、删除、求后继都是沿高度移动,O(h)——平衡时 O(log n),退化时 O(n)。而<strong>验证 BST 和求树高必须看遍每个节点</strong>,所以恒为 O(n),这一点不随平衡与否变化。递归栈额外空间 O(h)。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>这三件事几乎是 BST 题的固定考点:</p>
+<ul>
+<li><strong>「删除有两个孩子的节点」是最经典的追问。</strong>先说清三种情形,再点明「双子用中序后继(右子树最小值)替换,替换后要回到右子树把那个后继删掉」——两步都讲到才算完整。</li>
+<li><strong>「验证是否合法 BST」几乎必考陷阱题。</strong>面试官就等你写出「只比父子」的错解,然后甩一个反例。直接上<strong>上下界递归</strong>或<strong>中序判递增</strong>,一步到位。</li>
+<li><strong>「找中序后继」</strong>可能不给你父指针:此时从根按 BST 规则下探,记录「最后一次向左拐时经过的节点」即为后继——这是不带父指针版本的标准解法。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>验证 BST 只比较「左孩子 &lt; 父 &lt; 右孩子」是经典错解。</strong>反例:根 10、右孩子 15、而 15 的左孩子是 6。局部看「6 &lt; 15」没问题,但 6 落在 10 的右子树里、却比 10 小,违反不变量。只有<strong>上下界法</strong>能抓到它:走到 6 时下界已被 10 收紧成「必须 &gt; 10」,6 立刻判非法。</p>
+<p><strong>删除双子的另一个坑:替换值之后忘了删掉原后继节点。</strong>只把后继的值抄到被删位置、却让后继原地还留着,树里就出现了重复值、结构也错乱。正确流程是「抄值上来 + 递归到右子树删掉那个后继」,一个都不能少。</p>
+</div>
+
+<div class="implement">
+<p>在上一课的基础上,照仓库「二叉查找树」实现清单把进阶方法补齐:</p>
+<p><code>get_node_count()</code> · <code>get_height()</code>(单节点高度记为 1)· <code>is_binary_search_tree()</code>(<strong>用上下界递归</strong>)· <code>delete_value(x)</code>(三情形,双子用后继替换)· <code>get_successor(x)</code>(无则返回 -1)。</p>
+<p>关键单元测试:对一棵树反复 <code>delete_value</code> 各种节点(尤其双子),每删一次就跑一遍中序,断言序列<strong>始终严格递增</strong>——这是验证删除正确性最省事的不变量检查。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>删双子节点 = 用<strong>中序后继(右子树最小值)</strong>替换,再回右子树删掉那个后继。验证 BST 千万别只比父子,要么带<strong>上下界</strong>递归、要么<strong>中序判严格递增</strong>。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:删除一个有两个孩子的节点,为什么用「中序后继」替换就能保持 BST 有序?</summary>
+<div class="answer">
+<p>中序后继是<strong>右子树里的最小值</strong>——它比被删节点的左子树全部大(因为它本就在右子树)、又比右子树其余全部小(它是右子树最小)。把它抬到被删节点的位置,恰好继续满足「左边全部更小、右边全部更大」,不变量不破。用中序前驱(左子树最大值)是对称的等价做法。别忘了收尾:把原后继节点从右子树删掉——它至多只有一个右孩子,退化成简单情形好处理。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:要验证一棵二叉树是否为合法 BST,下面哪种做法是对的?</summary>
+<div class="answer">
+<p><strong>中序遍历,检查是否严格递增(或等价地,递归携带上下界)。</strong>「只检查每个节点 左孩子 &lt; 自己 &lt; 右孩子」是经典错解——它抓不到「孙子违反祖先约束」的情况(如根 10、右孩子 15、15 的左孩子 6:6 在 10 的右子树却比 10 小)。「只检查根的左右」更不够;「节点数是否为 2^h−1」只跟满二叉树有关,和 BST 的有序性毫无关系。正确的两种解法都利用了「约束是对整棵子树、而非直接孩子」这一点。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题在仓库大纲「树 → 二叉查找树(BSTs)」小节,聚焦删除与后继:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=gcULXE7ViZw&list=PL2_aWCzGMAwI3W_JlcBbtYTwiQSsOTa6P&index=36">从二叉查找树中删除一个节点(视频)</a> —— 三种情形讲得最细。</li>
+<li><a href="https://www.youtube.com/watch?v=5cPbNCrdotA&index=37&list=PL2_aWCzGMAwI3W_JlcBbtYTwiQSsOTa6P">二叉查找树中序遍历的后继者(视频)</a> —— 专讲 get_successor。</li>
+<li><a href="https://www.youtube.com/watch?v=yEwSGhSsT0U&index=35&list=PL2_aWCzGMAwI3W_JlcBbtYTwiQSsOTa6P">判断一棵二叉树是否为二叉查找树(视频)</a> · 求高度参考 <a href="https://www.geeksforgeeks.org/find-the-maximum-depth-or-height-of-a-tree/">树的最大深度 / 高度(GeeksforGeeks)</a>。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师给你一棵树、指定删一个双子节点,让你在纸上画出替换后的结果;或让老师用一个「只比父子会漏判」的反例考你验证逻辑。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0020-binary-search-tree.html"><span class="dir">← 上一课</span>二叉搜索树:有序性即不变量</a>
+  <a class="next" href="0022-heap-priority-queue.html"><span class="dir">下一课 →</span>堆与优先队列:数组里的完全二叉树</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

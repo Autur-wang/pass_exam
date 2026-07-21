@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0039 · NP 完全:识别「大概没有多项式解」</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0039 课 · 工程与设计 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>NP 完全:识别「大概没有多项式解」</h1>
+
+<p class="lede">仓库大纲对这一节的要求写得异常直白:<strong>「知道最经典的一些 NP-完全问题,而且能在面试官试图忽悠你的时候识别出他们。」</strong>这不是让你去证明什么,而是给你装一个警报器——当面试官把一个<strong>其实没有已知高效解</strong>的问题描述得云淡风轻,等你埋头去写「最优解」时,你得听出警报响,抬头说一句:「这看着像 NP-完全,我不追求精确最优,给你一个近似/启发式方案。」这节课就装这个警报器,不追求严格定义。</p>
+
+<div class="recall">
+<p>回忆<a href="0036-greedy-vs-dp.html">贪心 vs 动态规划</a>:贪心「每步取局部最优」大多数问题并不能得到全局最优。这节你会看到贪心的另一个正当用途——面对 NP-完全问题,既然求不出精确最优,<strong>贪心/启发式恰恰是拿到「足够好」近似解的主力工具</strong>。求不到最好,就退而求可证明的次好。</p>
+</div>
+
+<h2>一、四个词,一张直觉</h2>
+
+<p>先用「验证」和「求解」这两个动作把四个词串起来,不碰形式定义:</p>
+
+<dl class="keydef">
+<dt>P</dt>
+<dd>能在<strong>多项式时间内求解</strong>的问题(排序、最短路、匹配)。「快」的世界。</dd>
+<dt>NP</dt>
+<dd>给你一个候选答案,能在<strong>多项式时间内验证</strong>它对不对的问题。注意 NP = <em>Nondeterministic Polynomial</em>(非确定性多项式),<em>不是</em>「非多项式」。P ⊆ NP:能求解当然就能验证。</dd>
+<dt>NP-完全(NP-Complete)</dt>
+<dd>NP 里<strong>最难的一层</strong>:既属于 NP(解可快速验证),又满足「NP 中任何问题都能多项式规约到它」。只要其中任何一个有了多项式解,整个 NP 就都有——但至今没人找到,也没人证明找不到。</dd>
+<dt>NP-难(NP-Hard)</dt>
+<dd>「至少和 NP 里最难的一样难」,但<strong>不要求自己属于 NP</strong>(可能连解都没法快速验证)。TSP 的<strong>优化版</strong>(求最短环游)是 NP-难;它的<strong>判定版</strong>(存在长度 ≤ k 的环游吗)才是 NP-完全。</dd>
+</dl>
+
+<p>一句话记牢差别:<strong>可以多项式时间「验证」一个解,不等于可以多项式时间「找到」一个解</strong>。P vs NP 这个悬赏百万美元的未解难题,问的正是「验证得快 ⇒ 求解也快?」——目前主流猜测 <strong>P ≠ NP</strong>(验证 ≠ 求解),但没被证明。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 480 320" width="480" height="320" role="img" aria-label="P、NP、NP-完全、NP-难 的包含关系（假设 P 不等于 NP）">
+  <ellipse class="dgm-accent-node" style="fill-opacity:.45" cx="285" cy="120" rx="175" ry="100"/>
+  <ellipse class="dgm-link-node" style="fill-opacity:.5" cx="185" cy="215" rx="160" ry="95"/>
+  <ellipse class="dgm-good-node" cx="140" cy="240" rx="80" ry="45"/>
+  <text class="dgm-accent-text" x="360" y="55" text-anchor="middle" font-size="16" font-weight="700">NP-难</text>
+  <text class="dgm-text" x="70" y="170" text-anchor="middle" font-size="16" font-weight="700">NP</text>
+  <text class="dgm-good-text" x="140" y="245" text-anchor="middle" font-size="16" font-weight="700">P</text>
+  <text class="dgm-accent-text" x="270" y="185" text-anchor="middle" font-size="13" font-weight="700">NP-完全</text>
+  <text class="dgm-muted" x="270" y="203" text-anchor="middle" font-size="11">= NP ∩ NP-难</text>
+</svg>
+</div>
+<figcaption>此图假设 P ≠ NP(尚未证明)。NP-完全是 NP 与 NP-难的交集——NP 里最难的那批。P 稳稳待在 NP 内部、够不着 NP-难。若哪天证明 P = NP,这三个圈会塌成一个。</figcaption>
+</figure>
+
+<h2>二、认脸:经典 NP-完全问题</h2>
+
+<p>面试的目标不是背定义,是<strong>认脸</strong>——听到某类描述能条件反射地起疑。下面这些是必须眼熟的招牌(判定版才严格属于 NP-完全):</p>
+
+<table>
+<thead><tr><th>问题</th><th>判定版问的是</th><th>备注</th></tr></thead>
+<tbody>
+<tr><td><strong>SAT</strong> 布尔可满足</td><td>存在一组赋值让公式为真吗</td><td>历史上第一个被证明的 NPC(Cook–Levin 定理)</td></tr>
+<tr><td><strong>TSP</strong> 旅行商</td><td>存在总长 ≤ k、遍历所有城市各一次的环游吗</td><td>求最短环游的优化版是 NP-难</td></tr>
+<tr><td><strong>0/1 背包</strong></td><td>能否选出总重 ≤ W 且总价值 ≥ V 的子集</td><td>有伪多项式 DP(与数值大小相关,非真多项式)</td></tr>
+<tr><td><strong>图着色</strong></td><td>能用 k 种颜色给图上色使相邻不同色吗</td><td>k=3 时已经是 NPC</td></tr>
+<tr><td><strong>子集和</strong> Subset Sum</td><td>有子集之和恰为目标 T 吗</td><td>背包的近亲</td></tr>
+<tr><td><strong>哈密顿回路</strong></td><td>存在经过每个顶点恰一次的环吗</td><td>和「每条边一次」的欧拉回路(P 类)极易混,别搞反</td></tr>
+</tbody>
+</table>
+
+<p>触发警报的口令:<strong>「遍历所有…的最优顺序」「从一堆里挑一个子集使…最大/恰好」「用最少的…覆盖/着色」</strong>——一旦规模不能限制、又要精确最优,先怀疑它是不是这几张脸之一。</p>
+
+<h2>三、警报响了怎么办</h2>
+
+<p>识别只是第一步,面试真正想听的是<strong>你的应对策略</strong>。既然(在 P ≠ NP 的假设下)没有已知的多项式精确算法,就在三个方向里权衡:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node good"><span class="n-title">近似算法</span><span class="n-sub">带比率保证<br>如度量 TSP 1.5 倍</span></div>
+  <div class="arrow">·</div>
+  <div class="node"><span class="n-title">启发式</span><span class="n-sub">贪心/模拟退火/遗传<br>快但不保证</span></div>
+  <div class="arrow">·</div>
+  <div class="node bad"><span class="n-title">精确但指数</span><span class="n-sub">分支限界/状压 DP<br>仅限小规模 n</span></div>
+</div>
+<figcaption>三条出路:要「可证明的次优」用近似算法;要「工程上够快够好」用启发式;n 很小(几十)时也可以老实上指数级精确解。</figcaption>
+</figure>
+
+<p>还有一招是<strong>识别特例</strong>:一般图的 TSP 是 NP-难,但若满足三角不等式(度量 TSP),就有 1.5 倍的近似算法;背包若数值不大,伪多项式 DP 就能精确解。会说「先看看它是不是某个可解的特例」是成熟的信号。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>最常见的不是问「NP-完全的定义」,而是<strong>下套</strong>:面试官把一个 NP-完全问题包装成日常需求——「给这些配送点排一条最短路线」(TSP)、「把这些任务塞进机器让价值最大」(背包)、「给课程表安排考场不冲突」(图着色)——看你会不会一头扎进去写「保证最优」的算法。</p>
+<p>漂亮的回应分三步:① <strong>点名</strong>「这本质是 TSP / 背包 / 图着色,属于 NP-完全」;② 说清「所以没有已知的多项式精确解」;③ 给<strong>可落地的替代</strong>:「小规模我上精确 DP;规模大就用贪心/最近邻启发式,或带保证的近似算法,并向你说明近似比。」能走完这三步,比会证明规约更值钱。</p>
+</div>
+
+<div class="gotcha">
+<p><strong>「NP = 没有解」——错得最离谱的一句。</strong>NP-完全问题都是<strong>可判定</strong>的,解存在、还能快速<strong>验证</strong>;只是没有<strong>已知的多项式时间求解</strong>算法,而且「是否存在」本身尚未被证明。说成「无解」会立刻暴露理解错位。</p>
+<p><strong>「NP 就是非多项式」——张冠李戴。</strong>NP 的 N 是 Nondeterministic(非确定性),不是 Non(非)。P 是 NP 的子集,「P 里的问题也在 NP 里」完全成立。</p>
+<p><strong>别把 NP-难和 NP-完全画等号。</strong>NP-完全 = 在 NP 内 + NP-难;NP-难可以更凶(不一定属于 NP,解都未必能快速验证)。还有个经典陷阱:哈密顿回路(每点一次)是 NPC,而欧拉回路(每边一次)是多项式可解的——描述相似,难度天差地别。</p>
+</div>
+
+<div class="implement">
+<p>动手核对(把警报器调准):找 5 个常见面试/业务需求,逐个判断「它是否 NP-完全?判定版怎么问?若是,我会用哪种应对(近似/启发式/小规模精确)?」建议试:配送路线规划、任务打包装箱、考试排考场、社交网络找最大团(clique)、把文件切块塞进固定容量磁盘。写下你的判断,再对照经典 NPC 清单核验——目标是把「起疑」变成条件反射。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>NP-完全 = 「解能快速验证,但没有已知的快速求解」。面试价值全在识别——听出面试官在让你硬求一个 NPC 问题的最优解时,别埋头写,抬头说「这是 NPC,我给近似/启发式」。</p>
+</div>
+
+<h2>四、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:面试官说「我有 40 个配送点,给我写个算法找出访问全部一次、总里程最短的路线,要保证最优。」你的第一反应应该是什么?</summary>
+<div class="answer">
+<p>这是<strong>旅行商问题(TSP)的优化版,属 NP-难</strong>(判定版是 NP-完全)。不该一上来写「保证最优」的多项式算法——那不存在(P ≠ NP 假设下)。正确应对:① 点名它是 TSP;② 说明没有已知多项式精确解,精确解需指数级(如状压 DP,40 个点已经吃力);③ 给替代——「若必须最优且点数很小(20 出头)可上 <code>O(n²·2ⁿ)</code> 状压 DP;点数大就用最近邻/2-opt 启发式,或在满足三角不等式时用有 1.5 倍保证的近似算法,并告诉你近似比」。能提到「问是否满足三角不等式」是加分。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:「因为背包问题是 NP-完全的,所以它根本没法用动态规划解。」这句话对吗?</summary>
+<div class="answer">
+<p><strong>不对。</strong>0/1 背包确有一个 <code>O(n·W)</code> 的经典 DP(W 是容量上限)。矛盾的关键在于:<code>O(n·W)</code> 是<strong>伪多项式</strong>——它对「数值 W」是线性的,但对「W 的<strong>输入位数</strong>」是指数的(W 用二进制写只需 log W 位)。所以当权重数值不大时 DP 完全可用、还很快;只有当数值可以任意大时,它才不算真正的多项式算法。「NP-完全」说的是不存在对输入规模多项式的算法,并不等于「没有任何实用算法」。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:下面哪一项最准确地描述「P vs NP」这个未解问题?(A) NP 里的问题都无解 (B) P 一定不等于 NP,已证明 (C) 是否「能快速验证解」就意味着「能快速求出解」,尚未证明 (D) NP 就是指数时间</summary>
+<div class="answer">
+<p><strong>C。</strong>P vs NP 问的正是:凡是解能在多项式时间验证的问题(NP),是否也一定能在多项式时间求解(P)?即 P 是否等于 NP。这至今<strong>未被证明</strong>,是千禧年七大难题之一。逐个排除:A 错——NPC 问题有解且可验证;B 错——P ≠ NP 只是主流猜测,没被证明;D 错——NP 是「多项式可验证」,不是「指数时间」,而且 P ⊆ NP。</p>
+</div>
+</details>
+</div>
+
+<h2>五、主推资源</h2>
+
+<p>本主题在仓库大纲的「NP, NP-Completeness 和近似算法」小节。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=eHZifpgyH_4&list=PLUl4u3cNGP6317WaSNfmCvGym2ucw3oGp&index=22">复杂度:P, NP, NP-完全性, 规约(MIT 视频)</a> —— 把四个词和规约一次讲清,首推。</li>
+<li><a href="https://www.youtube.com/watch?v=MEz1J9wY2iM&list=PLUl4u3cNGP6317WaSNfmCvGym2ucw3oGp&index=24">复杂度:近似算法(MIT 视频)</a> —— 警报响了之后的应对方向。</li>
+<li><a href="https://www.youtube.com/watch?v=moPtwq_cVH8&list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb&index=23">计算复杂度(视频)</a> —— 更概览的一条。</li>
+<li><a href="http://nbviewer.jupyter.org/url/norvig.com/ipython/TSP.ipynb">Peter Norvig:旅行商问题的近似最优解(Jupyter 笔记本)</a> —— 用代码把「求不到最优就求足够好」演示到底。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「验证 ≠ 求解」,或随口描述一个业务需求让你判断它是不是 NP-完全、该怎么应对。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0038-combinatorics-probability.html"><span class="dir">← 上一课</span>组合与概率:面试要的那点数学</a>
+  <a class="next" href="0040-how-programs-run.html"><span class="dir">下一课 →</span>程序如何运行:从源码到内存布局</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

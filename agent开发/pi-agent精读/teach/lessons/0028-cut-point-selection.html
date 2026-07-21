@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0028 · 在哪切:有效切点、向后遍历与 Turn 分割</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 9 章 · 上下文压缩 ›
+  <a href="./0027-why-compact-and-when-to-trigger.html">上一课</a> ›
+  <strong>Lesson 0028</strong>
+</div>
+
+<p class="kicker">Lesson 0028 · 第 9 章 · 上下文压缩</p>
+<h1>在哪切:有效切点、向后遍历与 Turn 分割</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课讲清了「为什么要压缩、什么时候触发」——token 快超预算,或 API 已经报错。
+  这一课只回答<strong>下一步的问题</strong>:压缩决定已经做了,但具体<strong>从哪一条消息下刀</strong>?
+  刀口选错,模型会看到断裂的对话;刀口选对,才有后面第 0029 课的结构化摘要可讲。
+</div>
+
+<div class="recall">
+  ↩️ <b>先回忆上一课:</b> Pi 用「预防性压缩」(token 超阈值 183,616)和「应急性压缩」(API 报错兜底)两道防线决定<em>要不要</em>压缩。
+  这一课接着往下走:决定压缩之后,压缩函数拿到的是一整条 entries 数组,它<strong>不能随便挑一条切下去</strong>——
+  切错位置,压缩出来的上下文会让模型confused。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 看到一段 <span class="sys-pill">entries</span> 序列,
+  能自己指出哪些位置是<strong>合法切点</strong>、哪些不是,并说清 Pi 为什么<strong>宁可切断 Turn 也要保证压缩生效</strong>,
+  以及 <span class="sys-pill">turnPrefix</span> 怎么把这笔账补回来。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:剪一卷录像带</b>
+  想象你在剪一卷会议录像。user 说话、assistant 回应的画面之间可以剪——观众看得懂;
+  但「我调用了 read 工具」和「工具返回的结果」这两帧<strong>必须连在一起</strong>——
+  如果在中间剪断,观众看到的就是「他说要读文件……然后呢?」,一头雾水。
+  而且剪辑师不是从片头往后剪,而是<strong>从片尾往回量 20 分钟</strong>再下剪刀——
+  因为最近发生的事,才是观众最需要记住的。
+</div>
+
+<h2>1 · 不是哪里都能切:有效切割点</h2>
+<p>
+  LLM 的对话历史有一条硬性结构约束:<code>ToolResult</code> 消息必须<strong>紧跟</strong>在触发它的
+  <code>AssistantMessage</code>(含 ToolCall)之后。如果把 ToolCall 留在「保留区」、把它对应的 ToolResult
+  切进「压缩区」,模型会看到「我调用了 read 工具,但结果在哪?」——上下文彻底断裂。
+</p>
+<p>所以能下刀的位置必须是<strong>有效切割点</strong>——源码里这套规则叫 <code>findValidCutPoints</code>:</p>
+<pre><span class="ln">1</span>entry:  0     1     2      3       4     5      6       7      8
+<span class="ln">2</span>       ┌─────┬─────┬──────┬───────┬─────┬──────┬───────┬──────┬─────┐
+<span class="ln">3</span>       │ hdr │ usr │ ass  │ tool  │ usr │ ass  │ tool  │ ass  │tool │
+<span class="ln">4</span>       └─────┴─────┴──────┴───────┴─────┴──────┴───────┴──────┴─────┘
+<span class="ln">5</span>
+<span class="ln">6</span>有效切割点 = [1(usr), 2(ass), 4(usr), 5(ass), 7(ass)]
+<span class="ln">7</span>                                                       ↑
+<span class="ln">8</span>                                          注意:3(tool)、6(tool)、8(tool) 全部被排除
+</pre>
+<p><code>user</code> 和 <code>assistant</code> 都是合法切点,<code>toolResult</code> 不是。源码注释里的关键说明是:</p>
+<p><em>"When we cut at an assistant message with tool calls, its tool results follow it and will be kept."</em></p>
+<div class="why">
+  <b>为什么这是硬约束,不是优化项?</b> 这不是「压缩这条消息收益高不高」的权衡,而是 LLM 对话协议本身的正确性要求——
+  ToolCall 与 ToolResult 必须成对出现在模型看到的上下文里。排除 toolResult 作切点,
+  是为了<strong>不可能</strong>发生「调了工具却找不到结果」这种断裂,而不是为了效率。
+</div>
+<cite>🔎 出处:教程 §三「不是哪里都能切」/ <code>findValidCutPoints:L305</code>(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第9章-上下文压缩-当对话太长怎么办.md</code>)。</cite>
+
+<h2>2 · 切点的语义:它是「保留区的第一条」</h2>
+<p>
+  理解切割点要先纠正一个直觉误区——<strong>切点不是「被切掉的最后一条」,而是「保留区的第一条」</strong>。
+  这个语义会澄清后面所有关于 Turn 分割的疑问。
+</p>
+<p>切点选在 <code>user</code> 上,意味着什么?看这个例子:</p>
+<pre><span class="ln">1</span>例子:切点选 entry 4 (usr)
+<span class="ln">2</span>entry:  0     1     2      3       4     5      6       7      8
+<span class="ln">3</span>       hdr   usr   ass   tool    [usr]  ass   tool    ass   tool
+<span class="ln">4</span>       └──────── 压缩区 ────────┘  └────── 保留区 ──────────────┘
+<span class="ln">5</span>                                   ↑
+<span class="ln">6</span>                              切点 = 保留区第一条
+<span class="ln">7</span>                              user + 后面的 ass + tool 全部保留
+<span class="ln">8</span>                              → 这个 Turn 完整!
+</pre>
+<p>
+  entry 4 这个 <code>user</code> 自己进保留区,它<strong>后面</strong>的 assistant 和 toolResult 也都跟着进保留区——
+  这个 user 开头的<strong>完整 Turn</strong> 全部被保留,被压缩的只是 user 之前的消息。
+  所以在 user 后切是最安全的选择:天然保证 Turn 完整。
+</p>
+<cite>🔎 出处:教程 §三「切点的语义:保留区的起点」。</cite>
+
+<h2>3 · 向后遍历:从最新消息往回累积</h2>
+<p>
+  确定了合法切点集合后,具体切在哪个上?Pi 的策略是<strong>从后往前累积 token</strong>——
+  这正是 <code>findCutPoint</code> 干的事:
+</p>
+<pre><span class="key">function</span> <span class="fn">findCutPoint</span>(entries, keepRecentTokens) {
+<span class="ln">1</span>    <span class="key">const</span> cutPoints = <span class="fn">findValidCutPoints</span>(entries);  <span class="cm">// 排除 toolResult</span>
+<span class="ln">2</span>
+<span class="ln">3</span>    <span class="key">let</span> accumulated = 0;
+<span class="ln">4</span>    <span class="key">for</span> (<span class="key">let</span> i = entries.length - 1; i &gt;= 0; i--) {
+<span class="ln">5</span>        accumulated += <span class="fn">estimateTokens</span>(entries[i]);
+<span class="ln">6</span>        <span class="key">if</span> (accumulated &gt;= keepRecentTokens) {
+<span class="ln">7</span>            <span class="cm">// 找到第一个 &gt;= i 的有效切割点</span>
+<span class="ln">8</span>            <span class="key">return</span> 第一个 &gt;= i 的 cutPoint;
+<span class="ln">9</span>        }
+<span class="ln">10</span>    }
+<span class="ln">11</span>    <span class="key">return</span> 最早的 cutPoint;  <span class="cm">// 全部需要压缩</span>
+<span class="ln">12</span>}
+</pre>
+<p>
+  从 <code>entries.length - 1</code> 开始往回走,累积 token 数;一旦累积量 <code>&gt;= keepRecentTokens</code>
+  (默认 <strong>20,000</strong>),就停止,在停止位置<strong>之后</strong>找最近的有效切割点——那里就是切刀落下的地方。
+</p>
+<div class="why">
+  <b>为什么从后往前累积,而不是从前往后?</b> 判断依据只有一条:<strong>最近的上下文最重要</strong>。
+  模型继续工作时,最需要知道的是「刚才做了什么」「刚才读了什么文件」「用户最新说了什么」,
+  而不是「10 轮前讨论过什么」。逆向遍历天然把近期消息保在保留区,把该压缩的旧消息留在前面。
+</div>
+<cite>🔎 出处:教程 §三「向后遍历:保护最重要的东西」/ <code>findCutPoint:L392-454</code>。</cite>
+
+<h2>4 · 极端情况:Turn 分割与 turnPrefix 补丁</h2>
+<p>
+  §一、§二 讲了 user 切点和 assistant 切点都合法,但两者<strong>性质不同</strong>:
+</p>
+<table class="bd">
+  <thead><tr><th>切点类型</th><th>Turn 是否完整</th><th>原因</th></tr></thead>
+  <tbody>
+    <tr><td>user 切点</td><td>✅ 天然完整</td><td>user 后面的 assistant + toolResult 都跟着进保留区</td></tr>
+    <tr><td>assistant 切点</td><td>⚠️ 会切断</td><td>它对应的 user 落在压缩区,自己却在保留区</td></tr>
+  </tbody>
+</table>
+<p>源码里的判断逻辑很直白:</p>
+<pre><span class="ln">1</span><span class="key">const</span> isUserMessage = cutEntry.message.role === <span class="str">"user"</span>;
+<span class="ln">2</span><span class="key">const</span> turnStartIndex = isUserMessage ? -1 : <span class="fn">findTurnStartIndex</span>(entries, cutIndex, startIndex);
+<span class="ln">3</span>isSplitTurn: !isUserMessage &amp;&amp; turnStartIndex !== -1,
+</pre>
+<p>切点是 <code>user</code> → 一定不是 split turn;切点是 <code>assistant</code> → 可能是 split turn。</p>
+<p><strong>为什么 Pi 不干脆只允许 user 切点,彻底避免这种麻烦?</strong> 看这个场景:向后累积到 entry 6 时预算刚好用完,
+  但最近的 user 是 entry 1。</p>
+<div class="tradeoff">
+  🔑 <b>只允许 user 切点</b> → 保留区被迫从 entry 1 开始,要保留 entry 1-8 共 8 条——token 预算可能只够装 2-3 条,
+  <strong>压缩失败,根本压不动</strong>。<br>
+  🔑 <b>允许 assistant 切点</b> → 直接选 entry 6,保留区只剩 entry 6-8 共 3 条,<strong>精确控制 token 量</strong>,
+  代价是切断了一个 Turn。<br>
+  Pi 选择了后者——<strong>优先保证压缩能生效</strong>,再用轻量机制弥补 Turn 完整性的损失。
+</div>
+<p>这个「轻量机制」就是 <code>turnPrefixMessages</code>:</p>
+<pre><span class="ln">1</span>entry:  1     2      3      4      5      6       7      8     9
+<span class="ln">2</span>       ┌─────┬──────┬──────┬──────┬──────┬───────┬──────┬─────┬──────┐
+<span class="ln">3</span>       │ usr │ ass  │ tool │ ass  │ tool │ tool  │ ass  │tool │ ass │
+<span class="ln">4</span>       └─────┴──────┴──────┴──────┴──────┴───────┴──────┴─────┴──────┘
+<span class="ln">5</span>         ↑     └────────── turnPrefixMessages ──────────┘  └─ kept ─┘
+<span class="ln">6</span>       turnStart=1            (entries 2-6)              entries 7-9
+<span class="ln">7</span>
+<span class="ln">8</span>       切点在 entry 7(assistant),但 entry 1(user)是它的 Turn 起点
+<span class="ln">9</span>       → entry 1 在主摘要里压缩
+<span class="ln">10</span>       → entry 2-6 是"被切断的 Turn 前缀",单独生成 turnPrefix 摘要
+</pre>
+<p>
+  被切断 Turn 的前缀(user 起点到切点之间的 assistant + toolResult)用专门的
+  <code>TURN_PREFIX_SUMMARIZATION_PROMPT</code> 单独摘要——只用<strong>更轻量的 3 段格式</strong>
+  (Original Request / Early Progress / Context for Suffix),与主摘要<strong>并行生成</strong>
+  (<code>Promise.all</code>),最后合并成一份完整摘要。
+</p>
+<div class="why">
+  <b>为什么用 turnPrefix 弥补,而不是干脆禁止 split turn?</b> 因为 Pi 的优先级排序很明确:
+  <strong>先保证压缩能跑通</strong>,完整性损失用一份轻量摘要打补丁,而不是牺牲压缩的有效性去死守完整性。
+  这是效率与完整性之间一个<strong>显式且可解释</strong>的权衡,不是妥协出来的 bug。
+</div>
+<cite>🔎 出处:教程 §五「极端情况:Turn 分割」/ <code>findCutPoint:L444-453</code>、<code>turnPrefixMessages:L698-705</code>。</cite>
+
+<div class="diagram">切点选择的完整决策链
+
+   要不要压缩(0027)  →  在哪切(本课)  →  怎么压缩(0029)
+                          │
+              ┌───────────┴───────────┐
+              ▼                       ▼
+      findValidCutPoints      findCutPoint(从后往前)
+      排除所有 toolResult      累积到 keepRecentTokens(20K)
+              │                       │
+              └───────────┬───────────┘
+                          ▼
+              切点是 user? → 完整 Turn,直接切
+              切点是 assistant? → isSplitTurn=true
+                          │
+                          ▼
+              turnPrefix 单独摘要被切断的前缀
+              (与主摘要 Promise.all 并行生成)
+</div>
+
+<h2>5 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① findValidCutPoints 把所有 toolResult 位置都排除在合法切点之外。这条规则背后的硬约束是什么?</p>
+    <button class="opt">toolResult 消息通常太大,压缩它收益最高</button>
+    <button class="opt">toolResult 必须紧跟触发它的 toolCall,切断会让模型「调了工具却找不到结果」</button>
+    <button class="opt">toolResult 的 token 无法用 chars/4 估算</button>
+    <button class="opt">toolResult 属于系统消息,不能被 LLM 读取</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="3">
+    <p class="stem">② findCutPoint 为什么是「从最新消息往回累积 token」,而不是从最旧的往后走?</p>
+    <button class="opt">因为向后遍历的算法复杂度更低</button>
+    <button class="opt">因为最旧的消息 token 估算最不准</button>
+    <button class="opt">因为 toolResult 大多集中在对话开头</button>
+    <button class="opt">因为最近的上下文最重要——模型更需要「刚才读了什么/用户最新说了什么」,逆向遍历优先保住近期消息</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ assistant 切点会切断 Turn(它对应的 user 落在压缩区)。既然如此麻烦,为什么 Pi 不干脆只允许 user 切点来彻底避免 split turn?</p>
+    <button class="opt">因为 user 切点会破坏 toolCall-toolResult 对</button>
+    <button class="opt">因为只有 assistant 消息才携带文件操作信息</button>
+    <button class="opt">因为只允许 user 切点会让保留区起点被迫前移、保留区过大装不下 token 预算,导致压缩效率低甚至压不动</button>
+    <button class="opt">因为 user 切点的 token 估算总是偏高</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>keepRecentTokens 的 20,000 是怎么定出来的,会不会随模型上下文窗口大小变化?</em>」
+  「<em>findTurnStartIndex 具体怎么向前找到 Turn 起点——万一往前找也找不到 user 呢?</em>」
+  「<em>turnPrefix 摘要和主摘要的 3 段 vs 6 段格式,合并时会不会冲突?</em>」——
+  最后这个问题,正好把我们带向<strong>下一课</strong>:切下来的部分到底怎么变成结构化摘要。
+</div>
+
+<h2>6 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第9章-上下文压缩-当对话太长怎么办.md">第 9 章 · 上下文压缩:当对话太长怎么办</a>——
+  原文 §四、§五 还讲了摘要的 6 段结构化格式、增量更新(previousSummary)、文件跟踪列表怎么跨压缩累积,值得通读。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0029):</strong> 切点已经找到,messagesToSummarize 和 kept 已经分好组——
+  接下来这些被切下来的消息怎么变成一段<strong>结构化摘要</strong>?为什么是「填表」而不是「随便写总结」?
+  多次压缩时又怎么在旧摘要基础上「更新」而不是「重写」?这些是下一课的主题。
+</p>
+
+<footer>
+  Lesson 0028 · 第 9 章 上下文压缩 ·
+  下一课:<a href="./0029-structured-summary-and-rebuild.html">0029 结构化摘要与重建 →</a> ·
+  上一课:<a href="./0027-why-compact-and-when-to-trigger.html">0027 为什么压缩与何时触发</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对,这是 LLM 对话协议的正确性硬约束,不是优化。延伸:user/assistant 之所以是合法切点,正因为在它们后面切不会拆散任何 toolCall-toolResult 对。',
+               '✓ 对。逆向遍历直到累积够 keepRecentTokens(20K),天然把近期消息留在保留区。延伸:这也是为什么这个函数被描述成「找哪里值得保留」而非「找哪里能切」。',
+               '✓ 对,这是效率与完整性的权衡:允许 assistant 切点才能精确控制保留 token 量,代价是切断的 Turn 用 turnPrefix 摘要弥补。延伸:turnPrefix 用的是比主摘要更轻量的 3 段格式,而非 6 section。'];
+  var msgNo = ['想想如果把 toolCall 留在保留区、把它的 toolResult 切进压缩区,模型看到的对话会缺什么?这是完整性问题还是性能问题?',
+               '问自己:对继续工作而言,是 10 轮前讨论的内容重要,还是刚才读了哪个文件、用户最新的指令重要?遍历方向应该优先保护哪一头?',
+               '看第五节那个例子:若向后累积到 entry 6 预算用完,但最近的 user 是 entry 1,只允许 user 切点会被迫保留 entry 1-8。这么多 entry 的 token 塞得下预算吗?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

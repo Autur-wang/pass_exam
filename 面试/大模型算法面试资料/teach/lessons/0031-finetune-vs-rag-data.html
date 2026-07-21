@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0031 · 微调 vs RAG 抉择与数据工程</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第九部分 评估与数据 · 第 0031 课</p>
+<h1>微调 vs RAG 抉择与数据工程</h1>
+<p class="lede">「这个业务需求,你打算微调还是上 RAG?」——这是大模型岗几乎必问的一道开放题。它考的不是你会不会跑 LoRA,而是你能不能<strong>把需求拆成「缺知识」还是「缺能力」</strong>,再算清成本、讲清数据从哪来、怎么清。这节课(也是本课程最后一课)把决策框架和数据工程一次讲透。</p>
+
+<div class="recall">
+<p>前面几课我们分别讲过:LoRA/PEFT 怎么用少量参数改模型,RAG 怎么把外部文档检索进上下文,还有评估怎么做。<strong>先别往下看,试着回答:如果老板要求「让模型能回答我们公司最新的内部规章」,你的第一反应是微调还是 RAG?为什么?</strong></p>
+</div>
+
+<h2>一、决策框架:先问「缺的是知识,还是能力」</h2>
+<p>面试官最想看到的,不是你背了一堆「RAG 优点」,而是你手里有一把<strong>能当场做判断的尺子</strong>。这把尺子只有一句话:</p>
+<blockquote><strong>要改的是「模型知道什么」,用 RAG;要改的是「模型怎么做、什么风格、什么格式」,用微调。</strong></blockquote>
+
+<p>为什么这么分?因为两者动的是模型的不同部位:</p>
+<ul>
+<li><strong>RAG 动的是「输入」</strong>——模型参数一个字节都不改,只是在推理时把相关文档塞进上下文,让模型「开卷考试」。所以它天生擅长处理<strong>时效性强、私域、需要溯源</strong>的知识:今天更新的政策、你司的内部 wiki、要求「答案必须给出处」的场景。文档一改,索引一更,模型立刻「知道」新事,不用重训。</li>
+<li><strong>微调动的是「参数」</strong>——把某种<strong>行为模式</strong>烙进权重里:固定的输出格式(必须吐 JSON)、特定的语气人设(客服话术)、某类任务的推理能力(把一类题目做对)。这些是「怎么做」,靠往上下文塞文档是塞不出来的。</li>
+</ul>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">业务需求</div>
+  <div class="node">缺的是<br>知识 or 能力?</div>
+  <div class="node">知识:时效/私域/要溯源<br>→ RAG</div>
+  <div class="node">能力/风格/格式<br>→ 微调</div>
+  <div class="node good">大多数落地系统<br>= 两者结合</div>
+</div>
+<figcaption>决策不是二选一。真实系统常是:微调打磨「怎么答」,RAG 负责「答什么内容」。</figcaption>
+</figure>
+
+<h3>为什么「结合」才是常态</h3>
+<p>把两句合起来想就懂了:你希望客服机器人<strong>既</strong>用你司统一的话术和格式回答(能力/风格,微调),<strong>又</strong>能引用到今天刚更新的退款政策(知识,RAG)。单靠任何一个都缺一块。所以标准答法是:「我会先判断缺口在哪一侧,大多数生产系统两者都要——微调定人设与格式,RAG 供实时知识与出处。」</p>
+
+<table>
+<thead><tr><th>维度</th><th>RAG</th><th>微调(SFT/LoRA)</th></tr></thead>
+<tbody>
+<tr><td>改的是</td><td>输入(上下文),参数不动</td><td>模型参数</td></tr>
+<tr><td>擅长</td><td>知识:时效、私域、可溯源</td><td>能力、风格、输出格式</td></tr>
+<tr><td>知识更新</td><td>改文档/重建索引即可,近实时</td><td>要重新准备数据 + 重训</td></tr>
+<tr><td>可溯源</td><td>天然能给出处(引用检索片段)</td><td>难,知识揉进权重说不清来源</td></tr>
+<tr><td>主要成本</td><td>索引构建与维护、向量库、每次检索延迟</td><td>标注数据 + 算力(训练一次性,推理更省)</td></tr>
+<tr><td>典型风险</td><td>检索不准 → 喂错料;上下文变长变贵</td><td>数据少易过拟合、灾难性遗忘("SFT 后变傻")</td></tr>
+</tbody>
+</table>
+
+<h2>二、成本对比:两种「贵」的方式不一样</h2>
+<p>面试官追问成本时,想听的是你知道钱花在<strong>不同的地方</strong>,而不是笼统说「RAG 便宜、微调贵」。</p>
+<ul>
+<li><strong>RAG 的成本是「持续的运维」</strong>:要搭并维护向量索引(见第 0028/0029 课的 ANN 索引选型),文档变了要重新分块、重新向量化、重建索引;每次请求都要跑一次检索,还会因为把检索片段拼进 prompt 而<strong>拉长上下文</strong>,推理 token 变多、延迟变高。</li>
+<li><strong>微调的成本是「前期的数据 + 算力」</strong>:训练本身是一次性投入(数据准备往往比训练更费人力),但训练完之后推理时不需要额外检索、上下文更短。PEFT/LoRA 正是为了把这里的算力门槛压下来——只训练少量低秩参数,而不是全参数微调。</li>
+</ul>
+<p>一句话记法:<strong>RAG 把成本摊到每一次调用和长期维护上,微调把成本压在训练前的数据与算力上。</strong>知识变得越频繁,RAG 的相对优势越大;行为要求越固定、调用量越大,微调摊薄后越划算。</p>
+
+<h2>三、数据工程:微调成败的地基</h2>
+<p>选了微调,真正的活儿才开始——大部分微调项目的瓶颈不在训练,在<strong>数据</strong>。源材料里那句「为什么 SFT 之后感觉 LLM 傻了」,根因通常就出在数据:分布偏移、数据太少导致过拟合。所以数据工程这一环,面试官会盯着问。</p>
+
+<h3>1）采集:数据从哪来</h3>
+<ul>
+<li><strong>私域已有数据</strong>:历史工单、客服对话、内部文档、日志——最贴合业务,但通常脏、格式乱。</li>
+<li><strong>人工标注/编写</strong>:针对目标任务专门写「指令 → 期望回答」对,质量最高、最贵。</li>
+<li><strong>合成/增强</strong>:用更强的模型或规则生成、对已有样本做同义替换/改写扩充(源材料提到的数据增强)。要小心合成数据的分布和质量。</li>
+</ul>
+
+<h3>2）规模与配比</h3>
+<p>SFT 不是越多越好。数据太少、模型容量又大,容易<strong>过拟合</strong>到这批样本、丢掉预训练学到的通用能力(灾难性遗忘,也就是「变傻」)。反过来,质量差的大批量数据比少量精标更糟。经验方向是:<strong>宁精勿滥,覆盖任务的各类情形</strong>,而不是盲目堆量。(具体数字随任务和模型而变,面试时讲权衡,不要背死数。)</p>
+
+<h3>3）清洗与去重(高频考点)</h3>
+<p>「你怎么给微调数据去重?」是很爱问的一问。要分两层答:</p>
+<ul>
+<li><strong>精确/近似去重</strong>:完全相同或差几个字的样本,用哈希(如 MinHash)、编辑距离等快速去掉。</li>
+<li><strong>语义去重</strong>:意思一样但措辞不同的样本(「怎么退款」vs「退款流程是什么」),精确匹配抓不到。做法是把样本过 embedding,算<strong>余弦相似度</strong>,超过阈值的判为重复,保留一条:</li>
+</ul>
+$$\operatorname{sim}(a,b)=\cos(\theta)=\frac{\mathbf{e}_a\cdot\mathbf{e}_b}{\lVert\mathbf{e}_a\rVert\,\lVert\mathbf{e}_b\rVert}$$
+<p class="formula-note">$\mathbf{e}_a,\mathbf{e}_b$ 是两条样本的句向量;$\operatorname{sim}$ 越接近 1 越像。设一个阈值(如 0.9 上下,具体要调)判重。</p>
+<p>为什么非去重不可?重复样本会让模型在这些例子上<strong>过度加权</strong>,加剧过拟合、扭曲数据分布,还浪费算力。</p>
+
+<h3>4）标注质量:正负样本与「多师傅」经验统一</h3>
+<ul>
+<li><strong>正负样本</strong>:除了「好答案」(正样本),准备「坏答案」(负样本)对偏好类训练(如 DPO/RLHF 的偏好对)很关键——模型要学会「什么不该答」。</li>
+<li><strong>多标注人一致性</strong>:多个「师傅」各写各的,风格、判断口径会打架。必须先立<strong>统一的标注规范</strong>,把多人的经验对齐成一套标准,否则模型学到的是相互矛盾的信号,越训越乱。这本质上和「Q、K 用不同权重」一样——信号不一致,学出来的就是噪声。</li>
+</ul>
+
+<h3>5）数据飞轮:让系统越用越好</h3>
+<p>数据工程不是一锤子买卖。上线后把<strong>线上真实反馈回流</strong>——用户点赞/点踩、人工纠正过的回答、被 RAG 检索命中的高频问题——清洗后补进训练集,再做下一轮微调。这个「上线→收集反馈→回流→再训」的闭环叫<strong>数据飞轮(Data Flywheel)</strong>,是把 demo 熬成好产品的核心机制。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">上线服务</div>
+  <div class="node">收集线上反馈<br>点踩/纠正/高频问</div>
+  <div class="node">清洗去重标注</div>
+  <div class="node">补入训练集</div>
+  <div class="node good">下一轮微调<br>→ 更好 → 循环</div>
+</div>
+<figcaption>数据飞轮:真实使用产生的数据回流,让模型迭代式变强。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>RAG(检索增强生成)</dt>
+<dd>不改模型参数,推理时先检索相关文档、拼进上下文再生成。改的是「模型看到什么输入」,擅长时效/私域/可溯源的<strong>知识</strong>。</dd>
+<dt>微调(Fine-tuning / SFT)</dt>
+<dd>用任务数据继续训练、更新模型参数(全参数或 PEFT/LoRA)。改的是模型的<strong>行为</strong>:风格、格式、特定能力。</dd>
+<dt>语义去重</dt>
+<dd>用句向量余弦相似度 $\cos(\theta)=\dfrac{\mathbf{e}_a\cdot\mathbf{e}_b}{\lVert\mathbf{e}_a\rVert\lVert\mathbf{e}_b\rVert}$ 判定「意思重复」的样本并合并,抓精确匹配抓不到的换句话重复。</dd>
+<dt>数据飞轮</dt>
+<dd>「上线→收集真实反馈→清洗回流→再训练」的自增强闭环,让系统随使用不断变好。</dd>
+</dl>
+
+<div class="implement">
+<p>语义去重的最小骨架(思路示意,阈值需按数据实测调):</p>
+<pre><code>import numpy as np
+
+def dedup_by_semantics(texts, embed_fn, threshold=0.9):
+    embs = embed_fn(texts)                       # [N, d]
+    embs = embs / np.linalg.norm(embs, axis=1, keepdims=True)
+    keep, kept_embs = [], []
+    for i, e in enumerate(embs):
+        # 与已保留样本的最大余弦相似度
+        if kept_embs and max(k @ e for k in kept_embs) >= threshold:
+            continue                             # 太像,视为重复,丢弃
+        keep.append(texts[i]); kept_embs.append(e)
+    return keep</code></pre>
+<p>注意:$N$ 大时两两比较是 $O(N^2)$,生产里会先用 ANN 索引(见第 0028 课)找近邻,再判阈值。</p>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「这个需求你微调还是 RAG?」——先拆「缺知识还是缺能力」;知识/时效/溯源→RAG,风格/格式/能力→微调,生产多为结合。别一上来就选边。</li>
+<li>「RAG 和微调各自成本花在哪?」——RAG 是索引维护 + 每次检索 + 长上下文;微调是前期数据 + 一次性算力(PEFT 压算力)。</li>
+<li>「微调数据从哪来?怎么保证质量?」——私域/标注/合成三路;立统一标注规范对齐多标注人,配正负样本。</li>
+<li>「怎么给数据去重?」——精确/近似(哈希、编辑距离)+ 语义去重(embedding 余弦相似度过阈值)。</li>
+<li>「上线后怎么持续变好?」——数据飞轮:线上反馈回流→清洗→再训。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把 RAG 和微调当成非此即彼的单选题——生产系统常常两者都用,答「结合」并说清各管一块才到位。</li>
+<li>指望「微调」来注入频繁变动的知识——知识一变就得重训,时效性场景应优先 RAG。</li>
+<li>去重只做精确匹配——换句话说的重复(语义重复)漏掉,仍会过拟合;必须补语义去重。</li>
+<li>盲目堆数据量——数据少 + 模型大易过拟合导致"变傻",但脏数据堆多更糟,质量优先于数量。</li>
+<li>忽视多标注人口径不一致——不统一规范,训练信号自相矛盾,越训越乱。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>业务要求「模型必须能回答每天更新的公司公告,并给出处链接」。最合适的首选方案是?</p>
+<details><summary>A. 全参数微调,把公告写进权重</summary>知识天天变,微调要反复重训,且难给出处,不合适。</details>
+<details><summary>B. RAG:把公告入库建索引,检索后拼上下文并附引用 ✅</summary>正确。时效强 + 需溯源正是 RAG 的主场,改文档即更新,还能天然给出处。</details>
+<details><summary>C. 只做 LoRA 微调,不用外部检索</summary>同样无法解决时效与溯源问题。</details>
+<details><summary>D. 增大上下文窗口,把所有公告全塞进 prompt</summary>公告量大且天天增,全塞不现实也贵,仍需检索筛选。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>下面哪种去重能抓到「怎么申请退款」和「退款要怎么操作」这类换句话说的重复?</p>
+<details><summary>A. 完全字符串相等去重</summary>两句字面不同,精确匹配抓不到。</details>
+<details><summary>B. MinHash / 编辑距离近似去重</summary>能抓字面接近的,但换了措辞、词序变化大时仍会漏。</details>
+<details><summary>C. 按样本长度分桶后去重</summary>长度相近不代表语义相同,无法判重。</details>
+<details><summary>D. 语义去重:句向量余弦相似度超阈值判重 ✅</summary>正确。embedding 表征语义,余弦相似度能识别措辞不同但意思一样的重复。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</strong>(Lewis et al., 2020)——RAG 的原始论文,理解「为什么知识类任务靠检索」。</li>
+<li><strong>LoRA: Low-Rank Adaptation of Large Language Models</strong>(Hu et al., 2021)——PEFT 主流方法,微调侧的成本为何能压下来看这里。</li>
+<li>去重方法可顺着 MinHash / LSH(近似去重)与句向量检索(语义去重)两条线深挖,和第 0028 课 ANN 索引连起来看。</li>
+<li>回顾:偏好训练的正负样本可接第 0022/0023 课(RLHF/DPO);RAG 检索优化见第 0028–0030 课。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>缺知识用 RAG(时效/私域/溯源),缺能力用微调(风格/格式/能力),生产多为结合;数据工程靠采集—去重(含语义)—统一标注—数据飞轮撑起来。</strong></p>
+<nav class="lesson-nav">
+<a href="0030-evaluation.html">← 上一课:大模型评估</a>
+<a href="../reference/cheatsheet.html">速查表 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

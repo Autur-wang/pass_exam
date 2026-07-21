@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>相等与哈希 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第六部分 · Python 机制与跨语言 · 第 0022 节</p>
+<h1>相等与哈希:<code>__eq__</code> 与 <code>__hash__</code> 契约</h1>
+<p class="lede">"自定义相等"是面试里最容易踩坑的一簇:很多人只重写了 <code>__eq__</code>,结果对象放进 <code>set</code> 就报错。这一节把 <code>__eq__</code> 和 <code>__hash__</code> 的成对契约讲透,让你既写得对,也答得清"为什么"。</p>
+
+<div class="recall">
+<p>还记得 0006 里 <code>is</code> 和 <code>==</code> 的区别吗?<code>is</code> 比的是<strong>身份</strong>(是不是同一个对象),<code>==</code> 比的是<strong>相等</strong>。可是——你自己写的类,默认的 <code>==</code> 其实就等价于 <code>is</code>。为什么?如果你想让两个 <code>x</code>、<code>y</code> 都相同的 <code>Point</code> 判为相等,又该动哪个方法?先在心里答一遍,再往下看。</p>
+</div>
+
+<h2>一、直觉:两张一模一样的名片</h2>
+
+<p>桌上放着两张印着相同姓名、相同电话的名片。它们是"同一张"吗?不是——它们是两个物理对象(<code>is</code> 为假)。但它们"内容相等"吗?是——因为你关心的字段都一样(<code>==</code> 应为真)。</p>
+
+<p>Python 默认只懂前一种判断:对你自定义的类,<code>a == b</code> 会退化成"<code>a</code> 和 <code>b</code> 是不是同一个对象",也就是和 <code>is</code> 一个意思。想让它懂"内容相等",你得亲手告诉它<strong>哪些字段算数</strong>——这就是重写 <code>__eq__</code>。</p>
+
+<p>可这里埋着一个连锁反应:<strong>一旦你改了"什么叫相等",哈希也必须跟着改</strong>。因为 <code>set</code> 和 <code>dict</code> 靠哈希把对象分桶存放,而哈希和相等之间有一条硬契约。Python 为了逼你别忘,干脆在你只改 <code>__eq__</code> 时,把哈希功能直接关掉。</p>
+
+<h2>二、默认相等,就是身份相等</h2>
+
+<p>所有类默认从 <code>object</code> 继承一套 <code>__eq__</code> 和 <code>__hash__</code>:前者按身份(<code>id</code>)比较,后者按 <code>id</code> 计算。所以两个"内容一样"的实例,默认既不相等、哈希也不同:</p>
+
+<pre><code>class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+a = Point(1, 2)
+b = Point(1, 2)
+print(a == b)      # False —— 默认 __eq__ 比身份,等价于 a is b
+print(hash(a) == hash(b))   # 几乎必为 False —— 默认哈希基于 id
+</code></pre>
+
+<p>此时对象<strong>是可哈希的</strong>(能进 <code>set</code>、能当 key),只是"相等"的语义还停留在身份层面。要升级到"内容相等",就重写 <code>__eq__</code>。</p>
+
+<h2>三、重写 <code>__eq__</code> 的隐藏代价:<code>__hash__</code> 被设为 <code>None</code></h2>
+
+<p>这是本节最高频的坑。规则是:<strong>如果一个类重写了 <code>__eq__</code> 却没有同时定义 <code>__hash__</code>,Python 会把这个类的 <code>__hash__</code> 设为 <code>None</code></strong>,于是它的实例变得 <em>unhashable</em>——不能进 <code>set</code>,不能当 <code>dict</code> 的 key。</p>
+
+<pre><code># ❌ 只重写了 __eq__,忘了 __hash__
+class BadPoint:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+
+    def __eq__(self, other):
+        return (self.x, self.y) == (other.x, other.y)
+    # 没有定义 __hash__ !
+
+print(BadPoint.__hash__ is None)   # True —— Python 悄悄把它关掉了
+p = BadPoint(1, 2)
+{p}          # TypeError: unhashable type: 'BadPoint'
+{p: "A"}     # 同样报错:不能当 dict 的 key
+</code></pre>
+
+<p>正确姿势是<strong>成对定义</strong>,并且让两者用<strong>同一组字段</strong>:</p>
+
+<pre><code># ✅ __eq__ 与 __hash__ 都基于同一个 (x, y) 元组,逻辑一致
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other):
+        if not isinstance(other, Point):
+            return NotImplemented      # 类型不匹配就交还给对方,别硬判 False
+        return (self.x, self.y) == (other.x, other.y)
+
+    def __hash__(self):
+        return hash((self.x, self.y))  # 复用内置元组的哈希,省心又正确
+
+a, b = Point(1, 2), Point(1, 2)
+print(a == b)               # True —— 内容相等
+print(hash(a) == hash(b))   # True —— 相等对象哈希必相等(契约!)
+print(len({a, b}))          # 1 —— set 认为它们是"同一个",去重成功
+</code></pre>
+
+<p>如果对象本就该"不可变 + 值语义",最省事的写法是 <code>@dataclass(frozen=True)</code>,它会<strong>自动</strong>为你生成一致的 <code>__eq__</code> 和 <code>__hash__</code>:</p>
+
+<pre><code>from dataclasses import dataclass
+
+@dataclass(frozen=True)           # frozen=True 让实例不可变
+class Point:
+    x: int
+    y: int
+    # __init__ / __repr__ / __eq__ / __hash__ 全部自动生成,且相互一致
+
+a, b = Point(1, 2), Point(1, 2)
+print(a == b, hash(a) == hash(b))   # True True
+</code></pre>
+
+<p>小心一个默认值:普通 <code>@dataclass</code>(即 <code>frozen=False</code>)只生成 <code>__eq__</code>,并把 <code>__hash__</code> 设为 <code>None</code>——和你手写只写 <code>__eq__</code> 是一个下场。<strong>要可哈希,就得 <code>frozen=True</code></strong>(或显式 <code>eq=False</code> 保留继承来的身份哈希)。</p>
+
+<div class="keydef">
+<dl>
+<dt>哈希契约(Hash Contract)· 三条铁律</dt>
+<dd><em>违反任何一条,<code>set</code>/<code>dict</code> 就会给你"查不到明明存进去的键"这类灵异 bug ↓</em></dd>
+<dt>① 相等 ⟹ 哈希相等</dt>
+<dd>若 <code>a == b</code>,则必须 <code>hash(a) == hash(b)</code>。<strong>反过来不要求</strong>:哈希相等不代表相等(允许哈希冲突,容器会再用 <code>==</code> 复核)。</dd>
+<dt>② 成对定义</dt>
+<dd>重写 <code>__eq__</code> 就要一并给出 <code>__hash__</code>,且二者基于<strong>同一组字段</strong>,逻辑一致。</dd>
+<dt>③ 生命周期内哈希不变</dt>
+<dd>一个对象只要还在被当作 key/成员,它的哈希就不能变。所以哈希应<strong>基于不可变字段</strong>——用作 key 的对象通常应当不可变。</dd>
+</dl>
+</div>
+
+<div class="interview">
+<p><strong>高频追问链(这一簇几乎必被连环追问):</strong></p>
+<ul>
+<li>"为什么我定义了 <code>__eq__</code> 之后,对象就不能放进 <code>set</code> 了?" → 因为 Python 把该类的 <code>__hash__</code> 自动设成了 <code>None</code>,逼你要么一并定义 <code>__hash__</code>,要么明确承认它不该被哈希。</li>
+<li>"相等的对象哈希一定相等吗?反过来呢?" → 正向必须成立(契约①);<strong>反向不成立</strong>——哈希相等只是"可能相等",容器还会用 <code>==</code> 再确认一次,这就是哈希冲突的正常处理。</li>
+<li>"为什么用作 <code>dict</code> key 的对象最好是不可变的?" → 因为哈希在生命周期内不能变(契约③);可变对象一旦改了参与哈希的字段,就会在容器里"丢失"。见下面易错点的现场演示。</li>
+<li>"<code>@dataclass</code> 默认会生成 <code>__hash__</code> 吗?" → <strong>不会</strong>。默认 <code>eq=True, frozen=False</code> 会把 <code>__hash__</code> 设为 <code>None</code>;加 <code>frozen=True</code> 才生成哈希。</li>
+<li>"<code>__eq__</code> 里为什么返回 <code>NotImplemented</code> 而不是 <code>False</code>?" → 让 Python 有机会去问对方的 <code>__eq__</code>(反射比较),比直接判 <code>False</code> 更正确、更可扩展。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:只重写 <code>__eq__</code>、忘了 <code>__hash__</code>。</strong>这是最高频的一题。后果不是"哈希用默认的",而是对象<strong>直接变 unhashable</strong>——放进 <code>set</code> 或当 <code>dict</code> key 立刻 <code>TypeError</code>。记牢:改相等,就成对改哈希。</p>
+<p><strong>坑二:拿"可变对象"当 <code>dict</code> key,之后又改了它。</strong>看现场:</p>
+<pre><code># 假设 Point 是"可变的 + 基于 (x,y) 哈希"(反面教材)
+p = Point(1, 2)
+d = {p: "A"}
+p.x = 99             # 改了参与哈希的字段 → 哈希变了!
+print(d[p])          # KeyError! 键还躺在旧哈希对应的桶里,新哈希找不到它
+</code></pre>
+<p>这正是"哈希在生命周期内必须不变"被违反的样子。<code>frozen=True</code> 从根上堵住它——你根本改不了 <code>p.x</code>。</p>
+<p><strong>坑三:<code>__eq__</code> 与 <code>__hash__</code> 用了不同字段(逻辑不一致)。</strong>比如相等只看 <code>x</code>、哈希却算 <code>(x, y)</code>,会造出"两个相等的对象哈希不同"的怪物,直接违反契约①,<code>set</code> 去重失败、<code>dict</code> 时灵时不灵。两者必须咬合同一组字段。</p>
+</div>
+
+<div class="crosslang">
+<p>这条契约<strong>不是 Python 独有的</strong>,而是所有"用哈希表做集合/字典"的语言共有的经典陷阱题——Java 尤其爱考:</p>
+<table>
+<tr><th>语言</th><th>相等方法</th><th>哈希方法</th><th>契约要点</th></tr>
+<tr><td><strong>Python</strong></td><td><code>__eq__</code></td><td><code>__hash__</code></td><td>成对重写;相等 ⟹ 哈希相等;只写 <code>__eq__</code> → 实例 unhashable</td></tr>
+<tr><td><strong>Java</strong></td><td><code>equals()</code></td><td><code>hashCode()</code></td><td>必须成对重写;<code>a.equals(b)</code> ⟹ <code>a.hashCode()==b.hashCode()</code>,否则 <code>HashMap</code>/<code>HashSet</code> 出错</td></tr>
+<tr><td><strong>C#</strong></td><td><code>Equals()</code></td><td><code>GetHashCode()</code></td><td>同构契约;重写 <code>Equals</code> 就应重写 <code>GetHashCode</code></td></tr>
+</table>
+<p>一句话记牢:<strong>"改了相等,就必须改哈希"是跨语言通用的铁律。</strong>Java 里若只重写 <code>equals()</code> 而不改 <code>hashCode()</code>,对象照样能编译能运行,但放进 <code>HashSet</code> 会"存得进、找不着"——比 Python 直接抛 <code>TypeError</code> 还阴险,因为它是静默出错。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写一个 <code>Money</code> 值对象(表示"金额 + 币种"):</p>
+<ul>
+<li>字段 <code>amount</code>(整数,单位分)与 <code>currency</code>(字符串,如 "CNY")。</li>
+<li>两个 <code>Money</code> 当且仅当 <code>amount</code> 和 <code>currency</code> 都相同才 <code>==</code>。</li>
+<li>正确实现 <code>__hash__</code>,让它能进 <code>set</code>、能当 <code>dict</code> key。</li>
+<li>自测:<code>len({Money(100,"CNY"), Money(100,"CNY")})</code> 应为 <code>1</code>;<code>Money(100,"CNY") == Money(100,"USD")</code> 应为 <code>False</code>。</li>
+</ul>
+<p>写完再想一个问题:你会不会给 <code>amount</code> 加一个 setter 允许改金额?若允许,它还适合当 <code>dict</code> key 吗?(提示:契约③。)最省事的收尾——把它整个换成 <code>@dataclass(frozen=True)</code>,对比你手写的版本。</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:一个类<strong>只</strong>重写了 <code>__eq__</code>,没有定义 <code>__hash__</code>。下面哪种说法最准确?</summary>
+<div class="answer">
+<p><strong>答案:该类的实例变成 unhashable——放进 <code>set</code> 或当作 <code>dict</code> 的 key 会抛 <code>TypeError</code>。</strong></p>
+<p>常见错误答案是"哈希会退回用默认(基于 <code>id</code>)的实现"。恰恰相反:Python 检测到你重写了 <code>__eq__</code> 却没给 <code>__hash__</code>,会主动把该类的 <code>__hash__</code> 设为 <code>None</code>。这么设计是为了阻止你造出"两个相等的对象哈希却不同"的破契约对象——它宁可让你早早撞上 <code>TypeError</code>,也不放你埋下 <code>set</code>/<code>dict</code> 的隐性 bug。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:判断对错——"如果 <code>hash(a) == hash(b)</code>,那么 <code>a == b</code> 一定成立。"</summary>
+<div class="answer">
+<p><strong>错。</strong>契约只要求单向:<code>a == b</code> ⟹ <code>hash(a) == hash(b)</code>。反方向不成立——不同的对象完全可能撞上相同的哈希值,这叫<strong>哈希冲突</strong>,是被允许且必然会发生的(哈希把无穷多的对象映射到有限的整数区间)。所以容器拿哈希只是"快速定位到桶",桶内还会用 <code>==</code> 逐一复核。正因如此,<code>__hash__</code> 可以偶尔"偷懒"返回粗糙的值(顶多降低性能),但 <code>__eq__</code> 必须精确。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>改了"相等"就必须成对改"哈希",且二者基于同一组字段——相等的对象哈希必相等(反之不要求,允许冲突),可哈希对象的哈希在生命周期内不能变(所以 key 通常应不可变)。Python 里只写 <code>__eq__</code> 会让实例 unhashable;想省事就用 <code>@dataclass(frozen=True)</code> 自动生成一致的一对。这条契约在 Java 的 <code>equals()</code>/<code>hashCode()</code> 上完全同构。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>canon(权威锚定):</strong>本节属 canon,锚定 Python 官方 Data Model,不来自课程 README 源题。核心规则(重写 <code>__eq__</code> 不给 <code>__hash__</code> 则 <code>__hash__</code> 置 <code>None</code>、相等对象哈希必相等、哈希生命周期内不变)全部出自 <a href="https://docs.python.org/3/reference/datamodel.html#object.__hash__">Python Data Model · <code>object.__hash__</code></a> 与 <a href="https://docs.python.org/3/reference/datamodel.html#object.__eq__"><code>object.__eq__</code></a>;<code>@dataclass</code> 生成 <code>__hash__</code> 的默认行为见 <a href="https://docs.python.org/3/library/dataclasses.html">dataclasses 官方文档</a>。</li>
+<li><strong>跨语言对照(canon):</strong>Java 的同构契约见 <a href="https://docs.oracle.com/javase/8/docs/api/java/lang/Object.html#hashCode--">Oracle Java 文档 · <code>Object.hashCode()</code></a>(其中明确"equals 相等则 hashCode 必相等")。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想要我用 ELI5 再讲一遍"为什么哈希冲突是被允许的"、或者把你写的 <code>Money</code> 代码拿来评一评契约有没有咬合,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节把"可变 vs 不可变"这条暗线正式摊开——值语义、引用语义与可变性,正是决定"一个对象该不该当 key、该不该 frozen"的底层判据。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0021-duck-typing-abc-protocol.html"><span class="dir">← 上一课</span>0021 · 鸭子类型、ABC 与 Protocol</a>
+<a class="next" href="0023-value-reference-mutability.html"><span class="dir">下一课 →</span>0023 · 值语义、引用语义与可变性</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

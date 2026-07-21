@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0012 · 对齐:RLHF、DPO、GRPO 与灾难性遗忘</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第四部分 微调与对齐 · 第 0012 课</p>
+<h1>对齐:RLHF、DPO、GRPO 与灾难性遗忘</h1>
+<p class="lede">这节课把「对齐」这条面试主线一次讲透,答清四组真实题:<strong>「什么是 RLHF、怎么用?」「怎么把 RL 融入 LLM 训练、选损失函数难在哪?」「RLHF / DPO / ORPO 各是什么、举个例子」「什么是灾难性遗忘、迁移微调怎么才不丢旧知识?」</strong>(源:60 题·LLM 第 10、11、14、17 题;微调 101·对齐段)。目标:让你既能背出 RLHF 三段式,也能说清 DPO 为什么更简单、GRPO 新在哪,还能给出防遗忘的一整套手段。</p>
+
+<div class="recall">
+<p>上一课(0011)我们讲了微调与 PEFT:用 LoRA/QLoRA 让模型学会「新任务的形状」。但会做题不等于会做人——模型可能既准确又冒犯、既流畅又胡说。<strong>先别往下看:如果你手里已经有一个能对话的基座模型,却总在语气、安全、拒答上不合人心,你会怎么「教它做人」?监督微调(给标准答案)够吗?</strong></p>
+</div>
+
+<h2>一、RLHF:用人类偏好当奖励信号</h2>
+<p>监督微调需要「标准答案」,但「哪个回答更礼貌、更有帮助、更安全」这种事,人往往<strong>说不出标准答案,却一眼能比出高下</strong>。RLHF(Reinforcement Learning from Human Feedback,基于人类反馈的强化学习)的核心思路就是:<strong>不要标准答案,只要人类在两个回答之间的偏好排序</strong>,再把这种偏好变成可优化的奖励信号。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">① 预训练 / SFT<br>得到基座策略</div>
+  <div class="arrow">→</div>
+  <div class="node">② 收集人类偏好<br>对同一 prompt 的多个回答排序/打分</div>
+  <div class="arrow">→</div>
+  <div class="node">③ 训奖励模型 RM<br>偏好 → 标量奖励</div>
+  <div class="arrow">→</div>
+  <div class="node good">④ RL(常用 PPO)微调策略<br>让高奖励回答更常出现</div>
+</div>
+<figcaption>RLHF 经典三段式:SFT 打底 → 奖励建模 → 强化学习优化策略。奖励模型是「人类偏好的可微替身」。</figcaption>
+</figure>
+
+<p>拆开看这四步在干什么:</p>
+<ul>
+<li><strong>基座策略</strong>:一个已经会说话的语言模型(通常先做一轮指令 SFT),它就是 RL 里要优化的「策略」(policy)。</li>
+<li><strong>收集偏好</strong>:让模型对同一个 prompt 采样多个回答,请标注员排序或两两比较——「A 比 B 更好」。这比写标准答案便宜、也更贴近真实价值判断。</li>
+<li><strong>奖励模型(RM)</strong>:用这些偏好对训练一个模型,输入(prompt, 回答),输出一个标量分数,使被人选中的回答分更高。它把离散的人类偏好,变成 RL 能用的<strong>连续奖励</strong>。</li>
+<li><strong>策略优化</strong>:用 RM 给出的奖励,通过强化学习(最常见是 PPO,Proximal Policy Optimization)更新语言模型,使它更倾向于产出高奖励的回答。</li>
+</ul>
+<p>一句话:<strong>RLHF 让模型的输出对齐人类偏好、价值与伦理</strong>——这正是把「能续写的模型」调成「能好好对话、少偏见、更安全」的助手的关键一步。</p>
+
+<h2>二、把 RL 塞进 LLM 训练,难在哪?</h2>
+<p>面试爱追这一层,因为它区分「背过流程」和「真懂 RL」。整件事可以压成两个动作,每个动作都有坑:</p>
+
+<dl class="keydef">
+<dt>奖励建模(Reward Modeling)</dt>
+<dd>按任务标准,用人类标注的偏好训练奖励模型,把「什么是好回答」编码成标量奖励。<em>坑:奖励函数要<strong>全面</strong>——只奖励「答得长」「语气热情」这类容易度量的表面特征,模型就会去钻这个空子,而不是真的答得更好。</em></dd>
+<dt>策略优化(Policy Optimization)</dt>
+<dd>用奖励模型给出的梯度信号微调 LLM。<em>坑:语言生成里奖励往往<strong>稀疏、延迟</strong>(整段生成完才给一个分),梯度估计方差大、训练不稳,容易崩。</em></dd>
+</dl>
+
+<p>把「选损失函数/训练目标的挑战」显式列出来,面试答这三条足够有层次:</p>
+<ul>
+<li><strong>定义好的奖励很难</strong>:奖励要覆盖有用、诚实、无害等多个维度,还不能引入偏见或可被利用的捷径。定歪了,模型就学歪了。</li>
+<li><strong>高方差、不稳定</strong>:稀疏/延迟奖励下梯度难以准确估计,训练过程震荡;PPO 用「裁剪 + 参考模型 KL 约束」来压住策略每步别更新太猛。</li>
+<li><strong>reward shaping 与长期目标对齐</strong>:要防止模型为了眼前分数做<strong>表面优化</strong>——即 <em>reward hacking</em>(奖励作弊):讨好奖励模型的漏洞,而非真正变好。这是对齐里最经典的失败模式。</li>
+</ul>
+<p class="formula-note">PPO 的目标里那一项 $-\beta\,\mathrm{KL}\!\big(\pi_\theta \,\Vert\, \pi_{\text{ref}}\big)$,作用就是「别为了追奖励跑得离原模型太远」——奖励涨太猛往往是作弊的信号,而不是真变好。</p>
+
+<h2>三、DPO 与 GRPO:把「RL 那一坨」简化掉</h2>
+<p>RLHF 的痛点很实在:要单独训一个奖励模型,再套一整个 RL 循环(采样、打分、PPO 更新、KL 约束……),工程复杂、超参敏感、容易训崩。于是有了更轻的替代路线。</p>
+
+<div class="trio">
+  <div class="cell"><strong>RLHF</strong><br>经典三段式<br><em>SFT → 奖励模型 → RL(PPO)</em><br>强,但重、易不稳</div>
+  <div class="cell"><strong>DPO</strong><br>去掉奖励模型<br><em>直接在偏好对上做分类式优化</em><br>更简单、更稳</div>
+  <div class="cell"><strong>GRPO</strong><br>组内相对比较<br><em>让模型和自己的多个输出比高下</em><br>面向可验证奖励</div>
+</div>
+
+<h3>DPO(Direct Preference Optimization,直接偏好优化)</h3>
+<p>DPO 的洞见:<strong>既然最终目的是让模型偏向「被选中的回答」、远离「被拒绝的回答」,那何必绕道去先训一个奖励模型、再跑 RL?</strong>DPO 用数学把「奖励最大化 + KL 约束」这个 RL 目标,等价改写成一个<strong>直接作用在策略上的、分类式的监督损失</strong>——奖励模型被「隐式」吸收进策略本身,不用再单独训。</p>
+
+<dl class="keydef">
+<dt>DPO 损失(直觉版)</dt>
+<dd>$$\mathcal{L}_{\text{DPO}}=-\,\mathbb{E}_{(x,\,y_w,\,y_l)}\Big[\log\sigma\big(\beta\,r_\theta(x,y_w)-\beta\,r_\theta(x,y_l)\big)\Big],\quad r_\theta(x,y)=\log\frac{\pi_\theta(y\mid x)}{\pi_{\text{ref}}(y\mid x)}$$</dd>
+<dd><em>$y_w$ 是被选中(win)的回答,$y_l$ 是被拒绝(lose)的回答,$\pi_{\text{ref}}$ 是参考模型(通常是 SFT 后的基座)。$r_\theta$ 是「策略相对参考模型的对数似然比」,充当隐式奖励。整条式子就是:让选中回答的隐式奖励高于被拒回答——一个带温度 $\beta$ 的成对分类。</em></dd>
+</dl>
+<p>例子(微调 101):新闻摘要里,人偏好「短摘要」而非「长摘要」,直接把 (短, 长) 当作 (win, lose) 偏好对喂给 DPO 即可。<strong>ORPO</strong>(Odds Ratio Preference Optimization,赔率比偏好优化)更进一步,把<strong>任务学习和偏好对齐合成一步</strong>做,例子是「既准确又简洁的文章摘要」。</p>
+
+<h3>GRPO(Group Relative Policy Optimization,组内相对策略优化)</h3>
+<p>GRPO 我们上课(RL/推理那一节)提过:它让模型对同一个问题<strong>采样一组回答,用组内的相对好坏(相对平均水平)当作优势信号</strong>,省掉了 PPO 里那个额外的价值网络(critic)。它特别适合<strong>可验证奖励</strong>的场景——比如数学题、代码,对错能自动判定,不必依赖人训的奖励模型。微调 101 的例子:数学辅导 App 从多个解法里挑最好的那个。</p>
+
+<div class="keydef">
+<dt>三句话记牢对答区别</dt>
+<dd><strong>RLHF</strong> = 经典三段式(奖励模型 + RL);<strong>DPO</strong> = 去掉奖励模型,直接在偏好对上优化;<strong>GRPO</strong> = 组内相对比较,面向可验证奖励。</dd>
+</div>
+
+<h2>四、灾难性遗忘:学新的,别丢旧的</h2>
+<p>换个战场。你拿一个通用大模型去做领域微调,结果它学会了医学术语,却「忘」了怎么正常聊天、甚至基础常识都退化了——这就是<strong>灾难性遗忘</strong>(catastrophic forgetting)。</p>
+
+<dl class="keydef">
+<dt>灾难性遗忘(Catastrophic Forgetting)</dt>
+<dd>模型在学习新知识/新任务时会调整权重,而这些调整可能<strong>无意中覆盖掉承载旧知识的权重</strong>,导致旧能力显著退化。小数据 + 大幅更新全部参数时尤其严重。</dd>
+</dl>
+
+<p>缓解手段(也正好是 60 题第 14 题「迁移微调如何有效知识转移」的答案骨架):</p>
+<ul>
+<li><strong>gradual unfreezing(逐步解冻)</strong>:一开始冻住大部分层,只更新最后几层(离输出近、最需适配任务),再一层层往浅处解冻。让底层通用表示先稳住,不被新数据一下冲垮。</li>
+<li><strong>differential learning rate(分层差异学习率)</strong>:浅层(通用特征)用<strong>小</strong>学习率、深层(任务相关)用<strong>大</strong>学习率——动通用的要轻,动专用的可重。</li>
+<li><strong>领域继续预训练</strong>:先在领域无标注语料上继续预训练打底,再做任务微调,过渡更平滑。</li>
+<li><strong>任务特定头(task-specific head)</strong>:主干尽量少动,主要训练新加的输出头,保护主干里的通用知识。</li>
+<li><strong>正则与回放</strong>:dropout、label smoothing、weight decay 防小数据过拟合;混入少量旧任务/通用数据一起训(回放),提醒模型别忘本。</li>
+<li><strong>数据增强</strong>:扩充小样本的多样性,降低模型死记硬背新数据、挤掉旧知识的风险。</li>
+</ul>
+<p class="formula-note">一句话串起来:<strong>「冻 + 分层小步动 + 掺旧数据 + 正则」</strong>——四件事都在做同一件事:限制权重被新任务改动的幅度和范围。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「RLHF 为什么要单独一个奖励模型,不能直接用人打分做 RL 吗?」——人无法在线为百万次采样实时打分,RM 是人类偏好的可微、可批量替身。</li>
+<li>「PPO 里那个 KL 约束/参考模型是干嘛的?」——防止策略为追奖励跑偏(reward hacking),把更新限制在参考模型附近。</li>
+<li>「DPO 相比 RLHF 省了什么、代价是什么?」——省掉奖励模型和 RL 循环,更稳更省工程;但它依赖成对偏好数据,且隐式奖励表达力不一定完全等同显式 RM。别答成「DPO 全面碾压 RLHF」。</li>
+<li>「GRPO 和 PPO 的关键差别?」——GRPO 用组内相对优势替代单独的价值网络,尤其契合可验证奖励(数学/代码)。</li>
+<li>「reward hacking 举个例子?」——模型发现「答得越长/越自信」奖励越高,就一味堆砌,而非真正答得更对。</li>
+<li>「微调导致遗忘,你线上怎么发现、怎么救?」——保留通用能力评测集做回归;用 gradual unfreezing、分层学习率、回放旧数据、必要时改走 LoRA(只动少量参数,天然更抗遗忘)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞是面试扣分点):</strong></p>
+<ul>
+<li>别说「DPO 一定比 RLHF 好/更强」。DPO 更简单更稳、省掉 RL 循环,但依赖高质量成对偏好数据;两者是<strong>权衡</strong>而非替代,资源与数据形态不同,选择不同(微调 101 就按资源给了不同推荐)。</li>
+<li>别把奖励模型和策略混为一谈:<strong>奖励模型</strong>只打分,<strong>策略</strong>才是最终要用的语言模型;RLHF 是用前者的分去更新后者。</li>
+<li>别说「RLHF 让模型绝对安全/无偏见」。它只是让输出<strong>更</strong>对齐偏好,残余偏见、越狱、reward hacking 依旧存在。</li>
+<li>PPO 里的 KL 约束不是可有可无的正则细节——去掉它,策略极易钻奖励模型漏洞而整体崩坏。</li>
+<li>别说「灾难性遗忘能被彻底解决」。上面的手段是<strong>缓解</strong>,是限制改动幅度的权衡,不是消灭。</li>
+<li>gradual unfreezing 是「先解冻靠近输出的深层、再往浅层」;别记反成「先动底层」。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>相比经典 RLHF,DPO 最核心的简化是什么?</p>
+<details><summary>A. 用更大的学习率,所以训练更快</summary>与学习率无关,DPO 的价值在于流程简化。</details>
+<details><summary>B. 去掉了单独训练的奖励模型和 RL 循环,直接在偏好对上做分类式优化 ✅</summary>正确。DPO 把「奖励最大化 + KL 约束」等价改写成对策略的监督损失,奖励被隐式吸收,更简单也更稳。</details>
+<details><summary>C. 不再需要任何人类偏好数据</summary>恰恰相反,DPO 仍然依赖成对偏好数据(选中/拒绝)。</details>
+<details><summary>D. 把语言模型换成了纯监督分类器,不再生成文本</summary>不对,优化的仍是同一个生成式策略模型。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>做领域微调时最担心灾难性遗忘,下面哪个组合最对症?</p>
+<details><summary>A. 用最大学习率一次性更新全部参数,尽快拟合新数据</summary>这恰恰是最容易触发遗忘的做法——大幅全参更新会覆盖旧知识。</details>
+<details><summary>B. gradual unfreezing + 分层差异学习率 + 掺入旧/通用数据回放 + 正则 ✅</summary>正确。四招都在限制权重被新任务改动的幅度与范围,从而保住旧能力。</details>
+<details><summary>C. 只增大 batch size</summary>与遗忘无直接关系,治标不治本。</details>
+<details><summary>D. 把奖励模型的分数当作正则项加进去</summary>奖励模型属于对齐(RLHF),不是缓解遗忘的手段,张冠李戴。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>InstructGPT</strong>(Ouyang et al., 2022, <em>Training language models to follow instructions with human feedback</em>)——把 RLHF 三段式(SFT → 奖励模型 → PPO)用于大模型的代表作,本课流程图即此范式。</li>
+<li><strong>PPO</strong>(Schulman et al., 2017, <em>Proximal Policy Optimization Algorithms</em>)——RLHF 里最常用的策略优化算法,理解裁剪与 KL 约束看这篇。</li>
+<li><strong>DPO</strong>(Rafailov et al., 2023, <em>Direct Preference Optimization: Your Language Model is Secretly a Reward Model</em>)——本课 DPO 损失的出处,讲清了「隐式奖励」这层等价。</li>
+<li>本仓库 <code>resources/fine_tuning_101.md</code> 的对齐段:RLHF / DPO / ORPO / GRPO 的概念、例子与「按资源选方法」的选择矩阵。</li>
+<li>下一步:对齐之外,知识该「训进权重」还是「查外部」?见第 0013 课 RAG vs 微调 vs 长上下文。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>RLHF = SFT→奖励模型→PPO(靠 KL 约束防作弊);DPO = 去奖励模型、直接在偏好对上优化;GRPO = 组内相对 + 可验证奖励;防遗忘 = 冻层 + 分层小学习率 + 回放 + 正则。</strong></p>
+<nav class="lesson-nav">
+<a href="0011-fine-tuning-and-peft.html">← 上一课:微调与 PEFT</a>
+<a class="next" href="0013-rag-vs-finetuning.html">下一课:RAG vs 微调 vs 长上下文 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

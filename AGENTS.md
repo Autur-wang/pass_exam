@@ -4,19 +4,19 @@
 
 ## 项目定位
 
-这是一个《操作系统》期末冲刺学习工作区，不是传统软件工程仓库。AI 的主要职责是帮助学习者在短时间内理解第 1–8 章核心概念、掌握常考题型，并维护可持续复习的资料结构。
+这是一个**多学科的考试 / 面试备考教学工作区**，不是传统软件工程仓库。它起源于《操作系统》期末复习，现已扩展为覆盖多门学校考试课（操作系统、数据结构与算法、多媒体系统导论、面向对象高级编程等）与多个面试方向（编程 / 前端 / 大模型算法 / 生成式 AI / 工程领导力 / OOP、Agent 开发）的教学平台。AI 的主要职责是：针对**当前任务所属的那一门课**，帮助学习者理解核心概念、掌握常考题型，并维护可持续复习的资料结构（HTML 微课、学习记录、术语表、题库）。各板块清单见 `README.md`。
 
 ## 必读上下文
 
-开始任何实质工作前，至少阅读：
+开始任何实质工作前，先确认任务属于**哪门课**，再至少阅读该课的：
 
-1. `README.md`
-2. `operating_systems/teach/MISSION.md`
-3. `operating_systems/teach/NOTES.md`
-4. 最新的 `operating_systems/learning-records/*.md`
-5. 当前任务相关的 `operating_systems/textbook/` 章节、术语表或算法速查表
+1. `README.md`（全仓库板块地图）
+2. 该课的 `teach/MISSION.md`（或课程根 `MISSION.md`）
+3. 该课的 `teach/NOTES.md`
+4. 该课最新的 `learning-records/*.md`
+5. 当前任务相关的教材章节、术语表或速查表
 
-如果任务涉及生成题目、课程或复盘，必须参考 `operating_systems/LEARNING-RECORD-FORMAT.md`、`MISSION-FORMAT.md` 等格式文件。
+如果任务涉及生成题目、课程或复盘，必须参考**该课** `teach/` 下的 `LEARNING-RECORD-FORMAT.md`、`MISSION-FORMAT.md` 等格式文件（每门课都有一套同构的 `*-FORMAT.md` 模板）。
 
 ## 教学原则
 
@@ -30,41 +30,38 @@
 
 ## 内容优先级
 
-优先级从高到低：
+在**任一门课内**，优先级从高到低：
 
-1. 老师已讲章节与作业题
-2. `operating_systems/teach/MISSION.md` 中确认的考试目标
-3. `operating_systems/` 中已有整理和作业
-4. 汤小丹教材知识库
-5. 408/王道等外部高频考点
-6. `reference/egos-2000/` 的实现细节
+1. 老师已讲章节与作业 / 真题
+2. 该课 `teach/MISSION.md` 中确认的考试 / 学习目标
+3. 该课已有的整理、微课与学习记录
+4. 该课引用的教材 / 书籍知识库
+5. 外部拔高材料（如操作系统的 408 / 王道）——只能作参考，不得反客为主
 
-注意：本项目是学校自命题期末复习，408 材料只能作为参考，不得反客为主。
+以操作系统为例：学校自命题期末为主，408 材料仅参考；`reference/xv6-riscv-20230207/` 的实现细节优先级最低，默认只读。
 
 ## 文件维护规则
 
 ### 可以新增或更新
 
-- `README.md`
-- `AGENTS.md`
-- `workflow/*.md`
-- `operating_systems/learning-records/*.md`
-- `operating_systems/lessons/*.html`
-- `operating_systems/reference/*`
-- 与教材整理相关的 markdown 文件
+- `README.md`、`AGENTS.md`、`CLAUDE.md`、`workflow/*.md`
+- 各课程下的 `learning-records/*.md`
+- 各课程下的 `lessons/*.html`
+- 各课程 `teach/` 下的 `MISSION.md`/`NOTES.md`/`GLOSSARY.md`/`RESOURCES.md` 等状态文件
+- 各课程 `reference/`、与教材整理相关的 markdown 文件
 
 ### 谨慎修改
 
-- `operating_systems/textbook/` 下的原始教材和课件：通常只读，不修改。
-- `reference/egos-2000/`：第三方参考代码，除非用户明确要求，不修改。
-- `.agent`、`.claude`：旧式 AI 提示，可参考但不要随意重写。
-- `skills/ExamPass-Assistant/`、`skills/book-to-skill/`：独立工具技能，除非任务要求维护这些工具，否则不改。
+- 各课程 `textbook/`、`原始资料/` 下的原始教材、课件、PDF：通常只读，不修改。
+- `reference/xv6-riscv-20230207/`、`agent开发/原始资料/`、`book-to-skill/` 等克隆的第三方代码 / 仓库：除非用户明确要求，不修改。
+- `skills/`（`teach-you`/`grill-me`/`caveman`）、各课程 `teach/` 下的 `*-FORMAT.md` 模板：属工具 / 模板，除非任务要求维护，否则不改。
+- `个人情况与简历/` 下的目录目前是**空占位**（内容未落盘），其 `AGENTS.md` 的项目描述尚未对应磁盘现实——改动前先与用户确认。
 
 ## 新增课程规范
 
 新增 HTML 课程时：
 
-- 放在 `operating_systems/lessons/`。
+- 放在**对应课程**的 `lessons/` 目录（如 `operating_systems/lessons/`、`面试/编程面试大全/teach/lessons/`）。
 - 命名为 `NNNN-dash-case-topic.html`，编号递增。
 - 一节课只讲一个窄主题。
 - 必须包含：直觉类比、关键定义、小表格、至少 1 道自测题、答案解释。
@@ -75,10 +72,10 @@
 
 新增学习记录时：
 
-- 放在 `operating_systems/learning-records/`。
+- 放在**对应课程**的 `learning-records/` 目录。
 - 命名为 `NNNN-dash-case-topic.md`，编号递增。
 - 记录用户反馈、错因、下一步教学策略，而不是流水账。
-- 若改变学习路线或任务目标，必须同步考虑更新 `operating_systems/teach/MISSION.md`。
+- 若改变学习路线或任务目标，必须同步考虑更新该课程的 `teach/MISSION.md`。
 
 ## 语言和风格
 
@@ -93,8 +90,8 @@
 
 完成任务前检查：
 
-- 是否服务 `MISSION.md` 的期末目标？
-- 是否考虑了学习者零基础状态？
-- 是否避免了 408/实现细节过度展开？
+- 是否服务当前课程 `teach/MISSION.md` 的目标？
+- 是否考虑了学习者在该课的实际水平（多为应试 / 面试冲刺，部分接近零基础）？
+- 是否避免了外部拔高 / 实现细节过度展开？
 - 是否更新了必要的学习记录或索引？
-- 是否没有误改原始教材、第三方代码或旧提示文件？
+- 是否没有误改原始教材、第三方代码或模板文件？

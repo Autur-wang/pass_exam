@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0021 · RAG 全流程与「为什么要 RAG」</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第六部分 RAG 与知识库 · 第 0021 课</p>
+<h1>RAG 全流程与「为什么要 RAG」</h1>
+<p class="lede">大模型有两个先天缺陷:它<strong>不知道训练截止之后的事</strong>,也<strong>不知道你公司内网里的事</strong>,而且一旦不知道,它还会<strong>一本正经地编</strong>。RAG(Retrieval-Augmented Generation,检索增强生成)就是给模型外挂一个可随时更新、可溯源的「资料库」,让它<em>先查再答</em>。这节课把整条链路一次性走通——从一份 PDF 到一句带出处的回答,中间每一步会出什么问题——这几乎是所有 RAG 面试的开场必答题。</p>
+
+<div class="recall">
+<p>上一课(DPO / GRPO / GSPO)讲的是<strong>对齐</strong>:让模型「更会说话、更听话」。但对齐改变不了一个事实——模型的知识被冻结在训练那一刻。<strong>先别往下看:如果老板要求模型准确回答「我们公司上周五发布的报销新规」,你会去重新训练模型,还是有更划算的办法?</strong></p>
+</div>
+
+<h2>一、为什么要 RAG:四个动机 + 一个成本账</h2>
+<p>把 RAG 想成开卷考试。闭卷(纯参数记忆)靠死记硬背,记错了就瞎编;开卷是<strong>带着资料进考场,答题前先翻到对应那一页,照着写</strong>。RAG 解决的正是「让模型在答题前翻到对的那一页」。它主要治四种病:</p>
+
+<div class="trio">
+  <div class="cell"><strong>知识时效</strong><br>参数知识冻结在训练截止日<br><em>外挂库随时增删,不必重训</em></div>
+  <div class="cell"><strong>私域知识</strong><br>内网文档、产品手册模型没见过<br><em>放进检索库即可被引用</em></div>
+  <div class="cell"><strong>降幻觉 + 可溯源</strong><br>不知道就爱编、无法追责<br><em>答案挂上原文出处,可核对</em></div>
+</div>
+
+<p>第四个动机是<strong>成本</strong>,也是面试高频对比点。当目标是「让模型掌握一批会频繁变动的<em>事实</em>」时:</p>
+<ul>
+<li><strong>微调(改参数)</strong>:知识每变一次就要重新准备数据、重新训练、重新评测、重新部署;而且往模型里「灌事实」还容易带来遗忘和新的幻觉。</li>
+<li><strong>RAG(改上下文)</strong>:知识变了,只需更新检索库里的文档,模型权重一动不动。改一条规章 = 改一个文件。</li>
+</ul>
+<p>所以经验法则是:<strong>「教模型新知识」优先 RAG,「教模型新行为/新风格/新格式」才考虑微调。</strong>两者边界这节先点到,细讲留到第 0031 课。</p>
+
+<h2>二、基础链路:一份 PDF 是怎么变成一句带出处的回答的</h2>
+<p>整条链路分成两个时段。<strong>离线</strong>(建库,只做一次或定期做)把文档灌进向量库;<strong>在线</strong>(每次提问)把问题变成检索、再拼进 prompt 交给模型。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">文档<br>PDF / 网页 / DB</div>
+  <div class="node">解析 &amp; 清洗<br>抽文本 + 存元数据</div>
+  <div class="node">分块<br>Chunking</div>
+  <div class="node">向量化<br>Embedding</div>
+  <div class="node good">建索引<br>向量库(ANN)</div>
+</div>
+<figcaption>离线建库:文档 → 文本 → 小块 → 向量 → 索引。上面这条线只在文档变化时跑。</figcaption>
+</figure>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">用户问题</div>
+  <div class="node">查询理解<br>改写 / 分解</div>
+  <div class="node">检索召回<br>向量 + BM25</div>
+  <div class="node">重排<br>Rerank(精排)</div>
+  <div class="node">拼进 Prompt<br>问题 + 命中片段</div>
+  <div class="node good">LLM 生成<br>带出处的回答</div>
+</div>
+<figcaption>在线问答:问题 → 检索 → 重排 → 拼上下文 → 生成。命中的片段被塞进 prompt,模型「照着答」。</figcaption>
+</figure>
+
+<p>逐环节说明,以及<strong>每一步最容易翻车的地方</strong>(面试官爱顺着链路一路追问):</p>
+<table>
+<thead><tr><th>环节</th><th>做什么</th><th>典型问题(出错点)</th></tr></thead>
+<tbody>
+<tr><td>解析 / 清洗</td><td>从 PDF/HTML 抽出干净文本,记录文件名、页码、来源、日期等元数据</td><td>表格 / 多栏 / 扫描件抽错,导航栏噪声混入</td></tr>
+<tr><td>分块 Chunking</td><td>把长文切成检索单位(chunk)</td><td>切太碎丢上下文,切太大稀释语义、还挤爆窗口</td></tr>
+<tr><td>向量化 Embedding</td><td>每块编码成一个稠密向量</td><td>Embedding 模型与领域/语言不匹配,相似≠相关</td></tr>
+<tr><td>建索引</td><td>用 ANN 结构(HNSW / IVF / PQ)存向量,支持近似最近邻查询</td><td>召回率 vs 速度/内存的取舍没调好</td></tr>
+<tr><td>检索召回</td><td>把问题也编码,取 Top-K 最相近的块</td><td>只用向量,漏掉靠关键词/专有名词才能命中的块</td></tr>
+<tr><td>重排 Rerank</td><td>用更强的 Cross-Encoder 对候选精排,选出最相关的少数几块</td><td>不做重排,粗排噪声直接进 prompt</td></tr>
+<tr><td>生成</td><td>把问题 + 命中片段填进 prompt 模板,让模型据此作答并给出处</td><td>上下文太长被「中间遗忘」,或模型无视资料仍旧编</td></tr>
+</tbody>
+</table>
+<p>一句话记住整条链:<strong>解析 → 分块 → 向量化 → 建索引 → 检索 → 重排 → 拼 prompt → 生成。</strong>面试让你「讲讲 RAG 流程」,把这八步 + 每步的坑说清楚,基本就稳了。</p>
+
+<h2>三、五个可优化阶段:知道每一步能怎么调</h2>
+<p>朴素 RAG 效果往往不够,优化空间集中在五个阶段。这一节只给<strong>地图</strong>,后面几课逐个深挖(分块/向量库见 0022,检索与重排见后续课)。</p>
+
+<dl class="keydef">
+<dt>① 解析与预处理</dt>
+<dd>把原始文档变成干净文本,并<strong>保留元数据</strong>(文件名、日期、来源、页码、作者)。元数据不是摆设——检索时可以按它做过滤(「只在 2026 年的文档里找」),生成时可以用它给出处。清洗则是去掉导航菜单、乱码、统一标点与 Unicode。</dd>
+
+<dt>② 分块策略(Chunking)</dt>
+<dd>决定「检索的最小单位」有多大、边界切在哪。常见几档:<em>固定大小</em>(按 Token 数均分,常留 10%–20% 重叠维持连贯)、<em>基于句子</em>(用 NLP 工具找句界)、<em>递归字符分块</em>(按段落→换行→空格层层退让,LangChain 默认基线)、<em>语义分块</em>(相邻句子 Embedding 相似度低于阈值就切,主题一致但算得慢)、<em>基于结构</em>(顺着 Markdown/HTML 标题层级切)。工程上常见做法是<strong>先用递归字符分块打底,再按语义相似度决定要不要在某处断开</strong>。</dd>
+
+<dt>③ 向量化与索引</dt>
+<dd>选 Embedding 模型 + 选 ANN 索引类型。近似最近邻的三大家:<em>IVF</em>(倒排文件,粗筛桶+桶内细搜,配强过滤稳)、<em>HNSW</em>(分层可导航小世界图,召回率高)、<em>PQ</em>(乘积量化,压向量、省内存)。选型看约束:要强过滤走 IVF 系;要极致召回走 HNSW;内存/成本敏感走 PQ 系(如 IVF_PQ)。</dd>
+
+<dt>④ 查询理解与增强</dt>
+<dd>用户的原始问题往往不适合直接检索。三招:<em>查询改写</em>(把口语化/有指代的问题改清楚)、<em>预设答案检索</em>(先让模型草拟一个假想答案,再拿它去检索,常比原问题更贴近文档措辞)、<em>查询分解</em>(把复杂的<strong>多跳(Multi-Hop)</strong>问题拆成若干子问题,分别检索再合成——这正是 RAG 回答「A 的老板的生日是哪天」这类需要两步查证问题的标准解法)。</dd>
+
+<dt>⑤ 混合检索与重排</dt>
+<dd>不要只靠一种检索。<em>稠密</em>(向量,懂语义、抗同义改写)和<em>稀疏</em>(BM25 关键词,擅长专有名词、代码、精确匹配)各有盲区,并行跑再融合。融合后用 Cross-Encoder 做重排精选。下一节详解这一步的两个核心公式。</dd>
+</dl>
+
+<h2>四、把「混合检索」讲到公式级</h2>
+<p>面试问「检索有哪些?BM25 是什么?」时,你要能区分两条路并写出关键式子。</p>
+
+<h3>稀疏检索:BM25</h3>
+<p>BM25 是词袋打分的代表,不看语义、只看「查询词在文档里出现得够不够、够不够稀有、文档是不是靠长度作弊」。总分是各查询词得分之和:</p>
+$$\text{BM25}(D,Q)=\sum_{i=1}^{n}\text{IDF}(q_i)\cdot\frac{f(q_i,D)\,(k_1+1)}{f(q_i,D)+k_1\!\left(1-b+b\cdot\dfrac{|D|}{\text{avgdl}}\right)}$$
+<p class="formula-note">$f(q_i,D)$ 是词 $q_i$ 在文档 $D$ 的词频,$|D|$ 是文档长度,$\text{avgdl}$ 是平均文档长度。</p>
+<p>三个设计各治一个问题:</p>
+<ul>
+<li><strong>IDF(逆文档频率)</strong>——衡量区分度。稀有词权重高,「的/是」这种到处都有的词权重低:
+$$\text{IDF}(q_i)=\log\frac{N-n(q_i)+0.5}{n(q_i)+0.5}$$
+其中 $N$ 是文档总数,$n(q_i)$ 是含 $q_i$ 的文档数。</li>
+<li><strong>词频饱和</strong>——一个词从出现 1 次到 2 次,相关性提升很大;从 20 次到 21 次几乎无差别。参数 $k_1$ 控制饱和速度(常取 $1.2\sim2.0$)。</li>
+<li><strong>长度归一化</strong>——长文档偶然命中查询词的概率天然更高,用 $|D|/\text{avgdl}$ 惩罚它。参数 $b$ 控制强度:$b=0$ 不惩罚,$b=1$ 完全归一化,常取 $0.5\sim0.75$。</li>
+</ul>
+
+<h3>结果融合:RRF(Reciprocal Rank Fusion)</h3>
+<p>向量和 BM25 各返回一个排序榜单,分数量纲还不一样,不能直接相加。RRF 干脆<strong>只看名次不看原始分</strong>:一篇文档在某个榜单里排第 $r$ 名,就贡献 $\tfrac{1}{k+r}$,把它在所有榜单的贡献加起来:</p>
+$$\text{RRF}(d)=\sum_{r\in R}\frac{1}{k+\operatorname{rank}_r(d)}$$
+<p class="formula-note">$R$ 是所有检索路的榜单集合,$\operatorname{rank}_r(d)$ 是文档 $d$ 在第 $r$ 路里的名次,$k$ 是一个小平滑常数(常用 60)。</p>
+<p>直觉:<strong>被多路一致地排在前面的文档,得分累加后自然冒头</strong>;只在一路里靠前的文档得分偏低。这就是为什么源材料里 doc_B(两路都靠前)融合后排第一,而各只在一路命中的 doc_A/C/D/E 排在后面。除了 RRF,也可用线性加权 $\text{score}=\alpha\cdot\text{vec}+(1-\alpha)\cdot\text{kw}$,但那要求两路分数先归一化,调 $\alpha$ 更麻烦。</p>
+
+<div class="implement">
+<p>把在线链路写成一段最小可读的伪代码,感受数据怎么流:</p>
+<pre><code>def rag_answer(question, index, llm, top_k=50, top_n=5):
+    # ① 查询理解:改写 / 分解(此处从简)
+    q = rewrite(question)
+
+    # ② 混合检索:两路并行,各取 top_k
+    dense_hits  = index.vector_search(embed(q), k=top_k)   # 稠密:懂语义
+    sparse_hits = index.bm25_search(q,        k=top_k)     # 稀疏:抓关键词
+
+    # ③ 融合:RRF 只看名次
+    fused = rrf_fuse([dense_hits, sparse_hits], k=60)
+
+    # ④ 重排:Cross-Encoder 精排,选最相关的 top_n 块
+    ctx = rerank(q, fused)[:top_n]
+
+    # ⑤ 拼 prompt:把命中片段 + 出处塞进模板,让模型据此作答
+    prompt = build_prompt(question, ctx)
+    return llm.generate(prompt)   # 回答里带 ctx 的来源,可溯源</code></pre>
+<p>注意:检索粗排取几十上百条(高召回),重排后只留几条进 prompt(高精度)。<strong>召回负责「别漏」,重排负责「别脏」。</strong></p>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「完整讲一遍 RAG 链路。」——按<strong>解析→分块→向量化→建索引→检索→重排→拼 prompt→生成</strong>八步走,每步带一句「这步会出什么问题」,别只背名词。</li>
+<li>「为什么用 RAG 而不是微调?」——要改<em>知识/事实</em>且频繁变动 → RAG(更新库即可、可溯源、便宜);要改<em>行为/风格/格式</em> → 微调。(细节第 0031 课)</li>
+<li>「RAG 有哪些优化阶段?」——五阶段:解析预处理 / 分块 / 向量化索引 / 查询理解增强 / 混合检索重排,能各举一两个具体手段。</li>
+<li>「检索有哪些?BM25 是什么?」——稀疏(BM25:IDF + 词频饱和 + 长度归一化)vs 稠密(向量语义);实际用混合检索 + RRF 融合 + 重排。</li>
+<li>「多跳问题怎么做?」——查询分解:拆成子问题逐一检索,再把中间结果拼起来合成最终答案。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把 RAG 当成「万能治幻觉」。它降幻觉靠的是「给了对的资料」;<strong>检索错了,模型照样会顺着错资料编</strong>——垃圾进,垃圾出。</li>
+<li>只用向量检索。向量擅长语义、却常在<strong>专有名词、编号、代码、罕见词</strong>上失手,这些恰是 BM25 的强项,所以要混合。</li>
+<li>把「向量相似」等同于「与问题相关」。相似度高的块未必答得了问题,这正是要单独做一步 <strong>Rerank</strong> 的原因。</li>
+<li>chunk 越大越好 / 越小越好——都不对。太大稀释语义还挤占窗口,太小丢上下文;要按文档结构和问题粒度权衡(第 0022 课)。</li>
+<li>RRF 用原始分相加。RRF 的精髓是<strong>只用名次</strong>,正因为两路分数量纲不可比;要相加原始分得先归一化(那是线性加权那一路)。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>某问答系统要能准确回答「本公司上周新发布的报销规定」,且规定几乎每月更新。下面哪种方案最合适?</p>
+<details><summary>A. 每次规定更新就用新规定重新微调模型</summary>知识频繁变动却用微调,意味着反复重训、评测、部署,成本高且易引入遗忘/幻觉,不划算。</details>
+<details><summary>B. 把最新规定文档放进检索库,用 RAG 让模型检索后作答 ✅</summary>正确。知识频繁变动时,更新检索库即可(改一条规章=改一个文件),模型权重不动,还能给出处溯源。</details>
+<details><summary>C. 把规定写进系统提示词,永久固定在 prompt 里</summary>规定每月变、且未来会越来越多,硬塞进 prompt 会不断膨胀且难维护,不如放进可检索的库。</details>
+<details><summary>D. 扩大模型参数量,让它「记住」更多规定</summary>参数量与「知道你公司内网私域知识」无关,模型没见过就是没见过,更大也记不住未训练过的内容。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于混合检索里用 RRF 融合向量检索和 BM25 的结果,下列说法正确的是?</p>
+<details><summary>A. RRF 把两路的原始相似度分数直接相加得到总分</summary>恰恰不是。两路分数量纲不同不可直接相加,直接加原始分是「线性加权」那条路(还需先归一化)。</details>
+<details><summary>B. RRF 只对向量检索有效,BM25 不能参与融合</summary>错。RRF 是与检索方式无关的排名融合,任何能给出排序榜单的检索路都能参与。</details>
+<details><summary>C. RRF 依据文档在各路榜单中的名次计算贡献 $\tfrac{1}{k+\text{rank}}$ 再求和,被多路一致排在前面的文档更容易胜出 ✅</summary>正确。只看名次不看原始分,躲开量纲不可比的问题;多路共识的文档得分累加后自然冒头。</details>
+<details><summary>D. RRF 要求两路检索必须返回完全相同的候选集合</summary>错。各路榜单可以不同,某文档只在一路出现时,它仅从那一路获得一份贡献,分数自然偏低。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</strong>(Lewis et al., 2020)——RAG 这一术语与范式的原始论文。</li>
+<li><strong>Dense Passage Retrieval for Open-Domain QA</strong>(Karpukhin et al., 2020)——稠密向量检索(双塔 Embedding)的代表工作。</li>
+<li><strong>The Probabilistic Relevance Framework: BM25 and Beyond</strong>(Robertson &amp; Zaragoza, 2009)——BM25 打分函数的系统性来源,本课 IDF / 词频饱和 / 长度归一化即出自此。</li>
+<li><strong>Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods</strong>(Cormack et al., 2009)——RRF 的原始论文。</li>
+<li><strong>Efficient and Robust ANN Search using HNSW Graphs</strong>(Malkov &amp; Yashunin)——HNSW 索引来源,理解向量库为什么快。</li>
+<li>下一步:分块粒度、Embedding 与向量库怎么选(第 0022 课);RAG 与微调的边界怎么权衡(第 0031 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>RAG = 让模型先查再答,链路是「解析→分块→向量化→建索引→检索→重排→拼 prompt→生成」;它治的是「不知道就瞎编」,改知识比微调便宜且可溯源。</strong></p>
+<nav class="lesson-nav">
+<a href="0020-dpo-grpo-gspo.html">← 上一课:DPO / GRPO / GSPO</a>
+<a href="0022-chunking-embedding-vectordb.html">下一课:分块、Embedding 与向量库 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

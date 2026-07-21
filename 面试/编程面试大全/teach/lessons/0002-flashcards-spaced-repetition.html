@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0002 · 记得住才算学会:主动回忆与间隔重复</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0002 课 · 起步与方法 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>记得住才算学会:主动回忆与间隔重复</h1>
+
+<p class="lede">上一课解决"学什么",这一课解决更残酷的问题:<strong>学过 ≠ 记得住</strong>。仓库作者看了数小时视频、记了大量笔记,几个月后大半忘光——他花三天翻笔记做抽认卡才补救回来。面试当场调不出来的知识,等于没学。这节把他踩过的四条教训,拧成一套你能马上执行的记忆策略。</p>
+
+<div class="recall">
+<p>上一课定下了"学什么"——覆盖高频的 75%、按清单自顶向下、边学边做。但清单上打的那个 <code>x</code> 只在你真会了时才算数。先诚实回想一下:上次你"看懂"某个算法之后,过两周,还能不看笔记把它默写出来吗?如果心里发虚,这一课就是为你写的。</p>
+</div>
+
+<h2>一、教训一:你不可能把所有东西都记住</h2>
+
+<p>作者的第一条教训是一句大实话:<strong>遗忘是常态,不是你的失败</strong>。他看了数小时视频、记了厚厚的笔记,几个月后回头,发现有很多东西根本不记得了。这不是因为他笨,而是因为人脑本就如此——不复习的知识会自然衰退。</p>
+
+<p>关键的认知转变在这里:<strong>学习的产物不是"看过多少"或"笔记有多厚",而是"几周后还能从空白记忆里取回多少"</strong>。既然遗忘无法避免,那就得主动设计一套对抗遗忘的机制,而不是指望"多看几遍自然就记住了"。</p>
+
+<h2>二、教训二:用抽认卡 + 间隔重复对抗遗忘</h2>
+
+<p>作者的补救办法是<strong>抽认卡(flashcards)</strong>:一面是问题,一面是答案,分成"普通卡"和"带代码的卡"两类。抽认卡之所以有效,不在于卡片本身,而在于它逼你做一件事——<strong>先从记忆里把答案调出来,再翻面核对</strong>。这个"先调取"的动作,就是记忆科学里最有效的手段:主动回忆(检索练习)。</p>
+
+<p>把抽认卡按<strong>间隔重复(spaced repetition)</strong>的节奏复习,效果最好:刚学时复习得密,记牢后间隔拉长。这样你能用最少的复习次数,把知识压进长期记忆。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node good"><span class="n-title">学完主题</span><span class="n-sub">当天做成卡片</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">+1 天</span><span class="n-sub">回想 → 核对</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">+3 天</span><span class="n-sub">再回想</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">+1 周</span><span class="n-sub">又回想</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">长期记住</span><span class="n-sub">间隔越拉越长</span></div>
+</div>
+<figcaption>间隔重复的形状:<strong>先密后疏</strong>。每次都在你"快要忘"的临界点复习,制造"合意困难",记得最牢。Anki 这类工具会替你自动排这个时间表。</figcaption>
+</figure>
+
+<p>一个作者反复强调的细节:<strong>第一次答对时,先别急着把卡片标成"已知"</strong>。要反复复习到"每次都能答对"才算真的学会。第一次答对往往只是当下的流畅感,不是长期能取回的证据。</p>
+
+<h2>三、教训三:在学习过程中就做编程面试题</h2>
+
+<p>第三条教训作者标了"这非常重要":<strong>边学边做题,而不是学完再做</strong>。他的原话点破了本质——<strong>你被雇佣不是因为你的知识,而是因为你知道如何应用这些知识</strong>。光看不练,知识会忘;做题则强迫你把知识调出来用,顺便完成了一次主动回忆。</p>
+
+<p>他给的具体节奏是:学完一个主题(比如链表),立刻去做 2~3 道该主题的题;继续学下一个主题;<strong>过些天再回来</strong>做另外 2~3 道链表题。这既是应用,也天然形成了间隔重复。</p>
+
+<h2>四、教训四:专注</h2>
+
+<p>第四条最短也最容易被轻视:<strong>专注</strong>。学习时干扰无处不在,注意力是稀缺资源。作者的小技巧是放点纯音乐帮助集中。这条和前面三条是一体的——只有专注地回想、专注地做题,复习的质量才撑得起间隔重复的效率。</p>
+
+<figure class="diagram">
+<div class="trio">
+  <div class="cell"><div class="role">对抗遗忘</div><div class="head">抽认卡</div><div class="sub">先回想再核对</div></div>
+  <div class="cell"><div class="role">学会应用</div><div class="head">边学边做题</div><div class="sub">2~3 题 / 主题,过几天再来</div></div>
+  <div class="cell"><div class="role">保证质量</div><div class="head">专注</div><div class="sub">减少分心</div></div>
+</div>
+<figcaption>三个可执行的习惯,共同服务一个目标:让知识在面试当天还能被<strong>主动取回</strong>。第四条"记不住是常态"是前提,不是习惯。</figcaption>
+</figure>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>检索练习(Retrieval Practice)</dt>
+<dd>主动从记忆里<strong>回想</strong>,而不是重读,是把知识从"会了的错觉"转成长期记忆的核心手段。抽认卡"先答后翻"、做题"当场调用",都是它。<em>避免</em>"多看几遍就记住了"。</dd>
+<dt>间隔重复(Spaced Repetition)</dt>
+<dd>按<strong>先密后疏</strong>的时间表复习:刚学复习得勤,记牢后间隔拉长,在"快忘的临界点"复习效率最高。Anki 等工具自动排这个表。</dd>
+<dt>流畅性 vs 存储强度(Fluency vs Storage Strength)</dt>
+<dd>流畅性=当下能顺畅调用(容易高估掌握);存储强度=长期还能取回(真正目标)。第一次答对卡片只证明了流畅性,不等于存储强度。<em>避免</em>把"看懂了"等同于"掌握了"。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>面试是一次典型的<strong>限时主动回忆</strong>:没有 IDE 补全、没有 Google、没有你的笔记,只有你脑子里当场能取回的东西。这正是间隔重复的用武之地——它让你在面试前几周,依然记得几个月前学的链表、堆、图算法,而不是"学的时候会、临考全忘"。把复习设计成"隔一段就回想一次",本质上就是在为"面试当天那一次调取"预演。你平时练的每一次回想,都是面试现场的一次彩排。</p>
+</div>
+
+<div class="gotcha">
+<p><strong>"看懂了"不等于"记住了"——这是准备期最贵的错觉。</strong></p>
+<p>重看笔记、重看视频会带来强烈的"我都会"的<strong>流畅感</strong>,但流畅性会高估你的<strong>存储强度</strong>:真到不看资料默写时才发现调不出来。破解办法只有一个——把"重读"换成"先合上材料自己回想"。同理,<strong>抽认卡第一次答对别急着标"已知"</strong>,那只是流畅性;要反复答对才是存储强度。顺带一提,作者本人也说<strong>不建议直接用他那 1200~1800 张卡</strong>——大多是你不需要的琐事,自己按需要做卡更有效。</p>
+</div>
+
+<div class="implement">
+<p><strong>本周就动手做的一件事:</strong>今天就建一副抽认卡(纸质卡片或装个 <strong>Anki</strong> 都行),把<strong>本课的 3 个术语——检索练习、间隔重复、流畅性 vs 存储强度——各做成一张卡</strong>:正面写术语,背面写你自己的解释。明天不看笔记,先合上材料把三张卡都答一遍,再翻面核对。只有反复答对了才标"已知"。这既建立了工具,又是一次货真价实的检索练习。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>学习的产物不是笔记页数,而是<strong>几周后还能从空白记忆里取回的东西</strong>。主动回忆是唯一诚实的检验;重读只会喂养"我都会"的错觉。</p>
+</div>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:为什么"重读笔记时感觉全都会了"是一个危险信号?</summary>
+<div class="answer">
+<p>因为你感受到的是<strong>流畅性(fluency)</strong>而不是<strong>存储强度(storage strength)</strong>。材料摆在眼前,大脑只需"认出"而非"取回",这会让你严重高估掌握程度;等到面试现场没有材料、需要从空白记忆里主动调取时,才发现根本调不出来。正确的检验方式是<strong>先合上笔记、自己回想一遍</strong>(检索练习),想不起来的地方才是真正的薄弱点。"看懂了"和"记住了"是两回事。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:一张抽认卡你第一次就答对了,接下来最该怎么处理? (A) 立刻标成"已知",从此不再复习 (B) 按间隔重复继续隔几天再考它,反复答对才算学会 (C) 立刻删掉,换更难的卡</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。作者特别提醒:第一次答对<strong>先别</strong>标"已知",那多半只是当下的流畅性。要按间隔重复的节奏(隔 1 天、3 天、一周……)反复考它,每次都能答对,才说明它进入了长期记忆。(A) 会让你在临界点忘掉它却浑然不觉;(C) 丢掉了尚未真正巩固的知识。记忆靠的是"在快忘时再取回一次",而不是"答对一次就毕业"。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本主题对应仓库大纲的「不要犯我的错误」一节。下面的一手链接都出自这一段:</p>
+<ul>
+<li><a href="https://startupnextdoor.com/retaining-computer-science-knowledge/">记住计算机科学知识(作者文章)</a> —— 本课四条教训的原始出处,作者亲述如何用抽认卡补救遗忘。</li>
+<li><a href="https://github.com/jwasham/computer-science-flash-cards">抽认卡页面的代码仓库</a> —— 作者自制的抽认卡网站,支持"普通卡"和"带代码的卡",可自己部署。</li>
+<li><a href="http://ankisrs.net/">Anki</a> —— 很多人推荐的间隔重复工具,自动排复习时间表,多平台并支持云端同步。</li>
+<li><a href="https://ankiweb.net/shared/info/25173560">作者的 Anki 卡组(社区共享)</a> —— 可参考格式。注意:作者本人<strong>不建议</strong>照单全收他的卡(1200~1800 张里大多是你不需要的琐事),建议自己按需要做卡。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI14 讲清"流畅性 vs 存储强度"的区别,或帮你把某个刚学的主题拆成一组抽认卡问题。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0001-how-to-use-this-plan.html"><span class="dir">← 上一课</span>这份学习计划怎么用:75% 原则与节奏</a>
+  <a class="next" href="0003-choosing-a-language.html"><span class="dir">下一课 →</span>面试该用哪门语言</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

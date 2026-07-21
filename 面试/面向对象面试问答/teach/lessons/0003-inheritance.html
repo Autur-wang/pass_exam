@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>继承 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第一部分 · 四大支柱 · 第 0003 节</p>
+<h1>继承:is-a、继承类型与 super</h1>
+<p class="lede">继承的定义谁都会背,面试真正筛人的是两问:"你凭什么用继承而不是复制粘贴?"和"你说的是哪一种继承?"。这一节把 is-a 关系、五种继承类型、以及 Python 里 <code>super()</code> 的正确用法一次讲透。</p>
+
+<div class="recall">
+<p>开始前先回忆:你有一个 <code>Animal</code> 类,现在要写 <code>Dog</code>、<code>Cat</code>,它们都有 <code>name</code>、都会 <code>speak()</code>,只是叫声不同。你会怎么复用 <code>Animal</code> 里已经写好的东西?如果直接把 <code>Animal</code> 的代码复制两份到 <code>Dog</code> 和 <code>Cat</code> 里,以后会踩什么坑?先给个答案,再往下看。</p>
+</div>
+
+<h2>一、直觉:继承是"把共性提到上一层"</h2>
+
+<p>继承(Inheritance)就是<strong>基于一个已有的类,创建一个新类</strong>。新类自动"继承"旧类的属性和行为,然后在此基础上加自己的东西、或改写不合适的东西。</p>
+
+<p>用一句话抓住它的本质:继承建立的是 <strong>"is-a"(是一种)关系</strong>。<code>Dog</code> is a <code>Animal</code>,<code>Manager</code> is a(n) <code>Employee</code>。当你能理直气壮地说出"X 是一种 Y"的时候,让 X 继承 Y 才是正当的。反过来——如果你只是"想用 Y 里现成的代码",那不是 is-a,那是<strong>为了偷懒而继承</strong>,后面会讲这为什么危险。</p>
+
+<div class="keydef">
+<dl>
+<dt>继承 (Inheritance)</dt>
+<dd>基于已有类创建新类,新类<strong>获得</strong>已有类的属性与行为,并可扩展或重写。它表达的是 <strong>is-a</strong> 关系。</dd>
+<dt>父类 (Base / Super / Parent class)</dt>
+<dd>被继承的那个类。术语在不同语言里混用:base class(C++)、superclass(Java)、parent class(通俗说法)指的是同一个。</dd>
+<dt>子类 (Derived / Sub / Child class)</dt>
+<dd>继承别人的那个类:derived class(C++)、subclass(Java)、child class(通俗)。</dd>
+<dt>重写 (Override)</dt>
+<dd>子类用同名方法<strong>覆盖</strong>父类的实现,给出自己的版本(下一节 0004「多态」的核心机制)。</dd>
+<dt><code>super()</code></dt>
+<dd>子类里调用父类逻辑的入口,最常见于 <code>super().__init__(...)</code> 复用父类构造。注意它的语义有个坑,见易错点。</dd>
+</dl>
+</div>
+
+<h2>二、五种继承类型(源题的核心考点)</h2>
+
+<p>面试题常问 "Name some types of inheritance"。别只答"单继承和多继承",完整的五种要能报出名字、画出形状、举出语言:</p>
+
+<table>
+<tr><th>类型</th><th>形状</th><th>一句话</th><th>典型语言</th></tr>
+<tr><td><strong>① 单继承</strong><br>Single</td><td>A ← B</td><td>一个子类只继承一个基类,最常见、最安全</td><td>Java(<code>class B extends A</code>)、Python、C++ 都支持</td></tr>
+<tr><td><strong>② 多继承</strong><br>Multiple</td><td>A、B ← C</td><td>一个子类同时继承多个基类</td><td>C++、Python 支持;Java <strong>不用类</strong>支持,改用 <code>interface</code> 达到类似效果</td></tr>
+<tr><td><strong>③ 多层继承</strong><br>Multilevel</td><td>A ← B ← C</td><td>链式:C 继承 B,B 又继承 A</td><td>三种语言都支持</td></tr>
+<tr><td><strong>④ 层次继承</strong><br>Hierarchical</td><td>B ← A → C</td><td>一个基类被多个子类继承(A 被 B、C 共同继承)</td><td>三种语言都支持</td></tr>
+<tr><td><strong>⑤ 混合继承</strong><br>Hybrid</td><td>以上的组合</td><td>多种形式叠加,容易变复杂</td><td>C++ 可能出现;Java <strong>不直接用类</strong>支持,可用接口模拟多继承那部分</td></tr>
+</table>
+
+<p>为什么 Java 要把多继承和混合继承挡在门外?因为多继承会引出 <strong>菱形问题(diamond problem)</strong>:如果两个父类都从同一个"祖父类"继承并各自改了某个方法,子类到底该用哪一份?Java 的选择是——类只能单继承,想要"多来源"就用 <code>interface</code>(接口只定契约、通常不带实现状态,冲突风险小得多)。C++ 允许真多继承,并用 <code>virtual</code> 继承来化解菱形冲突;Python 也允许多继承,靠 MRO(见下面跨语言对照)确定查找顺序。菱形问题的深水区我们放到 <strong>0019</strong> 用 MRO 专门讲,这里你只需要能说出"它叫菱形问题、Java 因此禁止类多继承"。</p>
+
+<h2>三、Python 单继承 + super() 实战</h2>
+
+<p>看代码。<code>Dog</code> is-a <code>Animal</code>,用 <code>super()</code> 复用父类构造,再<strong>重写</strong> <code>speak()</code>:</p>
+
+<pre><code>class Animal:
+    def __init__(self, name):
+        self.name = name              # self ≈ 其他语言里的 this
+
+    def speak(self):
+        return f"{self.name} 发出了某种声音"
+
+    def describe(self):
+        return f"我是 {self.name}"
+
+
+class Dog(Animal):                    # 括号里写父类:Dog 单继承 Animal
+    def __init__(self, name, breed):
+        super().__init__(name)        # 复用父类构造,别手写 self.name = name
+        self.breed = breed            # 子类自己新增的属性
+
+    def speak(self):                  # override:给出 Dog 自己的版本
+        return f"{self.name}({self.breed}) 说:汪汪"
+
+
+d = Dog("旺财", "柴犬")
+print(d.speak())                      # 旺财(柴犬) 说:汪汪   —— 用子类版本
+print(d.describe())                   # 我是 旺财            —— 继承自父类,没重写
+print(isinstance(d, Animal))          # True   —— Dog is-a Animal
+print(isinstance(d, Dog))             # True
+</code></pre>
+
+<p>三个要点:</p>
+<ul>
+<li><strong><code>class Dog(Animal)</code></strong>:括号里是父类,一行就建立了 is-a 关系。</li>
+<li><strong><code>super().__init__(name)</code></strong>:让父类去初始化它负责的部分(<code>name</code>),子类只管自己新增的(<code>breed</code>)。不要在子类里重复写 <code>self.name = name</code>——那就是把父类逻辑复制了一份,父类一改你就漏改。</li>
+<li><strong><code>describe()</code> 没重写却能用</strong>:这就是继承的复用——子类白得父类所有没被覆盖的方法。</li>
+</ul>
+
+<div class="interview">
+<p><strong>高频追问链(继承几乎必被追问,顺着答能显出深度):</strong></p>
+<ul>
+<li>"继承和组合(composition)有什么区别?什么时候用哪个?" → 继承是 <strong>is-a</strong>(狗<em>是</em>动物),组合是 <strong>has-a</strong>(汽车<em>有</em>引擎)。判断口诀:能说通"X 是一种 Y"才用继承,否则用组合。业界更进一步有句名言"<strong>组合优于继承</strong>",原因见易错点,专题在 <strong>0010</strong>。</li>
+<li>"<code>super()</code> 调用的一定是<strong>父类</strong>吗?" → 单继承下是的;但严格讲 <code>super()</code> 返回的是 <strong>MRO(方法解析顺序)里的下一个类</strong>,多继承时它未必是你写在括号里的那个直接父类。这点答准立刻区别于死记硬背的人。</li>
+<li>"Java 为什么不支持(类的)多继承?" → 为了回避<strong>菱形问题</strong>带来的二义性与复杂度,改用 <code>interface</code> 提供"多来源"的能力。</li>
+<li>"继承有什么代价 / 缺点?" → <strong>父子强耦合</strong>与<strong>脆弱基类问题</strong>(fragile base class):改动父类可能悄悄破坏所有子类。见易错点。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>头号翻车点:为了"复用代码"而继承。</strong>继承的正当理由<strong>只有一个</strong>——真实的 is-a 关系。如果你继承某个类仅仅因为"它刚好有我想要的几个方法",那是把复用误当成了继承。代价是:子类和父类被焊死成<strong>强耦合</strong>,父类暴露给子类的一切(包括你没打算用的方法)都成了子类对外承诺的一部分。</p>
+<p><strong>脆弱基类问题(fragile base class):</strong>继承让父类的实现细节泄漏给子类。父类作者哪天改了一个内部方法的调用方式,可能<strong>在完全不知情的情况下</strong>把远处某个子类弄崩——因为子类依赖了它本不该依赖的父类内部行为。这正是"组合优于继承"的动机:组合只依赖对方的<strong>公开接口</strong>,耦合面小得多。(这条会在 <strong>0010</strong> 展开。)</p>
+<p><strong>次级坑:</strong>说"<code>super()</code> 就是父类"。单继承下没错,但多继承里它是 <strong>MRO 的下一个</strong>,拿不准就这样表述,别把话说死。</p>
+</div>
+
+<div class="crosslang">
+<p>"多继承在你这门语言里怎么处理?"是继承题的必考对照,记住这张表:</p>
+<table>
+<tr><th>语言</th><th>类的多继承</th><th>菱形问题怎么办</th><th>"多来源"的正道</th></tr>
+<tr><td><strong>Python</strong></td><td>支持</td><td>用 <strong>MRO / C3 线性化</strong>定唯一查找顺序(<code>Cls.__mro__</code> 可查)</td><td>直接多继承,或 mixin</td></tr>
+<tr><td><strong>Java</strong></td><td>不支持(类只能单继承)</td><td>从源头回避:类不能多继承</td><td><code>interface</code> 多实现(<code>implements A, B</code>)</td></tr>
+<tr><td><strong>C++</strong></td><td>支持(真多继承)</td><td>用 <code>virtual</code> 继承合并共同基类子对象</td><td>直接多继承</td></tr>
+</table>
+<p>一句话:<strong>Java 从源头禁掉、C++ 用 <code>virtual</code> 打补丁、Python 用 MRO 排个确定顺序。</strong>三种哲学,MRO 的细节在 0019。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,自己写一遍(先单继承,建立肌肉记忆):</p>
+<ul>
+<li>写一个父类 <code>Employee</code>,有 <code>name</code>、<code>base_salary</code>,以及方法 <code>pay()</code> 返回 <code>base_salary</code>。</li>
+<li>写子类 <code>Manager(Employee)</code>:构造里用 <code>super().__init__(...)</code> 复用父类,新增属性 <code>bonus</code>;<strong>重写</strong> <code>pay()</code>,返回 <code>base_salary + bonus</code>。</li>
+<li>自测:<code>isinstance(m, Employee)</code> 是不是 <code>True</code>?为什么?(因为 Manager is-a Employee。)</li>
+<li>进阶自问:如果需求变成"一个人既是 Manager 又是 Engineer",你会用多继承,还是用组合(让 Person 持有若干 Role)?哪个更不容易踩菱形?</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:有人写 <code>class Stack(list):</code>,理由是"list 已经有 append/pop 了,继承过来省事"。这个设计好不好?为什么?</summary>
+<div class="answer">
+<p><strong>不好——这是典型的"为复用而继承"。</strong>问一句 is-a:Stack <em>是一种</em> list 吗?不是。栈只该暴露 <code>push</code>/<code>pop</code>/<code>peek</code>,但继承 <code>list</code> 会把 <code>insert</code>、<code>__setitem__</code>、按下标随机插入等<strong>破坏栈语义</strong>的方法全部暴露出去,调用方能绕过栈的规则乱改。</p>
+<p><strong>更好的做法是组合:</strong>让 <code>Stack</code> 内部<em>持有</em>一个 list(<code>self._items = []</code>),只对外开放栈该有的几个方法。这就是 has-a 而非 is-a——正是"组合优于继承"的经典场景(专题 0010)。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:下面关于 <code>super()</code> 的说法,哪个最准确?"在 Python 里 <code>super()</code> 指向的是……"</summary>
+<div class="answer">
+<p><strong>答案:MRO(方法解析顺序)中当前类的下一个类。</strong>在<strong>单继承</strong>下,这个"下一个"恰好就是直接父类,所以平时把它当"父类"用没问题;但在<strong>多继承</strong>下,<code>super()</code> 顺着 MRO 走,可能指向一个并非你直接父类的兄弟分支上的类。</p>
+<p>常见错误答案是"<code>super()</code> 永远等于直接父类"——这在多继承里会失效。想彻底搞懂,看 0019 的 MRO / C3 线性化。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 3:把五种继承类型和它们的形状连起来——"A ← B ← C"是哪一种?"B ← A → C"又是哪一种?</summary>
+<div class="answer">
+<p><strong>"A ← B ← C" 是多层继承(Multilevel):</strong>链式,C 继承 B,B 继承 A。</p>
+<p><strong>"B ← A → C" 是层次继承(Hierarchical):</strong>一个基类 A 被多个子类 B、C 共同继承。</p>
+<p>另外三种:单继承(A ← B,一对一)、多继承(多个基类 → 一个子类)、混合继承(以上组合)。面试报名字 + 画形状,比只说"有好几种"强得多。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>继承表达的是 <strong>is-a</strong> 关系,唯一正当的理由是"X 确实是一种 Y",而不是"我想蹭 Y 的代码"——后者会招来强耦合与脆弱基类问题。五种类型(单/多/多层/层次/混合)要能报名字画形状;<code>super().__init__()</code> 复用父类构造,但它严格来说指向 <strong>MRO 的下一个</strong>而非死板的"父类"。想不清该不该继承时,先问 is-a,答不通就改用组合(0010)。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《52 OOP Interview Questions》Q5(What is inheritance? Name some types of inheritance)——is-a 关系、subclass/superclass 术语、五种继承类型(单/多/多层/层次/混合)、"Java 不用类支持多继承而用 interface"均取自源题原文。</li>
+<li><strong>canon(补充锚定):</strong><a href="https://docs.python.org/3/tutorial/classes.html#inheritance">Python 官方教程 · Inheritance</a> 与 <a href="https://docs.python.org/3/library/functions.html#super"><code>super()</code> 文档</a>——<code>super()</code> 与 MRO 的准确语义;<a href="https://docs.oracle.com/javase/tutorial/java/IandI/subclasses.html">Oracle Java Tutorial · Inheritance & Interfaces</a>——Java 单继承 + 接口的对照。"组合优于继承"出自 GoF《Design Patterns》(1994) 的设计原则"favor object composition over class inheritance";"is-a 关系要经得起替换"对应 Robert C. Martin 等推广的 <strong>Liskov 替换原则(LSP)</strong>——这两条为下一步的取舍(0010)与多态(0004)打底。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍菱形问题、把你写的 <code>Manager</code> 代码拿来评、或者提前剧透 0019 的 MRO,都可以开口。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>继承让子类"能改写父类方法";下一节就顺着这条线,讲同一个调用为什么能对不同对象表现出不同行为——多态。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0002-encapsulation.html"><span class="dir">← 上一课</span>0002 · 封装:信息隐藏、访问控制与 Python 的"伪私有"</a>
+<a class="next" href="0004-polymorphism.html"><span class="dir">下一课 →</span>0004 · 多态:重写、鸭子类型与动态分派</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

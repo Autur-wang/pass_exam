@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0011 · 开源架构对比与 Tokenizer / BPE</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第三部分 预训练模型家族 · 第 0011 课</p>
+<h1>开源架构对比与 Tokenizer / BPE</h1>
+<p class="lede">2017 年的原始 Transformer 和今天的 LLaMA、Qwen、DeepSeek,骨架是同一具:注意力 + FFN + 残差。但几乎<strong>每一个零件都被换过一遍</strong>——位置编码、归一化、注意力、激活、FFN 结构。面试官特别爱在这里追问「你说说 DeepSeek 和 LLaMA 到底差在哪」「为什么现在都用 RMSNorm 而不是 LayerNorm」。这节课把这套「现代化改造清单」讲清楚,再补上模型的入口——Tokenizer 与 BPE。</p>
+
+<div class="recall">
+<p>上节课我们把预训练分成三种范式(encoder-only / decoder-only / encoder-decoder),并看到主流开源大模型几乎都收敛到了 <strong>decoder-only</strong>。那么新问题来了:既然骨架都是 decoder-only 的 Transformer,<strong>为什么 LLaMA、Qwen、DeepSeek 还是各不相同?它们到底动了哪些零件、又为什么这么动?</strong> 先自己列几个你知道的差异点,再往下看。</p>
+</div>
+
+<h2>一、直觉:骨架没变,零件全换了一遍</h2>
+<p>把原始 Transformer 想成一辆 2017 年的车:发动机(注意力)、变速箱(FFN)、车架(残差连接)这套底盘至今没变。但发动机换了涡轮(RoPE),换了更省油的机油(RMSNorm),多缸共享了油路(GQA/MLA),变速箱换了更平顺的挡位(SwiGLU),甚至给你并联了好几台按需启动的发动机(MoE)。<strong>逐个零件都是一次「针对性优化」,每次优化都对应一个明确的痛点。</strong></p>
+
+<table>
+<thead><tr><th>组件</th><th>原始 Transformer(2017)</th><th>现代主流 LLM 常见做法</th><th>升级动机(要能一句话答出)</th></tr></thead>
+<tbody>
+<tr><td>位置编码</td><td>正弦绝对编码 / 可学习绝对编码</td><td>RoPE(部分用 ALiBi 等)</td><td>表达<strong>相对</strong>位置、对更长序列外推更友好</td></tr>
+<tr><td>归一化</td><td>LayerNorm(且多为 Post-Norm)</td><td>RMSNorm + Pre-Norm</td><td>更省算、深层训练更稳</td></tr>
+<tr><td>注意力</td><td>MHA(多头)</td><td>GQA / MLA</td><td>压缩推理时的 KV Cache 显存</td></tr>
+<tr><td>FFN 激活</td><td>ReLU</td><td>SwiGLU(门控 GLU 家族)</td><td>门控带来更强的表达/更好的经验效果</td></tr>
+<tr><td>FFN 结构</td><td>稠密(每 token 走全部参数)</td><td>MoE(稀疏,每 token 只走 Top-K 专家)</td><td>总参数量放大而<strong>单 token 算力不成比例增长</strong></td></tr>
+</tbody>
+</table>
+<p>注意用词:这是「主流/常见」而非「所有」。ALiBi、不同的激活变体、稠密与 MoE 并存,都真实存在;别在面试里把某一种说成「唯一」。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">输入 $x$</div>
+  <div class="node">RMSNorm<br><em>(Pre-Norm)</em></div>
+  <div class="node">Attention<br>RoPE + GQA/MLA</div>
+  <div class="node">$+$ 残差</div>
+  <div class="node">RMSNorm</div>
+  <div class="node good">FFN:SwiGLU<br>或 MoE → $+$ 残差</div>
+</div>
+<figcaption>一个「现代」decoder 层:归一化挪到子层<em>之前</em>(Pre-Norm),Norm 换成 RMSNorm,注意力带 RoPE 且用 GQA/MLA 省 KV,FFN 用 SwiGLU 或替换成 MoE。逐层堆叠 $N$ 次。</figcaption>
+</figure>
+
+<h3>为什么是 RoPE,不是绝对位置编码?</h3>
+<p>原始的正弦绝对编码给「第 5 个位置」一个固定向量,模型看到的是<strong>绝对</strong>坐标;可语言里真正重要的往往是<strong>相对</strong>距离(「这个词离那个动词几步」)。而且训练时序列长度有隐含假设,推到远更长的序列时表现容易掉。</p>
+<p>RoPE 的做法是把每一对特征维度看成二维平面上的点,按位置 $m$ 旋转一个角度:</p>
+$$\begin{pmatrix} \tilde{x}^{(2i-1)}\\ \tilde{x}^{(2i)} \end{pmatrix}=\begin{pmatrix} \cos m\theta_i & -\sin m\theta_i\\ \sin m\theta_i & \cos m\theta_i \end{pmatrix}\begin{pmatrix} x^{(2i-1)}\\ x^{(2i)} \end{pmatrix},\qquad \theta_i=10000^{-2i/d}$$
+<p class="formula-note">$m$ 是 token 的绝对位置,$\theta_i$ 控制每一维的旋转速度(低维转得快、高维转得慢)。</p>
+<p>妙处在于:query 和 key 各自旋转后再做点积,结果只依赖二者的<strong>位置差</strong> $m-n$:</p>
+$$\langle R_m q,\;R_n k\rangle=g(q,k,\;m-n)$$
+<p class="formula-note">旋转是正交变换,不改变向量长度;相对位置被「免费」编进了注意力分数里。这也是它外推更友好的原因。</p>
+
+<h3>为什么是 RMSNorm + Pre-Norm?</h3>
+<p>LayerNorm 要先减均值再除标准差,还带偏置:$\hat{x}=\frac{x-\mu}{\sigma}\odot g+b$。RMSNorm 砍掉了「减均值」这一步,只用均方根做缩放:</p>
+$$\operatorname{RMSNorm}(x)=\frac{x}{\sqrt{\dfrac{1}{d}\sum_{i=1}^{d}x_i^2+\epsilon}}\odot g$$
+<p class="formula-note">$g$ 是可学习的逐维缩放增益,$\epsilon$ 防止除零。没有减均值、通常也没有偏置,少一批统计量和参数,算得更快。经验上,去掉重新居中(re-centering)对效果影响很小,而重新缩放(re-scaling)才是稳定训练的关键。</p>
+<p>而 <strong>Pre-Norm</strong>(把归一化放在子层<em>之前</em>、残差之外)相比原始的 Post-Norm,让梯度有一条不被反复归一化「挤压」的干净通路,深层网络更容易训练稳定。代价是最终表示可能需要一个额外的收尾 Norm,且极深时表达力略有讨论——但工程上,大模型堆几十上百层时,Pre-Norm 的稳定性收益压倒一切。</p>
+
+<h3>SwiGLU:把激活换成「门控」</h3>
+<p>原始 FFN 是 <span class="nowrap">$\operatorname{ReLU}(xW_1)W_2$</span>,两个权重矩阵。SwiGLU 属于 GLU(门控线性单元)家族,用一路信号去「开关」另一路:</p>
+$$\operatorname{FFN}_{\text{SwiGLU}}(x)=\big(\operatorname{Swish}(xW_{\text{gate}})\odot xW_{\text{up}}\big)W_{\text{down}},\qquad \operatorname{Swish}(z)=z\,\sigma(z)$$
+<p class="formula-note">注意它用了<strong>三个</strong>权重矩阵(gate / up / down),比原始 FFN 多一个;为了保持参数量可比,SwiGLU 的隐藏维通常取得比 ReLU-FFN 小一些。门控让网络能更灵活地控制信息通过。</p>
+
+<h3>MoE:总参数放大,单 token 算力不放大</h3>
+<p>MoE 把一层稠密 FFN 换成 $N$ 个并列的「专家」FFN,外加一个路由器(Router)。每个 token 只被送去得分最高的 <strong>Top-K</strong> 个专家,输出是它们的加权和:</p>
+$$y=\sum_{i\in\text{TopK}(x)} g_i\,E_i(x)$$
+<p class="formula-note">$g_i$ 是路由器给专家 $i$ 的门控权重,$E_i$ 是第 $i$ 个专家。关键点:<strong>总参数量</strong>(所有专家)可以很大,但每个 token 实际<strong>激活</strong>的只有 K 个专家,算力(FLOPs)按激活量算,不按总量算。这就是「大而不贵」。</p>
+<p>MoE 最大的工程麻烦是<strong>负载均衡</strong>:路由器容易「偏心」,把大多数 token 塞给少数几个专家,其余专家吃不饱、训不动(马太效应)。两条主流对策:</p>
+<ul>
+<li><strong>辅助损失(Auxiliary Loss)</strong>:在主损失外加一个惩罚项,监控每个专家的负载频率 $f_i$ 与路由概率 $P_i$,逼它们趋于均匀——$L_{aux}=\alpha\,N\sum_{i=1}^{N} f_i\,P_i$。缺点:这个额外梯度会<strong>干扰主任务</strong>的学习。</li>
+<li><strong>无辅助损失均衡(Auxiliary-Loss-Free)</strong>:给每个专家配一个可动态调整的<strong>偏置</strong>,Top-K 选人时用「路由分数 + 偏置」;哪个专家过载就调低它的偏置,欠载就调高。偏置只影响「选谁」,不直接进主损失的梯度,避免了干扰。这是 DeepSeek 系列采用的思路。</li>
+</ul>
+
+<h2>二、家族取舍:同一套零件,不同的组合</h2>
+<p>把上面的零件当成「可选配件」,各家的差异其实就是<strong>选配清单不同</strong>。下面是概念层面的对比(不钉死具体版本号/参数,那些会随迭代变):</p>
+
+<table>
+<thead><tr><th>家族</th><th>可以记住的「性格」</th></tr></thead>
+<tbody>
+<tr><td><strong>LLaMA</strong></td><td>把「现代配方」做成了开源标准模板:RoPE + RMSNorm(Pre-Norm) + SwiGLU,较大模型上用 GQA,主体是<strong>稠密</strong>结构。很多后来者都是在这份配方上做增删。</td></tr>
+<tr><td><strong>Qwen</strong></td><td>整体沿用同一类 decoder-only 现代配方(RoPE / RMSNorm / SwiGLU / GQA 这一系),并同时提供<strong>稠密与 MoE 两条产品线</strong>。可理解为「同一底盘上的一个成熟、覆盖面广的家族」。</td></tr>
+<tr><td><strong>DeepSeek</strong></td><td>差异化最鲜明:注意力用 <strong>MLA</strong>(把 KV 压成低维隐向量再动态解压,极致省 KV Cache),FFN 用<strong>细粒度 MoE</strong>(更多、更小的专家 + 共享专家),并采用<strong>无辅助损失</strong>的偏置式负载均衡。面试常拿它和 LLaMA 对比。</td></tr>
+<tr><td><strong>GLM</strong></td><td>早期最大特色不在零件而在<strong>预训练目标</strong>:自回归空白填充(autoregressive blank infilling),用一套目标同时兼顾「理解」与「生成」,不是纯 causal LM;后续版本逐步向主流 decoder-only 风格靠拢。</td></tr>
+</tbody>
+</table>
+
+<h3>面试高频题:DeepSeek 和 LLaMA 架构差在哪?</h3>
+<p>别背版本号,答「设计选择」的差异,分两条主线最清楚:</p>
+<ul>
+<li><strong>注意力</strong>:LLaMA(较大模型)用 <strong>GQA</strong>——让多个 query 头<em>共享</em>一组 K/V 头来省显存;DeepSeek 用 <strong>MLA</strong>——把 K/V <em>联合压缩</em>成一个低维隐向量 $c_t$ 存进 Cache,计算时再解压回各头。二者目标一致(省 KV Cache),机制不同:GQA 是「共享」,MLA 是「压缩+解压」。</li>
+<li><strong>FFN</strong>:LLaMA 主体是稠密 FFN(SwiGLU);DeepSeek 用细粒度 MoE + 无辅助损失均衡。前者「每 token 走全部参数」,后者「每 token 只走少数专家」。</li>
+</ul>
+
+<pre>
+KV Cache 怎么一步步变小(概念示意,不代表具体倍数):
+
+  MHA:  每个 Q 头都有自己的 K、V           →  Cache 最大
+  GQA:  若干 Q 头共享一组 K、V(分组)      →  Cache 中等
+  MLA:  只缓存压缩后的低维隐向量 c_t,      →  Cache 最小
+        用时再投影解压回多头 K、V
+</pre>
+
+<h2>三、模型的入口:Tokenizer 与 BPE</h2>
+<p>模型不吃字符串,吃的是整数 ID。把文本切成一串 token、再映射成 ID,这一步就是 <strong>Tokenizer</strong>。切分的粒度有三种选择,子词(subword)是折中出来的甜点区:</p>
+
+<div class="trio">
+  <div class="cell"><strong>字符级</strong><br>切成单字/字节<br><em>没有 OOV,但序列超长、单 token 语义太弱、算得慢</em></div>
+  <div class="cell"><strong>词级</strong><br>切成整词<br><em>语义强,但词表爆炸、新词/稀有词直接 OOV、无法拆词形</em></div>
+  <div class="cell"><strong>子词级(BPE 等)</strong><br>常见词整块、罕见词拆片<br><em>词表可控、几乎无 OOV、能拼出没见过的词</em></div>
+</div>
+
+<h3>为什么不用字级、也不用词级?</h3>
+<ul>
+<li><strong>词级</strong>的死穴是 <strong>OOV(未登录词)</strong>:词表一旦固定,遇到没收录的新词/拼写/专有名词就只能标成 <code>&lt;unk&gt;</code>,信息全丢;而要覆盖所有词,词表会大到无法承受。</li>
+<li><strong>字级</strong>没有 OOV,但把「language」拆成 8 个字符,序列长度暴涨——注意力是 $O(n^2)$,序列越长越贵,而且单个字符几乎不携带语义,模型要花更多层去「重新拼词」。</li>
+<li><strong>子词</strong>两头取好处:高频词(the、ing)保留成整块,低频词拆成有意义的片段(如 <code>token</code> + <code>ization</code>),既压住了序列长度和词表大小,又能用已有片段<strong>拼出</strong>训练时没见过的词。</li>
+</ul>
+
+<h3>BPE(字节对编码)在做什么?</h3>
+<p>BPE 是一种<strong>无监督</strong>的子词构建法:从最细的单位起步,不断把「出现最频繁的相邻单位对」合并成一个新单位,直到达到预设的合并次数(即目标词表大小)。以 <code>hello world</code> 为例的迭代:</p>
+<pre>
+初始(字符):  h e l l o   w o r l d
+统计相邻对频率 → 'l'+'l'... 最高频的相邻对被合并
+合并 "e"+"l" → "el":   h el l o   w o r l d
+继续合并 "el"+"l" ...:  逐步长出 "ell"、"ello" 之类子词
+… 重复,直到达到设定的合并次数 / 词表大小
+</pre>
+<p>训练结束后得到一张「合并规则表」+ 词表。推理时对新文本按同样的规则贪心地切分。工业上常用的是它的变体 <strong>byte-level BPE</strong>——在<strong>字节</strong>而非字符上做 BPE,这样任何 Unicode 文本(中文、emoji、乱码)都能被表示,彻底消除 OOV。</p>
+
+<h3>词表大小怎么权衡?</h3>
+<p>这是面试爱追的点,记住它是一把<strong>双刃剑</strong>:</p>
+<ul>
+<li>词表<strong>越大</strong>:同一段文本切出的 token <strong>越少</strong>(序列更短、单位算力覆盖的信息更多),但 embedding 矩阵和输出层 softmax 都随词表线性变大(更多显存、更大末层计算),且很多罕见 token 见得少、<strong>训练不充分</strong>。</li>
+<li>词表<strong>越小</strong>:embedding/输出层省,但序列变长、注意力更贵。</li>
+</ul>
+<p>所以词表大小是显存、序列长度、训练充分度之间的折中,不存在「越大越好」。多语言/代码场景往往需要更大的词表来把非英文、符号切得不那么碎。</p>
+
+<dl class="keydef">
+<dt>BPE(Byte-Pair Encoding)</dt>
+<dd>一种子词分词算法:从字符(或字节)开始,反复合并语料中<strong>最高频的相邻单位对</strong>,直到达到目标词表大小。兼顾「几乎无 OOV」与「词表可控」。</dd>
+<dt>RMSNorm</dt>
+<dd>只做均方根缩放、不减均值的归一化:$\operatorname{RMSNorm}(x)=\dfrac{x}{\sqrt{\frac1d\sum_i x_i^2+\epsilon}}\odot g$。比 LayerNorm 少算均值、通常无偏置,更省更稳。</dd>
+<dt>MoE 的激活参数 vs 总参数</dt>
+<dd>总参数 = 所有专家参数之和(很大);激活参数 = 单个 token 实际经过的参数(仅 Top-K 专家,较小)。算力按激活参数走。</dd>
+</dl>
+
+<pre><code># 一个玩具级 BPE:反复合并最高频相邻对(展示思想,非工业实现)
+from collections import Counter
+
+def get_pairs(tokens):
+    return Counter(zip(tokens, tokens[1:]))   # 统计相邻对频率
+
+def bpe_train(tokens, num_merges):
+    merges = []
+    for _ in range(num_merges):
+        pairs = get_pairs(tokens)
+        if not pairs:
+            break
+        best = max(pairs, key=pairs.get)      # 频率最高的相邻对
+        merges.append(best)
+        # 把序列里所有 best 相邻对合并成一个新单位
+        merged, i = [], 0
+        while i < len(tokens):
+            if i < len(tokens) - 1 and (tokens[i], tokens[i+1]) == best:
+                merged.append(tokens[i] + tokens[i+1])
+                i += 2
+            else:
+                merged.append(tokens[i]); i += 1
+        tokens = merged
+    return tokens, merges
+
+seq = list("hello world hello")   # 从字符起步
+print(bpe_train(seq, num_merges=5))</code></pre>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「现代 LLM 相比原始 Transformer 改了哪些地方?」——按清单答:RoPE(位置)、RMSNorm+Pre-Norm(归一化)、GQA/MLA(注意力省 KV)、SwiGLU(激活)、MoE(稀疏 FFN),每条都能说出<em>动机</em>。</li>
+<li>「DeepSeek 和 LLaMA 架构差别?」——两条主线:注意力(GQA「共享」vs MLA「压缩解压」)、FFN(稠密 vs 细粒度 MoE + 无辅助损失均衡)。</li>
+<li>「为什么用 RMSNorm 而不是 LayerNorm?为什么 Pre-Norm?」——省去减均值、少参数更快,重新缩放才是稳定关键;Pre-Norm 给梯度留干净通路,深层更稳。</li>
+<li>「为什么用 RoPE?绝对编码有什么问题?」——绝对编码只给绝对坐标、外推差;RoPE 用旋转把相对位置编进点积,外推更友好且无额外可学习参数。</li>
+<li>「为什么用 BPE 子词,不用字/词级?词表大小怎么定?」——词级 OOV+词表爆炸,字级序列太长语义弱;子词折中。词表越大序列越短但末层越大、罕见 token 训不充分。</li>
+<li>「MoE 怎么做负载均衡?」——辅助损失(会干扰主任务)vs 无辅助损失偏置法(DeepSeek);还有专家容量、噪声路由等。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别说「所有大模型都用 RoPE」。ALiBi 等相对位置方案真实存在,措辞用「主流/多数」。</li>
+<li>RMSNorm 不是「没有可学习参数」——它<strong>去掉了减均值和偏置,但保留</strong>逐维缩放增益 $g$。</li>
+<li>Pre-Norm 与 Post-Norm 是<strong>归一化相对残差的位置</strong>之别(之前 vs 之后),不是换了别的 Norm;两者可以和任意 Norm 组合。</li>
+<li>MLA 不等于 GQA。GQA 是「多头共享同一组 K/V」;MLA 是「把 K/V 压成低维隐向量再解压」——机制不同,别混为一谈。</li>
+<li>MoE 的「总参数量」不等于「单 token 算力」。看到「几百 B 参数的 MoE」别脑补成同规模稠密模型的算力。</li>
+<li>SwiGLU 用<strong>三个</strong>权重矩阵(比原始 FFN 多一个),为保参数量可比通常把隐藏维调小,别忘了这一点。</li>
+<li>不要在答案里报没把握的具体数字(某模型词表多大、KV 省几倍、专家几个)。说不准就讲「量级 / 权衡方向」。</li>
+</ul>
+</div>
+
+<div class="implement">
+<p>RMSNorm 短到可以默写,面试白板题常见。自己敲一遍,顺便对照 LayerNorm 想想少了哪一步:</p>
+<pre><code>import torch, torch.nn as nn
+
+class RMSNorm(nn.Module):
+    def __init__(self, d, eps=1e-6):
+        super().__init__()
+        self.g = nn.Parameter(torch.ones(d))   # 可学习缩放增益,注意保留
+        self.eps = eps
+
+    def forward(self, x):                       # x: [..., d]
+        rms = x.pow(2).mean(dim=-1, keepdim=True).add(self.eps).sqrt()
+        return x / rms * self.g                 # 只缩放,不减均值、无偏置</code></pre>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>为什么现代 LLM 大多用 RoPE 取代原始的正弦绝对位置编码?</p>
+<details><summary>A. RoPE 引入了更多可学习参数,拟合能力更强</summary>错。RoPE 本身没有可学习参数,它靠固定的旋转把位置编进 Q/K。</details>
+<details><summary>B. RoPE 让模型不再需要注意力就能建模位置</summary>错。RoPE 恰恰是作用在注意力的 Q/K 上,离不开注意力。</details>
+<details><summary>C. RoPE 用旋转把位置编进 Q/K,点积后天然表达相对位置,且对更长序列外推更友好 ✅</summary>正确。旋转是正交变换不改变模长,点积结果只依赖位置差 $m-n$,相对位置「免费」得到,外推也更友好。</details>
+<details><summary>D. RoPE 只能和 RMSNorm 搭配使用</summary>错。RoPE 与归一化方案相互独立,可自由组合。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 BPE 词表大小的权衡,下面哪个说法是对的?</p>
+<details><summary>A. 词表越大,同一段文本切出的 token 越少(序列更短),但 embedding/输出层更大、稀有 token 训练不充分 ✅</summary>正确。这正是词表大小的双刃剑:序列变短省注意力算力,但末层随词表线性变大,长尾 token 见得少训不透。</details>
+<details><summary>B. 词表越大,序列一定越长,显存一定越省</summary>错。词表越大序列反而越<em>短</em>;且末层显存随词表增大,不是「一定越省」。</details>
+<details><summary>C. 字符级切分没有 OOV,所以一定比子词更好</summary>错。字级虽无 OOV,但序列过长、单 token 语义弱,并非「一定更好」。</details>
+<details><summary>D. 词表大小对模型的显存和计算没有任何影响</summary>错。embedding 与输出 softmax 都随词表大小线性变化,影响显著。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>RoFormer: Enhanced Transformer with Rotary Position Embedding</strong>(Su et al., 2021)——RoPE 原始论文,本课旋转矩阵与相对位置性质出自此。</li>
+<li><strong>Root Mean Square Layer Normalization</strong>(Zhang &amp; Sennrich, 2019)——RMSNorm 原始论文,论证去掉 re-centering 的可行性。</li>
+<li><strong>GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</strong>(Ainslie et al., 2023)——分组共享 K/V。</li>
+<li><strong>GLU Variants Improve Transformer</strong>(Shazeer, 2020)——SwiGLU 等门控激活的来源。</li>
+<li><strong>Neural Machine Translation of Rare Words with Subword Units</strong>(Sennrich et al., 2016)——把 BPE 引入 NLP 的经典论文。</li>
+<li><strong>Outrageously Large Neural Networks: The Sparsely-Gated MoE Layer</strong>(Shazeer et al., 2017)与 <strong>Switch Transformer</strong>(Fedus et al., 2021)——MoE 与负载均衡辅助损失。</li>
+<li><strong>LLaMA: Open and Efficient Foundation Language Models</strong>(Touvron et al., 2023)与 <strong>DeepSeek-V2 / V3 技术报告</strong>——MLA、细粒度 MoE、无辅助损失均衡的一手出处。</li>
+<li><strong>GLM: General Language Model Pretraining with Autoregressive Blank Infilling</strong>(Du et al., 2022)——GLM 空白填充预训练目标。</li>
+<li>下一步:第 0012 课讲「全量微调 vs PEFT」——当这些架构预训练完成后,怎么低成本适配到你的任务。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>骨架不变、零件全换——RoPE 换位置、RMSNorm+Pre-Norm 换归一化、GQA/MLA 省 KV、SwiGLU 换激活、MoE 换稠密;各家差异是「选配清单」不同;Tokenizer 用子词 BPE 折中字与词。</strong></p>
+<nav class="lesson-nav">
+<a href="0010-gpt-bert-t5-decoder-only.html">← 上一课:GPT / BERT / T5 与 decoder-only</a>
+<a href="0012-full-vs-peft.html">下一课:全量微调 vs PEFT →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

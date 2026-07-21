@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0027 · 为什么要压:窗口红线与触发判断</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 9 章 · 上下文压缩 ›
+  <a href="./0026-tool-output-truncation.html">上一课</a> ›
+  <strong>Lesson 0027</strong>
+</div>
+
+<p class="kicker">Lesson 0027 · 第 9 章 上下文压缩</p>
+<h1>为什么要压:窗口红线与触发判断</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课讲的是单条工具输出太长时的<strong>局部截断</strong>;
+  这一课把视角拉高到<strong>整段对话</strong>——当 50 轮聊天把 200K 的窗口塞满,Pi 用什么信号判断
+  「该动手压缩了」、又为什么拒绝了最直觉的方案「删掉旧消息」。
+</div>
+
+<div class="recall">
+  ⏪ <b>先回忆上一课</b>:工具输出太长会被截断保留头尾,原始内容仍能找回——那是<em>单条消息</em>层面的体积控制。
+  但如果 50 轮对话里<strong>每一条</strong>消息都不算太长,整体加起来还是会逼近甚至冲破 200K 窗口。
+  这就是本课要处理的问题:不是某一条消息太大,而是<strong>历史的总和</strong>太大。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 手算出 Pi 的压缩红线 <code>183,616</code> 是怎么来的,
+  说清 <code>chars/4</code> 估算为什么故意「不精确」,并分清<span class="sys-pill">预防性压缩</span>
+  和<span class="sys-pill">应急性压缩</span>这两种触发场景各自兜底什么。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:一卷快塞满的录像带</b>
+  把 Agent 的记忆想成一卷录像带:50 轮对话是 150K token 的原始录像,快塞满 200K 的磁带盒了。
+  直接剪掉前 30 分钟(删旧消息)等于让它失忆——它忘了你最初让它做什么。
+  Pi 的选择是把旧录像转成一页<b>「摘要笔记」</b>,腾出空间又留住关键情节。
+</div>
+
+<h2>1 · 问题根源:对话是有状态的,窗口迟早装不下</h2>
+<p>
+  Agent 和 LLM 的对话是<strong>有状态的</strong>——每一轮都要把之前的<em>完整历史</em>重新发给模型,
+  模型本身不记得上一次调用说了什么。你和 Agent 聊了 50 轮,每轮可能产生几千 token 的工具结果,
+  算一笔账:<code>50 轮 × 平均 3000 token/轮 = 150,000 token</code>。
+  Claude Sonnet 的上下文窗口是 <code>200,000</code> token——快满了。
+</p>
+<p>
+  满了会怎样?API 直接报错:<code>"prompt is too long"</code>,对话被迫中断。
+  这不是「体验变差」,是<strong>硬性失败</strong>——所以必须在撞墙之前处理。
+</p>
+
+<h2>2 · 为什么不能简单删旧消息</h2>
+<p>
+  最直觉的方案是:把前 30 轮扔掉,只留最近 20 轮。但这样 Agent 就<strong>「失忆」</strong>了——
+  它不记得你最初让它做什么、不记得之前做过哪些决策、不记得改过哪些文件。
+  删除是<em>盲目且有损</em>的:丢掉的信息完全随机,可能刚好把最关键的目标说明也删了。
+</p>
+<div class="why">
+  <b>为什么压缩而不是删旧:</b> 删旧会造成 Agent 失忆(丢失目标/决策/文件记录),
+  压缩则用<strong>结构化摘要</strong>保留关键信息——记忆从「原始录像」降级为「摘要笔记」而非彻底消失。
+  两者都有损,但压缩有损地保留了「结构」,这正是它优于删旧的地方。
+</div>
+<div class="diagram">压缩前后对比
+
+压缩前(185,000 token):
+┌── 第1-30轮(135,000 token)──┬── 第31-50轮(50,000 token)──┐
+│  原始消息(大量工具结果)      │  原始消息(最近的上下文)      │
+└──────────────────────────┴──────────────────────────┘
+
+压缩后(约 60,000 token):
+┌── 摘要(约 10,000 token)──┬── 第31-50轮(50,000 token)──┐
+│  结构化总结(目标、进度、    │  原始消息(完整保留)          │
+│  决策、文件跟踪……)          │                              │
+└────────────────────────┴──────────────────────────┘
+</div>
+
+<h2>3 · 触发红线:shouldCompact 判断什么</h2>
+<p>压缩不是随便触发的,它有一条明确的「红线」——一个纯函数来判断要不要动手:</p>
+<pre><span class="key">function</span> <span class="fn">shouldCompact</span>(contextTokens, contextWindow, settings): boolean {
+<span class="ln">1</span>    <span class="key">if</span> (!settings.enabled) <span class="key">return</span> <span class="key">false</span>;
+<span class="ln">2</span>    <span class="key">return</span> contextTokens &gt; contextWindow - settings.reserveTokens;
+<span class="ln">3</span>}
+</pre>
+<p>代入具体数字:<code>contextWindow = 200,000</code>,<code>reserveTokens = 16,384</code>。</p>
+<p>
+  当 <code>contextTokens &gt; 200,000 - 16,384 = 183,616</code> 时,触发压缩。
+  另外注意第一行:<code>settings.enabled</code> 关掉的话,不管 token 多少都<strong>永不压缩</strong>——
+  这是一个显式的总开关,方便调试或者关掉自动压缩自己手动管理。
+</p>
+<div class="why">
+  <b>为什么保留 reserveTokens = 16,384?</b>
+  上下文窗口是「输入 + 输出」共享的一块空间,必须给 LLM 的回复留出位置——
+  如果把 183,616 之后的空间全塞满输入,模型连生成回复的余地都没有了。
+</div>
+<cite>🔎 出处:教程第 9 章 §二「触发条件」(compaction.ts:shouldCompact)。代码为教程示意,基于 pi v0.80.2。</cite>
+
+<h2>4 · Token 怎么数:chars/4 的粗糙估算</h2>
+<p>
+  一个关键前提问题:压缩判断需要知道「当前有多少 token」,怎么算?
+  精确计算要用 tokenizer,但不同模型 tokenizer 不同、且计算开销大。Pi 选了一个简单粗暴的办法:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 实际签名(compaction.ts:256-296):estimateTokens(message: AgentMessage): number</span>
+<span class="cm"><span class="ln">2</span>// 对每个 message 取其文本字符数 chars,然后 return Math.ceil(chars / 4)</span>
+<span class="ln">3</span><span class="key">function</span> <span class="fn">estimateTokens</span>(message: AgentMessage): number {
+<span class="ln">4</span>    <span class="key">let</span> chars = 0;
+<span class="cm"><span class="ln">5</span>    // ...按 message.role 分别累加 text/thinking/toolCall/command/output/summary 的字符数</span>
+<span class="ln">6</span>    <span class="key">return</span> Math.ceil(chars / 4);  <span class="cm">// chars / 4</span>
+<span class="ln">7</span>}
+</pre>
+<p>
+  一个英文字符大约 0.25 token(4 个字符 ≈ 1 token),估算与实际接近。
+  但<strong>中文是反向偏差</strong>:1 个汉字实际大约 1-2 token,<code>chars/4</code> 却只算成 0.25 token——
+  <strong>严重低估</strong>中文占比高的对话。纯中文场景下,Pi 可能觉得「还没到阈值」,
+  实际 token 已经接近甚至超过上限。
+</p>
+<div class="tradeoff">
+  🔑 <b>为什么用不精确的 chars/4 估算?</b>
+  因为<strong>宁可高估、不可低估</strong>——高估最多多压缩一次(无害);低估会让 API 直接报错(有害)。
+  这是「用精度换安全」的保守策略,而且实现极简。
+  <br><br>
+  <b>为什么接受中文低估这个缺陷?</b> 这是已知的精度问题,但 Pi 的目标场景以英文编码为主,
+  <code>chars/4</code> 在英文场景下够准。权衡下选择了简单实现,而不是引入精确但昂贵的 tokenizer。
+</div>
+<cite>🔎 出处:教程第 9 章 §二「Token 估算」(compaction.ts:256-296)。代码为教程示意,基于 pi v0.80.2。</cite>
+
+<h2>5 · 两种触发场景:预防性 vs 应急性</h2>
+<p>知道了红线和估算方式,压缩实际发生时有两种不同的起因:</p>
+<table class="bd">
+  <thead><tr><th>场景</th><th>什么时候触发</th><th>意味着什么</th></tr></thead>
+  <tbody>
+    <tr><td><b>预防性压缩</b></td><td>token 超过阈值(183,616)但还没报错</td><td>提前压缩,避免 API 报错</td></tr>
+    <tr><td><b>应急性压缩</b></td><td>API 返回上下文溢出错误</td><td>补救措施,先压缩再重试</td></tr>
+  </tbody>
+</table>
+<p>
+  预防性压缩是<strong>常态</strong>——在问题发生之前就处理掉,这是 <code>chars/4</code> 估算准确工作时的正常路径。
+  应急性压缩是<strong>兜底</strong>——万一估算偏了(比如中文低估),API 真报错了,还有一道防线先压缩再重试。
+</p>
+
+<h2>6 · 核心时序:压缩发生在两轮之间</h2>
+<p>
+  在往后学切割点算法、摘要生成之前,先把这条时序刻进脑子——这是理解整章的钥匙:
+  <strong>压缩不是在对话进行中触发的,而是在两轮对话之间发生的</strong>。
+</p>
+<div class="diagram">压缩时序
+
+用户问 → Agent 回答 → (Agent 这一轮结束,发 agent_end 事件)
+                              │
+                              ▼
+                     检查 token:超阈值了吗?
+                              │
+                   ┌──────────┴──────────┐
+                   ▼                     ▼
+                没超 → 等下一轮       超了 → 立刻压缩
+                                       ├─ 找切割点
+                                       ├─ 生成摘要
+                                       └─ 写进 Session Tree
+</div>
+<p>
+  换句话说,Agent 不会在生成回复<em>途中</em>被打断去压缩——那样会破坏正在进行的推理。
+  压缩总是等一轮彻底结束、发出 <code>agent_end</code> 之后才检查、才动手。
+  后面几课讲「在哪切」「怎么生成摘要」,都是这条主线上的具体环节。
+</p>
+
+<h2>7 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① 为什么 Pi 不用「直接删掉前 30 轮对话」这种最直觉的方案来腾出上下文空间?</p>
+    <button class="opt">因为删除消息在 API 层面是不允许的操作</button>
+    <button class="opt">因为删旧比压缩消耗更多 token</button>
+    <button class="opt">因为删旧会让 Agent「失忆」——忘掉最初目标、之前的决策和改过的文件</button>
+    <button class="opt">因为最近的消息比旧消息占用更多空间</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② estimateTokens 用 chars/4 这种粗糙估算,而不是精确 tokenizer。为什么这个「不精确」在工程上是可接受甚至更优的?</p>
+    <button class="opt">因为宁可高估不可低估——高估最多多压一次(无害),低估会让 API 报错(有害)</button>
+    <button class="opt">因为 chars/4 对中文的估算特别准确</button>
+    <button class="opt">因为精确 tokenizer 在 TypeScript 里无法实现</button>
+    <button class="opt">因为估算结果只用于日志,不影响实际压缩</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="3">
+    <p class="stem">③ shouldCompact 的阈值是 contextWindow - reserveTokens = 200,000 - 16,384 = 183,616。这个 reserveTokens 预留的 16K 空间是给谁用的?</p>
+    <button class="opt">给下一次压缩产生的摘要文本</button>
+    <button class="opt">给 Session Tree 的元数据存储</button>
+    <button class="opt">给保留区的最近消息</button>
+    <button class="opt">给 LLM 生成回复用的空间——不能把窗口塞满到 200K,否则模型没有回复的余地</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>预防性压缩和应急性压缩,哪一种在真实使用里更常见?</em>」
+  「<em>如果 reserveTokens 设得太小(比如 1000)会发生什么?</em>」
+  「<em>压缩红线判断的是要不要压,那到底从<strong>哪一条消息</strong>下刀切割?</em>」——
+  最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>8 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第9章-上下文压缩-当对话太长怎么办.md">第 9 章 · 上下文压缩:当对话太长怎么办</a>——
+  原文第一节的配图直观展示了压缩前后 185K → 60K 的 token 占用变化,值得看一眼建立直觉。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0028):</strong> 知道了「该不该压」,下一课解决「从哪里下刀」——
+  切割点算法。为什么 <code>ToolResult</code> 消息不能被单独切走、切割点必须落在 user/assistant 消息之后,
+  以及切断一个 Turn 时的 <code>turnPrefix</code> 处理。
+</p>
+
+<footer>
+  Lesson 0027 · 第 9 章 上下文压缩 ·
+  下一课:<a href="./0028-cut-point-selection.html">0028 切割点选择 →</a> ·
+  上一课:<a href="./0026-tool-output-truncation.html">0026 工具输出截断</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。删旧是有损且盲目的,压缩则把旧消息转成保留目标/决策/文件跟踪的结构化摘要。延伸想一想:压缩其实也是有损的,但它有损地保留了「结构」,这正是它优于删旧的地方。',
+               '✓ 对,这是「用精度换安全」的保守策略。延伸:正因为偏保守,中文场景下 chars/4 反而会低估(1 汉字算 0.25 token),这时保守方向恰好反了,成了已知缺陷。',
+               '✓ 对。上下文窗口是「输入+输出」共享的,必须给模型的回复留位置。延伸:keepRecentTokens(20K)是另一个不同的预算,它约束的是保留区大小,别和 reserveTokens 搞混。'];
+  var msgNo = ['回到第一节「问题」那段——想想 Agent 是有状态的,每轮都依赖完整历史,删掉前 30 轮之后它还记得你最初让它做什么吗?',
+               '想想估算偏高和偏低分别会导致什么后果:一个是多压缩一次,一个是 API 报错。哪个 Pi 更不能接受?',
+               '注意上下文窗口不只装输入,还要装模型的输出。如果 183,616 的输入之后一点空间都不剩,模型拿什么生成回复?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

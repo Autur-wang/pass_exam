@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Pi-Agent SDK 深度精读 · 课程门户</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+<div class="hero">
+  <p class="kicker">agent开发 · 第四门子课 · 源码精读</p>
+  <h1>Pi-Agent SDK 深度精读</h1>
+  <p style="color:#6b6b5f;margin:.3rem 0 0">32 节微课,逐层拆解一个<strong>能上线的生产级 Agent SDK</strong>——
+  earendil-works 开源的 <code>pi</code>(v0.80.2)。看懂它,等于看懂一个完整 Agent SDK 应该怎么设计。</p>
+</div>
+
+<div class="lead">
+  <b>怎么用:</b>按 0001 → 0032 顺序走,每课末有上/下课导航。时间有限先走<strong>前 6 章(0001–0020)</strong>——
+  它们是理解 Pi 运行机制的核心地基;第 7 章起(进阶)可按需跳读。★核心 标记的章(Agent Loop / 模型调用 / 工具 / 消息)是全课重心。
+  每节回答三层:<b>是什么 · 怎么做 · 为什么这样设计</b>。
+</div>
+
+<div class="part">一 · 全局观 · 第 1 章 开篇总览</div>
+<div class="cards">
+  <a class="card" href="lessons/0001-why-pi-three-identities.html"><span class="n">Lesson 0001</span><span class="t">为什么 Pi 值得读:三重身份与减法哲学</span></a>
+  <a class="card" href="lessons/0002-four-packages-three-layer-stack.html"><span class="n">Lesson 0002</span><span class="t">四包三层:堆栈与正交的 UI 库</span></a>
+  <a class="card" href="lessons/0003-run-modes-and-models-json.html"><span class="n">Lesson 0003</span><span class="t">四种运行模式与 models.json 配置</span></a>
+</div>
+<div class="part">二 · 骨骼 · 第 2 章 三层架构</div>
+<div class="cards">
+  <a class="card" href="lessons/0004-five-packages-project-skeleton.html"><span class="n">Lesson 0004</span><span class="t">项目骨骼：五个包各管各的</span></a>
+  <a class="card" href="lessons/0005-type-progression-across-layers.html"><span class="n">Lesson 0005</span><span class="t">类型演进：从原子到分子到材料</span></a>
+  <a class="card" href="lessons/0006-dependency-direction-and-layer-boundaries.html"><span class="n">Lesson 0006</span><span class="t">层边界与依赖：方向单向向上</span></a>
+</div>
+<div class="part">三 · 引擎 · 第 3 章 Agent Loop <span style="color:#a23a2e;font-size:.8em">★核心</span></div>
+<div class="cards">
+  <a class="card" href="lessons/0007-why-loop-trace-and-turn.html"><span class="n">Lesson 0007</span><span class="t">为什么需要循环:三种用法与 Trace/Turn 嵌套</span></a>
+  <a class="card" href="lessons/0008-stopreason-the-only-signal.html"><span class="n">Lesson 0008</span><span class="t">stopReason:驱动循环的唯一信号灯</span></a>
+  <a class="card" href="lessons/0009-kernel-onion-and-streaming-replace.html"><span class="n">Lesson 0009</span><span class="t">内核+叠加的洋葱架构与流式原地替换</span></a>
+  <a class="card" href="lessons/0010-steering-vs-followup-and-hooks.html"><span class="n">Lesson 0010</span><span class="t">两种干预:steering vs followUp 与 Turn 钩子</span></a>
+</div>
+<div class="part">四 · 调模型 · 第 4 章 模型调用 <span style="color:#a23a2e;font-size:.8em">★核心</span></div>
+<div class="cards">
+  <a class="card" href="lessons/0011-translation-company-unified-entry.html"><span class="n">Lesson 0011</span><span class="t">翻译公司:一个入口消化30多家Provider</span></a>
+  <a class="card" href="lessons/0012-translator-five-steps-and-event-protocol.html"><span class="n">Lesson 0012</span><span class="t">翻译器内部:五步骨架与事件协议宪法</span></a>
+  <a class="card" href="lessons/0013-thinking-levels-enum-and-map.html"><span class="n">Lesson 0013</span><span class="t">思考档位:统一枚举 + 各家映射表</span></a>
+</div>
+<div class="part">五 · 手脚 · 第 5 章 工具系统 <span style="color:#a23a2e;font-size:.8em">★核心</span></div>
+<div class="cards">
+  <a class="card" href="lessons/0014-three-layer-tool-types.html"><span class="n">Lesson 0014</span><span class="t">工具的三层类型：名片、执行、展示</span></a>
+  <a class="card" href="lessons/0015-five-step-tool-pipeline.html"><span class="n">Lesson 0015</span><span class="t">五步管道:工具调用不是「调个函数就完了」</span></a>
+  <a class="card" href="lessons/0016-parallel-vs-sequential-scheduling.html"><span class="n">Lesson 0016</span><span class="t">并行 vs 串行:一批工具不是「一起跑就完了」</span></a>
+  <a class="card" href="lessons/0017-errors-are-messages.html"><span class="n">Lesson 0017</span><span class="t">永不抛出:工具出错也是一条消息</span></a>
+</div>
+<div class="part">六 · 记忆 · 第 6 章 消息系统 <span style="color:#a23a2e;font-size:.8em">★核心</span></div>
+<div class="cards">
+  <a class="card" href="lessons/0018-three-standard-llm-messages.html"><span class="n">Lesson 0018</span><span class="t">第一层:LLM 只认三种消息</span></a>
+  <a class="card" href="lessons/0019-agent-message-two-layers.html"><span class="n">Lesson 0019</span><span class="t">第二层:AgentMessage 内富外严</span></a>
+  <a class="card" href="lessons/0020-convert-to-llm-and-visibility.html"><span class="n">Lesson 0020</span><span class="t">转换边界:convertToLlm 与可见性</span></a>
+</div>
+<div class="part">七 · 神经 · 第 7 章 事件驱动</div>
+<div class="cards">
+  <a class="card" href="lessons/0021-why-events-and-sync-barrier.html"><span class="n">Lesson 0021</span><span class="t">为什么要事件 + emit 是同步屏障</span></a>
+  <a class="card" href="lessons/0022-event-nesting-and-two-layers.html"><span class="n">Lesson 0022</span><span class="t">10 种事件的 4 层嵌套与两层事件</span></a>
+  <a class="card" href="lessons/0023-text-delta-journey.html"><span class="n">Lesson 0023</span><span class="t">追踪一个 text_delta 的完整旅程</span></a>
+</div>
+<div class="part">八 · 装窗口 · 第 8 章 上下文工程</div>
+<div class="cards">
+  <a class="card" href="lessons/0024-context-engineering-overview.html"><span class="n">Lesson 0024</span><span class="t">上下文工程总览</span></a>
+  <a class="card" href="lessons/0025-system-prompt-assembly-and-pipeline.html"><span class="n">Lesson 0025</span><span class="t">系统提示词组装与全景管道</span></a>
+  <a class="card" href="lessons/0026-tool-output-truncation.html"><span class="n">Lesson 0026</span><span class="t">工具输出截断策略</span></a>
+</div>
+<div class="part">九 · 压对话 · 第 9 章 上下文压缩</div>
+<div class="cards">
+  <a class="card" href="lessons/0027-why-compact-and-when-to-trigger.html"><span class="n">Lesson 0027</span><span class="t">为什么要压：窗口红线与触发判断</span></a>
+  <a class="card" href="lessons/0028-cut-point-selection.html"><span class="n">Lesson 0028</span><span class="t">在哪切：有效切点、向后遍历与 Turn 分割</span></a>
+  <a class="card" href="lessons/0029-structured-summary-and-rebuild.html"><span class="n">Lesson 0029</span><span class="t">怎么压与如何生效：结构化摘要 + 上下文重建</span></a>
+</div>
+<div class="part">十 · 存会话 · 第 10 章 会话管理</div>
+<div class="cards">
+  <a class="card" href="lessons/0030-session-tree-two-dimensions-and-append-only.html"><span class="n">Lesson 0030</span><span class="t">会话为什么是一棵树</span></a>
+  <a class="card" href="lessons/0031-entry-anatomy-and-three-core-operations.html"><span class="n">Lesson 0031</span><span class="t">节点解剖与三个核心操作</span></a>
+  <a class="card" href="lessons/0032-build-session-context-and-jsonl-persistence.html"><span class="n">Lesson 0032</span><span class="t">从树到LLM上下文与JSONL落盘</span></a>
+</div>
+
+<div class="part">参考 · 脚手架</div>
+<div class="cards">
+  <a class="card" href="reference/chapter-map.html"><span class="n">脊椎</span><span class="t">章节 → 微课 映射表</span></a>
+  <a class="card" href="GLOSSARY.md"><span class="n">术语</span><span class="t">GLOSSARY 统一口径</span></a>
+  <a class="card" href="MISSION.md"><span class="n">为什么学</span><span class="t">MISSION 目标与边界</span></a>
+  <a class="card" href="RESOURCES.md"><span class="n">一手来源</span><span class="t">RESOURCES 教程与 pi 源</span></a>
+</div>
+
+<footer>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),源仓库快照见 <code>../原始资料/dg-ai-notes/</code>;根源 <a href="https://github.com/earendil-works/pi">earendil-works/pi</a>(v0.80.2)。忠实转译,不替代原文。
+</footer>
+</div>
+</body>
+</html>

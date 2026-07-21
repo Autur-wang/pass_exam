@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0013 · RAG vs 微调 vs 长上下文:何时用 RAG</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第五部分 RAG · 第 0013 课</p>
+<h1>RAG vs 微调 vs 长上下文:何时用 RAG</h1>
+<p class="lede">这节课把四道最容易问到一起的「知识从哪来」问题一次讲透:<strong>「何时用 RAG 而非微调给模型新知识?」「参数化 vs 非参知识有何区别?」「什么是训练截止,它怎么影响产品决策?」「百万 token 上下文下 RAG 是不是过时了?」</strong>(源:AI 工程师题库 Q32、Q8、Q13、Q50)。目标是让你答得住面试官那句最狠的追问:「既然都塞得进上下文了,你还要检索干嘛?」</p>
+
+<div class="recall">
+<p>前两课(0011 微调 / PEFT、0012 对齐)讲的都是<strong>怎么改模型的「行为」</strong>——用数据把某种模式写进权重。但产品里更常见的需求其实是另一回事:给模型它训练时没见过的<strong>「事实」</strong>——你公司昨天改的价格、内部文档、刚上线的 API。<strong>先别往下看:要让模型答出「今天的」事实,你觉得应该去改权重,还是有别的路?</strong></p>
+</div>
+
+<h2>一、两种知识:参数化 vs 非参(Q8)</h2>
+<p>要回答「知识从哪来」,先得把模型的知识拆成两类——这是后面所有决策的底座。</p>
+
+<dl class="keydef">
+<dt>参数化知识(Parametric Knowledge)</dt>
+<dd>训练时被<strong>固化进权重</strong>的知识。调用时不需要额外输入,模型「凭记忆」直接答,所以快;但它<strong>停在训练截止那天</strong>、难以溯源、也可能已经陈旧。</dd>
+<dt>非参知识(Non-parametric Knowledge)</dt>
+<dd>推理时<strong>经上下文注入</strong>的知识——通常靠检索把相关内容拼进 prompt。它不在权重里,而在「这一次调用的输入」里,所以能保鲜、能指到具体来源。</dd>
+</dl>
+
+<p><strong>RAG(Retrieval-Augmented Generation)就是注入非参知识的标准做法</strong>:先检索,再让模型基于检索到的内容作答。它带来三个参数化知识给不了的性质——答案<strong>保鲜</strong>(索引更新即生效)、<strong>可审计</strong>(能指到来源)、<strong>锚定在你可控的来源上</strong>(而不是模型脑内那团说不清来路的记忆)。</p>
+
+<p>于是真正的设计问题不是「用哪个」,而是<strong>「哪些事实该进权重,哪些该进检索」</strong>:</p>
+<ul>
+<li><strong>进权重(参数化)</strong>:稳定、通用、几乎不变的知识——语言本身、常识、领域基础概念。</li>
+<li><strong>进检索(非参)</strong>:<strong>易变、私有、需要引用</strong>的知识——价格、库存、内部文档、法规、今天的新闻。</li>
+</ul>
+
+<h2>二、RAG vs 微调:到底该用哪个(Q32)</h2>
+<p>面试官问「给模型新知识,你用 RAG 还是微调」,想听的不是二选一,而是你能不能<strong>按「知识 vs 行为」这条轴把两者分开</strong>:</p>
+
+<table>
+<thead><tr><th></th><th>选 RAG</th><th>选微调</th></tr></thead>
+<tbody>
+<tr><td>你要给的是</td><td>新<strong>知识</strong>(事实、文档、数据)</td><td>新<strong>行为</strong>(格式、语气、技能)</td></tr>
+<tr><td>典型触发</td><td>知识常变 / 量大 / 私有 / 需引用</td><td>输出结构要固定、风格要统一、要一项固化技能</td></tr>
+<tr><td>更新知识的方式</td><td>更新索引即可,免重训</td><td>要重新训练</td></tr>
+<tr><td>能否指出来源</td><td>能(可审计)</td><td>难(答案糊在权重里)</td></tr>
+</tbody>
+</table>
+
+<p>一句话:<strong>知识常变、私有、需要引用 → RAG;要改行为、格式、语气、固化技能 → 微调。</strong>关键别搞反——<strong>微调不是用来灌易变事实的</strong>:你把「今天的价格」微调进去,明天价格一变就得重训,而且它照样说不清这个数是哪来的。</p>
+
+<p>更成熟的答法是给出<strong>成本递增的实务顺序</strong>,而不是把它们对立起来:</p>
+
+<div class="flow">
+  <div class="step decision"><strong>你要给模型的,是「新知识」还是「新行为」?</strong></div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">知识:事实 / 文档 / 数据</div>
+      <div class="step"><strong>→ RAG(+ prompting)</strong><br>常变 / 量大 / 私有 / 需引用时:推理时检索注入,保鲜、可审计、免重训</div>
+    </div>
+    <div class="branch">
+      <div class="label">行为:格式 / 语气 / 技能</div>
+      <div class="step"><strong>→ 微调</strong><br>要固化输出风格、结构或某项技能时:把模式写进权重(别拿它装易变事实)</div>
+    </div>
+  </div>
+  <div class="down">↓ 实务顺序(便宜快 → 贵重)</div>
+  <div class="step terminal"><strong>先 prompting + RAG(便宜、快迭代),够不到才上微调;成熟系统常常两者都用</strong></div>
+</div>
+
+<p>为什么先 prompting + RAG?因为它<strong>便宜、能当天上线、随时改口</strong>;而微调要数据、要算力、要专业度,还把知识「焊死」在权重里失去可审计性。当 prompting + RAG 在行为层面够不到(输出总不稳、风格总跑偏)时,才用微调去补那一层。<strong>RAG 管「知道什么」,微调管「怎么表现」——它们不冲突,常常叠在一起用。</strong></p>
+
+<h2>三、训练截止:一个日期决定产品能不能上线(Q13)</h2>
+
+<dl class="keydef">
+<dt>训练截止(Training Cutoff / Knowledge Cutoff)</dt>
+<dd>模型训练数据的时间上限。<strong>截止之后发生的一切,模型都没见过</strong>——新事件、变动的价格、改过的 API、你昨天写的文档。</dd>
+</dl>
+
+<p>没见过会怎样?模型不会说「我不知道」,它会<strong>猜</strong>,而猜出来的东西看起来很像真的——这就是幻觉最常见的来源之一。所以产品决策上有一条硬规则:</p>
+<p style="text-align:center"><strong>时效性内容 / 私有内容,几乎都不能靠参数化知识,必须在推理时经检索或工具注入。</strong></p>
+
+<p>它的影响比想象中广。一个具体例子:<strong>代码助手</strong>——如果它的训练截止在某个库大版本更新之前,它会自信地推荐<strong>已经废弃的 API</strong>,代码跑不通还查不出为什么。这类场景就得靠检索最新文档 / 联网工具来兜底,而不是信模型的记忆。</p>
+
+<p>把这条落到设计里,就是两句话:<strong>让易变知识总在推理时进入</strong>(检索 / 工具,而非权重);并且<strong>把来源和日期显示给用户</strong>,让他自己判断新鲜度——而不是让模型替他假装什么都最新。</p>
+
+<h2>四、百万 token 上下文,RAG 过时了吗?(Q50)</h2>
+<p>这是最新、也最能拉开档次的一道题。诱人的直觉是:上下文窗口大到能把整个语料一次塞进去,那还检索什么?<strong>诚实的答案是:长上下文改变了权衡,但没有消除「选择读什么」这件事。</strong>即使全塞得下,单纯「每次把一切都塞进去」也有四个实打实的问题:</p>
+
+<ul>
+<li><strong>context rot</strong>:输入越长,模型的准确率往往越往下掉,相关信息容易被淹没在噪声里——「能塞进去」不等于「用得好」。</li>
+<li><strong>成本与延迟</strong>:每次调用都把全部内容当输入,token 数暴涨,又贵又慢。</li>
+<li><strong>没有权限过滤</strong>:一股脑塞进去,无法按「这个用户能看哪些」做隔离;检索层天然是放权限过滤的地方。</li>
+<li><strong>没有引用轨迹</strong>:答案指不到具体片段,做不到可审计。</li>
+</ul>
+
+<p>所以 RAG 真正在做的、长上下文替代不了的四件事是:<strong>选相关切片、尊重权限、保鲜(增量索引,而非每次重塞)、给引用</strong>——顺带还省 token。</p>
+
+<p>更准确的框架是<strong>两者互补</strong>,而非谁淘汰谁:</p>
+<div class="trio">
+  <div class="cell"><strong>长上下文</strong><br><em>让每次能塞更多检索到的证据,分块可以更粗、更简单</em></div>
+  <div class="cell"><strong>检索</strong><br><em>仍然决定「什么值得进这次的预算」——从来不是全塞</em></div>
+  <div class="cell"><strong>合起来</strong><br><em>更大的窗口 + 更聪明的挑选 = 又准又可控</em></div>
+</div>
+
+<p>面试就这么答:<strong>长上下文让「能带多少证据」的上限变高、让分块变简单,但「该带哪些证据、能不能带(权限)、带的是不是最新的、答案指向哪里」这些问题依旧要检索来回答。</strong>这是加分项,不是替代品。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「给模型新知识,RAG 还是微调?」——按「知识 vs 行为」分:知识常变/私有/需引用走 RAG,改行为/格式/技能走微调;先 prompting+RAG,够不到才微调。</li>
+<li>「那微调能不能也用来加知识?」——技术上能,但把易变事实焊进权重会陈旧、要重训、不可审计;固化的是通用稳定知识才划算。</li>
+<li>「参数化和非参知识的区别?」——权重里 vs 上下文里;快但会过时且难溯源,vs 保鲜、可审计、可控源。</li>
+<li>「训练截止怎么影响你的设计?」——时效/私有内容一律推理时注入,并显示来源与日期;举代码助手推荐过时 API 的例子最有说服力。</li>
+<li>「上下文都上百万 token 了,RAG 是不是没用了?」——答 context rot + 成本 + 权限 + 引用四点,再点明长上下文与 RAG 互补。</li>
+<li>「那 RAG 和 agent/工具调用什么关系?」——检索是给模型「读」外部知识;工具/agent 是让模型「做」动作、拿实时数据,两者都属于「推理时注入非参信息」的家族(引出后续 agent 课)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别说「微调是给模型加知识的方式」——微调主要改<strong>行为</strong>;拿它灌易变事实会陈旧、要重训、还不可审计。</li>
+<li>别把 RAG 和微调说成二选一。成熟系统常<strong>两者都用</strong>:RAG 管「知道什么」,微调管「怎么表现」。</li>
+<li>别断言「长上下文让 RAG 过时」。即便全塞得下,仍有 context rot、成本延迟、无权限过滤、无引用——绝对化措辞是这道题的典型扣分点。</li>
+<li>反过来也别说「长上下文毫无用处」。它<strong>确实</strong>放宽了「每次能带多少证据」的上限、简化了分块——正确姿势是「互补」,不是站队。</li>
+<li>别把「模型没答对时效问题」都归成「模型笨」。先问一句:这内容在训练截止之后吗?若是,那本就该走检索/工具,不是模型的锅。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>一家公司的产品价格每周都在变,客服机器人必须答出「当前价格」并能指出依据。最合适的做法是?</p>
+<details><summary>A. 每周把最新价格微调进模型权重</summary>价格一变就要重训,成本高、还说不清来源——把易变事实焊进权重正是典型反模式。</details>
+<details><summary>B. 用 RAG 检索最新价目表注入上下文,并附上来源 ✅</summary>正确。易变 + 私有 + 需引用,三个信号全指向 RAG:更新索引即生效、可审计、免重训。</details>
+<details><summary>C. 等模型下次训练截止更新后自然就会了</summary>训练截止之后的内容模型没见过,且更新周期远慢于「每周」,靠不住。</details>
+<details><summary>D. 把公司全部历史价目一次性塞进超长上下文</summary>又贵又慢,还会 context rot,更没解决「哪条是当前价、来源是什么」。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>面试官问「上下文窗口已经上百万 token,RAG 是不是过时了」,下面哪个回答最稳?</p>
+<details><summary>A. 是,能全塞进去就不用检索了,RAG 已被淘汰</summary>绝对化且错。忽略了 context rot、成本、权限、引用等长上下文解决不了的问题。</details>
+<details><summary>B. 长上下文改变了权衡但没消除「选择读什么」:仍需检索做相关切片、权限过滤、保鲜和引用,两者互补 ✅</summary>正确。既承认长上下文的价值(能带更多证据、简化分块),又说清 RAG 不可替代的四件事。</details>
+<details><summary>C. 不是,长上下文纯属噱头,永远不该用</summary>反向绝对化。长上下文确实放宽了每次能带的证据量、简化了分块,不该一棍子打死。</details>
+<details><summary>D. 无所谓用哪个,反正模型自己会挑重点</summary>回避了权限、引用、成本这些工程现实,面试官要的正是这些取舍。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</strong>(Lewis et al., 2020)——RAG 的原始论文,把「参数化 + 非参知识」这条主线讲清楚的源头。</li>
+<li><strong>Lost in the Middle: How Language Models Use Long Contexts</strong>(Liu et al., 2023)——长上下文里信息位置影响准确率的经典实证,是「能塞进去 ≠ 用得好」的直接证据。</li>
+<li><strong>Context Rot</strong>(Chroma 技术报告,2025)——系统测量「输入越长、表现越降」的现象,本课 context rot 一节的依据。</li>
+<li>Anthropic 工程博客里关于 context engineering / 检索的文章——从工程视角讲「该往上下文里放什么」的取舍。</li>
+<li>下一步:把 RAG 从「概念」拆成「管线」——检索、拼接、生成各环节怎么搭(第 0014 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>知识常变/私有/需引用 → RAG(非参、保鲜、可审计);改行为/格式/技能 → 微调;先 prompting+RAG,够不到才微调;长上下文让你带更多证据,但「选择读什么、能不能读、读的是不是最新的」仍靠检索。</strong></p>
+<nav class="lesson-nav">
+<a href="0012-alignment-rlhf-dpo.html">← 上一课:对齐:RLHF/DPO/GRPO</a>
+<a class="next" href="0014-rag-pipeline.html">下一课:RAG 基础管线 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

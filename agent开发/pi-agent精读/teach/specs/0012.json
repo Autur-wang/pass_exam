@@ -1,0 +1,86 @@
+{
+ "num": "0012",
+ "slug": "translator-five-steps-and-event-protocol",
+ "title": "翻译器内部:五步骨架与事件协议宪法",
+ "narrowTopic": "第二层 12 种统一事件协议 + 第三层翻译器的 5 步工作骨架 + StreamFunction 这套\"入职宪法\",讲清翻译器到底怎么把私有格式翻回统一格式。",
+ "analogySeed": "翻译员的标准工作流程:先确认带了字典(建客户端),再逐句翻译(构建请求+解析响应),最后必须交一份格式固定的\"标准报告\"(12 种统一事件)——不管翻的是法语日语,报告长相都一样。",
+ "keyPoints": [
+  "第二层为什么存在:翻译器把请求发给模型后,模型流式\"一个字一个字吐\";如果每个翻译员都按自己方式吐,前台就疯了,所以约定一套统一输出格式",
+  "12 种事件不用死记,只需抓模式:模型回复分三类(文字/思考/工具调用),每类都有\"开始→逐字增量→结束\"三步,再加流开始 start 和流结束 done/error 两个信号",
+  "每个事件都携带 partial(当前消息的完整快照)——第3章的\"原地替换\"就是它:每次收到事件用 partial 覆盖最后一条消息,不用自己拼增量",
+  "第三层翻译器都走同一个 5 步骨架:1创建客户端、2构建请求参数、3发送请求、4处理响应流、5发送终止事件;第2步(请求翻译)和第4步(响应翻译)是上千行代码的主要工作量",
+  "以 Anthropic 为例第4步的翻译:把 content_block_start/delta 等私有事件名映射成 text_start/toolcall_start 等统一事件,还要把终止原因 end_turn→stop、tool_use→toolUse 统一成 Pi 的术语",
+  "StreamFunction 是整个抽象层的\"宪法\",定三条规则:输入相同(model/context/options)、输出相同(必返回 AssistantMessageEventStream)、错误不抛异常(失败时 push 一个 error 事件而非 throw)"
+ ],
+ "codeRefs": [
+  {
+   "desc": "AssistantMessageEvent 的 12 种事件树:start / text_start→delta→end / thinking_start→delta→end / toolcall_start→delta→end / done(reason: stop/length/toolUse) / error(reason: error/aborted)",
+   "cite": "教程第4章 §二 / types.ts:453-465"
+  },
+  {
+   "desc": "翻译器统一的 5 步工作骨架伪代码:1创建客户端、2构建请求参数(如 Google content→parts)、3发送请求、4处理响应流(私有事件→12种统一事件)、5发送终止事件(成功 push done/失败 push error)",
+   "cite": "教程第4章 §二 / anthropic-messages.ts 5步骨架"
+  },
+  {
+   "desc": "Anthropic 私有事件→Pi 统一事件的映射表:content_block_start(text)→text_start、content_block_delta(text_delta)→text_delta、content_block_start(tool_use)→toolcall_start、content_block_delta(input_json)→toolcall_delta、message_delta(stop_reason)→done",
+   "cite": "教程第4章 §二 / Anthropic 第4步翻译规则"
+  },
+  {
+   "desc": "StreamFunction 的 TypeScript 类型签名:(model: Model, context: Context, options?) => AssistantMessageEventStream,及其下方定义的三条规则",
+   "cite": "教程第4章 §二 / types.ts:304-308"
+  }
+ ],
+ "designRationale": [
+  "为什么每类内容都拆成 start→delta→end 三步:这是流式输出,先告诉\"文字要开始了\",再逐字推送,最后告知结束,让 Agent Loop 能逐字渲染出\"一个字一个字蹦\"的效果",
+  "为什么每个事件都带 partial 完整快照:让消费方用\"原地替换\"消费,而不必自己维护和拼接增量,简化了 Agent Loop 的状态管理",
+  "为什么用协议+函数签名而不是 BaseProvider 抽象类继承:翻译器之间几乎没有共同代码——连\"发消息\"的字段名都不一样,继承需要找共同点,协议只约定输入输出、不管中间实现",
+  "为什么错误要 push 一个 error 事件而不是 throw:呼应第3章\"永不抛出\"原则,把异常包装成事件后,Agent Loop 用同一套机制处理成功和失败,循环永不被打断"
+ ],
+ "quiz": [
+  {
+   "stem": "为什么文字/思考/工具调用每类内容都要拆成 start→delta→end 三步?",
+   "options": [
+    "纯粹为了凑够 12 种事件的数量",
+    "因为是流式输出:先宣告开始、再逐字推送 delta、最后宣告结束,让 Agent Loop 能逐字渲染",
+    "因为 Anthropic 的 API 强制要求这样",
+    "因为这是错误处理的需要"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。三步对应流式的\"开始/增量/结束\",这就是你看到 AI 回复一个字一个字蹦出来的底层机制。延伸:delta 可能有很多个,而 start/end 各一次。",
+   "noMsg": "想想\"模型一个字一个字吐\"这件事:如果要让界面逐字显示,翻译器得先告诉你什么、中间发什么、最后发什么?"
+  },
+  {
+   "stem": "StreamFunction 规定的\"错误不抛异常\"意味着什么?",
+   "options": [
+    "API 失败时直接 throw 异常,交给上层 catch",
+    "静默忽略所有错误,当作没发生",
+    "出错就重启整个进程",
+    "把异常包装成 error 事件 push 进流,Agent Loop 用同一套机制处理成功和失败,循环不被打断"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。这正是第3章 stopReason 为 error/aborted 的注入点——它们不是模型返回的,是翻译器 catch 块设置的。延伸:因此网络超时、Key 过期、用户取消都能被 Agent Loop 统一重试或降级。",
+   "noMsg": "回忆第3章的\"永不抛出\"原则:如果翻译器真的 throw 了,Agent Loop 的 for-await 循环会怎样?错误应该以什么形态进入事件流?"
+  },
+  {
+   "stem": "Pi 为什么用\"事件协议 + 函数签名\"而不是设计一个 BaseProvider 抽象类让翻译器继承?",
+   "options": [
+    "翻译器之间几乎没有共同代码(连字段名都不一样),协议只约定输入输出、不管中间实现",
+    "因为 TypeScript 里没有 class 这种东西",
+    "因为继承在运行时性能更差",
+    "因为协议写起来代码行数更少"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。继承需要找共同代码,但 Anthropic 和 Google 在\"发消息\"上连字段名都不同,没什么可共享的。延伸:这就是本章\"协议 > 实现\"设计法——只约定接口,不强求共享实现。",
+   "noMsg": "想想继承的前提是什么(要有可复用的共同代码)。Anthropic 用 content[]、Google 用 parts[],它们在\"发消息\"这件事上有多少共同点?"
+  }
+ ],
+ "_chapter": "第4章",
+ "_chapterCN": "模型调用 —— 一行代码驾驭多个模型",
+ "prevFile": "0011-translation-company-unified-entry.html",
+ "prevNum": "0011",
+ "nextFile": "0013-thinking-levels-enum-and-map.html",
+ "nextNum": "0013",
+ "crumbLabel": "第 4 章 · 模型调用",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第4章-模型调用-一行代码驾驭多个模型.md",
+ "filename": "0012-translator-five-steps-and-event-protocol.html"
+}

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0042 · 进程与线程:并发的两种单位</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0042 课 · 工程与设计 · 预计 11 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>进程与线程:并发的两种单位</h1>
+
+<p class="lede">「进程和线程有什么区别」是面试的国民八股题,几乎躲不掉。但背下答案没用,考官一追问「那什么时候用多进程、什么时候用多线程」就露馅。这节把区别落到一件事上——<strong>它们共享还是隔离地址空间</strong>——从这一个点,进程与线程的所有性格(隔离性、通信方式、切换代价、崩溃影响)全都能推导出来。</p>
+
+<div class="recall">
+<p>先回忆 <a href="0040-how-programs-run.html">程序如何运行</a>那节:一个运行中的程序有自己的<strong>地址空间</strong>——代码段、数据段、堆(向上长)、栈(向下长)。那节讲的其实就是「一个进程」的内存长相。现在把问题推进一步:<strong>如果想让同一个程序里几件事同时进行,是该再开一个这样完整的地址空间,还是在同一个地址空间里多拉几条执行线?</strong>——这就是进程与线程的分岔口。</p>
+</div>
+
+<h2>一、直觉:公司与工位</h2>
+
+<p>把<strong>进程</strong>想成一家<strong>独立的公司</strong>:有自己独门独户的办公楼(地址空间)、自己的文件柜(内存、文件描述符)。两家公司要合作,只能靠打电话、寄快递(进程间通信 IPC)——安全,但麻烦、慢。</p>
+
+<p>把<strong>线程</strong>想成公司里的<strong>员工</strong>:同一栋楼、共用同一批文件柜(共享代码、数据、堆),沟通只要扭头喊一声(直接读写共享内存)——快,但也危险:两个人同时改同一份文件就乱套了(数据竞争,下一课的主题)。每个员工只有自己的<strong>办公桌</strong>是私有的:线程各有独立的<strong>栈、程序计数器、寄存器</strong>。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 540 260" role="img" aria-label="一个进程内含共享区与三个线程各自的私有栈">
+  <rect class="dgm-node" x="10" y="14" width="520" height="234" rx="10"></rect>
+  <text class="dgm-text" x="26" y="38" font-size="14">进程(独立地址空间)</text>
+
+  <rect class="dgm-good-node" x="26" y="52" width="488" height="60" rx="6"></rect>
+  <text class="dgm-good-text" x="270" y="76" text-anchor="middle" font-size="13">共享:代码段 · 全局/静态数据 · 堆 · 文件描述符</text>
+  <text class="dgm-muted" x="270" y="98" text-anchor="middle" font-size="11">所有线程都能直接读写 → 快,但需要同步保护</text>
+
+  <rect class="dgm-accent-node" x="40" y="128" width="140" height="98" rx="6"></rect>
+  <rect class="dgm-accent-node" x="200" y="128" width="140" height="98" rx="6"></rect>
+  <rect class="dgm-accent-node" x="360" y="128" width="140" height="98" rx="6"></rect>
+  <text class="dgm-accent-text" x="110" y="152" text-anchor="middle" font-size="13">线程 1</text>
+  <text class="dgm-accent-text" x="270" y="152" text-anchor="middle" font-size="13">线程 2</text>
+  <text class="dgm-accent-text" x="430" y="152" text-anchor="middle" font-size="13">线程 3</text>
+  <text class="dgm-muted" x="110" y="180" text-anchor="middle" font-size="11">私有栈</text>
+  <text class="dgm-muted" x="110" y="198" text-anchor="middle" font-size="11">PC · 寄存器</text>
+  <text class="dgm-muted" x="270" y="180" text-anchor="middle" font-size="11">私有栈</text>
+  <text class="dgm-muted" x="270" y="198" text-anchor="middle" font-size="11">PC · 寄存器</text>
+  <text class="dgm-muted" x="430" y="180" text-anchor="middle" font-size="11">私有栈</text>
+  <text class="dgm-muted" x="430" y="198" text-anchor="middle" font-size="11">PC · 寄存器</text>
+</svg>
+</div>
+<figcaption>线程<strong>共享</strong>代码/数据/堆(绿区),但各自拥有<strong>私有</strong>的栈、程序计数器、寄存器(红块)。为什么栈必须私有?因为每个线程有自己独立的函数调用链——共享栈会把彼此的栈帧踩烂。</figcaption>
+</figure>
+
+<h2>二、一张表把区别钉死</h2>
+
+<table>
+<thead><tr><th>维度</th><th>进程(Process)</th><th>线程(Thread)</th></tr></thead>
+<tbody>
+<tr><td><strong>地址空间</strong></td><td>独立、互相隔离</td><td>同进程内共享</td></tr>
+<tr><td><strong>通信方式</strong></td><td>IPC:管道、消息队列、共享内存、socket</td><td>直接读写共享内存(需加锁)</td></tr>
+<tr><td><strong>创建/切换代价</strong></td><td>重(要建/换整套地址空间与页表)</td><td>轻(共享地址空间,只换栈和寄存器)</td></tr>
+<tr><td><strong>崩溃影响</strong></td><td>一个进程崩了,不拖累其它进程</td><td>一个线程崩(如段错误)常拖垮整个进程</td></tr>
+<tr><td><strong>私有的东西</strong></td><td>全套内存 + 资源</td><td>仅栈、程序计数器、寄存器</td></tr>
+</tbody>
+</table>
+
+<p>这张表不用死背——只要记住「进程隔离、线程共享」这一句,每一行都能现场推出来。隔离所以要 IPC、所以切换重、所以崩溃不互相牵连;共享所以通信快、切换轻,但也所以一崩全崩、所以必须同步。</p>
+
+<h2>三、上下文切换:并发的隐藏成本</h2>
+
+<p>单核 CPU 同一时刻只能跑一条执行流。看起来「同时」运行,靠的是操作系统飞快地在多个进程/线程间来回切换——每次切换要<strong>保存当前的寄存器、程序计数器等状态,再载入下一个的状态</strong>,这叫<strong>上下文切换(context switch)</strong>。进程切换还要额外换页表、刷新 TLB,所以比线程切换贵得多。切换本身不干活,是纯开销;切得太频繁,CPU 时间都耗在搬家上了。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node good"><span class="n-title">线程 A 运行</span></div>
+  <div class="arrow">→</div>
+  <div class="node bad"><span class="n-title">保存 A 状态</span><span class="n-sub">寄存器 / PC</span></div>
+  <div class="arrow">→</div>
+  <div class="node bad"><span class="n-title">载入 B 状态</span><span class="n-sub">纯开销,不干活</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">线程 B 运行</span></div>
+</div>
+<figcaption>中间两步是上下文切换,不产出任何有用计算。进程切换在此之上还要换地址空间(页表 + TLB),这就是「线程比进程轻」的量化来源。</figcaption>
+</figure>
+
+<h2>四、并发 ≠ 并行</h2>
+
+<p>这是两个最常被混淆的词,面试爱抠:</p>
+<ul>
+<li><strong>并发(concurrency)</strong>:多个任务在<strong>时间上重叠推进</strong>,但不一定同一时刻真的在跑——单核靠快速切换也能并发。是一种「结构」。</li>
+<li><strong>并行(parallelism)</strong>:多个任务<strong>同一时刻真的在同时执行</strong>,必须有多核/多处理器硬件。是一种「执行」。</li>
+</ul>
+<p>一句话:并发是「同时应付很多事」(可以只有一个厨师在多道菜之间轮转),并行是「同时做很多事」(真有多个厨师)。并行一定并发,并发不一定并行。</p>
+
+<dl class="keydef">
+<dt>进程(Process)</dt>
+<dd>拥有独立地址空间的程序执行实例;进程间隔离,通信靠 IPC。</dd>
+<dt>线程(Thread)</dt>
+<dd>进程内的执行单位,与同进程其它线程共享地址空间(代码/数据/堆),但各有私有的栈、程序计数器、寄存器。</dd>
+<dt>上下文切换(Context Switch)</dt>
+<dd>CPU 从一个执行流切到另一个时,保存旧状态、载入新状态的过程;纯开销。进程切换含换页表,比线程切换贵。</dd>
+<dt>并发 vs 并行(Concurrency vs Parallelism)</dt>
+<dd>并发=多任务在时间上交错推进(单核亦可);并行=多任务同一时刻真正同时执行(需多核)。<em>避免</em>把两者当同义词。</dd>
+<dt>写时复制(Copy-on-Write)</dt>
+<dd><code>fork</code> 出的子进程先与父共享只读页,直到某方写入才真正复制该页;省去无谓的整片内存拷贝。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong></p>
+<ul>
+<li><strong>「进程和线程的区别?」</strong>——别只背表。用「隔离 vs 共享」这一根线串起来讲,再补一句「所以线程通信快但要同步,进程安全但通信慢」,层次立刻不一样。</li>
+<li><strong>「什么时候用多进程,什么时候用多线程?」</strong>——要隔离性/稳定性(一个崩不拖累全局)、或要绕开某语言的全局锁(如 Python 的 GIL 让多线程做不了 CPU 并行,得用多进程),选多进程;要频繁共享大量数据、切换开销敏感,选多线程。</li>
+<li><strong>协程 / 线程池</strong>:进阶会问协程(用户态调度,比线程更轻,一个线程里跑成千上万个)、以及为什么要线程池(复用线程、摊掉创建开销)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「并发就是并行」——最常见的口误,直接暴露基础不牢。</strong>单核机器可以并发(靠切换)但无法并行。反过来,把 8 核机器上的程序说成「并发执行」不算错,但要能指出它此刻是真并行。</p>
+<p>另一个坑:<strong>「多线程一定更快」是错的。</strong>线程切换、锁竞争、缓存失效都是成本;IO 密集型任务多线程收益大(线程等 IO 时让别人跑),CPU 密集型任务线程数超过核数反而更慢。而且在 Python 里,GIL 使多线程无法让多个线程同时执行 Python 字节码,CPU 密集要靠多进程。</p>
+</div>
+
+<div class="implement">
+<p>用你熟悉的语言各写一个小实验,亲手感受区别:</p>
+<p>① <strong>共享的证据</strong>:开 2 个线程,各把同一个全局计数器自增一百万次(先不加锁),打印最终值——你会看到它<strong>小于</strong>两百万,这就是共享内存 + 数据竞争(下一课要治的病)。<br>② <strong>隔离的证据</strong>:用 <code>fork</code>(或多进程 API)开子进程,让它修改一个变量,回到父进程打印同名变量——父进程的值<strong>没变</strong>,因为地址空间隔离(写时复制)。<br>③ 若用 Python,再拿一段纯计算跑「多线程」对比「多进程」耗时,观察 GIL 让多线程 CPU 任务几乎不提速。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>进程<strong>隔离</strong>、线程<strong>共享</strong>——这一个区别推出全部其它区别。共享带来速度也带来数据竞争,于是有了下一课的同步原语;隔离带来安全也带来 IPC 的麻烦。并发是结构,并行是执行,别混。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:同一进程里的多个线程,下面哪一组是<strong>每个线程私有</strong>、不共享的?<br>A. 代码段和全局变量<br>B. 堆上分配的对象<br>C. 栈、程序计数器、寄存器<br>D. 打开的文件描述符</summary>
+<div class="answer">
+<p><strong>C。</strong>线程共享代码段、全局/静态数据、堆、文件描述符(A、B、D 都是共享的),但各自拥有私有的<strong>栈、程序计数器、寄存器</strong>。栈必须私有,因为每个线程有独立的函数调用链;PC 和寄存器私有,因为每个线程执行到的位置和中间状态各不相同。正是「堆共享、栈私有」,让线程既能便捷共享数据,又能各跑各的调用流。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:一个 Web 服务要处理大量并发连接,团队在「多进程」和「多线程」间纠结。仅从「一个连接的处理逻辑崩溃了会怎样」这个角度看,两者差别是什么?</summary>
+<div class="answer">
+<p><strong>多进程更抗崩。</strong>进程地址空间隔离,一个进程因某连接的 bug 崩溃(如段错误),其它进程照常服务,影响面被限制在那一个进程。多线程共享地址空间,一个线程触发段错误通常会让<strong>整个进程连同其上所有线程一起挂掉</strong>,影响面大得多。这就是为什么很多服务器(如早期 Apache prefork、以及浏览器把每个标签页放进独立进程)用多进程换稳定性和隔离性——代价是更重的创建/切换开销和更麻烦的 IPC。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:「我的笔记本是单核的,所以它没法并发,只能一个一个来。」这句话对吗?</summary>
+<div class="answer">
+<p><strong>不对——混淆了并发与并行。</strong>单核确实无法<strong>并行</strong>(同一时刻只能真正执行一条指令流),但完全可以<strong>并发</strong>:操作系统靠快速的上下文切换,让多个任务在时间上交错推进,宏观上「同时在跑」。你单核电脑上一边放音乐一边编辑文档,就是并发。并行才需要多核;并发只是一种任务组织结构,单核也成立。并行一定并发,并发不一定并行。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题在仓库大纲的「进程和线程」小节,内容很密(涵盖进程/线程/协程、锁、信号量、死锁、上下文切换)。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.quora.com/What-is-the-difference-between-a-process-and-a-thread">进程和线程的区别是什么?(Quora)</a> —— 把这道八股题讲清楚的经典问答。</li>
+<li><a href="https://www.javatpoint.com/what-is-the-context-switching-in-the-operating-system">操作系统和底层硬件如何启动上下文切换?(javatpoint)</a> —— 想弄懂切换代价从哪来,读这篇。</li>
+<li><a href="https://archive.org/details/ucberkeley-webcast-PL-XXv-cvA_iBDyz-ba4yDskqMDY6A1w_c">UC Berkeley CS162 · 操作系统和系统编程(视频)</a> —— 前 11 讲系统覆盖进程与线程。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI14 讲「上下文切换到底切了什么」,或带你在纸上画出两个线程共享堆、各占私有栈的内存图。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0041-cache.html"><span class="dir">← 上一课</span>缓存:局部性与命中率</a>
+  <a class="next" href="0043-concurrency-primitives.html"><span class="dir">下一课 →</span>并发原语:锁、信号量与死锁</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

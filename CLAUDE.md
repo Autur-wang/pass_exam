@@ -4,35 +4,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 这是什么仓库（先读这一段）
 
-这**不是软件工程项目，而是一个考试复习教学工作区**。主要产物是 HTML 微课、Markdown 学习记录、术语表和题库——不是可运行的程序。当前主线是《操作系统》学校自命题期末复习（已讲第 1–8 章，第 9–12 章低优先级）。
+这**不是软件工程项目，而是一个多学科的考试 / 面试备考教学工作区**。主要产物是 HTML 微课、Markdown 学习记录、术语表和题库——不是可运行的程序。它起源于《操作系统》学校自命题期末复习（`operating_systems/`，至今仍是内容最成熟的板块），现已扩展为覆盖多门考试课与面试方向的教学平台：`面试/`（6+ 门面试精读课，**当前最活跃**）、`agent开发/`（4 门 Agent 开发课）、`数据结构与算法/`、`多媒体/`、`advanced_oop/`、`learn-code/` 等。完整板块清单见 `README.md`。
 
 误判性质会导致整个工作方向错误，务必注意：
-- 目标**不是**开发一个操作系统，也**不是**刷 408 统考难题。
-- `reference/xv6-riscv-20230207/` 与 `reference/egos-2000/` 是**参考材料**，不是开发目标，默认只读。
+- 目标**不是**开发任何软件 / 操作系统，也**不是**刷 408 统考难题；产物是教学材料。
+- `reference/xv6-riscv-20230207/` 是**参考材料**（源码快照，非活动 git 克隆），不是开发目标，默认只读。（注：早期文档提到的 `reference/egos-2000/` 当前**不存在**。）
+- 各板块下的 `原始资料/`、克隆的第三方仓库（如 `agent开发/原始资料/`、`book-to-skill/`）默认只读。
 - 不要把内容一次性讲满；每节课只解决一个关键概念或一类题。
 
 ## 必读上下文（接手任何任务前）
 
-按此顺序读取，再开始工作：
-1. `README.md` — 项目结构与复习目标
+先判断本次任务属于**哪个板块（课程）**，再按此顺序读取该板块的上下文：
+1. `README.md` — 全仓库板块地图与定位
 2. `AGENTS.md` — AI 行为规范（文件可改/不可改清单、新增课程/学习记录规范）
-3. `operating_systems/MISSION.md` — 考试目标与边界（也存在镜像 `operating_systems/teach/MISSION.md`）
-4. `operating_systems/NOTES.md` — 用户偏好与教学法
-5. 最新 2–3 条 `operating_systems/learning-records/*.md` — 判断学到哪、错在哪、下一步教什么
-6. 与任务相关的 `operating_systems/textbook/` 章节、`GLOSSARY.md` 或算法速查表
+3. 该板块的 `teach/MISSION.md`（或课程根 `MISSION.md`）— 考试/学习目标与边界
+4. 该板块的 `teach/NOTES.md` — 用户偏好与教学法
+5. 该板块最新 2–3 条 `learning-records/*.md` — 判断学到哪、错在哪、下一步教什么
+6. 与任务相关的教材章节、`GLOSSARY.md` 或速查表
+
+以操作系统为例：`operating_systems/teach/MISSION.md` → `operating_systems/teach/NOTES.md` → 最新 `operating_systems/teach/learning-records/*.md`。（注意 operating_systems 的 MISSION/NOTES 在课程根与 `teach/` 两处有镜像；学习记录主体在 `teach/learning-records/`。）
 
 完整接手/产出/交接流程见 `workflow/ai-workflow.md`。
 
 ## 架构：可复用的 `teach/` 元结构
 
-四门课各自带一套**完全同构**的教学脚手架，理解一套即理解全部：
+多门课各自带一套**高度同构**的教学脚手架，理解一套即理解全部。带 `teach/`（或等价的 `lessons/` + `MISSION/GLOSSARY/…`）脚手架的主要课程：
 
-| 课程目录 | 主题 |
-|---|---|
-| `operating_systems/` | 操作系统期末（当前主线） |
-| `advanced_oop/` | 面向对象高级编程 |
-| `learn-code/` | 零基础编程入门 |
-| `reference/xv6-riscv-20230207/` | xv6 源码精读（既是参考代码，也带 `teach/`） |
+| 课程目录 | 主题 | 微课数 |
+|---|---|---|
+| `operating_systems/` | 操作系统期末（起源板块，内容最成熟） | 94 |
+| `面试/编程面试大全/` 等 6 门 | 各面试方向精读（**当前最活跃**：编程/前端/大模型算法/生成式AI/工程领导力/OOP） | 26–52/门 |
+| `agent开发/`（from-zero / 顶层 lessons / book-course / pi-agent精读） | Agent 开发入门 / 进阶 / 书精读 / Pi-Agent SDK 源码精读 | 14 / 18 / 57 / 32 |
+| `数据结构与算法/teach_副本/` | 数据结构与算法期末 | 19 |
+| `多媒体/teach/` | 多媒体系统导论期末 | 22 |
+| `advanced_oop/` | Effective Java 期末过线 | 11 |
+| `learn-code/teach/` | 按 OS 章节精读 xv6 内核源码（起步） | 4 |
+| `reference/xv6-riscv-20230207/teach/` | xv6 源码精读（参考代码内嵌 `teach/`） | 13 |
+
+（完整板块清单与体量见 `README.md`。）
 
 每门课的 `teach/`（`operating_systems` 把同名文件同时放在课程根和 `teach/` 两处）包含一组**配对的内容文件 + 格式模板**：
 
@@ -49,8 +58,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## operating_systems/ 主工作区布局
 
 - `1_操作系统引论/` ~ `6_文件管理/` — 各章原始教材 + PPT + 测试
-- `textbook/` — 主教材结构与课件；`0_总框架.md` 是人工整理的快速定位入口（查老师口径优先看这里）
-- `operating_systems_tangxiaodan/` — 汤小丹教材知识库（`SKILL.md` 是 12 章索引，`textbook/算法速查表.md` 覆盖调度/页面置换/银行家算法等）
+- `textbook/` — 主教材结构与课件；`0_总框架.md` 是人工整理的快速定位入口（查老师口径优先看这里）；算法速查表、考研高频考点也在此
+- `operating_systems_tangxiaodan/` — 汤小丹教材知识库入口，但当前**仅剩 `SKILL.md` 索引，正文章节内容已缺失**（SKILL 里 12 章 / 417 页的描述与磁盘不符）
 - `lessons/` — 已生成的 HTML 微课，命名 `NNNN-dash-case-topic.html`，编号递增，一节一窄主题
 - `exams/` — 章节测试卷 `chNN-test.html` 与 `final-test.html`
 - `bank/` — 题库（README 提及；当前可能未填充）
@@ -79,7 +88,7 @@ open operating_systems/lessons/0006-page-replacement.html
 
 `build_chN.py` / `build_final.py` 用 `exams/_template.html` 模板把题目 JSON 渲染成测试卷，`link_lessons.py` 把题库链接注入各 lesson 页脚。**但这些脚本已与当前目录结构漂移，运行前必须核对**：
 
-- 脚本**硬编码了另一台机器的绝对路径** `/Users/wangzihao/Code/pass_exam/...`，本机是 `/Users/bytedance/pass_exam`，直接运行会写到不存在的路径。
+- 机器绝对路径**已修**：原 `/Users/wangzihao/Code/pass_exam/...` 已批量替换为本机 `/Users/bytedance/pass_exam`（2026-07）。但以下**结构性**漂移仍未修：
 - 脚本假设模板在 `operating_systems/exams/_template.html`，实际模板在 `operating_systems/reference/_template.html`。
 - `link_lessons.py` 把链接指向 `../bank/`，但测试卷实际在 `exams/`。
 
@@ -95,6 +104,8 @@ open operating_systems/lessons/0006-page-replacement.html
 ## 本地教学技能
 
 `skills/` 下有可被引用的轻量教学技能：`teach-you/`（循序教学）、`grill-me/`（追问式校验理解）、`caveman/`（极简类比风格）。各自 `SKILL.md` 为入口。
+
+`skills/yao-positioning-skill/` 是从第三方仓库 [yaojingang/yao-open-skills](https://github.com/yaojingang/yao-open-skills) 引入的完整 Agent Skill 包（定位分析与报告生成，含 `scripts/`、`references/`、`templates/` 等），非本仓库自制教学技能，改动前先看其 `SKILL.md` 与 `security/permission_policy.md`。
 
 ---
 

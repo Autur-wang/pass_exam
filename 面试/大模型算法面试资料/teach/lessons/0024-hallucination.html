@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0024 · 幻觉治理与知识时效</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第六部分 RAG 与知识库 · 第 0024 课</p>
+<h1>幻觉治理与知识时效</h1>
+<p class="lede">大模型会一本正经地胡说八道:编造不存在的论文、杜撰错误的 API、把「去年的事」说成「刚发生」。面试里一旦聊到 RAG,「你怎么降低幻觉」几乎是必问题。这节课把幻觉拆成「为什么会有」和「分层怎么治」两条线,让你既能讲清生成机制的根因,又能报出一套从检索到对齐的组合拳。</p>
+
+<div class="recall">
+<p>上一课(混合检索与重排序)我们把「怎么把最相关的证据捞上来」讲透了:稠密向量 + BM25 稀疏检索并行,再用 RRF 融合、Cross-Encoder 精排。<strong>先别往下看,想一个问题:就算证据召回得很准,模型拿到证据后就一定不会瞎编了吗?如果它照样编,问题出在哪一环?</strong></p>
+</div>
+
+<h2>一、幻觉是什么,为什么必然会有</h2>
+<p>幻觉(Hallucination)指模型生成的内容<strong>流畅、自信,但与事实或给定证据不符</strong>。它不是偶发 bug,而是从生成机制里长出来的结构性倾向。要治它,先得看清它的三个根:</p>
+
+<h3>根因一:它本质是「下一个 token 的概率游戏」</h3>
+<p>自回归语言模型做的事,就是在已有上文的条件下,对下一个 token 采样:</p>
+$$P(x_t \mid x_{&lt;t}) = \operatorname{softmax}(W h_t)$$
+<p class="formula-note">$h_t$ 是当前位置的隐状态,模型选的是「最像话」的 token,不是「最真」的 token。</p>
+<p>它优化的目标是<strong>语言的流畅性与统计似然</strong>,不是「事实正确」。整个训练里没有一个模块负责核对「这句话是不是真的」。所以当上文暗示该出现一个人名、一个年份、一篇参考文献时,模型会填一个「概率上最合理」的——哪怕它根本不存在。流畅和真实是两个正交的维度,模型只被优化了前者。</p>
+
+<h3>根因二:参数里没有事实约束,也没有「我不知道」的出口</h3>
+<p>模型的知识全被压进了权重里,是一种<strong>有损、模糊的记忆</strong>。它记得「爱因斯坦 + 相对论 + 某个年份」这些概念高度共现,但具体年份可能记串。更糟的是,预训练语料里几乎没有「这个我不确定」的表达范式——语料都是斩钉截铁的陈述句,于是模型也学会了对不确定的东西同样斩钉截铁。这就是所谓的<strong>过度自信(overconfidence)</strong>。</p>
+
+<h3>根因三:训练数据本身有噪声与过时信息</h3>
+<p>网络语料里本就混着错误、谣言、互相矛盾的说法,模型会照单全收。而且——这引出本课后半的重点——语料有一个<strong>知识截止日期(knowledge cutoff)</strong>,截止之后发生的事,参数里根本没有。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">流畅性目标<br>(似然最大)</div>
+  <div class="node">参数记忆<br>有损/模糊</div>
+  <div class="node">无事实校验<br>模块</div>
+  <div class="node">语料噪声<br>+ 知识过期</div>
+  <div class="node good">幻觉</div>
+</div>
+<figcaption>幻觉不是单一 bug,而是四股力共同作用的结果——所以治理也必须分层。</figcaption>
+</figure>
+
+<h2>二、分层治理:一套组合拳,不是银弹</h2>
+<p>没有任何单一手段能「消灭」幻觉,只能层层设防、逐级压低概率。面试答这题的高分姿势,就是能把治理拆成从输入到输出、从推理到训练的<strong>多个层次</strong>,并说清每层解决哪一类幻觉。</p>
+
+<table>
+<thead><tr><th>层次</th><th>手段</th><th>治的是哪类幻觉</th></tr></thead>
+<tbody>
+<tr><td>输入侧</td><td>RAG 注入外部证据</td><td>参数记不住 / 已过期的事实</td></tr>
+<tr><td>指令侧</td><td>Prompt 约束「只依据证据回答」</td><td>模型脱离证据自由发挥</td></tr>
+<tr><td>输出侧</td><td>结构化输出 + 校验、引用溯源</td><td>格式错乱、无法核对的断言</td></tr>
+<tr><td>训练侧</td><td>RLHF / DPO 对齐,奖励「诚实」</td><td>过度自信、习惯性编造</td></tr>
+</tbody>
+</table>
+
+<h3>1. RAG:给它证据,而不是让它凭记忆</h3>
+<p>这是最直接的一层,也是本部分的主线。把权威文档检索进上下文,让模型<strong>基于证据(grounded)作答</strong>,而不是从模糊的参数记忆里捞。它同时缓解了「记不清」和「知识过期」两类问题——因为知识库可以随时更新,不必重训模型。</p>
+<p>但要注意:RAG <strong>不等于</strong>幻觉归零。如果检索到的证据本身不相关、或模型忽略证据继续按参数记忆答(这叫上下文不忠实),幻觉照样出现。所以 RAG 之后仍需下面几层兜底。</p>
+
+<h3>2. Prompt 约束:把「作答纪律」写进指令</h3>
+<p>用指令给模型划红线,常见几条:</p>
+<ul>
+<li>「<strong>仅依据下面提供的资料回答</strong>,资料中没有的信息不要编造。」</li>
+<li>「如果资料不足以回答,请直接回答『根据现有资料无法确定』。」——给模型一个「认怂」的出口,对冲根因二。</li>
+<li>「回答中每个关键结论后<strong>标注出处编号</strong>[1][2]。」</li>
+</ul>
+<p>这层几乎零成本,却能显著改变行为——它把「允许说不知道」这件预训练里稀缺的事,在推理时补了回来。</p>
+
+<h3>3. 结构化输出校验 + 引用溯源</h3>
+<p>让模型按固定 schema(如 JSON)输出,再用程序校验字段是否合法、引用的 chunk id 是否真在检索结果里。<strong>引用溯源(citation / attribution)</strong>是关键一招:要求模型把每句话对应到具体证据片段,既方便人工核对,也逼模型「只说有据可查的话」。答不出出处的结论,就该被拦下或标红。</p>
+
+<h3>4. RLHF / DPO:从对齐层面降编造</h3>
+<p>前三层都在推理时打补丁,这一层是从<strong>训练</strong>上改脾气。SFT 之后,用人类偏好把模型往「诚实、有据、不确定就承认」的方向拉:</p>
+<ul>
+<li><strong>RLHF</strong>:训练一个奖励模型 $r_\phi$ 给回答打分,再用 PPO 优化策略,让「编造/过度自信」的回答拿低分。可在偏好标注里刻意加入「宁可说不知道,也别瞎编」的偏好。</li>
+<li><strong>DPO</strong>:跳过独立奖励模型,直接用「好回答 vs 坏回答」的偏好对做优化。把「有据、诚实」的回答设为 chosen,「自信地编造」的设为 rejected,模型就学会压低后者的概率。</li>
+</ul>
+<p>DPO 的偏好目标可以写成:</p>
+$$\mathcal{L}_{\text{DPO}} = -\,\mathbb{E}_{(x,\,y_w,\,y_l)}\left[\log \sigma\!\left(\beta \log \frac{\pi_\theta(y_w\mid x)}{\pi_{\text{ref}}(y_w\mid x)} - \beta \log \frac{\pi_\theta(y_l\mid x)}{\pi_{\text{ref}}(y_l\mid x)}\right)\right]$$
+<p class="formula-note">$y_w$ 是更受偏好的回答(如有据、承认不确定),$y_l$ 是较差的(如自信编造);优化让模型相对参考策略 $\pi_{\text{ref}}$ 更倾向 $y_w$。$\beta$ 控制偏离参考策略的强度。DPO 与 RLHF 的推导见第 0018/0019 课。</p>
+<p>一句话记住这层的定位:<strong>RAG 管「有没有正确信息可用」,对齐管「模型愿不愿意老实用、不瞎补」。</strong>两者互补,缺一不可。</p>
+
+<h2>三、知识时效:参数会过期,检索来续命</h2>
+<p>这是幻觉的一个特殊且高频的子问题。模型的参数知识冻结在预训练<strong>截止日期</strong>那一刻,之后的新事实(新发布的产品、换届的人事、最新的财报)它一概不知——但它不会说「不知道」,而是拿旧知识硬答,或直接编。</p>
+<p>解法是把「静态参数知识」和「动态外部知识」分开:</p>
+<div class="trio">
+  <div class="cell"><strong>参数知识</strong><br>压在权重里<br><em>广博但过期、模糊</em></div>
+  <div class="cell"><strong>RAG 检索</strong><br>查知识库/文档<br><em>可随时更新的私域/时效知识</em></div>
+  <div class="cell"><strong>工具调用</strong><br>搜索引擎/API/数据库<br><em>实时、精确的动态信息</em></div>
+</div>
+<p>需要「此刻的天气、股价、今天的新闻」这类<strong>实时</strong>信息时,连 RAG 的离线索引都可能不够新,得靠<strong>工具调用</strong>(联网搜索、调 API)去取——这也是下一课 Agent 范式的核心动机之一:让模型学会「不知道就去查」,而不是「不知道就编」。</p>
+
+<h2>四、怎么评估幻觉</h2>
+<p>治理要能度量才能迭代。评估幻觉大致两条思路:</p>
+<dl class="keydef">
+<dt>事实一致性(Factual Consistency)</dt>
+<dd>判断生成内容是否与「参考事实/给定证据」一致。常见做法:用一个判别模型(NLI 蕴含判断)或更强的 LLM 当裁判(LLM-as-a-judge),逐条判断回答里的断言是被证据<strong>支持</strong>、<strong>矛盾</strong>还是<strong>无法判定</strong>。</dd>
+<dt>引用命中(Citation / Attribution 准确率)</dt>
+<dd>在 RAG 场景下,检查模型标注的引用是否真的支撑对应结论。可拆成两个角度:<strong>引用精确率</strong>(标出来的证据确实相关)和<strong>引用召回率</strong>(该有出处的结论都标了)。</dd>
+</dl>
+<p>还有一个便宜的信号:<strong>自洽性(self-consistency)</strong>——对同一问题多次采样,若答案彼此矛盾、飘忽不定,往往是模型在编;答案高度一致,可信度相对更高。注意这只是启发式,一致也可能是「一致地错」。</p>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「大模型为什么会产生幻觉?」——从生成机制答:优化目标是流畅性/似然而非事实,无事实校验模块,参数记忆有损,叠加语料噪声与知识过期。别只说「训练数据有错」。</li>
+<li>「你会怎么降低一个 RAG 系统的幻觉?」——分层报菜名:检索质量兜底 → prompt 约束「仅依据证据、可说不知道」→ 结构化输出+引用溯源校验 → 对齐(RLHF/DPO)。强调没有银弹。</li>
+<li>「RLHF / DPO 是怎么改善幻觉的?」——从对齐层面奖励诚实、惩罚自信编造;DPO 用 chosen/rejected 偏好对直接拉偏好,把「有据/认怂」设为 chosen。</li>
+<li>「模型知识过期了怎么办?」——参数知识冻结在截止日期,用 RAG 补时效知识(可随时更新索引),实时信息靠工具调用/联网搜索。</li>
+<li>「Agent 里的幻觉怎么办?」——见下方易错点:幻觉会沿工具调用链累积,要靠工具返回做事实锚点 + 每步校验 + 失败可重试/反思。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li><strong>别说「RAG 能消除幻觉」。</strong>RAG 只是提供证据;若检索不相关,或模型不忠实于证据(继续按参数记忆答),幻觉照样发生。用「显著降低/大幅缓解」这种量级措辞,别说死。</li>
+<li>幻觉 ≠ 事实错误的全集。<strong>忠实性幻觉</strong>(违背给定证据/指令)和<strong>事实性幻觉</strong>(违背世界知识)是两回事,RAG 主要治后者顺带治前者,面试可点出这层区分显功底。</li>
+<li>Agent 场景下幻觉会<strong>沿调用链放大</strong>:某一步编造的中间结论会被后续步骤当真、层层传导。对策是让工具返回值充当事实锚点、每步做校验、允许反思/重试,而不是让模型一条道走到黑。</li>
+<li>调低 temperature 能让输出更保守,但<strong>不能根治</strong>幻觉——它只是减少随机性,模型该编的高概率错误照样编。</li>
+<li>「知识过期」要靠更新<strong>检索库或工具</strong>解决,而不是「重新训练一个模型」——后者又慢又贵,且下次还会过期。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>下面哪一项最准确地解释了「大模型为什么天然容易产生幻觉」?</p>
+<details><summary>A. 因为模型参数量太大,过拟合了训练数据</summary>幻觉与参数量大小、过拟合不是一回事;小模型同样会幻觉。根因在生成机制,不在容量。</details>
+<details><summary>B. 训练/推理的目标是最大化语言似然(流畅),没有任何模块负责校验事实,叠加参数记忆有损与语料噪声 ✅</summary>正确。流畅性与真实性是正交维度,模型只被优化了前者,又没有事实校验出口,幻觉是结构性的。</details>
+<details><summary>C. 因为用了 softmax 采样,温度设太高</summary>温度只影响随机性程度,调低也不能根治;它不是幻觉的根因。</details>
+<details><summary>D. 因为 attention 是低秩的,表达能力不足</summary>与幻觉无因果关系,属于张冠李戴。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>用户问「本月最新发布的某产品定价是多少」,模型自信地给了一个错误数字。最根本的对策是?</p>
+<details><summary>A. 把 temperature 调到 0,让输出确定</summary>确定性输出仍可能确定地输出错误数字,治标不治本。</details>
+<details><summary>B. 用更长的 prompt 反复强调「不要编造」</summary>有帮助但不解决根本——模型参数里压根没有这个新事实,再怎么约束也变不出正确数字。</details>
+<details><summary>C. 通过 RAG 检索最新文档、或调用工具/联网搜索获取实时信息,让回答基于外部证据 ✅</summary>正确。这是典型的知识时效问题:参数知识冻结在截止日期,必须靠可更新的外部知识(RAG/工具)来续命。</details>
+<details><summary>D. 立刻用最新数据重新训练整个模型</summary>又慢又贵,且下次仍会过期;不是工程上的合理首选。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Survey of Hallucination in Natural Language Generation</strong>(Ji et al., 2023)——系统梳理幻觉的定义、成因与忠实性/事实性的区分,本课分类框架的参考。</li>
+<li><strong>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</strong>(Lewis et al., 2020)——RAG 的原始论文,理解「用检索缓解参数知识局限」的源头。</li>
+<li><strong>Direct Preference Optimization</strong>(Rafailov et al., 2023)——本课 DPO 损失的出处;RLHF 侧可回看 InstructGPT(Ouyang et al., 2022)。</li>
+<li>向前接第 0022/0023 课(RAG 检索与重排),向后接第 0025 课 Agent 范式——「不知道就去查」正是 Agent 的核心动机。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>幻觉源于「优化流畅而非事实」,治理靠分层——RAG 给证据、prompt 划红线、结构化+溯源校验、RLHF/DPO 教诚实;知识过期则用可更新的检索与工具来续命。</strong></p>
+<nav class="lesson-nav">
+<a href="0023-hybrid-retrieval-rerank.html">← 上一课:混合检索与重排序</a>
+<a href="0025-agent-paradigms.html">下一课:Agent 范式 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

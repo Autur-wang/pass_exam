@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0032 · 递归:自我调用与 base case</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0032 课 · 算法范式 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>递归:自我调用与 base case</h1>
+
+<p class="lede">递归是接下来一整个「算法范式」部分的地基——回溯、分治、动态规划都长在它上面。这节课只攻一件事:把一个函数<strong>调用自己</strong>为什么能算出答案讲清楚,以及面试官最爱盯的两个死穴——<strong>漏了 base case 会栈溢出</strong>、<strong>子问题重叠不做缓存会指数爆炸</strong>。</p>
+
+<div class="recall">
+<p>先回忆:在<a href="0018-trees-and-traversal.html">树的遍历</a>那课,我们几乎每个遍历都写成「先处理自己,再对左右子树做同样的事」。那句「对子树做同样的事」就是递归。还有一个隐藏角色——每次函数调用自己,系统都往<strong>调用栈</strong>压一层栈帧。试着自己说出:如果一直压栈、永远不返回,会发生什么?</p>
+</div>
+
+<h2>一、直觉:把问题缩小成同一个问题</h2>
+
+<p>递归的心法只有一句:<strong>假设「更小的那个问题」已经解决了,我只负责拼出当前这一层</strong>。求 <code>n!</code> 时,我不去想 <code>5×4×3×2×1</code> 怎么连乘,只想一件事:<code>n! = n × (n-1)!</code>——只要有人替我算出 <code>(n-1)!</code>,我乘个 <code>n</code> 就完事。那个「有人」就是递归调用它自己。</p>
+
+<p>但光有「缩小」不够,必须有个地方<strong>停下来直接给答案,不再往下递</strong>,否则会无限递归。这个终点就是 <strong>base case</strong>(基准情形):<code>0! = 1</code>。于是递归的三要素浮现:</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">① base case:最小的、能直接回答的情形(<code>0! = 1</code>)</div>
+  <div class="down">↓</div>
+  <div class="step">② 递归式:用更小的子问题表达当前问题(<code>n! = n × (n-1)!</code>)</div>
+  <div class="down">↓</div>
+  <div class="step terminal">③ 向 base case 收敛:每次调用都让规模严格变小,保证最终能撞上 base case</div>
+</div>
+<figcaption>三要素缺一不可。缺 ① 或 ③ → 停不下来 → 栈溢出(stack overflow)。</figcaption>
+</figure>
+
+<h2>二、递归靠调用栈展开</h2>
+
+<p>递归不是魔法,它借的是<strong>调用栈</strong>:每进入一层函数,系统压入一个栈帧(保存参数、局部变量、返回地址);撞到 base case 后开始逐层返回,栈帧一个个弹出、把结果往上交。所以递归深度 = 栈的高度。深度太大(比如对 100 万个元素做线性递归),即使逻辑正确也会<strong>爆栈</strong>——这是递归相对循环最现实的代价。</p>
+
+<h2>三、危险案例:朴素斐波那契</h2>
+
+<p>把 <code>fib(n) = fib(n-1) + fib(n-2)</code> 直接写成递归,看起来干净,却慢得离谱。画出它的<strong>递归树</strong>就明白了:同一个子问题被反复重算。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 600 300" role="img" aria-label="fib(4) 的递归树,fib(2) 被重复计算两次">
+  <line class="dgm-edge" x1="300" y1="35" x2="170" y2="110"/>
+  <line class="dgm-edge" x1="300" y1="35" x2="440" y2="110"/>
+  <line class="dgm-edge" x1="170" y1="110" x2="100" y2="185"/>
+  <line class="dgm-edge" x1="170" y1="110" x2="240" y2="185"/>
+  <line class="dgm-edge" x1="440" y1="110" x2="390" y2="185"/>
+  <line class="dgm-edge" x1="440" y1="110" x2="500" y2="185"/>
+  <line class="dgm-edge" x1="100" y1="185" x2="60" y2="260"/>
+  <line class="dgm-edge" x1="100" y1="185" x2="140" y2="260"/>
+  <circle class="dgm-node" cx="300" cy="35" r="20"/>
+  <text class="dgm-text" x="300" y="40" text-anchor="middle" font-size="12">f(4)</text>
+  <circle class="dgm-node" cx="170" cy="110" r="20"/>
+  <text class="dgm-text" x="170" y="115" text-anchor="middle" font-size="12">f(3)</text>
+  <circle class="dgm-accent-node" cx="440" cy="110" r="20"/>
+  <text class="dgm-accent-text" x="440" y="115" text-anchor="middle" font-size="12">f(2)</text>
+  <circle class="dgm-accent-node" cx="100" cy="185" r="20"/>
+  <text class="dgm-accent-text" x="100" y="190" text-anchor="middle" font-size="12">f(2)</text>
+  <circle class="dgm-node" cx="240" cy="185" r="20"/>
+  <text class="dgm-text" x="240" y="190" text-anchor="middle" font-size="12">f(1)</text>
+  <circle class="dgm-node" cx="390" cy="185" r="20"/>
+  <text class="dgm-text" x="390" y="190" text-anchor="middle" font-size="12">f(1)</text>
+  <circle class="dgm-node" cx="500" cy="185" r="20"/>
+  <text class="dgm-text" x="500" y="190" text-anchor="middle" font-size="12">f(0)</text>
+  <circle class="dgm-node" cx="60" cy="260" r="20"/>
+  <text class="dgm-text" x="60" y="265" text-anchor="middle" font-size="12">f(1)</text>
+  <circle class="dgm-node" cx="140" cy="260" r="20"/>
+  <text class="dgm-text" x="140" y="265" text-anchor="middle" font-size="12">f(0)</text>
+</svg>
+</div>
+<figcaption>两个红色的 <code>f(2)</code> 是<strong>同一个子问题被算了两次</strong>。规模再大一点,重复会像滚雪球——这就是<strong>重叠子问题</strong>,是通往<a href="0034-dynamic-programming-1.html">动态规划</a>的信号。</figcaption>
+</figure>
+
+<p>树的节点总数随 <code>n</code> 近似翻倍,所以朴素斐波那契是 <strong>O(2ⁿ)</strong>(更精确是 O(φⁿ),φ≈1.618)。只要在算过的子问题上加一层缓存(记忆化),同一个 <code>f(k)</code> 只算一次,复杂度立刻塌到 O(n)——这就是下下节 DP 的核心动作。</p>
+
+<h2>四、尾递归:一个常被高估的优化</h2>
+
+<p><strong>尾递归</strong>指递归调用是函数的<strong>最后一个动作</strong>,返回值直接就是那次调用的结果,当前栈帧没有任何后续计算要做。理论上编译器可以复用同一个栈帧(尾调用优化,TCO),把递归变成不增长栈的循环。但现实是——<strong>多数主流语言默认不做尾调用优化</strong>(如 CPython、大多数 JVM 实现),原因之一是会破坏调用栈信息、让异常堆栈不可读。所以别指望「写成尾递归就不会爆栈」;真要控制栈深,老老实实改写成迭代更可靠。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>递归(Recursion)</dt>
+<dd>函数调用自身、把问题化为更小的同类子问题;必须有 base case 保证收敛。<em>避免</em>把递归和「循环」当作可无脑互换——递归多占栈空间。</dd>
+<dt>base case(基准情形)</dt>
+<dd>递归的终止条件:小到可以直接给出答案、不再往下递的情形。漏写或写错会导致无限递归。</dd>
+<dt>重叠子问题(Overlapping Subproblems)</dt>
+<dd>递归展开中同一个子问题被反复求解。是「递归 + 记忆化 = 动态规划」适用的前提;不重叠则属<a href="../GLOSSARY.md">分治</a>范畴。</dd>
+<dt>尾递归(Tail Recursion)</dt>
+<dd>递归调用是函数执行的最后一步。理论上可被优化成常数栈空间,但多数语言默认不优化。</dd>
+</dl>
+
+<h2>六、复杂度:同是递归,天差地别</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">递归写法</th><th>时间</th><th>栈空间(深度)</th></tr></thead>
+<tbody>
+<tr><td class="op">阶乘 <code>fact(n)</code>(线性递归)</td><td>O(n)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">朴素斐波那契 <code>fib(n)</code></td><td class="warn">O(2ⁿ) <small>(重叠子问题)</small></td><td>O(n)</td></tr>
+<tr><td class="op">递归二分查找</td><td class="best">O(log n)</td><td class="best">O(log n)</td></tr>
+<tr><td class="op">归并排序(分治)</td><td>O(n log n)</td><td>O(log n) <small>(递归) + O(n) 合并缓冲</small></td></tr>
+</tbody>
+</table>
+<p>要点:递归本身没有固定复杂度——<strong>时间由「子问题个数 × 每层工作量」决定,空间至少要算上调用栈的最大深度</strong>。面试里一句「这段递归空间是多少」,考的往往就是你有没有把栈深算进去。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>递归很少单独成题,但它是解题的默认工具,面试官会用它探你的基本功:</p>
+<ul>
+<li><strong>套用「解决任何递归问题的 5 步」</strong>(见主推资源):① 找出最小子问题(base case);② 假设子问题已解决;③ 写出当前层如何用子问题的解拼出答案(递归式);④ 确认每次调用规模都在缩小;⑤ 估复杂度。能按这条流水线口述,面试官就知道你不是靠背模板。</li>
+<li><strong>要求你现场估复杂度</strong>:画出递归树,数「节点数 × 每节点工作量」。斐波那契树能画出来,分数就到手一半。</li>
+<li><strong>追问栈溢出风险</strong>:「输入 10⁶ 会怎样?」——线性递归深度 10⁶ 直接爆栈,这时要么改迭代、要么显式用<strong>栈</strong>模拟。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:漏 base case 或 base case 覆盖不全。</strong>比如只处理了 <code>n==0</code> 却忘了 <code>n==1</code>,或者递归参数可能走到负数却没拦。结果是无限递归直到栈溢出。写递归先写 base case,是肌肉记忆。</p>
+<p><strong>坑二:明明有重叠子问题却裸递归。</strong>朴素斐波那契、裸递归的爬楼梯,面试官等的就是你说出「这里子问题重叠,加记忆化能从 O(2ⁿ) 降到 O(n)」。说不出这句,就暴露了没吃透递归树。</p>
+<p><strong>坑三:以为「写成尾递归就不爆栈」。</strong>多数语言不做尾调用优化,别把它当保命符。</p>
+</div>
+
+<div class="implement">
+<p>徒手写并对照跑一遍,把「递归树」从抽象变具体:</p>
+<p><code>fact(n)</code> · 递归版 <code>fib(n)</code>(在函数里打印每次调用,数一数 <code>fib(2)</code> 被调用几次)· 加一个字典做<strong>记忆化</strong>的 <code>fib_memo(n)</code>(再数一次调用次数,对比)· 把 <code>fib</code> 改写成<strong>迭代</strong>版 · 用递归做二分查找和数组求和。</p>
+<p>实验:让 <code>fact</code> 的 <code>n</code> 一路加大,亲眼看它在哪个深度抛出 <code>RecursionError</code> / <code>StackOverflowError</code>。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>写任何递归先问三句——base case 是什么?每次调用规模有没有严格变小?子问题会不会重叠(重叠就该上记忆化)?这三问答完,递归的对与快都稳了。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:下面哪一项<strong>最</strong>能解释「朴素递归斐波那契为什么是 O(2ⁿ)」?</summary>
+<div class="answer">
+<p><strong>因为存在重叠子问题,同一个 <code>fib(k)</code> 在递归树的不同分支里被反复重算,节点总数随 n 近似翻倍。</strong></p>
+<p>干扰项辨析:不是「因为递归比循环慢」(常数差异,不改变量级);也不是「因为要压很多栈帧」(栈深只有 O(n),那是空间不是时间)。慢的根源是<strong>重复计算</strong>——所以加记忆化(每个子问题只算一次)就能把时间降到 O(n),而这并不改变代码的递归形态。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:一位同学说「我把递归改成尾递归了,所以再大的输入也不会栈溢出」。这话对吗?</summary>
+<div class="answer">
+<p><strong>不一定对,通常是错的。</strong>尾递归<em>理论上</em>可以被编译器优化成常数栈空间(TCO),但<strong>多数主流语言默认不做这个优化</strong>(如 CPython、常见 JVM 实现)。在这些语言里,尾递归照样一层层压栈,深度够大照样爆。真要保证不爆栈,应改写成显式迭代(循环)或用自己维护的栈。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:递归二分查找的<strong>空间</strong>复杂度是多少?为什么不是 O(1)?</summary>
+<div class="answer">
+<p><strong>O(log n)。</strong>虽然二分查找不额外开数组,但每次递归都压一层栈帧,而递归深度等于对半砍的次数,即 O(log n)。所以尽管「没开新数据结构」,调用栈本身就占了 O(log n) 空间。若改写成<strong>迭代</strong>二分,才是真正的 O(1) 额外空间——这也是面试里区分「原地」与否的常见细节。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题在仓库大纲的「更多知识 → 递归(Recursion)」小节。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://youtu.be/ngCos392W4w">解决任何递归问题的 5 个简单步骤(视频)</a> —— 把上面「面试怎么考」里那条流水线讲透,强烈推荐先看这条。</li>
+<li><a href="https://www.youtube.com/watch?v=gl3emqCuueQ&list=PLFE6E58F856038C69&index=8">Stanford 抽象编程 · 课程 8(视频)</a> 及紧随的 <a href="https://www.youtube.com/watch?v=uFJhEPrbycQ&list=PLFE6E58F856038C69&index=9">课程 9</a> —— 系统建立递归与回溯的直觉。</li>
+<li><a href="https://www.quora.com/What-is-tail-recursion-Why-is-it-so-bad">什么是尾递归以及为什么它如此糟糕?</a> —— 读完你会明白为什么不能把尾递归当保命符。</li>
+</ul>
+<p>复杂度对照随时查本地 <code>../cheat-sheets/big-o-cheatsheet.pdf</code>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「调用栈怎么一层层弹回」,或带你在纸上把 <code>fib(5)</code> 的递归树完整画一遍、数出重复节点。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0031-shortest-path-dijkstra.html"><span class="dir">← 上一课</span>最短路 · Dijkstra:非负权图的贪心</a>
+  <a class="next" href="0033-backtracking.html"><span class="dir">下一课 →</span>回溯:在决策树上试错与剪枝</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

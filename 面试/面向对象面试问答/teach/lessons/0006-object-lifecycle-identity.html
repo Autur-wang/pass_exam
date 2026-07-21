@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>对象的生命周期与身份 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第二部分 · 类的机制 · 第 0006 节</p>
+<h1>对象的生命周期与身份:is vs ==</h1>
+<p class="lede">"对象是什么?"是最像送分题、其实最容易答浅的一问。这一节把它拆成两个能当场演示的硬核:对象的<strong>三特征 + 一生</strong>,以及 Python 里最常被写错的一行——<code>is</code> 和 <code>==</code> 到底比的是什么。</p>
+
+<div class="recall">
+<p>先别往下看。请你回答:<code>a = [1, 2, 3]</code> 和 <code>b = [1, 2, 3]</code>,那么 <code>a == b</code> 是 True 还是 False?<code>a is b</code> 呢?为什么?把两个答案和理由都在心里说出来,再往下对。</p>
+</div>
+
+<h2>一、直觉:一个对象,像一个"活着的东西"</h2>
+
+<p>面试官问"What is an object?",他想听的不是"类的实例"这句循环定义,而是你能不能说清一个对象<strong>由哪几件事构成、又经历了什么</strong>。把对象想成一个活物,它同时有三样东西:</p>
+
+<div class="trio">
+  <div class="cell"><div class="role">它是谁</div><div class="head">Identity</div><div class="sub">唯一身份</div></div>
+  <div class="cell"><div class="role">它现在怎样</div><div class="head">State</div><div class="sub">状态 · 可变</div></div>
+  <div class="cell"><div class="role">它能做什么</div><div class="head">Behavior</div><div class="sub">行为 · 方法</div></div>
+</div>
+
+<p>拿一只狗打比方:它有一张独一无二的身份证(<strong>identity</strong>,哪怕世上有另一只一模一样的狗,也不是它)、有此刻的状态(<strong>state</strong>:饿不饿、会哪些技能,会变)、还有一套能做的动作(<strong>behavior</strong>:坐下、握手,这些动作会改它的状态)。三样缺一不可——只有数据没行为是结构体,只有行为没身份是函数。</p>
+
+<p>这三样合起来"活一辈子",就是<strong>对象的生命周期</strong>:</p>
+
+<div class="pipeline">
+  <div class="node good"><span class="n-title">① 创建</span><span class="n-sub">实例化<br>造出身份+初始状态</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">② 操作</span><span class="n-sub">调方法 / 改状态<br>身份始终不变</span></div>
+  <div class="arrow">→</div>
+  <div class="node bad"><span class="n-title">③ 销毁</span><span class="n-sub">GC 回收<br>或显式解除引用</span></div>
+</div>
+
+<p>注意中间一格:<strong>操作阶段状态在变,但身份从头到尾是同一个</strong>。狗学会了新技能,它还是那只狗——这正是 identity 和 state 的分野,也是下面 <code>is</code> 与 <code>==</code> 的全部根源。</p>
+
+<div class="keydef">
+<dl>
+<dt>对象 (Object)</dt>
+<dd>一个同时拥有 <strong>identity(身份)+ state(状态)+ behavior(行为)</strong> 的运行时实体;类是它的模板,对象是类的实例。</dd>
+<dt>Identity(身份)</dt>
+<dd>对象在其生命期内<strong>唯一且不变</strong>的标记,回答"是不是同一个对象"。在 CPython 里由 <code>id(obj)</code> 表示。</dd>
+<dt>State(状态)</dt>
+<dd>对象此刻持有的数据(属性值),<strong>通常可变</strong>——操作阶段就是在改它。</dd>
+<dt>Behavior(行为)</dt>
+<dd>对象能响应的操作(方法),往往用来读或改状态。</dd>
+<dt>生命周期 (Lifecycle)</dt>
+<dd>创建(实例化)→ 操作(改状态/调方法)→ 销毁(垃圾回收或显式解除引用)。</dd>
+</dl>
+</div>
+
+<h2>二、创建那一步,内部发生了什么?</h2>
+
+<p>写 <code>d = Dog("Rex")</code> 看着是一步,实际是<strong>两步</strong>:先 <code>__new__</code> 负责"造出一个空实例"(分配、拿到身份),再 <code>__init__</code> 负责"给这个已存在的实例填初始状态"。日常你几乎只写 <code>__init__</code>,因为 <code>__new__</code> 的默认行为已经够用了(这两者的分工与何时要重写 <code>__new__</code>,留到 0007 详讲)。</p>
+
+<pre><code>class Dog:
+    def __init__(self, name):      # 初始化:给"已造出的"实例填状态
+        self.name = name           # state(状态)
+        self.tricks = []
+
+    def learn(self, trick):        # behavior(行为):改状态
+        self.tricks.append(trick)
+
+d = Dog("Rex")     # ① 创建:先 __new__ 造壳拿身份,再 __init__ 填状态
+d.learn("sit")     # ② 操作:调方法、改状态,d 还是同一个对象
+del d              # ③ 解除一个引用;引用计数归零时才真正销毁
+</code></pre>
+
+<p>关于第 ③ 步要说准:<code>del d</code> <strong>不等于</strong>"立刻销毁对象",它只是删掉 <code>d</code> 这个名字对对象的引用。CPython 的回收以<strong>引用计数</strong>为主——引用数归零就即时回收;对付"你引用我、我引用你"的<strong>循环引用</strong>,再叠一层<strong>分代垃圾回收(generational GC)</strong>兜底。所以对象何时真正消失,是运行时说了算,不是你 <code>del</code> 说了算。</p>
+
+<h2>三、身份 vs 值:is 和 == 的分水岭</h2>
+
+<p>有了"身份 / 状态"这对概念,Python 里两个比较运算就一目了然:</p>
+
+<ul>
+<li><code>is</code> 比 <strong>identity</strong>:两个名字是不是<strong>指向同一个对象</strong>(等价于 <code>id(a) == id(b)</code>)。</li>
+<li><code>==</code> 比 <strong>value / equality</strong>:两个对象的<strong>值是否相等</strong>,可由 <code>__eq__</code> 自定义(默认退化为按身份比;<code>__eq__</code> 的定制留到 0022)。</li>
+</ul>
+
+<pre><code>a = [1, 2, 3]
+b = [1, 2, 3]      # 内容一样,但是"另造"的一个 list 对象
+c = a              # 没有新对象,c 只是 a 的另一个名字
+
+print(a == b)      # True  —— 值相等(内容逐项一样)
+print(a is b)      # False —— 不是同一个对象
+print(a is c)      # True  —— 就是同一个对象
+
+print(id(a), id(b))    # 两个不同的整数 → 身份不同
+print(id(a) == id(c))  # True → a 和 c 身份相同
+</code></pre>
+
+<p>一句话记牢:<strong><code>==</code> 问"长得一样吗",<code>is</code> 问"就是你吗"。</strong>上面 <code>a</code> 和 <code>b</code> 长得一样(<code>==</code> 为真),但不是同一个(<code>is</code> 为假);<code>a</code> 和 <code>c</code> 则是同一个对象的两个名字。</p>
+
+<p>关于 <code>id()</code> 再补一刀准确性:CPython 里 <code>id(obj)</code> <strong>恰好是对象的内存地址</strong>——但这是 <strong>CPython 的实现细节</strong>,不是 Python 语言的保证。语言只承诺:<code>id()</code> 在对象<strong>生命期内唯一且恒定</strong>。别把它当内存地址来写逻辑,换个解释器(如某些 PyPy 场景)就不成立。</p>
+
+<div class="interview">
+<p><strong>高频追问链(这一簇几乎必被追到底):</strong></p>
+<ul>
+<li>"<code>is</code> 和 <code>==</code> 有什么区别?" → <code>is</code> 比身份(同一个对象?),<code>==</code> 比值(内容相等?,由 <code>__eq__</code> 决定)。答不清这条基本出局。</li>
+<li>"为什么 <code>a = 256; b = 256; a is b</code> 是 True,换成 257 却可能是 False?" → CPython 缓存了小整数(约 -5 到 256),同一个值复用同一个对象;这是<strong>实现细节</strong>,不是语言规则,别据此写逻辑。见下面易错点。</li>
+<li>"判断一个变量是不是 <code>None</code>,该写 <code>x is None</code> 还是 <code>x == None</code>?" → 用 <code>is None</code>。因为 <code>None</code> 是<strong>全局单例</strong>,比身份最准最快;而 <code>== None</code> 可能被对方类重写的 <code>__eq__</code> 骗到,给出意外结果。</li>
+<li>"<code>id()</code> 返回的是内存地址吗?" → 在 CPython 里是,但那是实现细节;语言只保证生命期内唯一且恒定。</li>
+<li>"对象什么时候被销毁?" → CPython 引用计数为主,归零即回收;分代 GC 兜底循环引用。<code>del</code> 只减引用,不保证立即销毁。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>头号翻车点:拿 <code>is</code> 去判断值相等。</strong>初学者常写 <code>if x is 0</code>、<code>if name is "admin"</code>,一开始"居然能跑",于是误以为对——那是因为 CPython 对<strong>小整数(约 -5 到 256)做了缓存</strong>、对部分<strong>短字符串做了驻留(interning)</strong>,让不同来源的相同值"碰巧"是同一个对象。一旦值超出缓存范围、或字符串是运行时拼出来的,<code>is</code> 立刻翻脸:</p>
+<pre><code>x = 256; y = 256
+print(x is y)   # True  —— 落在小整数缓存里,别当真
+
+x = 257; y = 257
+print(x is y)   # 可能 False —— 超出缓存,是两个对象了
+print(x == y)   # True  —— 判断"值相等"永远用 ==
+</code></pre>
+<p><strong>规矩:判断值是否相等,永远用 <code>==</code>;只有判断"是不是同一个对象 / 是不是 <code>None</code>"这类身份问题,才用 <code>is</code>(<code>if x is None</code>)。</strong>把缓存行为当成语言保证来写逻辑,是最典型的"面试当场被反例打脸"。</p>
+</div>
+
+<div class="crosslang">
+<p>"身份比较 / 值比较,你这门语言怎么分?"是跨语言必问。Python 的这对区分,在其它语言里对应得很整齐:</p>
+<table>
+<tr><th>语言</th><th>比身份(同一对象)</th><th>比值(内容相等)</th><th>生命周期特点</th></tr>
+<tr><td><strong>Python</strong></td><td><code>is</code></td><td><code>==</code>(<code>__eq__</code>)</td><td>引用计数 + 分代 GC,回收时机由运行时定</td></tr>
+<tr><td><strong>Java</strong></td><td><code>==</code>(比引用)</td><td><code>.equals()</code></td><td>纯 GC,回收时机不确定</td></tr>
+<tr><td><strong>C++</strong></td><td>比指针 / 地址 <code>&amp;a == &amp;b</code></td><td><code>==</code>(可重载)</td><td>确定性析构:栈对象一出作用域立即析构</td></tr>
+</table>
+<p>特别注意 <strong>Java 的坑正好和 Python 相反</strong>:Java 的 <code>==</code> 比的是<strong>引用(identity)</strong>,值相等要用 <code>.equals()</code>——所以 Java 里 <code>str1 == str2</code> 判字符串内容是经典 bug,和 Python 里用 <code>is</code> 判内容是同一类错误。而 <strong>C++</strong> 走的是另一条路:<strong>栈上对象离开作用域就确定性析构</strong>,不像 Python/Java 交给不确定时机的 GC。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,打开解释器,亲手把这些区别跑出来:</p>
+<ul>
+<li>造两个内容相同的 <code>dict</code>,分别打印 <code>a == b</code>、<code>a is b</code>、<code>id(a)</code>、<code>id(b)</code>,解释为什么。</li>
+<li>写 <code>c = a</code> 后再打印 <code>a is c</code>,说清"新对象"和"新名字"的差别。</li>
+<li>令 <code>a.append(4)</code>,再看 <code>c</code>——为什么 <code>c</code> 也变了?这和"同一个对象"有什么关系?</li>
+<li>试 <code>x = 256; y = 256; x is y</code> 与 <code>x = 257; y = 257; x is y</code>,亲眼看缓存边界。(结论:这类结果别写进业务逻辑。)</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:<code>a = [1, 2]; b = a; c = [1, 2]</code>。下面四个表达式,各是 True 还是 False?<code>a == b</code>、<code>a is b</code>、<code>a == c</code>、<code>a is c</code>。</summary>
+<div class="answer">
+<p><strong>答案:True / True / True / False。</strong></p>
+<ul>
+<li><code>a == b</code> → True:值相等。</li>
+<li><code>a is b</code> → True:<code>b = a</code> 没造新对象,<code>b</code> 只是 <code>a</code> 的另一个名字,身份相同。</li>
+<li><code>a == c</code> → True:<code>c</code> 内容和 <code>a</code> 一样,值相等。</li>
+<li><code>a is c</code> → False:<code>c</code> 是"另造"的 list,身份不同(<code>id(a) != id(c)</code>)。</li>
+</ul>
+<p>要点:<code>==</code> 看内容,<code>is</code> 看"是不是同一个对象"。赋值 <code>b = a</code> 是共享引用,不是拷贝。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:同事把判空写成 <code>if user == None:</code>,你说应该改成 <code>if user is None:</code>。请给出两条理由。</summary>
+<div class="answer">
+<p><strong>理由一(正确性):</strong><code>None</code> 是全局<strong>单例</strong>,判"是不是 None"本质是身份问题,<code>is</code> 直击要害;而 <code>==</code> 会走对象的 <code>__eq__</code>,如果 <code>user</code> 的类重写了 <code>__eq__</code>(比如某些 ORM、numpy 数组),<code>== None</code> 可能返回意外结果甚至抛异常。</p>
+<p><strong>理由二(约定与性能):</strong><code>is None</code> 是 Python 社区一致的惯用法(PEP 8 也这么建议),可读性最好;身份比较也比可能触发 <code>__eq__</code> 调用的 <code>==</code> 更直接。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>对象 = identity(唯一身份)+ state(可变状态)+ behavior(行为),一生走"创建 → 操作 → 销毁"。身份贯穿始终,状态在变——这正是 <code>is</code> 与 <code>==</code> 的分水岭:<strong><code>is</code> 比身份(是不是同一个对象),<code>==</code> 比值(内容相不相等)</strong>。判值相等永远用 <code>==</code>,判 <code>None</code>/同一对象才用 <code>is</code>;小整数缓存与字符串驻留会让 <code>is</code> "看似"为真,那是 CPython 实现细节,别当语言保证。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《OOP 面试问答》Q8(What is an object?)——对象三特征 identity / state / behavior 与"创建 → 操作 → 销毁"生命周期,取自源题原文。</li>
+<li><strong>canon(补充锚定,均为权威一手文档):</strong>
+  <a href="https://docs.python.org/3/reference/datamodel.html">Python 官方 Data Model</a>(<code>object.__new__</code> / <code>object.__init__</code> 分工、对象身份与生命期)、
+  <a href="https://docs.python.org/3/library/functions.html#id"><code>id()</code> 内置函数文档</a>(唯一且恒定,CPython 实现为地址)、
+  <a href="https://docs.python.org/3/reference/expressions.html#is">Identity comparisons(<code>is</code> / <code>is not</code>)</a> 与
+  <a href="https://docs.python.org/3/reference/expressions.html#value-comparisons">Value comparisons(<code>==</code> 与 <code>__eq__</code>)</a>、
+  <a href="https://docs.python.org/3/library/gc.html"><code>gc</code> 模块文档</a>(引用计数 + 分代 GC)。跨语言对照中的 Java 部分参见
+  <a href="https://docs.oracle.com/javase/8/docs/api/java/lang/Object.html#equals-java.lang.Object-">Oracle <code>Object.equals()</code> 文档</a>。小整数缓存 / 字符串驻留是 CPython 的实现行为,非语言规范,故不写进语言保证。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"引用计数怎么回收",或者拿你写的对比代码来复盘缓存边界,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节钻进"创建对象"那一步的内部:<code>__new__</code> 和 <code>__init__</code> 到底各干了什么、什么时候才需要动 <code>__new__</code>。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0005-abstraction.html"><span class="dir">← 上一课</span>0005 · 抽象:隐藏复杂度、只暴露必要接口</a>
+<a class="next" href="0007-constructors.html"><span class="dir">下一课 →</span>0007 · 构造函数:__new__ 与 __init__</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

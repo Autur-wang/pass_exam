@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0019 · RADIO 框架:从架构画到优化,走一遍完整案例</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0019 课 · 5 前端系统设计 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>RADIO 框架:从架构画到优化,走一遍完整案例</h1>
+
+<p class="lede">知道 RADIO 是"需求、架构、数据模型、接口、优化"五个词并不难,但真正坐进考场,从"范围已经谈妥"到"面试官满意地点头说可以往下走了",中间那些分钟里具体该说什么、上一步的产出怎么变成下一步的原材料,才是真正决定分数的地方。这节课只做一件事:把 A(架构)、D(数据模型)、I(接口)、O(优化)四步,用源材料自己反复引用的"设计 Facebook 新闻提要"这个案例串成一条线,走一遍。</p>
+
+<div class="recall">
+<p>先回忆一下:上一课你应该已经能把 RADIO 五个字母对应的五个阶段说全,并且记得需求探索(R)这一步要在会话最开头、不超过 15% 的时间里做完两件事——确定这道题该聚焦产品的哪个核心用例,以及分清哪些是功能需求、哪些是非功能需求。这节课接着往下走,不重复 R,直接进入"确定了范围之后,接下来四步具体怎么做"。</p>
+</div>
+
+<h2>一、架构/高层设计:先把"新闻提要"拆成几个方框</h2>
+
+<p><strong>目标:</strong>确定产品的关键组件以及它们之间的相互关系。<strong>推荐时长:</strong>约占总时长的 20%。</p>
+
+<p>拿到 R 阶段谈妥的范围之后(比如已经和面试官对齐:这道题聚焦新闻提要本身、提要分页、发新帖子这三件事),下一步不是急着写代码,而是先画图——把系统拆成几个方框,再用箭头表示数据在方框之间怎么流动。这里有一条容易被忽略的边界:要专注在<strong>客户端架构</strong>,不是后端架构。服务器在这一步可以被当成一个黑盒,只需假设它对外暴露了一些可以通过 HTTP/WebSocket 调用的 API。</p>
+
+<p>前端高层设计里常见的方框:<strong>服务器</strong>(黑盒,提供 API)、<strong>视图</strong>(用户看到的内容,通常包含更小的子视图)、<strong>控制器</strong>(响应用户交互、把存储里的数据处理成视图要的格式;应用小、模块间不用传太多数据时可以省掉)、<strong>模型/客户端存储</strong>(数据所在的位置,往往是应用范围的)。定义每个方框的职责时,还要顺带想清楚两件事:<strong>关注点分离</strong>(这个方框该封装哪一组功能和数据,能为其他方框做什么)、<strong>计算该放在哪里做</strong>(比如按搜索词过滤结果,放服务器还是客户端算,两种做法各有取舍)。</p>
+
+<p>新闻提要这道题,源材料给出的架构长这样——服务器提供数据,控制器接管数据流,存进客户端存储,最后由 Feed UI 呈现给用户:</p>
+
+<div class="pipeline">
+  <div class="node"><span class="n-title">服务器</span><span class="n-sub">黑盒,提供 feed 数据 + 发帖 API</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">控制器</span><span class="n-sub">控制数据流,发网络请求</span></div>
+  <div class="arrow">→</div>
+  <div class="node"><span class="n-title">客户端存储</span><span class="n-sub">存放应用全局需要的数据</span></div>
+  <div class="arrow">→</div>
+  <div class="node good"><span class="n-title">Feed UI</span><span class="n-sub">帖子列表 + 撰写器,两个子组件</span></div>
+</div>
+
+<table>
+<tr><th>方框</th><th>职责(用语言描述,不只是画框)</th></tr>
+<tr><td>服务器</td><td>提供 feed 数据,并提供一个 HTTP API 以创建新的 feed 帖子。</td></tr>
+<tr><td>控制器</td><td>控制应用程序内的数据流,并向服务器发出网络请求。</td></tr>
+<tr><td>客户端存储</td><td>存储整个应用程序所需的数据;新闻提要场景下,大多数是服务器生成的、feed UI 需要的数据。</td></tr>
+<tr><td>Feed UI → Feed 帖子</td><td>呈现 feed 帖子的数据,并包含与帖子交互的按钮(喜欢/反应/分享/评论)。</td></tr>
+<tr><td>Feed UI → 帖子撰写器</td><td>用户创建新 feed 帖子的 UI。</td></tr>
+</table>
+
+<p>画完架构图只是一半,另一半是<strong>用语言描述每一个方框的职责</strong>——上面这张表就是那一半。你可能被要求现场用绘图工具画出这类图,常见的免费选项是 <a href="https://app.diagrams.net/">diagrams.net</a> 和 <a href="https://excalidraw.com/">Excalidraw</a>,提前熟悉一下操作会有帮助。</p>
+
+<h2>二、数据模型:给每个方框填数据</h2>
+
+<p><strong>目标:</strong>描述各种数据实体、它们包含的字段,以及它们所属的方框。<strong>推荐时长:</strong>约占会话的 10%。</p>
+
+<p>架构图搭好之后,接着要想清楚客户端里到底存在哪些数据字段。客户端应用里的数据分两大类,仅客户端数据还能再往下细分一层:</p>
+
+<div class="trio">
+  <div class="cell"><span class="role">来源:服务器</span><span class="head">服务器生成的数据</span><span class="sub">源自数据库,供多人多设备查看,如用户资料、feed 帖子</span></div>
+  <div class="cell"><span class="role">来源:客户端 · 要持久化</span><span class="head">需持久化的客户端数据</span><span class="sub">通常是用户输入,如表单字段,要发到服务器落库才有用</span></div>
+  <div class="cell"><span class="role">来源:客户端 · 临时</span><span class="head">临时客户端数据</span><span class="sub">表单验证状态/当前选中的标签页等,标签页关掉丢了也没关系</span></div>
+</div>
+
+<p>新闻提要这道题的数据模型示例:</p>
+
+<table>
+<tr><th>来源</th><th>实体</th><th>属于</th><th>字段</th></tr>
+<tr><td>服务器</td><td><code>Post</code></td><td>Feed 帖子</td><td><code>id</code>、<code>created_time</code>、<code>content</code>、<code>image</code>、<code>author</code>(一个 <code>User</code>)、<code>reactions</code></td></tr>
+<tr><td>服务器</td><td><code>Feed</code></td><td>Feed UI</td><td><code>posts</code>(<code>Post</code> 列表)、<code>pagination</code>(分页元数据)</td></tr>
+<tr><td>服务器</td><td><code>User</code></td><td>客户端存储</td><td><code>id</code>、<code>name</code>、<code>profile_photo_url</code></td></tr>
+<tr><td>用户输入(客户端)</td><td><code>NewPost</code></td><td>帖子撰写器 UI</td><td><code>message</code>、<code>image</code></td></tr>
+</table>
+
+<p>列字段时标注清楚"这是服务器数据还是仅客户端数据"很有用——而且这不是一锤子买卖,随着面试往下推进、需求被进一步澄清,字段列表会跟着动态增删。</p>
+
+<h2>三、接口定义(API):让方框开始互相说话</h2>
+
+<p><strong>目标:</strong>定义产品中组件之间的接口、每个 API 的功能、参数和响应。<strong>推荐时长:</strong>约占会话的 15%。</p>
+
+<p>方框有了、每个方框的数据也列清楚了,接下来该讨论方框之间怎么通信。不管是服务器和客户端之间,还是客户端组件之间,所有 API 都逃不开三个共同点:</p>
+
+<table>
+<tr><th>API 的组成部分</th><th>服务器-客户端</th><th>客户端-客户端</th></tr>
+<tr><td>名称和功能</td><td>HTTP 路径</td><td>JavaScript 函数</td></tr>
+<tr><td>参数</td><td>HTTP GET 查询和 POST 参数</td><td>函数参数</td></tr>
+<tr><td>返回值</td><td>HTTP 响应,通常为 JSON 格式</td><td>函数返回值</td></tr>
+</table>
+
+<p>新闻提要的服务器-客户端 API 示例——客户端向服务器要最新的 feed 帖子,分页参数进、分页结果出:</p>
+
+<div class="codecompare">
+<div class="side"><p class="label">请求 · GET /feed 的参数</p><pre><code>{
+  "size": 10,
+  "cursor": "=dXNlcjpXMDdRQ1JQQTQ"
+}</code></pre></div>
+<div class="side"><p class="label">响应</p><pre><code>{
+  "pagination": {
+    "size": 10,
+    "next_cursor": "=dXNlcjpVMEc5V0ZYTlo"
+  },
+  "results": [
+    {
+      "id": "123",
+      "author": { "id": "456", "name": "John Doe" },
+      "content": "Hello world",
+      "reactions": { "likes": 20, "haha": 15 },
+      "created_time": 1620639583
+    }
+  ]
+}</code></pre></div>
+</div>
+
+<p>客户端-客户端 API(比如控制器调用 Feed UI 的某个函数)写法类似,只是换成了 JavaScript 函数,要说清楚的核心还是同三件事:功能、参数、返回值。如果这道题问的是 UI 组件(比如上一课分类里的"下拉菜单"类问题),接口部分讨论的就是这个组件对外的自定义选项——类似 React 组件的 props,不是 HTTP 路径。</p>
+
+<h2>四、优化和深入研究:为什么这一步反而占大头</h2>
+
+<p><strong>目标:</strong>讨论构建产品时可能的优化机会和特定的关注领域。<strong>推荐时长:</strong>约占会话的 40%——五步里最长的一段。</p>
+
+<p>这一步没有固定套路,可以自由选择往哪个方向深挖,但源材料给了两条挑选原则:</p>
+
+<ul>
+<li><strong>关注产品的重要领域</strong>:电商网站性能至关重要,就该花大量时间讲性能优化;协作编辑器的难点是竞争条件和并发修改,就该专注解释这一点。</li>
+<li><strong>专注自己的优势</strong>:如果精通可访问性,就讲产品里可能出现的 a11y 陷阱和解法;如果是性能高手,就讲能带来流畅体验的各种优化机会——用自己的知识给面试官留下印象。</li>
+</ul>
+
+<p>可以讨论的一般领域清单:性能、用户体验、网络、可访问性(a11y)、多语言支持、多设备支持、安全性。重要的不是把七个词都念一遍,而是挑中和这道题、和你自己最相关的一两个,真正讲透。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>架构图</dt>
+<dd>用方框表示组件、箭头表示数据流向,画出产品客户端高层结构的图,画完还要配一段文字说明每个方框的职责。<em>避免</em>把它当成后端架构图在画——服务器在这一步只是一个提供 API 的黑盒,不用展开它内部怎么做分布式一致性。</dd>
+<dt>数据模型</dt>
+<dd>列出客户端里存在哪些数据实体、每个实体的字段,以及它属于架构图里的哪个方框;区分服务器生成的数据和仅客户端数据(要持久化的/临时的)。<em>避免</em>把它当成一次性列完就不再变的清单——需求往下推进时字段会跟着增删。</dd>
+<dt>API 接口设计</dt>
+<dd>定义方框之间怎么通信,不管是服务器-客户端(HTTP 路径/参数/JSON 响应)还是客户端-客户端(函数/参数/返回值),都要说清楚名称和功能、参数、返回值这三件事。<em>避免</em>只顾着写参数字段的具体名字,却没先说清楚这个接口是为了解决方框之间的什么协作需求。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>把百分比换算成真实分钟数会更有操作感:如果整场系统设计面试给你 45 分钟,R 阶段控制在 7 分钟以内,A 阶段约 9 分钟画完架构图并说清楚每个方框的职责,D 阶段约 4~5 分钟列数据模型,I 阶段约 7 分钟定义关键 API,剩下将近 18 分钟留给优化和深入研究——这也是为什么提前熟悉 diagrams.net 或 Excalidraw 的操作很值:画图阶段越快画完,留给最后一步深挖的时间就越多。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把优化阶段的 40% 花在把七个领域名词念一遍上。</strong>性能、用户体验、网络、可访问性、多语言、多设备、安全性,七个都提到但每个只说一句话,看起来"覆盖全面",实际上等于什么都没深挖——面试官在这一步想看到的是判断力和领域深度,不是关键词覆盖率。反过来还有一个对称的误区:架构阶段就急着写具体的 API 参数字段,跳过了先画图、先用语言说清楚方框职责这一步——数据模型和接口都得建立在方框已经分清楚的基础上,顺序颠倒了后面很容易讲乱。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>打开 <a href="https://excalidraw.com/">Excalidraw</a> 或 <a href="https://app.diagrams.net/">diagrams.net</a>,挑一个你熟悉的产品(不一定是新闻提要),照着这节课的顺序画一次:先画出服务器/控制器/存储/UI 几个方框,再给每个方框配一句职责说明,最后挑其中一个方框写出它对外的一个 API(参数是什么、返回什么)。全程限时 15 分钟,练的是"从画图到定接口"这条线的手速,不是画得多精美。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>A-D-I-O 不是四个孤立术语,是"先画图定方框 → 给方框填数据 → 定义方框之间怎么说话 → 挑一两个领域往深处讲"这一条逐层递进的线;而时间分配本身就是一个信号——优化阶段占比最大,说明面试官最想看到的是判断力和权衡能力,不是画框、列字段的执行速度。</p>
+</div>
+
+<figure class="diagram">
+<div class="bars">
+  <div class="row"><span class="lbl">需求探索(上一课)</span><div class="track"><span class="val base" style="width:15%">&lt;15%</span></div></div>
+  <div class="row"><span class="lbl">架构/高层设计</span><div class="track"><span class="val c" style="width:20%">~20%</span></div></div>
+  <div class="row"><span class="lbl">数据模型</span><div class="track"><span class="val c" style="width:10%">~10%</span></div></div>
+  <div class="row"><span class="lbl">接口定义(API)</span><div class="track"><span class="val c" style="width:15%">~15%</span></div></div>
+  <div class="row"><span class="lbl">优化和深入研究</span><div class="track"><span class="val b" style="width:40%">~40%</span></div></div>
+</div>
+<figcaption>条长直接对应推荐时长百分比(五项相加正好 100%)。灰色是上一课已经讲过的 R;这节课讲的 A-D-I-O 里,O 一项就吃掉将近一半时间。</figcaption>
+</figure>
+
+<h2>六、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于架构/高层设计这一步,下面哪个说法最准确? (A) 应该重点讨论服务器内部怎么做分布式一致性,这是这一步的核心 (B) 应该聚焦客户端架构,把服务器当成一个提供 HTTP/WebSocket API 的黑盒,用方框加箭头画出组件及数据流向 (C) 应该跳过画图,先把每个 API 的参数和返回值定义清楚</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。架构阶段专注客户端,服务器只作为黑盒出现。(A) 混淆了前端系统设计和后端系统设计的边界——分布式一致性属于后端范畴,不是这一步该展开的;(C) 把接口定义(I)阶段的任务提前到了架构阶段,顺序颠倒了——方框和职责要先分清楚,API 才有讨论的基础。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:RADIO 五个步骤按推荐时长排序,占比最大的一步是哪个,这说明了什么? (A) 数据模型占比最大(约 40%),因为字段列得越全越好 (B) 需求探索占比最大(约 40%),因为把问题问清楚最重要 (C) 优化和深入研究占比最大(约 40%),因为这一步没有固定套路,恰恰是展示专业判断力和领域深度的地方</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。优化和深入研究推荐时长约占会话的 40%,是五步里最长的一段,因为这一步要靠候选人自己判断该往哪个领域深挖,最能体现专业深度。(A) 数据模型推荐时长其实约 10%,是五步里较短的一段,不是 40%;(B) 需求探索推荐时长是不超过 15%,同样不是占比最大的一步。</p>
+</div>
+</details>
+</div>
+
+<h2>七、主推资源</h2>
+
+<p>本节案例里画架构图、想练手数据模型和接口设计,都可以直接拿这两个工具练——它们也是源材料原文提到的常见免费选项:</p>
+<ul>
+<li><a href="https://app.diagrams.net/">diagrams.net</a> —— 免费在线绘图工具,适合画方框+箭头式的架构图。</li>
+<li><a href="https://excalidraw.com/">Excalidraw</a> —— 另一款常见的免费手绘风绘图工具,源材料给的新闻提要架构图示例就是用它画的。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"为什么优化阶段要占掉将近一半的面试时间",也可以让老师陪你现场对着一个你熟悉的产品,把 A-D-I-O 四步走一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0018-radio-framework-overview.html"><span class="dir">← 上一课</span>RADIO 框架是什么 + 需求探索怎么问</a>
+  <a class="next" href="0020-front-end-system-design-common-mistakes-cheatsheet.html"><span class="dir">下一课 →</span>常见错误与临场备忘单</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

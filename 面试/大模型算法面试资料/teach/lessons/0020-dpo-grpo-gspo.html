@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0020 · DPO / GRPO / GSPO:更轻的对齐</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第五部分 对齐与强化学习 · 第 0020 课</p>
+<h1>DPO / GRPO / GSPO:更轻的对齐</h1>
+<p class="lede">上一课的 PPO 能对齐,但太重:要先训一个奖励模型(RM)、再挂一个价值网络(critic)、还得在线采样并用 KL 拉着。这节课讲三条「减负」路线——DPO 砍掉 RM 和 RL 循环,GRPO 砍掉 critic,GSPO 把 GRPO 的比值从 token 级提到序列级。面试最爱追两句:<strong>DPO 为什么比 PPO 省?GRPO 为什么适合推理模型?</strong></p>
+
+<div class="recall">
+<p>上节课(PPO)我们数过它的四个「零件」:①独立训练的<strong>奖励模型 RM</strong>;②估计优势的<strong>价值网络 critic</strong>;③<strong>on-policy 在线采样</strong>;④防止策略跑偏的 <strong>KL 惩罚</strong>。<strong>先别往下看,想一想:这四个零件里,哪些其实可以省掉,又要付出什么代价?</strong></p>
+</div>
+
+<h2>一、先看清 PPO 重在哪</h2>
+<p>PPO 的复杂度不在算法本身,而在「同时喂养多个模型」。跑一次 PPO,显存里通常同时住着:正在训练的策略 $\pi_\theta$、冻结的参考模型 $\pi_{\text{ref}}$、奖励模型 RM、价值网络 critic。RM 还得提前用人类偏好数据单独训一轮。零件越多,显存越紧、调参面越大、越容易训崩。</p>
+<p>三条减负路线,各砍掉不同的零件:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">PPO<br>策略+RM+critic<br>+KL,在线</div>
+  <div class="node">DPO<br>砍掉 RM<br>砍掉 RL 循环</div>
+  <div class="node">GRPO<br>砍掉 critic<br>组内相对优势</div>
+  <div class="node good">GSPO<br>比值改到<br>序列级</div>
+</div>
+<figcaption>从左到右是「越来越轻 / 越来越晚出现」的演进方向,而不是严格的替代关系——它们各有适用场景。</figcaption>
+</figure>
+
+<h2>二、DPO:把对齐做成一道二分类题</h2>
+<p>DPO(Direct Preference Optimization)的想法很反直觉:<strong>既不训 RM,也不跑 RL 循环</strong>,直接拿成对偏好数据来监督式地优化策略。每条样本是一个三元组:</p>
+<ul>
+<li><strong>$x$</strong>:输入提示(prompt)</li>
+<li><strong>$y_w$</strong>(chosen / winner):人类更偏好的回答</li>
+<li><strong>$y_l$</strong>(rejected / loser):被拒绝的回答</li>
+</ul>
+<p>目标一句话:给定 $x$,让模型生成 $y_w$ 的相对概率<strong>升高</strong>、生成 $y_l$ 的相对概率<strong>降低</strong>——整个过程像一个二分类。</p>
+
+<h3>为什么能跳过奖励模型?——隐式奖励</h3>
+<p>关键在一条 PPO 也在用的数学事实:在「奖励 + KL 约束」这套 RLHF 目标下,最优策略有解析形式:</p>
+$$\pi^*(y\mid x)=\frac{1}{Z(x)}\,\pi_{\text{ref}}(y\mid x)\exp\!\left(\tfrac{1}{\beta}\,r(x,y)\right)$$
+<p>把它反解,就能<strong>用策略自己表示奖励</strong>:</p>
+$$r(x,y)=\beta\log\frac{\pi^*(y\mid x)}{\pi_{\text{ref}}(y\mid x)}+\beta\log Z(x)$$
+<p class="formula-note">$Z(x)$ 是难算的配分函数,但下一步它会自动消掉。</p>
+<p>偏好用 Bradley–Terry 模型描述——「$y_w$ 胜过 $y_l$」的概率是两者奖励差的 sigmoid:$P(y_w\succ y_l\mid x)=\sigma\big(r(x,y_w)-r(x,y_l)\big)$。把上面的隐式奖励代进去,由于 $Z(x)$ 对 $y_w$、$y_l$ 相同,<strong>在差值里被抵消</strong>,于是奖励模型整个消失了,只剩策略。最终就是 DPO 的负对数似然损失:</p>
+$$\mathcal{L}_{\text{DPO}}(\pi_\theta;\pi_{\text{ref}}) = -\,\mathbb{E}_{(x,y_w,y_l)\sim\mathcal{D}}\left[\log\sigma\!\left(\beta\log\frac{\pi_\theta(y_w\mid x)}{\pi_{\text{ref}}(y_w\mid x)} - \beta\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\text{ref}}(y_l\mid x)}\right)\right]$$
+<p class="formula-note">$\sigma$ 是 sigmoid;$\beta$ 是温度系数,等价于 KL 约束的强度;$\mathcal{D}$ 是偏好数据集。括号里就是「chosen 的隐式奖励 − rejected 的隐式奖励」。</p>
+
+<dl class="keydef">
+<dt>DPO 的隐式奖励(implicit reward)</dt>
+<dd>$$\hat{r}_\theta(x,y)=\beta\log\frac{\pi_\theta(y\mid x)}{\pi_{\text{ref}}(y\mid x)}$$</dd>
+<dd><em>不训练任何独立的奖励模型;策略相对参考模型的对数概率比,本身就充当奖励。这就是 DPO 论文标题「你的语言模型其实偷偷是个奖励模型」的含义。</em></dd>
+</dl>
+
+<div class="implement">
+<p>DPO 的损失核心其实只有两行——算两个模型在 chosen / rejected 上的对数概率,做差,过 logsigmoid:</p>
+<pre><code>import torch.nn.functional as F
+
+def dpo_loss(policy, ref, prompt_ids, chosen_ids, rejected_ids, beta=0.1):
+    # 各自对 token 概率求和,得到序列 log 概率
+    pi_c   = get_log_probs(policy, prompt_ids, chosen_ids)
+    pi_r   = get_log_probs(policy, prompt_ids, rejected_ids)
+    with torch.no_grad():                      # 参考模型冻结,不回传梯度
+        ref_c = get_log_probs(ref, prompt_ids, chosen_ids)
+        ref_r = get_log_probs(ref, prompt_ids, rejected_ids)
+    # (chosen 隐式奖励) − (rejected 隐式奖励)
+    logits = beta * ((pi_c - ref_c) - (pi_r - ref_r))
+    return -F.logsigmoid(logits).mean()</code></pre>
+<p>注意:训练是<strong>离线</strong>的——直接遍历固定的偏好数据集,没有一边生成一边打分的 RL 循环。</p>
+</div>
+
+<h2>三、GRPO:扔掉 critic,用组内相对优势</h2>
+<p>GRPO(Group Relative Policy Optimization,DeepSeek 在 DeepSeekMath 中提出、并用于训练 R1 这类推理模型)保留了 RL 的味道,但把最贵的零件——价值网络 critic——换掉了。</p>
+<p>PPO 需要 critic 来估计「这一步比平均好多少」的优势 $\hat{A}$。GRPO 的替代方案很朴素:<strong>对同一个 prompt 采样一组(Group)$G$ 个回答,直接用组内奖励的均值和标准差做归一化,当作相对优势。</strong>「同题多解、互相比高低」——不需要再养一个网络去猜基准线。</p>
+$$\hat{A}_i=\frac{r_i-\operatorname{mean}(\{r_1,\dots,r_G\})}{\operatorname{std}(\{r_1,\dots,r_G\})}$$
+<p class="formula-note">组内高于平均的回答拿到正优势、低于平均的拿到负优势;均值被减掉,所以优势天然是正负交替、均值约为 0。</p>
+<p>拿到优势后,GRPO 复用了 PPO 那套<strong>截断代理目标</strong>(clipped surrogate),只是把 critic 估的优势换成了上面的组内优势:</p>
+$$L^{\text{CLIP}}(\theta)=\mathbb{E}_t\!\left[\min\!\big(r_t(\theta)\,\hat{A}_t,\;\operatorname{clip}(r_t(\theta),\,1-\epsilon,\,1+\epsilon)\,\hat{A}_t\big)\right]$$
+<p class="formula-note">这里的 $r_t(\theta)$ 是<strong>新旧策略的概率比值</strong>(重要性采样比),不是奖励——和上面的奖励 $r_i$ 同字母,别混了。$\epsilon$ 是截断范围,把单步更新限制在 $[1-\epsilon,\,1+\epsilon]$ 内。外层通常再叠一个对参考模型的 KL 惩罚(系数 $\beta$)防止跑偏。</p>
+
+<div class="implement">
+<p>组采样 + 组内标准化优势,是 GRPO 最有辨识度的一段(源码示例,已精简):</p>
+<pre><code>G = 4            # 对同一 prompt 采样 4 个回答
+epsilon = 0.2    # 截断范围
+beta = 0.01      # KL 惩罚系数
+
+outputs = [policy.generate(prompt, do_sample=True, temperature=0.8) for _ in range(G)]
+rewards = torch.tensor([reward_fn(y, expected) for y in outputs])
+
+# 组内相对优势:减均值、除标准差(+1e-8 防除零)
+advantages = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
+
+for i in range(G):
+    ratio = torch.exp(logp_policy[i] - logp_ref[i].detach())   # 概率比值
+    surr1 = ratio * advantages[i]
+    surr2 = torch.clamp(ratio, 1 - epsilon, 1 + epsilon) * advantages[i]
+    policy_loss = -torch.min(surr1, surr2)                      # 最小化 → 取负
+    kl = logp_ref[i] - logp_policy[i]
+    loss += policy_loss + beta * kl</code></pre>
+</div>
+
+<h3>为什么 GRPO 特别适合推理模型?</h3>
+<p>推理任务(数学、代码)有一个奢侈的条件:<strong>奖励可验证</strong>——答案对不对、代码过不过测试,直接判定,不必训练 RM 去猜人类偏好。这正好和 GRPO 咬合:用可验证奖励喂进去,再靠「同一道题采样多解、组内比高低」提取对比信号。既省掉 RM,又省掉 critic,显存和工程复杂度都大幅下降。</p>
+
+<h2>四、GSPO:把比值从 token 级提到序列级(概念)</h2>
+<p>GSPO(Group Sequence Policy Optimization,Qwen 团队 2025)是对 GRPO 的一处「粒度」改动。GRPO 的重要性采样比值 $r_t(\theta)$ 是<strong>逐 token</strong> 算、逐 token 截断的;当序列很长、或用在 MoE 这类结构上时,token 级比值容易积累噪声、带来训练不稳。</p>
+<p>GSPO 的思路是:<strong>把重要性比值和截断放到整条序列这一层级上</strong>(对序列做长度归一化后算一个序列级的比值),让优化的单位和奖励的单位——都是「一整条回答」——对齐。论文的动机是缓解 token 级比值的方差与不稳定,尤其在长序列 / MoE 场景。概念上记一句话就够:<strong>GRPO 在 token 级做重要性加权,GSPO 在序列级做</strong>。</p>
+
+<h2>五、四者对比表</h2>
+<div style="overflow-x:auto">
+<table>
+<thead>
+<tr><th>方法</th><th>需要奖励模型 RM?</th><th>需要 critic / 价值网络?</th><th>采样方式</th><th>稳定性 / 成本特征</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>PPO</strong></td><td>需要(先单独训)</td><td>需要</td><td>on-policy 在线</td><td>零件最多、显存与调参成本最高;靠 KL 保稳</td></tr>
+<tr><td><strong>DPO</strong></td><td>不需要(隐式奖励)</td><td>不需要</td><td>离线,用现成偏好对</td><td>最轻;但依赖偏好数据分布,易过拟合偏好、仍需冻结的 $\pi_{\text{ref}}$</td></tr>
+<tr><td><strong>GRPO</strong></td><td>可用 RM,也可用可验证奖励</td><td>不需要(组内相对优势替代)</td><td>on-policy 组采样</td><td>比 PPO 省一个网络;组采样带来额外前向成本</td></tr>
+<tr><td><strong>GSPO</strong></td><td>同 GRPO</td><td>不需要</td><td>on-policy 组采样</td><td>把重要性比值放到序列级,动机是长序列 / MoE 下更稳</td></tr>
+</tbody>
+</table>
+</div>
+<p>一句话串起来:<strong>DPO 用「监督分类」换掉整个 RL;GRPO 用「组内对比」换掉 critic;GSPO 用「序列级比值」换掉 GRPO 的 token 级比值。</strong></p>
+
+<h2>六、超参 $G$、$\epsilon$、$\beta$ 怎么调</h2>
+<p>下面结合源码示例里的默认值(<strong>$G=4$、$\epsilon=0.2$、$\beta=0.01$</strong>)讲各自方向上的影响。这里只谈定性趋势,不给具体最优数字——真实取值随任务和实现而变。</p>
+<dl class="keydef">
+<dt>$G$:组大小(GRPO / GSPO)</dt>
+<dd>调大 → 组内优势估计更稳、探索更充分,但每步的采样 / 前向成本大致线性上升;调小 → 便宜但优势噪声大。极端情形 $G=1$ 时,组内标准差失去意义,相对优势直接退化,别把 $G$ 设到太小。</dd>
+<dt>$\epsilon$:截断范围(PPO / GRPO)</dt>
+<dd>调大 → 允许单步走得更远、更新更激进,可能更快但也更容易不稳;调小 → 更新保守、更稳但学得慢。它的作用就是给「新旧策略概率比」套一个信任域。</dd>
+<dt>$\beta$:KL 惩罚系数 / 温度</dt>
+<dd>在 GRPO 里是显式 KL 惩罚系数,在 DPO 里是温度、等价于 KL 约束强度。调大 → 把策略更紧地拉向参考模型,稳但提升有限、学不动;调小 → 允许策略大幅偏离,潜力大但可能「跑偏」——忘掉原有语言能力,或出现 reward hacking。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「DPO 为什么比 PPO 省?」——砍掉了 RM 的单独训练、critic、以及在线 RL 循环,退化成对偏好对的监督式分类;代价是离线、依赖偏好数据分布、易过拟合。</li>
+<li>「DPO 真的不需要参考模型吗?」——需要。$\pi_{\text{ref}}$ 冻结着,$\beta\log(\pi_\theta/\pi_{\text{ref}})$ 就是隐式 KL 约束;省掉的是 RM,不是 ref。</li>
+<li>「GRPO 为什么适合推理模型?」——推理有可验证奖励(答案 / 测试),不必训 RM;组内相对优势天然利用「同题多解」的对比信号;去掉 critic 省显存。DeepSeek 用它训 R1。</li>
+<li>「GRPO 和 PPO 的目标函数什么关系?」——复用 PPO 的截断代理目标,只把 critic 估的优势换成组内标准化优势。</li>
+<li>「GSPO 相对 GRPO 改了什么?」——把重要性采样比值和截断从 token 级提到序列级,动机是缓解长序列 / MoE 下 token 级比值的不稳。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>别说「DPO 完全不需要参考模型 / 完全没有 KL」——$\pi_{\text{ref}}$ 仍在,$\beta$ 就是隐式 KL 强度。</li>
+<li>别把 DPO 当「在线 RL」——它是离线的、遍历固定偏好数据集,没有边生成边打分。</li>
+<li>GRPO 截断目标里的 $r_t(\theta)$ 是<strong>概率比值</strong>,不是奖励 $r_i$;两者同字母,答题时说清楚。</li>
+<li>组内优势用标准差归一化,$G$ 太小(尤其 $G=1$)会让 std 失效、优势退化。</li>
+<li>别把 GSPO 说成「token 级换成 batch 归一化」——它是<strong>序列级</strong>的重要性比值,粒度概念不同。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>DPO 能跳过显式奖励模型,最核心的原因是?</p>
+<details><summary>A. DPO 用一个更小的奖励模型代替了大的</summary>DPO 根本不训练任何奖励模型,不是「换个小的」。</details>
+<details><summary>B. DPO 在训练中在线打分,只是不叫它 RM</summary>DPO 是离线的、遍历固定偏好数据集,没有在线打分环节。</details>
+<details><summary>C. 最优策略与奖励存在解析关系,策略自身可隐式表示奖励,配分函数 $Z(x)$ 在偏好对差值里抵消 ✅</summary>正确。正因为 $r(x,y)=\beta\log(\pi/\pi_{\text{ref}})+\beta\log Z(x)$,代入 Bradley–Terry 后 $Z(x)$ 消掉,RM 就不再需要。</details>
+<details><summary>D. DPO 不需要参考模型,所以也不需要奖励模型</summary>前半句就错了——DPO 仍需冻结的 $\pi_{\text{ref}}$。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 GRPO 相对 PPO 的改动,哪一条说对了?</p>
+<details><summary>A. GRPO 需要再额外训练一个价值网络来估计优势</summary>恰恰相反,GRPO 就是为了去掉 critic。</details>
+<details><summary>B. GRPO 必须使用显式奖励模型,不能用可验证奖励</summary>反了,GRPO 既能用 RM,也能用可验证奖励(数学 / 代码正确性)。</details>
+<details><summary>C. GRPO 把重要性采样比值改到了序列级</summary>那是 GSPO 的改动;GRPO 仍在 token 级。</details>
+<details><summary>D. GRPO 去掉 critic,改用同一 prompt 采样一组回答做组内相对优势 ✅</summary>正确。用组内奖励的均值 / 标准差归一化当优势,替代价值网络。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Direct Preference Optimization: Your Language Model is Secretly a Reward Model</strong>(Rafailov et al., 2023)——DPO 原始论文,本课的隐式奖励与损失推导即出自此。</li>
+<li><strong>DeepSeekMath</strong>(Shao et al., 2024)——GRPO 的提出处;<strong>DeepSeek-R1</strong>(2025)展示了用 GRPO + 可验证奖励训练推理模型。</li>
+<li><strong>Group Sequence Policy Optimization</strong>(Qwen 团队, 2025)——GSPO 的序列级重要性比值动机与做法。</li>
+<li>回看上一课 PPO(第 0019 课)的 clipped 目标与 KL 惩罚,能看清 GRPO 复用了哪部分;想弄清 β 的 KL 由来,顺 DPO 论文的 RLHF 目标推导读。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>DPO 用监督分类换掉整个 RL(隐式奖励,省 RM+critic);GRPO 用组内相对优势换掉 critic(适合可验证奖励的推理);GSPO 把比值从 token 级提到序列级。</strong></p>
+<nav class="lesson-nav">
+<a href="0019-ppo.html">← 上一课:PPO</a>
+<a href="0021-rag-pipeline.html">下一课:RAG 检索增强管线 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0051 · 系统设计(上):数字直觉与 CAP</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0051 课 · 系统设计 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>系统设计(上):数字直觉与 CAP</h1>
+
+<p class="lede">仓库大纲写得很直白:<strong>「如果你有 4 年以上工作经验,可以预期会遇到系统设计问题。」</strong> 系统设计题没有唯一正确答案,考的是你能不能在约束下做合理权衡。这一切要立得住,得先有两块地基:一是对延迟与容量的<strong>数字直觉</strong>(内存比磁盘快多少?一天多少请求?),二是分布式系统绕不开的<strong>CAP 定理</strong>。这节课先把这两块打牢,下一课再谈缓存、分片和作答框架。</p>
+
+<div class="recall">
+<p>先回忆:<a href="0041-cache.html">缓存</a>一课讲过「快的小、慢的大」的存储层级,<a href="0042-process-thread.html">进程与线程</a>讲过单机上多个执行流如何协作。系统设计其实就是把这些单机概念<strong>放大到多台机器</strong>:缓存变成分布式缓存,线程间共享内存变成机器间跨网络通信。先自己想一句:一旦从「一台机器」变成「一群机器」,最先崩掉的假设是什么?</p>
+</div>
+
+<h2>一、数字直觉:先把量级刻进脑子</h2>
+
+<p>系统设计的第一步几乎总是<strong>容量估算</strong>:这系统每秒多少请求(QPS)?要存多少数据?占多少带宽?你不需要精确,但必须知道<strong>量级</strong>。而量级的根,是大纲反复推荐的「每个人都该知道的数字」——各种操作的延迟差了多少个数量级。</p>
+
+<table>
+<thead><tr><th>操作</th><th>大致延迟(数量级)</th><th>相对快慢</th></tr></thead>
+<tbody>
+<tr><td>读 L1 缓存</td><td>~ 1 纳秒 (ns)</td><td class="best">最快</td></tr>
+<tr><td>读主存(内存)</td><td>~ 100 ns</td><td class="best">很快</td></tr>
+<tr><td>SSD 随机读</td><td>~ 100 微秒 (µs)</td><td>较快</td></tr>
+<tr><td>同数据中心一次往返</td><td>~ 500 µs</td><td>中</td></tr>
+<tr><td>机械磁盘寻道</td><td>~ 10 毫秒 (ms)</td><td class="warn">慢</td></tr>
+<tr><td>跨大洲网络往返</td><td>~ 150 ms</td><td class="warn">最慢</td></tr>
+</tbody>
+</table>
+
+<p>这张表要读出的<strong>不是数字本身,而是台阶感</strong>:内存比 SSD 快约 1000 倍,SSD 比磁盘快约 100 倍,同城网络往返又比一次内存访问慢几千倍,跨洲再慢几百倍。<strong>「内存 ≪ SSD ≪ 磁盘 ≪ 网络」这个不等式,就是缓存为什么有效、为什么要把数据放得离用户近</strong>的全部理由。数字记不准没关系,台阶的顺序和倍率不能错。</p>
+
+<figure class="diagram">
+<div class="bars">
+  <div class="row"><span class="lbl">内存读</span><div class="track"><span class="val b" style="width:6%">~100 ns</span></div></div>
+  <div class="row"><span class="lbl">SSD 随机读</span><div class="track"><span class="val c" style="width:20%">~100 µs</span></div></div>
+  <div class="row"><span class="lbl">磁盘寻道</span><div class="track"><span class="val a" style="width:55%">~10 ms</span></div></div>
+  <div class="row"><span class="lbl">跨洲往返</span><div class="track"><span class="val base" style="width:95%">~150 ms</span></div></div>
+</div>
+<figcaption>条长仅示意「量级台阶」,非线性比例(真实差距是千百倍,画到等比会看不见短条)。要记的是顺序和倍率。</figcaption>
+</figure>
+
+<p>有了台阶感,容量估算就变成套路。例:某产品 1 亿日活,人均 10 次请求 → 约 10 亿次/天。一天约 86400 秒,粗算 ≈ <strong>1 万多 QPS</strong>(平均值);峰值再乘个 2~3 倍。这类「大数除以 10 万秒」的心算,是系统设计面试的基本功。</p>
+
+<h2>二、扩展的两个方向:向上 vs 向外</h2>
+
+<p>系统扛不住了,只有两条路:</p>
+
+<div class="trio">
+  <div class="cell">
+    <div class="role">Scale Up</div>
+    <div class="head">垂直扩展</div>
+    <div class="sub">换更强的单机</div>
+  </div>
+  <div class="cell">
+    <div class="role">Scale Out</div>
+    <div class="head">水平扩展</div>
+    <div class="sub">加更多台机器</div>
+  </div>
+  <div class="cell">
+    <div class="role">分发流量</div>
+    <div class="head">负载均衡</div>
+    <div class="sub">把请求摊到多台</div>
+  </div>
+</div>
+
+<p>垂直扩展简单,但有物理天花板,而且贵、单点故障风险高。水平扩展理论上无上限,是大规模系统的主流选择,但它<strong>逼你面对分布式问题</strong>:多台机器要靠<strong>负载均衡器</strong>分发请求,数据要跨机器保持一致——而这就把 CAP 请上了台。</p>
+
+<h2>三、CAP 定理:分区时,一致性和可用性只能保一个</h2>
+
+<p>CAP 说的是分布式系统的三个性质:</p>
+<ul>
+<li><strong>一致性 C(Consistency)</strong>:所有节点在同一时刻看到相同的数据。</li>
+<li><strong>可用性 A(Availability)</strong>:每个请求都能拿到(非错误的)响应。</li>
+<li><strong>分区容忍 P(Partition tolerance)</strong>:网络把节点切成互不通信的几块时,系统仍能运作。</li>
+</ul>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 360 320" role="img" aria-label="CAP 三角:分区发生时在 C 与 A 之间取舍">
+  <polygon points="180,40 40,270 320,270" class="dgm-node"/>
+  <circle cx="180" cy="40" r="30" class="dgm-good-node"/>
+  <circle cx="40" cy="270" r="30" class="dgm-good-node"/>
+  <circle cx="320" cy="270" r="30" class="dgm-accent-node"/>
+  <text x="180" y="45" text-anchor="middle" class="dgm-good-text" font-size="17" font-weight="700">C</text>
+  <text x="40" y="275" text-anchor="middle" class="dgm-good-text" font-size="17" font-weight="700">A</text>
+  <text x="320" y="275" text-anchor="middle" class="dgm-accent-text" font-size="17" font-weight="700">P</text>
+  <text x="180" y="95" text-anchor="middle" class="dgm-muted" font-size="12">一致性</text>
+  <text x="40" y="315" text-anchor="middle" class="dgm-muted" font-size="12">可用性</text>
+  <text x="320" y="315" text-anchor="middle" class="dgm-muted" font-size="12">分区容忍</text>
+  <text x="180" y="185" text-anchor="middle" class="dgm-text" font-size="13" font-weight="700">P 必须保</text>
+  <text x="180" y="205" text-anchor="middle" class="dgm-text" font-size="12">故只在 C 与 A 间取舍</text>
+</svg>
+</div>
+<figcaption>常见误读是「三选二」。真相是:分布式系统里网络分区(P)迟早发生、不可放弃,所以真正的取舍只在<strong>分区那一刻</strong>的 C 与 A 之间。</figcaption>
+</figure>
+
+<p>为什么 P 不能放弃?因为只要有多台机器靠网络连着,网络就<strong>一定</strong>会偶尔断——这不是设计选择,是物理现实。所以「不要 P」等于「回到单机」,那就不叫分布式了。真正的问题是:<strong>网络断开的那一刻,一个节点收到写请求,该怎么办?</strong></p>
+
+<div class="trio">
+  <div class="cell">
+    <div class="role">选 CP</div>
+    <div class="head">保一致</div>
+    <div class="sub">拒绝服务,不返回可能过期的数据</div>
+  </div>
+  <div class="cell">
+    <div class="role">选 AP</div>
+    <div class="head">保可用</div>
+    <div class="sub">照常响应,但数据可能暂时不一致</div>
+  </div>
+  <div class="cell">
+    <div class="role">恢复后</div>
+    <div class="head">最终一致</div>
+    <div class="sub">分区愈合,数据慢慢对齐</div>
+  </div>
+</div>
+
+<p>银行转账这类不容出错的场景倾向 <strong>CP</strong>(宁可暂时不可用,也不能算错账);社交动态、购物车这类容忍片刻延迟的场景倾向 <strong>AP</strong>(先让用户能用,数据稍后<strong>最终一致</strong>)。这就引出一致性模型的光谱:<strong>强一致</strong>(写完立刻处处可读到最新值,代价是性能和可用性)到<strong>最终一致</strong>(允许短暂读到旧值,换取高可用和低延迟)。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>CAP 定理</dt>
+<dd>分布式系统在网络分区(P)发生时,一致性(C)与可用性(A)只能保其一。<em>避免</em>说「CAP 是三选二、平时也要放弃一个」——P 不可放弃,取舍只发生在分区时。</dd>
+<dt>强一致 vs 最终一致(Strong vs Eventual Consistency)</dt>
+<dd>强一致:写入后任何读都能看到最新值,代价是延迟与可用性;最终一致:允许短暂读到旧值,只保证「最终」收敛到一致。<em>避免</em>把「最终一致」当成「不一致/会丢数据」。</dd>
+<dt>水平扩展 vs 垂直扩展(Scale Out vs Scale Up)</dt>
+<dd>水平=加机器(无上限但引入分布式问题),垂直=换更强单机(简单但有天花板与单点风险)。<em>避免</em>默认「加机器总能解决问题」——数据一致性会跟着变难。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong> 系统设计题开场几乎必然涉及这两块地基:</p>
+<ul>
+<li><strong>容量估算</strong>:「这系统大概多少 QPS?存储要多大?」——用「日活 × 人均次数 ÷ 约 10 万秒」快速心算平均 QPS,峰值乘 2~3 倍;存储用「条数 × 单条大小 × 保留年限」。数字不必准,量级要对。</li>
+<li><strong>CAP 是必答题</strong>:被问到时,先点破「P 不可放弃,取舍在分区时的 C 与 A」,再结合具体业务说该选 CP 还是 AP,并讲清最终一致的取舍。</li>
+<li><strong>「怎么扛更多流量?」</strong>——先垂直扩展救急,长期靠水平扩展 + 负载均衡,并主动指出「加机器后一致性会变难」,这句话最见功力。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>CAP 不是「平时三选二」。</strong> 最常见的扣分说法是「我们放弃可用性来换一致性和分区容忍」——听起来像平时就在做取舍,其实取舍只在<strong>分区发生的那一刻</strong>才被迫做出;网络正常时,强一致和高可用可以兼得。P 是前提,不是选项。</p>
+<p><strong>强一致不是免费的。</strong> 说「那就都用强一致」的人没意识到它的代价:每次写要等多个副本确认,延迟更高、分区时还得拒绝服务。很多大规模系统主动选最终一致,正是拿一致性换可用性和速度。</p>
+</div>
+
+<div class="implement">
+<p>动手核对,把「数字直觉」练成肌肉记忆:</p>
+<p>① 拿三个熟悉的产品(如某社交、某电商、某支付),各自估一遍日活 → QPS → 日存储增量,写下你的假设。② 给每个产品判一个 CP 还是 AP 的倾向,并说出理由。③ 背下那张延迟表的<strong>相对倍率</strong>(内存:SSD:磁盘:跨洲 ≈ 1 : 1000 : 1e5 : 1.5e6 ns),下次做题张口就能用。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong> 系统设计不是背架构图,是<strong>在约束下做权衡</strong>。地基是两句话:延迟有数量级台阶(内存≪SSD≪磁盘≪网络),分布式系统在分区时必须在一致性和可用性之间选一个。把这两句用活,你就有了估算容量和讨论取舍的底气。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一个产品有 5000 万日活,平均每人每天发起 20 次请求。平均 QPS 大约是哪个量级?</summary>
+<div class="answer">
+<p>总请求 ≈ 5000 万 × 20 = 10 亿次/天。一天约 86400 秒(心算按 10 万秒),10 亿 ÷ 10 万 ≈ <strong>1 万 QPS 量级</strong>(平均值)。峰值再乘 2~3 倍到约 2~3 万。面试要的就是这个「亿级请求 ÷ 十万秒 = 万级 QPS」的快速估算,精确到个位没有意义。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:关于 CAP 定理,下面哪个说法最准确?</summary>
+<div class="answer">
+<p>最准确的是:<strong>只有在网络分区发生时,才需要在一致性和可用性之间做取舍;分区容忍本身不可放弃</strong>。「任何时候都要三选二」是最常见的错误表述;「选了 AP 就永远读不到最新数据」也错(分区恢复后会最终一致);「强一致没有代价」更错(它牺牲延迟和分区时的可用性)。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:设计一个「点赞数展示」功能,用户点赞后哪怕别人过几秒才看到新数值也完全可以接受。这倾向于选择哪种一致性?</summary>
+<div class="answer">
+<p>倾向<strong>最终一致(AP)</strong>。点赞数不是关键数据,短暂看到旧值无伤大雅,而高可用和低延迟更重要——绝不能因为要强一致而让点赞按钮转圈或报错。对比:如果是账户余额或库存扣减,就该倾向强一致(CP),宁可慢也不能算错。判据永远是「这份数据错一会儿的代价有多大」。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本主题对应仓库大纲「系统设计、可扩展性和数据处理」小节。以下均为该处收录的一手来源:</p>
+<ul>
+<li><a href="https://github.com/donnemartin/system-design-primer">The System Design Primer</a> —— 大纲标注的「<strong>从这里开始</strong>」,系统设计的总入口。</li>
+<li><a href="http://everythingisdata.wordpress.com/2009/10/17/numbers-everyone-should-know/">每个人都应该了解的数字(Numbers Everyone Should Know)</a> —— 本课延迟表的来源。</li>
+<li><a href="http://ksat.me/a-plain-english-introduction-to-cap-theorem">CAP 定理的简明英文介绍</a>;想再直观感受延迟可看 <a href="http://blog.tsunanet.net/2010/11/how-long-does-it-take-to-make-context.html">进行上下文切换需要多长时间?</a>。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师随机出一个产品让你现场做容量估算,或用一个具体故障场景带你走一遍「分区时选 CP 还是 AP」。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0050-networking.html"><span class="dir">← 上一课</span>网络基础:TCP/IP、HTTP、DNS</a>
+  <a class="next" href="0052-system-design-patterns.html"><span class="dir">下一课 →</span>系统设计(下):缓存、分片、一致性哈希与作答框架</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

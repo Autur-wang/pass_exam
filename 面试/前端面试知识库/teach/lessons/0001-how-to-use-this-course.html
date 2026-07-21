@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0001 · 这门课怎么用 + 前端面试地图</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0001 课 · 1 起步:面试地图 · 预计 10 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>这门课怎么用 + 前端面试地图</h1>
+
+<p class="lede">这个仓库里已经放好了一整套前端面试真材料——不是一份平铺的链接清单,而是 38 篇正文 + 40 道高频问答题的完整讲义。这节不讲任何具体的技术知识点,只回答一个更基础的问题:这些材料原本是按目录字母顺序排的,这门课把它们重新组织成什么顺序,以及你该怎么用。</p>
+
+<div class="recall">
+<p>开课前先想一想:如果现在有人问你「前端工程师面试和普通软件工程师面试,到底有什么不一样」,你能不能说出至少一点具体的差异?先给自己一个诚实的答案——这决定了接下来 46 节课,哪几节对你是真正的新知识,哪几节可以先跳过。</p>
+</div>
+
+<h2>一、这个仓库是什么、材料从哪来</h2>
+
+<p>这个仓库是 <strong>GreatFrontEnd</strong> 维护的开源项目《Front End Interview Handbook》的中文翻译版本。README 里说得很直接:<a href="https://www.frontendinterviewhandbook.com">frontendinterviewhandbook.com</a> 是原始网站,这份仓库把「前端面试的各种形式」「前端系统设计面试」「前端 trivia 问答」「前端编码题」几大块内容,连同简体中文翻译,一起放进了本地目录。</p>
+
+<p>这一点和同一个 <code>面试/</code> 目录下的姊妹课程不太一样——比如《工程领导力资源》那门课的源材料只是一份 200+ 条的资源链接清单,而这个仓库里躺着的是<strong>可以直接读的完整讲义正文</strong>。这意味着这门课的每一节,都应该先去读对应的真实源文件,而不是靠"前端面试大概考什么"的通用印象去写。</p>
+
+<h2>二、仓库自带的五块内容</h2>
+
+<p>本地目录里实际存在(不是 README 里提到但没克隆下来的)五块内容,规模都用真实文件数核实过:</p>
+
+<table>
+<tr><th>目录</th><th>篇数</th><th>覆盖什么</th></tr>
+<tr><td><code>前端系统设计/</code></td><td>6 篇</td><td>简介、题型分类、评估标准、RADIO 框架、常见错误、备忘单</td></tr>
+<tr><td><code>综合面试手册/</code></td><td>10 篇</td><td>面试形式总览、简历、trivia、编码、JS、算法、UI 编程、组件 API 设计、系统设计入门</td></tr>
+<tr><td><code>行为面试手册/</code></td><td>10 篇</td><td>自我介绍、为什么来这里、简历讲述、协作/成长/解决问题/适应力等具体问题类型</td></tr>
+<tr><td><code>React面试手册/</code></td><td>12 篇</td><td>发展历程、基础概念、状态设计、Hooks、事件处理、表单、设计模式、数据获取</td></tr>
+<tr><td><code>quiz题库/</code></td><td>40 道题</td><td>h5bp 经典前端面试问答题,每题自带真实参考链接</td></tr>
+</table>
+
+<p>绝大多数正文都有官方中文翻译(<code>zh-CN.mdx</code>);只有 2 篇例外只有英文原文——对应的两节课会直接读英文源文件理解内容,用中文讲授,但不会假装存在一篇不存在的中文原文。</p>
+
+<h2>三、这门课怎么组织:7 个部分,46 节课</h2>
+
+<p>原始材料是按目录字母顺序平铺的,但备考是<strong>有先后依赖关系</strong>的——比如你需要先知道"前端面试分几道关卡",才能判断自己该优先补哪一关。这门课把上面五块内容,重新编排成一条从"面试地图"到"简历与行为面试收尾"的顺序:</p>
+
+<div class="trio">
+  <div class="cell"><span class="role">Part 1-2</span><span class="head">地图 + 编码基础</span><span class="sub">面试考什么、JS/算法/编码面试怎么区分</span></div>
+  <div class="cell"><span class="role">Part 3-4</span><span class="head">Trivia + UI 编程</span><span class="sub">HTML/CSS/浏览器高频问答、组件 API 设计</span></div>
+  <div class="cell"><span class="role">Part 5-7</span><span class="head">系统设计 + React + 收尾</span><span class="sub">RADIO 框架、React 专题、简历与行为面试</span></div>
+</div>
+
+<p>每节课只攻一个窄主题,10~15 分钟能读完;每节都指向对应源文件里<strong>真实存在</strong>的参考链接,不会凭空编一个"看起来应该有"的链接。</p>
+
+<h2>四、关键定义</h2>
+
+<dl class="keydef">
+<dt>Front End Interview Handbook</dt>
+<dd>GreatFrontEnd 维护的开源前端面试手册,本仓库是其中文翻译版本的本地拷贝。<em>避免</em>把它和 GreatFrontEnd 的付费刷题平台混为一谈——手册是免费的讲义,平台是另外的付费实战产品。</dd>
+<dt>这门课(<code>teach/</code>)与仓库本体的关系</dt>
+<dd>仓库本体(<code>前端系统设计/</code> 等五个目录)是原始一手材料,按目录字母顺序平铺;<code>teach/</code> 是在此基础上重新编排出的一条学习顺序,每节课都能追溯到具体的源文件。<em>避免</em>把这门课当成独立于仓库本体的新内容——它没有编造任何仓库里不存在的知识点。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>不需要严格从 0001 按顺序啃到 0046。如果你已经对 CSS/HTML 很熟,可以跳过 Part 3(HTML/CSS/浏览器高频问答),直接从 Part 5(前端系统设计)或 Part 6(React 专题)开始;如果只剩几天就要面试,行为面试(Part 7)的性价比往往比再刷十道 CSS trivia 题更高。判断标准很简单:哪一关你现在最没底,就先学哪一部分。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把"读完这 46 节课"当成终点。</strong>这门课负责讲清楚"为什么这么问、该往哪个方向想",但前端面试真正的手感,来自动手写代码——具体的实战练习题在 GreatFrontEnd 平台本身(见文末链接),不在这门课里重复造一遍。读完某节课觉得"懂了",和面试现场能不能在 15 分钟内写出来,是两件不同的事,后者需要真正动手。</p>
+</div>
+
+<div class="practice">
+<p><strong>本周就动手做的一件事:</strong>花 5 分钟,对着上面的 7 个部分表格,诚实标出"这一关我有底"还是"这一关我心里没数"。这份自评就是你接下来该优先学哪几节的依据,比按数字顺序死磕更有效率。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>这个仓库里是<strong>可以直接读的完整讲义</strong>,不是一份链接清单;这门课把它重新组织成 7 个部分、46 节课,但不需要按顺序全学——先诊断自己卡在哪一关,再挑对应部分深挖。</p>
+</div>
+
+<h2>五、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于这个仓库和这门课的关系,下面哪个说法最准确? (A) 仓库本体只是一份链接清单,实际内容全靠这门课凭经验编写 (B) 仓库本体自带可直接阅读的完整讲义正文,这门课只是把它们重新组织成一条学习顺序 (C) 这门课和仓库本体的内容互相独立,没有关系</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。仓库自带 38 篇正文 + 40 道问答题的完整讲义,这门课的每一节都追溯到具体的源文件。(A) 弄反了信息来源;(C) 忽略了这门课正是基于仓库本体重新编排出来的。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:如果只剩几天就要面试,且已经对 CSS/HTML 很熟,比较合理的学习策略是下面哪一个? (A) 仍然严格从 0001 按顺序学到 0046,一节不落 (B) 跳过已经熟悉的部分,优先补自己心里没数的部分,比如系统设计或行为面试 (C) 直接跳到最后一节,从后往前倒着学</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。这门课明确建议先自评"哪一关没底",再针对性深挖,而不是不管基础如何都从头学到尾。(A) 忽略了已经掌握的内容没必要重学;(C) 只是把"按顺序"倒过来,同样没有针对薄弱环节。</p>
+</div>
+</details>
+</div>
+
+<h2>六、主推资源</h2>
+
+<p>本节对应 README 开头"What is this?"一节介绍仓库定位时给出的链接,建议先看这两个再决定接下来优先学哪几节:</p>
+<ul>
+<li><a href="https://www.frontendinterviewhandbook.com/introduction/">Front End Interview Handbook · Introduction</a> —— 原始网站上的完整介绍页,比本地 README 的摘要更详细。</li>
+<li><a href="https://www.greatfrontend.com?utm_source=github&utm_medium=referral&gnrs=frontendinterviewhandbook">GreatFrontEnd</a> —— 出品方的实战刷题平台,200+ 带测试用例的练习题,读完某节课的概念后适合来这里动手练。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"前端面试和普通软件工程面试到底差在哪",也可以让老师帮你根据自己的实际处境,从 46 节里挑出最该优先学的几节。</p>
+<nav class="lesson-nav">
+  <span class="none"></span>
+  <a class="next" href="0002-what-front-end-interviews-actually-test.html"><span class="dir">下一课 →</span>前端面试到底考什么:五道关卡与考察重点</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

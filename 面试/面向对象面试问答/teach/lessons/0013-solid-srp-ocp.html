@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOLID:SRP 与 OCP · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第四部分 · SOLID · 第 0013 节</p>
+<h1>SOLID(一):单一职责与开闭原则</h1>
+<p class="lede">SOLID 是面试里"讲得出缩写、答不透理由"的重灾区。这一节只啃前两条——SRP 和 OCP,目标是让你既能一句话说清,又能当场用 Python 演示"为什么加需求时不该去改旧代码"。</p>
+
+<div class="recall">
+<p>先想一个你大概率写过的场景:一个 <code>AreaCalculator</code>,里面一串 <code>if shape.type == "circle": ... elif shape.type == "rectangle": ...</code>。产品说"再加一种三角形",你会怎么改?这一改,你要动的是<strong>新代码</strong>还是<strong>那段已经测过、上线过的旧代码</strong>?先在心里记下答案,再往下看。</p>
+</div>
+
+<h2>一、先认全家福:SOLID 是哪五个字母</h2>
+
+<p>SOLID 是五条面向对象设计原则的首字母缩写,由 Robert C. Martin(Uncle Bob)整理提出,"SOLID"这个记忆缩写据传由 Michael Feathers 归纳。它们不是语法,而是<strong>一组让设计更易维护、易扩展、抗腐化的经验法则</strong>——目的都是同一个:让代码在需求不断变化时,不至于越改越烂。</p>
+
+<div class="trio">
+  <div class="cell"><div class="role">S</div><div class="head">SRP</div><div class="sub">单一职责 · 本节</div></div>
+  <div class="cell"><div class="role">O</div><div class="head">OCP</div><div class="sub">开闭 · 本节</div></div>
+  <div class="cell"><div class="role">L / I / D</div><div class="head">LSP·ISP·DIP</div><div class="sub">下两节</div></div>
+</div>
+
+<p>本节讲 <strong>S</strong> 和 <strong>O</strong>。这两条常被合在一起考,因为它们回答的是同一个问题的两面:<strong>SRP 决定"把代码切成几块、按什么切",OCP 决定"块与块之间怎么连,才能加功能不动老代码"。</strong></p>
+
+<h2>二、SRP:一个类只该有"一个变化的理由"</h2>
+
+<p>直觉类比:一把<strong>瑞士军刀</strong>什么都能干,听起来很强,但真要拧一颗大螺丝、切一块牛排时,它样样都别扭——而且你想换掉起子那一部分,只能整把扔掉。SRP 说的就是:别造瑞士军刀式的"上帝类"(God class),让每个类只干一件"会因同一个原因而变"的事。</p>
+
+<p>注意关键词不是"只做一件事",而是"<strong>只有一个变化的理由</strong>"。Uncle Bob 后来把这句话说得更精确:一个模块应该只对<strong>一类使用者(actor)</strong>负责。换句话说,判断职责的尺子是"<strong>谁会来提需求让它改</strong>",不是"它有几个方法"。</p>
+
+<pre><code># ❌ 上帝类:一个 Report 扛了三个「变化的理由」
+class Report:
+    def calculate(self):   ...   # ① 业务规则变(财务同事提需求)→ 要改
+    def to_html(self):     ...   # ② 展示格式变(前端/设计提需求)→ 要改
+    def save_to_db(self):  ...   # ③ 存储方式变(DBA/运维提需求)→ 要改
+</code></pre>
+
+<p>三个方法背后是三拨不同的人、三个独立变化的方向。它们挤在一个类里,改任何一个都可能碰坏另外两个(还得重跑全部测试)。按"变化的理由"切开:</p>
+
+<pre><code># ✅ 每个类只对一类使用者负责
+class Report:              # 只管「内容/业务计算」
+    def calculate(self):   ...
+
+class ReportFormatter:    # 只管「展示格式」
+    def to_html(self, report):   ...
+
+class ReportRepository:   # 只管「持久化」
+    def save(self, report):      ...
+</code></pre>
+
+<p>现在"改格式"只碰 <code>ReportFormatter</code>,和业务计算、存储互不牵连——这正是 <a href="0012-cohesion-and-coupling.html">上一节</a>说的<strong>高内聚、低耦合</strong>在"类"这个粒度上的落地。</p>
+
+<div class="keydef">
+<dl>
+<dt>SRP · 单一职责原则 (Single Responsibility Principle)</dt>
+<dd>一个类应该<strong>只有一个变化的理由</strong>——只对一类使用者(actor)负责。切分依据是"会因什么原因而改变",不是方法数量。</dd>
+<dt>OCP · 开闭原则 (Open–Closed Principle)</dt>
+<dd>软件实体应<strong>对扩展开放、对修改关闭</strong>:加新功能靠"加新代码"(新增子类 / 实现接口 / 换新策略),而不是回去改那段已经测过、跑稳了的旧代码。</dd>
+</dl>
+</div>
+
+<h2>三、OCP:加功能靠"加代码",不靠"改代码"</h2>
+
+<p>回到开场那段 <code>if-elif</code>。每加一种形状,你都得回去改同一段计算逻辑——这就是<strong>违反 OCP</strong>的典型味道:一段稳定的旧代码,被反复撬开。</p>
+
+<pre><code># ❌ 违反 OCP:每加一种形状,都要回来撬开这段 if-elif 长链
+class AreaCalculator:
+    def area(self, shape):
+        if shape.type == "circle":
+            return 3.14159 * shape.radius ** 2
+        elif shape.type == "rectangle":
+            return shape.width * shape.height
+        # 加 triangle?又得回来动这里,还得重测整段……
+</code></pre>
+
+<p>OCP 的经典手法:<strong>用多态代替 <code>switch</code> / <code>if type == ...</code></strong>。让"每种形状怎么算面积"这件会变的事,分散到各自的类里;计算器只依赖一个稳定的<strong>抽象</strong>。Python 里用 <code>abc.ABC</code> + <code>@abstractmethod</code> 定义这个抽象:</p>
+
+<pre><code>from abc import ABC, abstractmethod
+
+class Shape(ABC):                       # 稳定的抽象:凡形状必会算面积
+    @abstractmethod
+    def area(self) -&gt; float:
+        ...
+
+class Circle(Shape):
+    def __init__(self, radius: float):
+        self.radius = radius
+    def area(self) -&gt; float:
+        return 3.14159 * self.radius ** 2
+
+class Rectangle(Shape):
+    def __init__(self, width: float, height: float):
+        self.width, self.height = width, height
+    def area(self) -&gt; float:
+        return self.width * self.height
+
+class AreaCalculator:                   # 只依赖 Shape 抽象,永不需要改
+    def total(self, shapes: list[Shape]) -&gt; float:
+        return sum(s.area() for s in shapes)
+</code></pre>
+
+<p>现在需求来了——加三角形。看看你要动多少行:</p>
+
+<pre><code>class Triangle(Shape):                  # ✅ 只「新增」一个类
+    def __init__(self, base: float, height: float):
+        self.base, self.height = base, height
+    def area(self) -&gt; float:
+        return 0.5 * self.base * self.height
+
+# AreaCalculator 一行都不用改,已上线的旧逻辑一个字节都不碰。
+</code></pre>
+
+<p>这就是"对扩展开放(可以随便加新 <code>Shape</code>)、对修改关闭(计算器这段稳定代码不再被撬)"。<strong>SRP 与 OCP 在这里咬合:</strong>因为先把"每种形状怎么算"按职责拆到了各自的类(SRP),才可能让计算器只依赖抽象、加功能不改它(OCP)。</p>
+
+<div class="interview">
+<p><strong>高频追问链(SRP/OCP 常被连着追问):</strong></p>
+<ul>
+<li>"SRP 里的'职责'到底怎么界定?两个方法算一个职责还是两个?" → 尺子是<strong>变化的原因 / 使用者(actor)</strong>:会被同一拨人、因同一个原因一起改动的,归一个职责;不是数方法个数。</li>
+<li>"OCP 说'对修改关闭',那是不是永远不能改代码?" → 不是。它关闭的是"<strong>为了加新行为而去撬稳定的旧逻辑</strong>";修 bug、改抽象本身当然要动代码。关键是把"变化"引到扩展点上,而不是核心链路上。</li>
+<li>"怎么用代码实现 OCP?" → 把会变的部分抽象成基类 / 接口 / 策略,用<strong>多态分派</strong>代替 <code>if type ==</code> 长链——新增行为 = 新增一个实现类。</li>
+<li>"SRP 和'高内聚'是一回事吗?" → SRP 可看作<strong>功能内聚在类粒度上的表达</strong>(接 0012);内聚描述"一块代码内部有多聚焦",SRP 给出一条切分它的具体判据。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>坑一:把"职责"理解成"方法数量"。</strong>一个类有十个方法,只要它们都为同一个原因而变,那仍是单一职责;反过来,一个类只有两个方法,若一个随业务规则变、一个随存储方式变,它就违反了 SRP。判据永远是<strong>变化的来源</strong>,不是行数或方法数。</p>
+<p><strong>坑二:为了 OCP 过度抽象(YAGNI)。</strong>在还只有一种情况时,就预先架起一堆基类、接口、策略工厂,美其名曰"为将来扩展"——这是典型的过度设计,徒增复杂度还没人用。务实的节奏是:<strong>等第二种变化真的出现、看清了变化点在哪,再抽象</strong>("发现重复,再消除重复")。OCP 是应对已出现的变化方向,不是给想象中的需求预留脚手架。</p>
+</div>
+
+<div class="crosslang">
+<p>SOLID 是<strong>语言无关</strong>的设计思想,但落地要靠各语言的抽象机制。同一条 OCP,换语言只是换"怎么声明那个稳定抽象":</p>
+<table>
+<tr><th>语言</th><th>提供稳定抽象的机制</th><th>多态分派方式</th></tr>
+<tr><td><strong>Python</strong></td><td><code>abc.ABC</code> + <code>@abstractmethod</code>;或 <code>typing.Protocol</code></td><td>鸭子类型 + 方法覆盖(有 <code>area()</code> 就能用,不必显式继承)</td></tr>
+<tr><td><strong>Java</strong></td><td><code>interface</code> / <code>abstract class</code></td><td><code>implements</code> + 覆盖,运行时动态分派</td></tr>
+<tr><td><strong>C#</strong></td><td><code>interface</code> / <code>abstract</code> 类</td><td>实现接口 + <code>override</code></td></tr>
+<tr><td><strong>C++</strong></td><td>含纯虚函数的抽象基类(<code>virtual f() = 0;</code>)</td><td>虚函数表(vtable)动态分派</td></tr>
+</table>
+<p>一句话:<strong>思想一致,只是 Java/C#/C++ 靠显式接口 + 继承,Python 还可以靠 Protocol / 鸭子类型"结构化地"满足同一个抽象。</strong></p>
+</div>
+
+<div class="implement">
+<p>合上讲义,把开场那段 <code>if-elif</code> 折扣计算器重写成 OCP 版:</p>
+<ul>
+<li>定义抽象 <code>DiscountPolicy(ABC)</code>,只有一个抽象方法 <code>apply(price: float) -&gt; float</code>。</li>
+<li>实现三个策略:<code>NoDiscount</code>(原价)、<code>PercentOff</code>(打 n 折)、<code>Coupon</code>(减固定额)。</li>
+<li>写一个 <code>checkout(price, policy)</code>,它<strong>只依赖 <code>DiscountPolicy</code></strong>,不出现任何 <code>if isinstance(...)</code>。</li>
+<li>自测:新增一个"满减"策略 <code>ThresholdOff</code>,你需要改动 <code>checkout</code> 吗?(答案应是"不需要"——若需要,说明抽象没做对。)</li>
+</ul>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:下面哪一种改动<strong>违反</strong>了开闭原则(OCP)?</summary>
+<div class="answer">
+<p><strong>答案:B。</strong></p>
+<ul>
+<li>A. 新增一个 <code>Hexagon(Shape)</code> 类来支持六边形 —— 纯扩展,不动旧代码,<strong>符合</strong> OCP。</li>
+<li><strong>B. 为了支持六边形,回到 <code>AreaCalculator.area()</code> 里再加一个 <code>elif shape.type == "hexagon"</code> —— 撬开了稳定的旧逻辑,正是 OCP 要消除的味道。</strong></li>
+<li>C. 发现 <code>Circle.area()</code> 把 π 写错了,回去修正这个 bug —— 这是修 bug,不是"为加新行为而改",不算违反 OCP。</li>
+</ul>
+<p>要点:OCP 反对的是"<strong>为了加新类型 / 新行为而反复修改同一段分发逻辑</strong>",不是反对一切代码改动。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:一个 <code>UserService</code> 类里有 <code>validate_password()</code>、<code>send_welcome_email()</code>、<code>log_signup_metric()</code> 三个方法。它违反 SRP 了吗?为什么?</summary>
+<div class="answer">
+<p><strong>大概率违反了</strong>——但理由不是"它有三个方法",而是这三件事分别会因<strong>不同的原因、被不同的人</strong>改动:</p>
+<ul>
+<li><code>validate_password</code> —— 安全策略变(安全团队)。</li>
+<li><code>send_welcome_email</code> —— 邮件文案/渠道变(市场/运营)。</li>
+<li><code>log_signup_metric</code> —— 埋点口径变(数据团队)。</li>
+</ul>
+<p>三个变化理由 = 三个职责。更好的切法是拆成 <code>PasswordValidator</code> / <code>EmailSender</code> / <code>MetricLogger</code>,由 <code>UserService</code> 编排它们。判据始终是"<strong>几个独立的变化来源</strong>",不是方法计数。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>SRP 告诉你"按<strong>变化的理由</strong>把代码切块"(一个类只对一类使用者负责),OCP 告诉你"块之间用<strong>抽象 + 多态</strong>连接,让加功能=加新类、而非撬旧代码"。两者一体两面;但别为想象中的需求过度抽象——<strong>看见第二种变化,再抽象。</strong></p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层(诚实标注):</p>
+<ul>
+<li><strong>canon(权威锚定):</strong>SRP、OCP 及整个 SOLID 出自 Robert C. Martin(Uncle Bob)——见其著作《Clean Architecture》《Agile Software Development, Principles, Patterns, and Practices》,以及他的博客 <a href="https://blog.cleancoder.com/">The Clean Code Blog</a>。OCP 的原始表述可追溯到 Bertrand Meyer《Object-Oriented Software Construction》(1988)。</li>
+<li><strong>canon(概念综述):</strong>Wikipedia 词条 <a href="https://en.wikipedia.org/wiki/SOLID">SOLID</a> / <a href="https://en.wikipedia.org/wiki/Single-responsibility_principle">Single-responsibility principle</a> / <a href="https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle">Open–closed principle</a>。</li>
+<li><strong>语言机制(实现依据):</strong>Python 官方 <a href="https://docs.python.org/3/library/abc.html"><code>abc</code> 模块文档</a> 与 <a href="https://docs.python.org/3/library/typing.html#typing.Protocol"><code>typing.Protocol</code></a>;Java 抽象机制见 <a href="https://docs.oracle.com/javase/tutorial/java/IandI/abstract.html">Oracle Java Tutorial · Abstract Methods and Classes</a>。</li>
+<li><strong>说明:</strong>本节属 canon 层,不来自某份源题 README;上述均为一手/权威出处,未做数字或版本细节的杜撰。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"为什么多态能替掉 <code>if type ==</code>",或者把你写的 <code>DiscountPolicy</code> 代码拿来评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节进入 SOLID 第三条——LSP 里氏替换原则:子类替换父类时,凭什么"不能破坏"父类的约定?</p>
+<nav class="lesson-nav">
+<a class="prev" href="0012-cohesion-and-coupling.html"><span class="dir">← 上一课</span>0012 · 内聚与耦合</a>
+<a class="next" href="0014-solid-lsp.html"><span class="dir">下一课 →</span>0014 · SOLID(二):里氏替换原则</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

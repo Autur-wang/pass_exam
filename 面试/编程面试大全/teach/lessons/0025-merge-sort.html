@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0025 · 归并排序:分治与稳定的代价</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0025 课 · 排序 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>归并排序:分治与稳定的代价</h1>
+
+<p class="lede">归并排序是「分治」范式最干净的教科书示例:把数组劈成两半,各自排好,再<strong>合并</strong>两个有序段。它的时间复杂度稳如泰山——最好、平均、最坏都是 O(n log n),还是<strong>稳定</strong>的。但天下没有免费的午餐,它的代价写在空间那一栏:数组版归并需要 <strong>O(n) 额外空间</strong>,不是原地排序。这节课把「稳定 + 稳定 O(n log n)」的红利和「非原地」的代价一并讲清,并揭示它一个特别的偏爱:<strong>链表</strong>。</p>
+
+<div class="recall">
+<p>回忆<a href="0023-sorting-overview.html">排序全景</a>那张总表:归并在时间轴上稳站 O(n log n)、在稳定性轴上是「稳定」、但在空间轴上标了红色的 O(n)。这节就来解释这三个格子背后各自的机制——尤其是「为什么它能稳定,却要付出额外空间」。</p>
+</div>
+
+<h2>一、分治三步:分、治、合</h2>
+
+<p>分治(Divide and Conquer)把一个大问题拆成<strong>互不重叠</strong>的同类子问题,分别解决再合并。归并排序的三步:</p>
+
+<ol>
+<li><strong>分(Divide)</strong>:把数组从中间劈成左右两半。</li>
+<li><strong>治(Conquer)</strong>:对左右两半各自递归调用归并排序。base case 是长度 ≤ 1 的段——它天然有序。</li>
+<li><strong>合(Merge)</strong>:把两个已排好序的段,合并成一个有序段。这是全部的技术核心。</li>
+</ol>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 560 260" width="560" role="img" aria-label="归并排序递归树:自顶向下拆分,自底向上合并">
+  <!-- top -->
+  <rect class="dgm-accent-node" x="200" y="10" width="160" height="30" rx="5"/>
+  <text class="dgm-accent-text" x="280" y="30" text-anchor="middle" font-size="14">[5, 3, 8, 1]</text>
+  <!-- level 2 -->
+  <line class="dgm-edge" x1="240" y1="40" x2="150" y2="70"/>
+  <line class="dgm-edge" x1="320" y1="40" x2="410" y2="70"/>
+  <rect class="dgm-node" x="90" y="70" width="120" height="30" rx="5"/>
+  <text class="dgm-text" x="150" y="90" text-anchor="middle" font-size="13">[5, 3]</text>
+  <rect class="dgm-node" x="350" y="70" width="120" height="30" rx="5"/>
+  <text class="dgm-text" x="410" y="90" text-anchor="middle" font-size="13">[8, 1]</text>
+  <!-- level 3 leaves -->
+  <line class="dgm-edge" x1="130" y1="100" x2="90" y2="130"/>
+  <line class="dgm-edge" x1="170" y1="100" x2="210" y2="130"/>
+  <line class="dgm-edge" x1="390" y1="100" x2="350" y2="130"/>
+  <line class="dgm-edge" x1="430" y1="100" x2="470" y2="130"/>
+  <rect class="dgm-node" x="60" y="130" width="60" height="28" rx="5"/>
+  <text class="dgm-text" x="90" y="149" text-anchor="middle" font-size="13">[5]</text>
+  <rect class="dgm-node" x="180" y="130" width="60" height="28" rx="5"/>
+  <text class="dgm-text" x="210" y="149" text-anchor="middle" font-size="13">[3]</text>
+  <rect class="dgm-node" x="320" y="130" width="60" height="28" rx="5"/>
+  <text class="dgm-text" x="350" y="149" text-anchor="middle" font-size="13">[8]</text>
+  <rect class="dgm-node" x="440" y="130" width="60" height="28" rx="5"/>
+  <text class="dgm-text" x="470" y="149" text-anchor="middle" font-size="13">[1]</text>
+  <!-- merge back -->
+  <rect class="dgm-good-node" x="90" y="185" width="120" height="28" rx="5"/>
+  <text class="dgm-good-text" x="150" y="204" text-anchor="middle" font-size="13">[3, 5]</text>
+  <rect class="dgm-good-node" x="350" y="185" width="120" height="28" rx="5"/>
+  <text class="dgm-good-text" x="410" y="204" text-anchor="middle" font-size="13">[1, 8]</text>
+  <rect class="dgm-good-node" x="200" y="228" width="160" height="28" rx="5"/>
+  <text class="dgm-good-text" x="280" y="247" text-anchor="middle" font-size="13">[1, 3, 5, 8]</text>
+  <text class="dgm-muted" x="20" y="55" font-size="11">分↓</text>
+  <text class="dgm-muted" x="20" y="205" font-size="11">合↑</text>
+</svg>
+</div>
+<figcaption>上半程一路对半拆到单元素(base case),下半程自底向上两两合并。树高 log n 层,每层合并总共处理 n 个元素——<strong>n × log n</strong> 就是这么来的。</figcaption>
+</figure>
+
+<h2>二、合并:两个有序段如何 O(n) 合一</h2>
+
+<p>合并是归并的灵魂。给定两个已排好序的段,各放一个指针在开头,<strong>比较两个指针指向的元素,把较小的那个取走、指针后移</strong>,如此往复直到一段耗尽,再把另一段剩下的接上。因为两段都已有序,每个元素只被看一次,合并一趟是 O(段长)。</p>
+
+<p>合并<strong>稳定</strong>的秘诀藏在一个细节里:当两个指针指向的元素<strong>相等</strong>时,永远优先取<strong>左段</strong>那个。左段的元素在原数组里本来就在前面,先取它就保住了相等元素的原始相对顺序。这一行「<code>&lt;=</code> 而非 <code>&lt;</code>」的选择,就是归并稳定性的全部来源。</p>
+
+<h2>三、为什么要额外的 O(n) 空间</h2>
+
+<p>合并两个相邻段时,你没法在原数组里就地完成——一边比较一边写回会覆盖掉还没读的元素。标准做法是开一个<strong>和数组等长的辅助数组</strong>,把合并结果写进去再拷回。这就是 O(n) 额外空间的由来,也是归并<strong>不是原地排序</strong>的原因。有所谓「原地归并」的技巧,但要么把合并退化成 O(n²)、要么实现极其复杂,面试里不必深究——只要说清「数组版归并需要 O(n) 辅助空间」即可。</p>
+
+<h2>四、链表:归并的主场</h2>
+
+<p>数组归并要额外空间,但换到<strong>链表</strong>上,这个代价几乎消失。链表合并两个有序段只需<strong>改指针的指向</strong>,不需要辅助数组,额外空间降到 O(1)。而且链表天生只支持顺序访问——这正是归并唯一需要的访问模式(它从不随机跳下标)。所以对链表,归并是最自然、最优的选择;快排和堆排在链表上反而会因缺少 O(1) 随机访问而退化。这就是上一课那句「链表适合归并」的底层原因。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>分治(Divide and Conquer)</dt>
+<dd>把问题分成<strong>互不重叠</strong>的子问题、分别求解再合并。<em>避免</em>与动态规划混同——DP 的子问题会重叠、需缓存,分治不重叠。</dd>
+<dt>归并排序(Merge Sort)</dt>
+<dd>分治排序:对半拆分、递归排序、合并两个有序段。稳定 O(n log n),数组版需 O(n) 辅助空间。</dd>
+<dt>自底向上归并(Bottom-up Merge Sort)</dt>
+<dd>不用递归,而是从段长 1 开始,一轮轮把相邻段两两合并(1→2→4→8…)的迭代版本,避免递归栈开销。</dd>
+</dl>
+
+<h2>六、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">项目</th><th>数组版</th><th>链表版</th></tr></thead>
+<tbody>
+<tr><td class="op">最好 / 平均 / 最坏 时间</td><td class="best">O(n log n)</td><td class="best">O(n log n)</td></tr>
+<tr><td class="op">额外空间</td><td class="warn">O(n) <small>(辅助数组)</small></td><td class="best">O(1) <small>(只改指针)</small></td></tr>
+<tr><td class="op">稳定性</td><td class="best">稳定</td><td class="best">稳定</td></tr>
+<tr><td class="op">原地?</td><td class="warn">否</td><td class="best">是</td></tr>
+</tbody>
+</table>
+<p>注意时间那一行——归并的三种情况<strong>完全一样</strong>,没有「最坏退化」。这是它相比快排最大的优势:性能可预测,永远 n log n,适合对最坏情况有硬性保证的场景。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>归并本身直接出题不多,但它的<strong>合并思想</strong>是一大批高频题的母题——看到「合并有序」「分治统计」就该想到它:</p>
+<ul>
+<li><strong>合并 K 个有序链表</strong>——把归并的「合并两个」推广到 K 个,用两两归并或优先队列,是经典高频题。</li>
+<li><strong>逆序对计数 / 数组中的翻转对</strong>——在归并的合并步里,当右段元素被取到左段元素前面时,顺带统计跨段逆序对,把 O(n²) 暴力降到 O(n log n)。</li>
+<li><strong>外部排序(External Sort)</strong>——数据大到内存装不下时,分块排序后<strong>多路归并</strong>落盘,是归并「只需顺序访问」这一性质的工业级应用。</li>
+<li>会被追问:<strong>「归并和快排怎么选?」</strong>——要稳定、要最坏情况有保证、或排链表,选归并;内存紧张、要原地、平均更快,选快排。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>「归并排序是原地的」——错。</strong>数组版归并需要 O(n) 辅助数组来完成合并,是典型的<strong>非原地</strong>排序。只有链表版靠改指针才做到 O(1) 额外空间。把数组归并说成原地是常见扣分点。</p>
+<p><strong>别把归并的「稳定」当成理所当然的偶然。</strong>它稳定是因为合并时<strong>相等元素优先取左段</strong>(<code>left[i] &lt;= right[j]</code> 时取左)。如果你把条件写成 <code>&lt;</code> 让右段优先,归并就变得不稳定了——稳定性是实现里那一行比较符的直接结果,不是天生的。</p>
+</div>
+
+<div class="implement">
+<p>实现两个版本,对照理解:</p>
+<p><strong>1) 数组版</strong>:<code>merge_sort(arr)</code> 递归拆分 + <code>merge(left, right)</code> 用辅助数组合并。在 merge 里刻意用 <code>&lt;=</code> 保证取左优先,再改成 <code>&lt;</code>,用带标签的相等元素验证稳定性如何被破坏。</p>
+<p><strong>2) 自底向上迭代版</strong>:段长从 1 开始翻倍(1→2→4…),每轮扫一遍数组合并相邻段,不用递归。</p>
+<p>进阶:实现<strong>链表版</strong>归并(快慢指针找中点拆分、合并只改 <code>next</code> 指针),观察它不需要辅助数组。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>归并用「稳定 + 三种情况都 O(n log n)」的可预测性,换来了 O(n) 额外空间。要最坏情况有保证、要稳定、或者排链表——选它。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:归并排序的最好情况时间复杂度是多少?为什么它和快排在这一点上有本质区别?</summary>
+<div class="answer">
+<p>归并的最好情况仍是 <strong>O(n log n)</strong>——和平均、最坏完全一样。因为无论输入长什么样,它都要拆到底(log n 层)、每层合并处理全部 n 个元素,拆分和合并的工作量不随输入内容变化。快排则不同:它平均 O(n log n),但在最坏输入(如已排序 + 固定选 pivot)下会退化到 O(n²)。所以归并的卖点是<strong>性能可预测、最坏情况有保证</strong>,快排的卖点是<strong>平均更快且原地</strong>。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:合并两个有序段时,若两个指针指向的元素相等,应该优先取哪一段的元素?取错了会有什么后果?</summary>
+<div class="answer">
+<p>应优先取<strong>左段</strong>(实现里写成 <code>left[i] &lt;= right[j]</code> 时取 left)。左段元素在原数组里本就排在右段前面,先取它就保住了相等元素的<strong>原始相对顺序</strong>,这正是归并<strong>稳定</strong>的来源。如果改成右段优先(把条件写成 <code>&lt;</code>),相等元素的顺序会被颠倒,归并就<strong>不再稳定</strong>。稳定性完全由这一行比较符决定,不是天生的。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:「数组中的逆序对个数」为什么能用归并排序在 O(n log n) 内求出,而不必 O(n²) 暴力两两比较?</summary>
+<div class="answer">
+<p>关键在<strong>合并步</strong>:当合并左右两个已排序段时,如果右段的某个元素比左段当前指针指向的元素小、被提前取走,说明左段<strong>剩下的全部元素</strong>都与它构成逆序对——一次就能统计一批,而不是逐对比较。把每次合并统计到的跨段逆序对累加,再加上左右子段内部递归算出的逆序对,就是总数。整个过程搭在归并的骨架上,时间复杂度就是归并的 O(n log n)。这是「分治统计」这一大类题的范式。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题对应仓库「排序」小节的 Sedgewick 归并系列与归并视频。抽出的一手来源:</p>
+<ul>
+<li><a href="https://www.coursera.org/lecture/algorithms-part1/mergesort-ARWDq">Sedgewick · 归并排序 Mergesort(Coursera 视频)</a> —— README 收录的第 1 讲,分治与合并讲得最系统。</li>
+<li><a href="https://www.coursera.org/learn/algorithms-part1/lecture/PWNEl/bottom-up-mergesort">Sedgewick · 自底向上的归并排序(视频)</a> —— 免递归的迭代版本。</li>
+<li><a href="https://youtu.be/4VqmGXwpLqc">Merge sort in 3 minutes(视频)</a> —— 三分钟看清拆分与合并动画。</li>
+<li><a href="http://www.geeksforgeeks.org/merge-sort-for-linked-list/">链表的归并排序(GeeksforGeeks)</a> —— README 用它佐证「链表适合归并」。</li>
+</ul>
+<p>实现参考本地/仓库代码:<a href="https://github.com/jwasham/practice-python/blob/master/merge_sort/merge_sort.py">归并排序(Python,外部数组版)</a>。</p>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师带你在纸上把 <code>[5,3,8,1]</code> 的递归树一层层画出来,或让老师用 ELI5 讲「为什么合并一趟是 O(n)」。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0024-quadratic-sorts.html"><span class="dir">← 上一课</span>O(n²) 三兄弟:冒泡、选择、插入</a>
+  <a class="next" href="0026-quick-sort.html"><span class="dir">下一课 →</span>快速排序:分区与最坏退化</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

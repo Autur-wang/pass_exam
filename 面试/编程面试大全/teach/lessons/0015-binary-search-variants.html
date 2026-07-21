@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0015 · 二分的变体:找边界与二分答案</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0015 课 · 哈希与查找 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>二分的变体:找边界与二分答案</h1>
+
+<p class="lede">上一课的二分只回答「在不在」。但面试里真正高频的是它的变体:<strong>找第一个满足条件的位置(边界),以及把一道最优化问题「二分」出答案</strong>。它们看着五花八门,内核却是同一句话——<strong>在一个「否否否是是是」的单调序列上,找那个从否翻到是的分界点</strong>。抓住这句,一堆题就通了。</p>
+
+<div class="recall">
+<p>先回忆:<a href="0014-binary-search.html">上一课</a>我们背下了闭区间模板——<code>while lo &lt;= hi</code>、<code>mid = lo + (hi - lo)/2</code>、收缩用 <code>mid ± 1</code>,靠不变量「目标若在必在 [lo, hi]」保证正确。请先自问:标准二分找到目标就 <code>return</code> 了;<strong>如果数组里有多个等于 target 的值,它返回的是第几个?</strong>(答案:不确定——这正是本课要治的病。)</p>
+</div>
+
+<h2>一、把二分重新理解成「找分界点」</h2>
+
+<p>标准二分是「找等于 target 的那一个」。换个视角:给区间里每个位置贴一个布尔标签 <strong>predicate(i)</strong>(它满不满足某条件),如果这些标签是<strong>单调</strong>的——前面一段全 <code>False</code>、后面一段全 <code>True</code>,中间只翻一次——那么二分就能 O(log n) 找到<strong>第一个 <code>True</code></strong>(或最后一个 <code>False</code>)。查找一个值,只是「predicate = (a[i] &gt;= target)」的特例。</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell"><span class="idx">0</span>F</div>
+  <div class="cell"><span class="idx">1</span>F</div>
+  <div class="cell"><span class="idx">2</span>F</div>
+  <div class="cell hi"><span class="idx">3</span>T</div>
+  <div class="cell on"><span class="idx">4</span>T</div>
+  <div class="cell on"><span class="idx">5</span>T</div>
+  <div class="cell on"><span class="idx">6</span>T</div>
+  <div class="cell on"><span class="idx">7</span>T</div>
+</div>
+<figcaption>单调谓词:F F F | T T T T T。二分的目标是那条竖线——<strong>第一个 T(红格,下标 3)</strong>。整个变体家族都在找这条分界线,区别只是「谓词是什么」和「要左边界还是右边界」。</figcaption>
+</figure>
+
+<h2>二、找左边界:lower_bound</h2>
+
+<p><strong>lower_bound</strong>:找第一个 <code>&gt;= target</code> 的位置(等价于「≥ target 的最左下标」)。谓词就是 <code>a[i] &gt;= target</code>,前 False 后 True。找左边界的收缩要点是:<strong>命中条件时不要急着返回,而是把右端收过来,继续向左试探还有没有更早的。</strong></p>
+
+<pre><code>def lower_bound(a, target):        # 第一个 a[i] &gt;= target
+    lo, hi = 0, len(a)             # 半开区间 [lo, hi),ans 落点可为 len(a)
+    while lo &lt; hi:
+        mid = lo + (hi - lo) // 2
+        if a[mid] &gt;= target:       # mid 满足 → 答案在 mid 或更左
+            hi = mid               # 不 -1:mid 本身可能就是答案
+        else:
+            lo = mid + 1           # mid 不满足,丢弃它及左侧
+    return lo                      # lo == hi,即第一个 True 的位置</code></pre>
+
+<p>对称地,<strong>upper_bound</strong>(第一个 <code>&gt; target</code>)只需把谓词换成 <code>a[i] &gt; target</code>。有了这两个,「target 出现了几次」= <code>upper_bound - lower_bound</code>,「插入位置」= <code>lower_bound</code>。C++ 的 <code>std::lower_bound/upper_bound</code>、Python 的 <code>bisect_left/bisect_right</code> 就是它们——库函数背后正是这套。</p>
+
+<h2>三、旋转有序数组:被拧过一下的单调</h2>
+
+<p>把有序数组从某点旋转,如 <code>[4,5,6,7,0,1,2]</code>,整体不再单调,但<strong>任意 mid 一劈,左右两半里至少有一半仍是有序的</strong>。于是每步先判断哪半有序、target 是否落在那半的范围内,据此决定往哪半走——依然 O(log n)。它是「局部单调也能二分」的代表。</p>
+
+<h2>四、二分答案:把「求最优」变成「问是否可行」</h2>
+
+<p>这是变体里最反直觉、也最高频的一招。很多最优化问题——<strong>「最小化最大值」「最大化最小值」「最少要几天/几台机器」</strong>——直接求很难,但改成<strong>判定问题</strong>就简单:「给定一个候选答案 x,可行吗?」如果<strong>可行性关于 x 单调</strong>(x 够大就一定可行、够小就一定不可行),那答案空间就是一条 F...F T...T,可以对<strong>答案本身</strong>二分。</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision">原问题:最小化「最大分段和」(把数组分成 k 段)</div>
+  <div class="down">↓ 换个问法</div>
+  <div class="step">判定 check(x):存在一种分法,使每段和都 ≤ x 吗?</div>
+  <div class="down">↓ check(x) 关于 x 单调:x 越大越容易可行</div>
+  <div class="branches">
+    <div class="branch"><div class="label">x 太小</div><div class="step">check=False → 调大 lo=mid+1</div></div>
+    <div class="branch"><div class="label">x 够大</div><div class="step terminal">check=True → 记录并缩 hi=mid</div></div>
+  </div>
+  <div class="down">↓ 在 [最大单元素, 总和] 上二分 x</div>
+  <div class="step terminal">收敛到「最小的可行 x」= 原问题的最优解</div>
+</div>
+</figure>
+
+<p>套路固定:<strong>① 确认答案落在一个数值区间 [lo, hi];② 写一个 check(x) 判定 x 是否可行;③ 确认 check 关于 x 单调;④ 在数值区间上二分,找第一个可行的 x。</strong>经典例子:分割数组的最大值最小、Koko 吃香蕉的最小速度、船在 D 天内运完货的最小载重——全是同一个模子。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>lower_bound / upper_bound</dt>
+<dd>第一个 <code>&gt;= target</code> / 第一个 <code>&gt; target</code> 的位置。是 C++ <code>lower_bound</code>、Python <code>bisect_left/right</code> 的原理。<em>避免</em>把「找边界」和「找任意一个等于 target」混为一谈。</dd>
+<dt>谓词单调性(Monotone Predicate)</dt>
+<dd>沿区间看 predicate 只从 False 翻到 True 一次(或反过来)。这是任何二分变体能成立的根本前提。</dd>
+<dt>二分答案(Binary Search on the Answer)</dt>
+<dd>把最优化问题转成「给定候选答案是否可行」的判定问题,当可行性单调时,对答案的取值范围二分。<em>避免</em>在可行性非单调时套用。</dd>
+</dl>
+
+<h2>六、复杂度</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">变体</th><th>时间</th><th>空间</th></tr></thead>
+<tbody>
+<tr><td class="op">lower_bound / upper_bound</td><td class="best">O(log n)</td><td class="best">O(1)</td></tr>
+<tr><td class="op">旋转有序数组查找</td><td class="best">O(log n) <small>(元素互异时)</small></td><td class="best">O(1)</td></tr>
+<tr><td class="op">二分答案</td><td class="warn">O(log R × C) <small>(R=答案范围,C=一次 check 代价)</small></td><td class="op">取决于 check</td></tr>
+</tbody>
+</table>
+<p>二分答案的时间是「二分次数 <code>log R</code>」乘「每次 check 的代价 <code>C</code>」——别只报 O(log R) 而忘了 check 本身通常是 O(n)。这类题的整体复杂度多为 O(n log R)。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>纯标准二分反而少见,变体才是主战场,记住两条触发信号:</p>
+<ul>
+<li><strong>「有序数组里 target 的第一个/最后一个/出现次数/插入位置」→ lower/upper_bound。</strong>能说清「命中时为什么用 <code>hi = mid</code> 而不是 <code>mid - 1</code>」就到位了。</li>
+<li><strong>「求满足某条件的最小/最大的那个值」且「答案越大越容易满足(或反之)」→ 二分答案。</strong>面试时先大声验证单调性,再写 check,最后套模板——这个顺序本身就是加分项。</li>
+<li>旋转数组、山脉数组峰值、在无限序列里定位,都是「局部单调 + 二分」,考的是你能不能把非全局单调的结构<strong>拆出可二分的方向</strong>。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>找边界最容易在「命中后往哪缩、最后返回谁」上翻车。</strong>找左边界时,<code>a[mid] &gt;= target</code> 命中后要 <code>hi = mid</code>(<strong>保留 mid</strong>,它可能就是最左的那个),而不是 <code>hi = mid - 1</code>——后者会把正确答案挤出区间。这也是为什么边界写法常用<strong>半开区间 <code>[lo, hi)</code> + <code>while lo &lt; hi</code></strong>与标准二分不同:两套模板的开闭、收缩、返回值必须整套配对,不能各取一半。</p>
+<p><strong>二分答案的前提是单调性,不确认就套模板 = 蒙。</strong>只有「x 可行 ⟹ 所有更大的 x 也可行」这种单调关系成立,答案空间才是 F...F T...T,二分才有意义。遇到可行性会「行→不行→又行」跳变的问题,二分答案直接失效,得换思路。</p>
+</div>
+
+<div class="implement">
+<p>用同一份有序数组,把边界家族写全并互验:</p>
+<p>① <code>lower_bound</code> 与 <code>upper_bound</code>;② 用它们求「target 出现次数」<code>= upper - lower</code>,并和暴力计数对拍;③ 旋转有序数组查找,专测 target 恰好是旋转点、在左半、在右半三种情况。</p>
+<p>再挑一道二分答案练手(如「分割数组的最大值最小」或「Koko 吃香蕉」):先写 <code>check(x)</code>,在纸上列几个 x 验证 check 确实单调,再套二分。打印每轮 <code>(lo, mid, hi, check(mid))</code> 看它怎么逼近第一个可行值。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>所有二分变体都是「在单调的 F...F T...T 上找那条分界线」。查值、找边界、二分答案的唯一区别是「谓词是什么」——写之前先说清谓词、并确认它单调,模板就那一个。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:实现 lower_bound(第一个 <code>&gt;= target</code>)时,当 <code>a[mid] &gt;= target</code>,下一步应该怎么收缩?</summary>
+<div class="answer">
+<p><strong><code>hi = mid</code>(保留 mid,不减 1)。</strong>因为 mid 本身满足 <code>&gt;= target</code>,它有可能正是「最左的那个」,不能被排除;我们只是把范围收到「mid 及其左侧」继续找有没有更早的。若写成 <code>hi = mid - 1</code>,当 mid 恰好是答案时就把它挤出去了,返回值会偏右一位。这正是边界二分与标准二分收缩规则不同的核心点。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:下面哪种问题<strong>最适合</strong>用「二分答案」?</summary>
+<div class="answer">
+<p><strong>「把货物在 D 天内运完,求船的最小载重」这类:求一个最优数值,且『能力越强(载重越大)越容易满足』的单调判定问题。</strong>它可以转成「载重 x 够不够 D 天运完?」的 check,且 x 越大越可行 → 单调 → 二分。干扰项里,「在有序数组找某个值」是标准二分而非二分答案;「求无序数组的中位数」「可行性会来回跳变的问题」都不满足单调性,套二分答案会出错。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:在旋转有序数组 <code>[4,5,6,7,0,1,2]</code> 里用二分找 <code>0</code>,为什么整体不单调却还能 O(log n)?</summary>
+<div class="answer">
+<p><strong>因为任取 mid 把数组一劈,左右两半中<strong>至少有一半是完全有序的</strong>。</strong>每步先判断哪半有序(比较端点与 mid),再看 target 是否落在那个有序半的值域内:落在 → 去那半,不落在 → 去另一半。每步仍排除约一半元素,所以还是 O(log n)。它体现的通用思想是:即使全局不单调,只要每步都能<strong>确定性地砍掉一半</strong>,二分依旧成立。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题仍在仓库大纲「更多的知识 → 二分查找」小节。最贴合本课(统一模板与变体)的一手来源:</p>
+<ul>
+<li><a href="https://leetcode.com/discuss/general-discussion/786126/python-powerful-ultimate-binary-search-template-solved-many-problems">Powerful Ultimate Binary Search Template(LeetCode 蓝图)</a> —— 用「找第一个满足条件的位置」一个模板统一了几十道变体题,是本课思想的直接出处。</li>
+<li><a href="https://www.topcoder.com/community/data-science/data-science-tutorials/binary-search/">二分查找详解(TopCoder 教程)</a> —— 专讲边界与单调谓词,治「命中后往哪缩」的老毛病。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师给你一道「最小化最大值」的题,你先只写 <code>check(x)</code> 并证明它单调,老师再陪你套模板;或专门对练 lower/upper_bound 的返回值边界。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0014-binary-search.html"><span class="dir">← 上一课</span>二分查找:有序区间的对折</a>
+  <a class="next" href="0016-bitwise-basics.html"><span class="dir">下一课 →</span>位运算基础:&amp; | ^ ~ &lt;&lt; &gt;&gt;</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

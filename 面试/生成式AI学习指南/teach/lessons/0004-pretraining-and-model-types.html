@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0004 · 预训练机制与模型类型:MLM/CLM、GPT vs BERT、base/instruct/reasoning</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第一部分 基础与 Transformer · 第 0004 课</p>
+<h1>预训练机制与模型类型:MLM/CLM、GPT vs BERT、base/instruct/reasoning</h1>
+<p class="lede">前两课把 Transformer 这块「积木」拆到了螺丝。这节课回答:<strong>拿到积木后,怎么用海量无标注文本把它「喂大」,喂出来的又分哪几种模型?</strong>一口气答清五道高频基础题:<strong>「LLM 有哪些预训练机制?」「GPT 与 BERT 的关键区别?」「NLP 里的迁移学习/预训练+微调是什么?」「编码器-解码器的信息流与交叉注意力的作用?」「base / instruction-tuned / reasoning 三类模型有何不同?」</strong>(源:60 题·LLM 第 8、2、1、12、15 题;AI 工程师题库 Q7)。</p>
+
+<div class="recall">
+<p>回忆一下:自注意力让序列里任意两个位置「一步」互相看到,位置编码又给它补上了顺序感——积木已经搭好。但一个刚随机初始化的 Transformer 对语言一无所知。<strong>先别往下看:手上只有海量网页文本、<em>一条人工标注都没有</em>,你要怎么设计一个「自动出题、自动判分」的任务,逼模型把语言规律学进去?</strong></p>
+</div>
+
+<h2>一、预训练机制:没有标注,怎么学语言?</h2>
+<p>核心思路叫<strong>自监督</strong>:不用人标注,而是从文本自身「挖一块出来」当答案,让模型去补——文本自己就是标准答案。挖法不同,就有了不同的预训练机制。三种主流机制,举例记住即可:</p>
+
+<dl class="keydef">
+<dt>MLM(Masked Language Modeling,掩码语言建模)——BERT</dt>
+<dd>随机遮住句子里一部分 token(BERT 论文里约 15%),让模型看着<strong>左右两边的上下文</strong>去还原被遮的词,即建模 $P(x_i \mid x_{\setminus i})$。因为能同时看前后,得到的是<strong>双向</strong>表示,特别适合「理解」类任务。BERT 预训练时还搭了一个 NSP(Next Sentence Prediction,判断两句是否相邻)辅助任务。</dd>
+<dt>CLM / 自回归(Causal / Autoregressive LM)——GPT</dt>
+<dd>只看<strong>前文</strong>预测下一个 token,即最大化 $\prod_t P(x_t \mid x_{&lt;t})$。注意 $x_{&lt;t}$ 表示「$t$ 之前的所有 token」——它<strong>单向</strong>(左→右),天生就是「续写」,所以天然适合<strong>生成</strong>。</dd>
+<dt>PLM(Permutation Language Modeling,排列语言建模)——XLNet</dt>
+<dd>把预测顺序随机打乱后再做自回归,试图「既拿到双向上下文,又保留自回归的生成能力」,是对 MLM 与 CLM 各自短板的一种折中。</dd>
+</dl>
+<p class="formula-note">一句话串起来:MLM 完形填空(看两边)、CLM 写作文(只看前面)、PLM 打乱顺序做填空。</p>
+
+<h2>二、三种架构:GPT 与 BERT 只是同一块积木的两种搭法</h2>
+<p>Transformer 原论文本是「编码器 + 解码器」双塔。后人发现:很多任务只需要其中<strong>半边</strong>,于是分化出三个架构家族。GPT 与 BERT 的区别,本质就是「用哪半边 + 配哪种预训练目标」:</p>
+
+<div class="trio">
+  <div class="cell"><strong>Encoder-only</strong><br>编码器堆叠 · 双向<br><em>BERT · 擅长理解</em></div>
+  <div class="cell"><strong>Decoder-only</strong><br>解码器堆叠 · 单向因果<br><em>GPT · 擅长生成</em></div>
+  <div class="cell"><strong>Encoder-Decoder</strong><br>双塔 · 编码后解码<br><em>T5 · 擅长序列到序列</em></div>
+</div>
+
+<p>把 GPT 与 BERT 摊开对比,面试答这张表就够:</p>
+
+<table>
+<thead><tr><th>维度</th><th>BERT</th><th>GPT</th></tr></thead>
+<tbody>
+<tr><td>用哪半边</td><td>Transformer <strong>编码器</strong>堆叠</td><td>Transformer <strong>解码器</strong>堆叠</td></tr>
+<tr><td>注意力方向</td><td>双向(能看左右)</td><td>单向 / 因果(只看前文)</td></tr>
+<tr><td>预训练目标</td><td>MLM + NSP</td><td>CLM(自回归)</td></tr>
+<tr><td>天生擅长</td><td>理解:分类、NER、抽取式 QA</td><td>生成:续写、对话、开放式问答</td></tr>
+</tbody>
+</table>
+<p>为什么 BERT 更适合「理解」?因为分类、命名实体识别(NER)、抽取式问答这类任务,判断一个词要同时依赖它左右两边——双向刚好对口。为什么 GPT 更适合「生成」?因为「预测下一个词」必须只能看前文(否则就作弊看到了答案),这条因果约束反而让它学成了一台强大的续写引擎。</p>
+
+<h3>编码器-解码器与交叉注意力(信息流)</h3>
+<p>当输入和输出是两段不同序列时(翻译、摘要、生成式 QA),双塔结构最自然。信息流是这样走的:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">输入序列<br><em>「今天天气很好」</em></div>
+  <div class="arrow">→</div>
+  <div class="node">编码器<br>编成连续表示</div>
+  <div class="arrow">→</div>
+  <div class="node good">交叉注意力<br>解码器来 query</div>
+  <div class="arrow">→</div>
+  <div class="node">解码器<br>逐 token 产出</div>
+  <div class="arrow">→</div>
+  <div class="node">输出序列<br><em>「The weather…」</em></div>
+</div>
+<figcaption>编码器只跑一次把输入压成表示;解码器一边参考它、一边看自己已生成的部分,逐个吐字。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>交叉注意力(Cross-Attention)</dt>
+<dd>解码每一步时,用<strong>当前解码器状态</strong>当 Query,去和<strong>编码器输出</strong>(当 Key/Value)算注意力——动态地「回头看」输入里当下最相关的部分。这正是第 0002 课自注意力的 Q、K、V 不再全来自同一段序列:<strong>Q 来自解码器、K/V 来自编码器</strong>。翻译时对齐原文哪个词、摘要时抓原文哪句、QA 时定位证据段,靠的都是它。</dd>
+</dl>
+
+<h2>三、迁移学习:预训练 + 微调,两阶段范式</h2>
+<p>把上面的机制放进一个更大的框架,就是 NLP 里说的<strong>迁移学习</strong>——它是「预训练机制」之所以值钱的原因。分两阶段:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">① 预训练<br>海量无标注语料<br>自监督学「通用语言」</div>
+  <div class="arrow">→</div>
+  <div class="node">通用底座<br>(懂语法/语义/常识)</div>
+  <div class="arrow">→</div>
+  <div class="node good">② 微调<br>小规模任务数据<br>特化到具体任务</div>
+</div>
+<figcaption>先花大钱学一次「通识」,之后每个下游任务只需少量标注数据做「专业课」。</figcaption>
+</figure>
+
+<p>这套范式为什么赢了?三条价值,面试点这三条:</p>
+<ul>
+<li><strong>省任务数据</strong>:通用能力已在预训练阶段学好,下游只需少量标注就能拿到高性能。</li>
+<li><strong>省资源</strong>:昂贵的预训练只做一次,不必为每个任务从零训练。</li>
+<li><strong>一模多用</strong>:同一个底座微调到分类、抽取、翻译……复用性极高。</li>
+</ul>
+
+<h2>四、base / instruct / reasoning:同一底座的三级「成熟度」</h2>
+<p>预训练出来的原始模型叫 <strong>base</strong>。但它并不「听话」——你问它问题,它可能只是接着你的话往下续写。要变成能对话、能解难题的产品,还要在 base 之上再加工。这就是 AI 工程师最常被问的三类模型区别:</p>
+
+<div class="trio">
+  <div class="cell"><strong>base(基座)</strong><br>只做一件事:预测下一个 token<br><em>不可靠听指令,续写机器</em></div>
+  <div class="cell"><strong>instruction-tuned / chat</strong><br>base + SFT + 偏好优化<br><em>能听指令、能对话——产品默认</em></div>
+  <div class="cell"><strong>reasoning(推理型)</strong><br>再进一步训练(常用可验证奖励 RL)<br><em>答前先花算力做内部思维链</em></div>
+</div>
+
+<p>三者递进关系说清楚:</p>
+<ul>
+<li><strong>base</strong>:纯预训练产物,目标只是「预测下一个 token」,不保证按你的指令行事——给它一句问题,它可能续成更多问题。</li>
+<li><strong>instruction-tuned / chat</strong>:在 base 上用指令数据做 SFT(监督微调)、再用偏好优化对齐人类偏好,于是学会「听懂指令、给出有用回答、多轮对话」。<strong>面向用户的产品默认用它。</strong></li>
+<li><strong>reasoning</strong>:再往上,常用「可验证奖励」的强化学习(答案对不对可以自动判定,如数学、代码)训练模型在给出最终答案<em>之前</em>先花 <strong>test-time compute</strong> 做一段内部思维链。难的多步问题更强,代价是更慢、更贵。</li>
+</ul>
+<p class="formula-note">选型口诀:常规任务用 instruct(快又够用);难的、多步的推理任务再上 reasoning(强但慢且贵)。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「MLM 和 CLM 分别适合什么任务、为什么?」——MLM 双向→理解;CLM 单向→生成。答不出「方向」这个根因就是背书。</li>
+<li>「BERT 能做文本生成吗?」——不擅长。它是双向编码器、没有因果约束,天生做的是理解;硬做生成要额外改造。别答「一定不能」,要说「架构上不对口」。</li>
+<li>「decoder-only 的 GPT 里有交叉注意力吗?」——没有。交叉注意力只存在于「编-解码器」结构里(解码器看编码器);decoder-only 只有带因果 mask 的自注意力。这是极易混的坑。</li>
+<li>「预训练和微调的数据量、监督方式各是什么?」——预训练:海量、自监督/无标注;微调:小规模、有标注。</li>
+<li>「reasoning 模型是不是永远比 instruct 好,应该默认用?」——不是。它更慢更贵,简单任务上性价比反而低;按任务难度选。</li>
+<li>「instruct 模型是怎么从 base 来的?」——SFT + 偏好优化(如 RLHF 一类)。引出对齐话题。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞是扣分点):</strong></p>
+<ul>
+<li>别把方向搞反:<strong>MLM 双向、CLM 单向</strong>。说「GPT 双向」或「BERT 单向」直接判死。</li>
+<li>交叉注意力 ≠ 自注意力。交叉注意力在<strong>编-解码器</strong>里(Q 来自解码器、K/V 来自编码器);decoder-only 的 GPT <em>没有</em>交叉注意力,只有因果自注意力。</li>
+<li>别说「BERT 一定不能生成、GPT 一定不能理解」。是「架构各有所长」:BERT 不擅长自由生成、GPT 也能做理解类任务,只是各自的天生对口方向不同。</li>
+<li>reasoning 不是「更高级所以永远该用」。它更慢更贵,简单问题用它是浪费;产品<strong>默认</strong>仍是 instruct。</li>
+<li>base 模型不等于「没训练好」。它训得很充分,只是<em>没做指令对齐</em>——它本来就不以「听指令」为目标。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>关于 MLM 与 CLM 两种预训练机制,下列哪句最准确?</p>
+<details><summary>A. MLM 单向、适合生成;CLM 双向、适合理解</summary>方向和用途都反了。MLM 双向适合理解,CLM 单向适合生成。</details>
+<details><summary>B. MLM 双向掩码还原、BERT 用它;CLM 据前文预测下一 token、单向、GPT 用它 ✅</summary>正确。这正是 BERT 擅长理解、GPT 擅长生成的根因。</details>
+<details><summary>C. 两者都必须依赖大量人工标注数据才能完成预训练</summary>都是自监督,答案从文本自身挖出来,不需要人工标注。</details>
+<details><summary>D. CLM 因为是双向的,所以比 MLM 更适合做文本分类任务</summary>CLM 是单向的;适合分类的是双向的 MLM/BERT。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于 base / instruction-tuned / reasoning 三类模型,哪句最准确?</p>
+<details><summary>A. base 模型已经过 SFT,所以能可靠地听从指令、进行多轮对话</summary>listen 指令是 instruct 模型的能力;base 只会预测下一个 token,不保证听指令。</details>
+<details><summary>B. reasoning 模型比 instruct 更快也更便宜,理应作为产品的默认选择</summary>恰恰相反——它更慢更贵,产品默认是 instruct,难题才上 reasoning。</details>
+<details><summary>C. instruct 经 SFT+偏好优化能听指令对话、是产品默认;reasoning 再用 RL 训成答前先做内部思维链,难题更强但更慢更贵 ✅</summary>正确。三者是「同一底座」上逐级加工出来的成熟度。</details>
+<details><summary>D. 三者底层架构完全不同:base 是编码器、instruct 是解码器、reasoning 是编-解码器</summary>架构没变,都是同一底座;区别在训练阶段,不在架构。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Attention Is All You Need</strong>(Vaswani et al., 2017)——原始编-解码器与交叉注意力的出处。</li>
+<li><strong>BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding</strong>(Devlin et al., 2018)——MLM + NSP 与「双向」的原论文。</li>
+<li><strong>Improving Language Understanding by Generative Pre-Training</strong>(Radford et al., 2018,即 GPT)——自回归 CLM 的「预训练 + 微调」范式。</li>
+<li><strong>XLNet</strong>(Yang et al., 2019)——排列语言建模 PLM。</li>
+<li><strong>T5 / "Exploring the Limits of Transfer Learning…"</strong>(Raffel et al.)——编-解码器 + 迁移学习的统一框架。</li>
+<li><strong>Training language models to follow instructions with human feedback</strong>(Ouyang et al., 2022,即 InstructGPT)——base 如何经 SFT + 人类反馈变成 instruct 模型。</li>
+<li>下一步:token 化与解码控制(第 0005 课)——GPT 那台「续写引擎」到底怎么把概率变成文字。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>MLM 双向填空(BERT/理解)、CLM 单向续写(GPT/生成)、PLM 打乱折中;迁移学习 = 预训练学通识 + 微调做专业课;交叉注意力只在编-解码器里(Q 来自解码器);base→instruct(听指令,默认)→reasoning(答前先思考,难题更强但更慢更贵)。</strong></p>
+<nav class="lesson-nav">
+<a href="0003-positional-encoding-long-context.html">← 上一课:位置编码与长上下文瓶颈</a>
+<a class="next" href="0005-tokenization-and-decoding.html">下一课:token 化与解码控制 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

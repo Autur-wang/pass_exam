@@ -1,0 +1,88 @@
+{
+ "num": "0015",
+ "slug": "five-step-tool-pipeline",
+ "title": "五步管道:工具调用不是「调个函数就完了」",
+ "narrowTopic": "从 ToolCall 到 ToolResultMessage 中间的五步管道——prepareArguments→validate→beforeToolCall→execute→afterToolCall——每步职责与退出机制。",
+ "analogySeed": "机场安检流水线:先整理行李(预处理)→过安检机(类型校验)→安检员可拦下你(权限)→你真正登机(执行)→落地后的行李复检(后处理)。任何一关不过,都不会让你上飞机,但也不会「炸掉」整个机场。",
+ "keyPoints": [
+  "承接 0014:类型定义搞清后,看工具调用的实际执行。为什么不能直接「找到 read→读文件→塞进消息」?因为模型输出并不规矩——参数格式不对、类型错误、要求危险操作。",
+  "第 1 步 prepareArguments(兼容垫片):处理特定模型的参数怪癖,如把字符串化的数组 \"[{...}]\" 解析回真正的数组。工具没定义它就直接透传。",
+  "第 2 步 validateToolArguments(Schema 验证):用 TypeBox 做运行时类型检查,如 path 应是 string 却传了 12345 → 验证失败、不执行工具。工具永远不会收到类型错误的参数。",
+  "第 3 步 beforeToolCall(前置钩子):产品层的权限拦截。返回 undefined 放行;返回 {block:true, reason} 阻止执行。即便被阻止,产物仍是一条 isError:true 的正常消息,不抛异常、不打断循环。",
+  "第 4 步 tool.execute(实际执行):4 个参数 toolCallId/params/signal/onUpdate。onUpdate 解决「长任务进度感知」,让工具边执行边推送(Bash 每 100ms 推终端输出),包装成 tool_execution_update 事件流向 UI。acceptingUpdates 标志位在 execute settle 后关闸,丢弃孤儿回调,防止污染已结束的调用。",
+  "第 5 步 afterToolCall(后置钩子):产品层修改结果的机会——脱敏、审计(返回 undefined 不改)、修错、早停(terminate:true)。合并语义是字段级覆盖:提供了就替换,没提供就保留原值。",
+  "管道终点:不管中间出什么状况,最终产物都是一条 ToolResultMessage(role/toolCallId/toolName/content/details/isError/timestamp),追加进对话历史,下一轮作为上下文发给模型。"
+ ],
+ "codeRefs": [
+  {
+   "desc": "五步管道的 ASCII 方框图(prepareArguments→validateToolArguments→beforeToolCall→tool.execute→afterToolCall 五个横向格子,含每步职责注释)",
+   "cite": "教程 §二 / agent-loop.ts:562-714"
+  },
+  {
+   "desc": "prepareArguments 处理前后对比(模型传来 edits 是字符串 \"[{...}]\",处理后变成真正的数组对象)",
+   "cite": "教程 §二·第1步"
+  },
+  {
+   "desc": "beforeToolCall 返回值效果对照表(undefined=放行 / {block:true,reason}=阻止并生成错误 ToolResultMessage)",
+   "cite": "教程 §二·第3步"
+  },
+  {
+   "desc": "管道终点 ToolResultMessage 的完整结构对象(role/toolCallId/toolName/content/details/isError/timestamp)",
+   "cite": "教程 §二·管道终点"
+  }
+ ],
+ "designRationale": [
+  "为什么 prepareArguments 和 validateToolArguments 要分开而不合并:一个是兼容性(「我知道某个模型会犯什么错」,只处理已知问题),一个是正确性(「不管谁调我都得验」),混在一起代码难维护。",
+  "为什么前 3 步任何一步失败都不执行工具:它们是「准备工作」,把垃圾数据和危险操作挡在真正干活的第 4 步之前。",
+  "为什么要有 onUpdate 而不是只报「开始/结束」:没有它工具执行就是黑盒;有了它执行「可观察」,长任务能实时向用户汇报进度。",
+  "为什么需要 acceptingUpdates 标志位:execute return 后内部可能还有未结束的异步操作(如 Bash 子进程还在打印),延迟回调会污染一个已结束的调用,让 UI 上下文错乱,所以 settle 后必须静默丢弃。",
+  "为什么 afterToolCall 用字段级覆盖而非整体替换:让后处理只改自己关心的字段(如只改 content 做脱敏),其余原值保留,降低钩子的心智负担。"
+ ],
+ "quiz": [
+  {
+   "stem": "prepareArguments 和 validateToolArguments 为什么不合并成一步?",
+   "options": [
+    "因为 TypeBox 不支持在验证时修改参数",
+    "因为一个负责「兼容特定模型的已知怪癖」,一个负责「不管谁调都保证类型正确」,关注点不同",
+    "因为合并后会导致执行速度变慢",
+    "因为 prepareArguments 必须在权限拦截之后才能运行"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。prepareArguments 是兼容层(只处理特定模型的已知问题),validateToolArguments 是安全层(对所有调用保证正确性)。一个管兼容、一个管正确,混一起难维护。延伸:这也是为什么 prepareArguments 是可选的、没有就透传。",
+   "noMsg": "回看第 1、2 步的对比——一个词是「兼容性」,另一个词是「正确性」,想想各自面向谁。"
+  },
+  {
+   "stem": "工具的 execute 已经 return 了,但它内部的异步子进程还在往 onUpdate 推数据,Pi 靠什么防止这些「孤儿回调」污染 UI?",
+   "options": [
+    "acceptingUpdates 标志位:execute settle 后关闸,之后所有 onUpdate 调用一律静默丢弃",
+    "afterToolCall 钩子会自动清理残留数据",
+    "TypeBox 会拒绝这些迟到的推送",
+    "beforeToolCall 提前阻止了这种情况发生"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。execute 一旦返回或抛异常,立即把 acceptingUpdates 关掉,孤儿回调直接忽略,避免污染一个已经结束的工具调用。延伸:0017 会看到 catch 块里同样先 await 所有 updateEvents 再编码错误,保证事件不乱序。",
+   "noMsg": "回看第 4 步末尾那个「边角问题」,Pi 用一个标志位解决延迟回调,找出那个标志位的名字。"
+  },
+  {
+   "stem": "beforeToolCall 判定某条 bash 命令危险并阻止了它,接下来发生什么?",
+   "options": [
+    "抛出一个异常,由外层框架统一处理并终止循环",
+    "工具照常执行,只是结果被标记为可疑",
+    "生成一条 isError:true 的正常 ToolResultMessage,模型看到后自己决定下一步,循环不中断",
+    "直接跳到 afterToolCall 让它决定是否放行"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。被阻止的产物仍是一条正常的 ToolResultMessage(isError:true),模型会看到拒绝原因,然后换命令或向用户解释——全程不抛异常、不打断循环。延伸:这正是 0017「错误即消息」哲学的一个前奏。",
+   "noMsg": "回看第 3 步的「注意」段——被阻止时产出的到底是异常还是一条消息?它的 isError 是什么值?"
+  }
+ ],
+ "_chapter": "第5章 工具系统",
+ "_chapterCN": "工具系统——Agent 的手脚是怎么被管住的",
+ "prevFile": "0014-three-layer-tool-types.html",
+ "prevNum": "0014",
+ "nextFile": "0016-parallel-vs-sequential-scheduling.html",
+ "nextNum": "0016",
+ "crumbLabel": "第 5 章 · 工具系统",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md",
+ "filename": "0015-five-step-tool-pipeline.html"
+}

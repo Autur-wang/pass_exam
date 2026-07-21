@@ -1,0 +1,86 @@
+{
+ "num": "0013",
+ "slug": "thinking-levels-enum-and-map",
+ "title": "思考档位:统一枚举 + 各家映射表",
+ "narrowTopic": "streamSimple 的便捷功能——把 ThinkingLevel 五级刻度翻译成各家 Provider 的思考参数,以及\"统一枚举 + 映射表\"这套设计法(缓存控制同款套路),并埋钩子引向下一章工具系统。",
+ "analogySeed": "一个五级思考旋钮(off→minimal→low→medium→high→xhigh):上层只管把旋钮拧到\"high\",翻译器自己查表把\"high\"换成 Anthropic 的 budget_tokens、OpenAI 的 reasoning_effort、Google 的 thinkingConfig。",
+ "keyPoints": [
+  "为什么有 stream() 和 streamSimple() 两个版本:stream() 是底层入口只做查表派活,streamSimple() 在其上包一层便捷功能——自动处理思考级别翻译、自动调整 token 上限,是实际开发常用入口",
+  "不同 Provider 对\"让模型深度思考\"的参数完全不同:Anthropic 用 thinking.budget_tokens、OpenAI 用 reasoning_effort(low/medium/high)、Google 用 thinkingConfig;甚至 Anthropic 自己都有自适应/预算两种模式",
+  "Pi 定义统一的 ThinkingLevel 五级枚举(off/minimal/low/medium/high/xhigh),各级标注 token 上限(如 minimal 1024、low 2048、medium 8192、high 16384、xhigh 模型最大值)",
+  "每个 Model 对象自带一个 thinkingLevelMap 翻译表,声明\"我这台模型每个级别对应什么参数\";上层只说 reasoning: high,翻译器自己查表翻译",
+  "clampThinkingLevel() 做回退:请求级别模型不支持时先向上找(思考更多通常比更少安全),找不到再向下找",
+  "缓存控制是同一套路:cacheRetention(none/short/long)也是\"统一枚举 + 各家映射表\",但四家对\"怎么标记不变内容\"思路完全不同(贴便签/插路标/按会员卡号查);钩子——下一章打开工具系统这个黑盒,看 ToolCall 谁来执行、如何保证参数正确与安全"
+ ],
+ "codeRefs": [
+  {
+   "desc": "三家 Provider 思考参数对比代码:Anthropic 的 params.thinking = { type: enabled, budget_tokens: 16384 }、OpenAI 的 params.reasoning_effort = high、Google 的 config.thinkingConfig = { includeThoughts, thinkingLevel }",
+   "cite": "教程第4章 §四 / 思考参数三家方言"
+  },
+  {
+   "desc": "ThinkingLevel 五级刻度图:off/minimal/low/medium/high/xhigh 及各级 token 上限(不思考 / 1024 / 2048 / 8192 / 16384 / 模型最大值)",
+   "cite": "教程第4章 §四 / ThinkingLevel 五级刻度"
+  },
+  {
+   "desc": "Agent Loop 使用 streamSimple 的典型代码:streamSimple(model, context, { reasoning: high }) 加 for await 里 switch 消费 text_delta / toolcall_end / done / error 各事件",
+   "cite": "教程第4章 §三 / compat.ts:258-268"
+  },
+  {
+   "desc": "缓存控制四家对照表(Provider | none | short | long | 打点位置):Anthropic 贴 cache_control、Bedrock 插 cachePoint 节点、OpenAI Responses 发 prompt_cache_key、OpenAI 兼容复用 Anthropic 风格",
+   "cite": "教程第4章 §五 / 缓存控制四家对照表"
+  }
+ ],
+ "designRationale": [
+  "为什么分 stream() 和 streamSimple() 两层:底层 stream 保持纯净只做路由,便捷层 streamSimple 加\"语法糖\"(查表 + clamp + 调 maxTokens),让常用场景一行搞定又不污染底层",
+  "为什么用\"统一枚举 + 映射表\"而不是\"取所有 Provider 的交集\":取交集可能只剩 off 太受限;每个 Model 自带映射表,上层说 high 底层查表,比暴露 20 种原生参数名又简洁得多",
+  "为什么 clampThinkingLevel 回退时先向上找:思考更多通常比更少安全,请求级别不支持时优先给更高档位,找不到才向下降",
+  "为什么缓存也用同款\"语义统一、实现分散\":cacheRetention 描述\"做什么\"(要长期缓存),各家翻译表描述\"怎么做\"(贴便签/插路标/按卡号查),语义接口与机制接口分离"
+ ],
+ "quiz": [
+  {
+   "stem": "stream() 和 streamSimple() 的核心区别是?",
+   "options": [
+    "两者完全相同,只是名字不一样",
+    "stream() 负责处理思考级别,streamSimple() 反而不处理",
+    "stream() 是底层只做查表派活,streamSimple() 在其上加了自动思考级别翻译 + clamp + 调 maxTokens",
+    "streamSimple() 运行更慢所以不推荐用"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。streamSimple 是\"便捷封装\",帮你把 reasoning: high 自动翻成各家参数并夹住范围。延伸:所以实际开发常用 streamSimple,直接用 stream 得自己处理很多翻译细节。",
+   "noMsg": "回看本章\"场景一:调用模型\":哪个是最底层、什么便利都没有,哪个帮你自动处理思考级别翻译和 token 上限?"
+  },
+  {
+   "stem": "Pi 为什么用\"统一枚举 + 各家映射表\",而不是\"取所有 Provider 的交集\"来做思考级别?",
+   "options": [
+    "取交集可能只剩 off 太受限;每个 Model 自带 thinkingLevelMap,上层说 high 底层查表翻译,更灵活",
+    "取交集实现更简单,所以其实交集更好",
+    "映射表方案根本不需要写任何代码",
+    "因为取交集在运行时会报错"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。交集会被最弱的 Provider 拉到只剩 off;映射表让每台模型自己声明支持哪些档位。延伸:它也比\"暴露各家原生参数\"简洁——上层不用记 20 种参数名。",
+   "noMsg": "想想如果只保留所有 Provider 都支持的档位会剩下什么?再想\"暴露每家原生参数\"会让上层多累。映射表是怎么两头讨好的?"
+  },
+  {
+   "stem": "clampThinkingLevel 在模型不支持请求级别时,为什么\"先向上找\"?",
+   "options": [
+    "向上找的代码写起来更短",
+    "请求级别不支持时先找更高档位,因为思考更多通常比更少安全,找不到再向下",
+    "随机选一个可用档位",
+    "直接报错,让用户重新选一个档位"
+   ],
+   "correctIndex": 1,
+   "okMsg": "对。回退优先\"多思考\"是更安全的默认。延伸:这也是\"语义统一、实现分散\"的一部分——上层只说想要的语义,回退策略由底层兜底。",
+   "noMsg": "回看回退策略那段:请求 xhigh 但只支持到 high 时,是宁可多思考还是少思考更保险?哪个方向先试?"
+  }
+ ],
+ "_chapter": "第4章",
+ "_chapterCN": "模型调用 —— 一行代码驾驭多个模型",
+ "prevFile": "0012-translator-five-steps-and-event-protocol.html",
+ "prevNum": "0012",
+ "nextFile": "0014-three-layer-tool-types.html",
+ "nextNum": "0014",
+ "crumbLabel": "第 4 章 · 模型调用",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第4章-模型调用-一行代码驾驭多个模型.md",
+ "filename": "0013-thinking-levels-enum-and-map.html"
+}

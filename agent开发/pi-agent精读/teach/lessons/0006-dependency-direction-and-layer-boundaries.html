@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0006 · 层边界与依赖:方向单向向上</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 2 章 · 三层架构 ›
+  <a href="./0005-type-progression-across-layers.html">上一课</a> ›
+  <strong>Lesson 0006</strong>
+</div>
+
+<p class="kicker">Lesson 0006 · 第 2 章 三层架构</p>
+<h1>层边界与依赖<br>—— 方向单向向上</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课我们看清了类型如何从 pi-ai 的「原子」一路扩展到 pi-coding-agent 的「材料」。
+  这节课要拆穿一个几乎所有人都会踩的误解——分层不等于「隔一层调一层」。
+  读完你会知道分层真正守的是什么规则,以及这条规则为什么能让你把任意一层整个换掉。
+</div>
+
+<div class="recall">
+  🔁 <strong>回忆一下:</strong> 上一课你看到 <code>Tool → AgentTool → ToolDefinition</code> 一路继承扩展,
+  每一层只加自己关心的字段,底层类型从不被修改。今天我们要问一个更底层的问题:
+  这些「层」之间,到底谁能引用谁?
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 看到任意一个 monorepo 的
+  <span class="sys-pill">package.json dependencies</span> 字段,你能立刻判断它的分层是「健康的」
+  还是「已经破坏了」——依据不是「有没有跨层引用」,而是「箭头有没有反向」。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:你以为分层像协议栈,直到你打开 package.json</b>
+  你以为分层就像网络协议栈——「隔一层调一层」,应用层不能直接碰物理层。
+  于是你打开 pi 的 <code>packages/coding-agent/package.json</code>,却发现它的 <code>dependencies</code>
+  里直接列了 <code>pi-ai</code>——跳过了中间的 <code>pi-agent-core</code>。
+  你愣了一下:这不是破坏分层了吗?这个「意外」正是理解真正规则的入口。
+</div>
+
+<h2>1 · 意外:顶层直接依赖了底层</h2>
+<p>
+  如果你的分层理解是「上层只能依赖相邻的下层」,那打开
+  <code>packages/coding-agent/package.json</code> 的 <code>dependencies</code> 字段,
+  会看到一个意料之外的细节:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// packages/coding-agent/package.json</span>
+<span class="ln">2</span>"dependencies": {
+<span class="hl"><span class="ln">3</span>    "@earendil-works/pi-agent-core": "^0.80.2",   <span class="cm">// ← 依赖中间层,合理</span></span>
+<span class="hl"><span class="ln">4</span>    "@earendil-works/pi-ai": "^0.80.2",            <span class="cm">// ← 也直接依赖底层?</span></span>
+<span class="ln">5</span>    "@earendil-works/pi-tui": "^0.80.2",
+<span class="ln">6</span>    <span class="cm">// ... 其他依赖</span>
+<span class="ln">7</span>}
+</pre>
+<p>
+  coding-agent <strong>直接依赖了 pi-ai</strong>,而不是只通过 pi-agent-core 间接使用它。
+  如果你之前认为分层就是「隔一层调一层」(就像网络协议栈那样),这个发现会让你愣一下:
+  这不是打破分层了吗?为什么顶层要跨层直接引用底层的东西?
+</p>
+<cite>🔎 出处:教程 §4 / <code>packages/coding-agent/package.json</code>。</cite>
+
+<h2>2 · 答案藏在类型系统里:跨层引用是必然</h2>
+<p>
+  打开 <code>packages/agent/src/types.ts</code> 的开头,你会看到 pi-agent-core 大量的基础类型
+  (<code>Message</code>、<code>Model</code>、<code>ImageContent</code>、<code>Tool</code>……)
+  都是从 pi-ai <strong>直接导入</strong>的。这些是整个系统的「原子概念」——就像化学元素,
+  不管你在哪一层,都需要用到「原子」的定义。
+</p>
+<p>
+  同样,coding-agent 也需要直接用到 pi-ai 的类型:比如用户往聊天里贴了一张截图,
+  coding-agent 需要知道图片数据用什么格式表示——这个 <code>ImageContent</code> 类型就定义在 pi-ai 里,
+  而不是在中间层 pi-agent-core 重新定义一份。
+</p>
+<div class="why">
+  <b>为什么跨层依赖不是设计失误?</b> 因为 <code>ImageContent</code> 等原子类型只在 pi-ai 定义,
+  上层要用就必须直接引用它——这是「集中定义原子」的必然结果。如果强行禁止跨层,
+  coding-agent 要么被迫复制一份 <code>ImageContent</code> 的定义(两份定义迟早会漂移),
+  要么加一层纯转发的「传声筒」模块(只为了合规,没有任何实际作用)。两条路都更差。
+</div>
+
+<h2>3 · 真正的规则:依赖方向必须单向向上</h2>
+<p>
+  关键不在于「能不能跨层引用」,而在于<strong>依赖方向是不是单向的</strong>。
+  验证方法很直接——看每个包的 <code>dependencies</code> 里有没有<strong>反向依赖</strong>:
+</p>
+<table class="bd">
+  <thead><tr><th>包</th><th>依赖了谁</th><th>有没有反向依赖?</th></tr></thead>
+  <tbody>
+    <tr><td>pi-ai</td><td>@anthropic-ai/sdk, openai, @google/genai 等 SDK</td><td>没有,它不依赖任何 pi-xxx 包</td></tr>
+    <tr><td>pi-agent-core</td><td>@earendil-works/pi-ai, typebox, yaml</td><td>只向上依赖 pi-ai,不依赖 coding-agent</td></tr>
+    <tr><td>pi-coding-agent</td><td>@earendil-works/pi-ai, @earendil-works/pi-agent-core, @earendil-works/pi-tui</td><td>只向上依赖,不反向依赖</td></tr>
+  </tbody>
+</table>
+<div class="diagram">所有箭头都朝上
+
+     pi-ai(底层)
+       ↑         ↑
+       │         │
+       │    pi-agent-core(中间层)
+       │         ↑
+       │         │
+       └─── pi-coding-agent(顶层)
+
+  底层永远不知道上层的存在
+  ——pi-ai 的代码里没有任何一个 import 指向 pi-agent-core 或 pi-coding-agent
+</div>
+<div class="tradeoff">
+  🔑 <b>规则是控制方向,而非限制层级:</b> 限制跨层会逼你复制类型或加转发层——两者都是纯负担;
+  而「单向向上」既允许跨层复用原子类型,又天然杜绝了循环依赖。
+  这就是分层的真正规则:<strong>不是限制引用层级,而是控制依赖方向必须单向向上。</strong>
+</div>
+<cite>🔎 出处:教程 §4 反向依赖对照表。</cite>
+
+<h2>4 · 三层不是教条,层数取决于复杂度</h2>
+<p>
+  理解了「方向」之后,一个自然的问题是:如果我只想写一个简单的 Agent,真的需要三层全用吗?
+  教程给出三个场景的对照:
+</p>
+<table class="bd">
+  <thead><tr><th>场景</th><th>适合什么</th><th>你自己做什么</th></tr></thead>
+  <tbody>
+    <tr><td>只用 pi-ai</td><td>只需要调 LLM、不需要 Agent 循环</td><td>自己管状态、自己写循环(如果需要)</td></tr>
+    <tr><td>pi-ai + pi-agent-core</td><td>需要完整 Agent 能力、但有自己独特的业务场景</td><td>写自己的工具、自己的入口</td></tr>
+    <tr><td>全部三层</td><td>做 Pi 同类的编程助手</td><td>直接用,或写扩展</td></tr>
+  </tbody>
+</table>
+<p>比如场景 C,只用 pi-ai:</p>
+<pre><span class="cm"><span class="ln">1</span>// 只用底层</span>
+<span class="ln">2</span><span class="key">import</span> { <span class="fn">streamSimple</span> } <span class="key">from</span> <span class="str">"@earendil-works/pi-ai"</span>;
+<span class="ln">3</span>
+<span class="ln">4</span><span class="key">const</span> stream = <span class="fn">streamSimple</span>(model, context);
+<span class="ln">5</span><span class="key">for</span> <span class="key">await</span> (<span class="key">const</span> event <span class="key">of</span> stream) {
+<span class="ln">6</span>  console.<span class="fn">log</span>(event);
+<span class="ln">7</span>}
+</pre>
+<p>
+  完全可行——但你就得自己写循环、自己管理消息状态、自己处理工具调用。
+  这正是 pi-agent-core 存在的意义:它帮你做了 Agent 最难的那部分(循环、状态、事件、压缩),
+  你只需要告诉它用什么工具。
+</p>
+<div class="why">
+  <b>为什么三层可以裁剪,但铁律不能裁剪?</b> Agent 最难的是循环/状态/事件/压缩,
+  agent-core 已经包办了这部分;你的复杂度决定要用几层。但不管你选场景 A、B 还是 C,
+  依赖方向的铁律与层数无关——它是所有场景都必须遵守的底线。
+</div>
+<cite>🔎 出处:教程 §6 场景对照表。</cite>
+
+<h2>5 · 唯一不可违反的铁律 + 三个可带走的方法</h2>
+<p>
+  三层不是教条,但有一条规则不能违反:<strong>底层的代码里不能出现任何对上层的引用。</strong>
+  pi-ai 不能 import pi-agent-core 的任何东西,pi-agent-core 不能 import pi-coding-agent 的任何东西。
+  这条规则保证了:你可以把任何一层换成自己的实现,而不影响其他层——比如把 pi-ai 整个换成自己的模型调用层,
+  pi-agent-core 和 pi-coding-agent 都不需要改。
+</p>
+<table class="bd">
+  <thead><tr><th>方法</th><th>是什么</th><th>怎么验证</th></tr></thead>
+  <tbody>
+    <tr><td>依赖漏斗分层法</td><td>先画依赖箭头:底层不知道外面世界,中间层知道底层但不知道业务,顶层知道一切</td><td>检查有没有高层的东西被底层 import</td></tr>
+    <tr><td>类型递进扩展模式</td><td>底层定义最小接口,上层用联合类型 / <code>extends</code> 扩展,不修改底层类型</td><td>底层能否独立发布,不引入整个 Agent 框架</td></tr>
+    <tr><td>可独立使用测试</td><td>去掉上层这一层,底层还能不能正常工作</td><td>暂时移除上层依赖,看底层编译 / 测试还能不能过</td></tr>
+  </tbody>
+</table>
+<div class="tradeoff">
+  🔑 <b>核心承诺:</b> 只有底层对上层一无所知,你才能把 pi-ai 整个换成自己的模型层而不动上面两层——
+  这就是分层架构真正要兑现的承诺,也是本节唯一不可违反的铁律。
+</div>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① 打开 coding-agent 的 package.json,发现它直接依赖了 pi-ai(而不是只通过 pi-agent-core 间接使用)。本章认为这说明什么?</p>
+    <button class="opt">这是一个设计失误,打破了严格分层,应当修复</button>
+    <button class="opt">说明分层架构在这个项目里已经失败了</button>
+    <button class="opt">这是必然——某些基础类型(如 ImageContent)必须在一处定义,所有层直接引用这一处</button>
+    <button class="opt">coding-agent 应该删掉对 pi-ai 的依赖,改成手动复制类型</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② 根据本章,分层的「真正规则」是什么?</p>
+    <button class="opt">依赖方向必须单向向上,底层永远不知道上层的存在</button>
+    <button class="opt">上层只能依赖相邻的下层,严格禁止任何跨层引用</button>
+    <button class="opt">所有包必须互相依赖,才能保证功能完整</button>
+    <button class="opt">包的层数必须正好是三层,不能多也不能少</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">③ 如果你只想写一个用 OpenAI、只需要一两个工具的简单 Agent,本章给出的建议是?</p>
+    <button class="opt">必须用满三层,否则 Agent 根本无法工作</button>
+    <button class="opt">可以只用 pi-ai + pi-agent-core、甚至只用 pi-ai,层数取决于复杂度;但依赖方向单向的规则不能违反</button>
+    <button class="opt">只能单独使用 pi-coding-agent,因为它最全</button>
+    <button class="opt">必须先自己重写一个 pi-ai 才能开始</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果 pi-agent-core 反过来 import 了 pi-coding-agent 的一个类型,会实际造成什么后果?</em>」
+  「<em>「可独立使用测试」——去掉上层这一层还能跑吗——具体怎么在 CI 里自动化检查?</em>」
+  「<em>agentLoop() 到底是怎么把 LLM 调用、工具执行、状态更新串成一个循环的?</em>」——
+  最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第2章-三层架构-Pi-Agent项目的骨骼.md">第 2 章 · 三层架构——Pi-Agent 项目的骨骼</a>——
+  原文第 5 节还展开了类型在层间「原子→分子→材料」的完整递进,以及 pi-orchestrator 这个实验性外围编排层,值得通读一遍。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0007):</strong> 我们钻进 Agent 的心脏——<strong>Agent Loop</strong>。
+  看一条用户消息从按下回车到 Agent 说「我完成了」的完整旅程:为什么需要 Loop,而不是一次调用就完事?
+</p>
+
+<footer>
+  Lesson 0006 · 第 2 章 三层架构 ·
+  下一课:<a href="./0007-why-loop-trace-and-turn.html">0007 →</a> ·
+  上一课:<a href="./0005-type-progression-across-layers.html">0005</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。原子类型集中在 pi-ai,上层用到就得直接引它,跨层反而是健康的。延伸:真正要警惕的不是跨层,而是反向依赖。',
+               '✓ 对。规则是控制方向而非限制层级——所有箭头朝上、无反向依赖即可。延伸:这正是能把任意一层替换成自己实现的前提。',
+               '✓ 对。三层是可裁剪的(场景 A/B/C),铁律只有一条:底层不能引用上层。延伸:下一章会钻进 agent-core 的核心——Agent Loop。'];
+  var msgNo = ['回看 §4「答案藏在类型系统里」,想想 ImageContent 定义在哪、为什么上层非得直接引用它。',
+               '看 §4 那张「所有箭头都朝上」的依赖图和它下面加粗的那句话,注意区分「限制层级」和「控制方向」。',
+               '回看 §6 的三个场景与场景对照表,再看结尾那条「无论几层不能违反」的规则到底是哪一条。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

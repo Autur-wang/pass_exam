@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0026 · 记忆与多智能体:让 Agent 记得住、协作得起来</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第七部分 Agent 智能体 · 第 0026 课</p>
+<h1>记忆与多智能体:让 Agent 记得住、协作得起来</h1>
+<p class="lede">上节课把 Agent 的几种范式(ReAct / Plan-and-Execute / Reflexion / Multi-Agent)排开了。这节课钻进两个落地时最要命、面试也最爱追的模块:<strong>记忆</strong>——Agent 凭什么记得住上一轮说过什么、记得住这个用户是谁;<strong>多智能体编排</strong>——多个角色怎么分工、怎么用 LangGraph 串成一张可控的图,以及关键动作为什么必须留一道人工确认(human-in-the-loop)。这三块几乎是简历里写了「做过 Agent 项目」就一定被拷问的地方。</p>
+
+<div class="recall">
+<p>上节课我们说多智能体范式(MAS)优点是模块化、能扛高复杂度,缺点是<strong>编排复杂、通信开销大、容易「群体迷失」</strong>。<strong>先别往下看,试着回忆:如果让你把「产品经理 → 程序员 → 测试」三个 Agent 串起来,你怎么保证「谁下一步该动、上一步的产出怎么传给下一位」?</strong>这正是本课后半段要解决的问题。</p>
+</div>
+
+<h2>一、记忆:短期 vs 长期,先分清两条时间线</h2>
+<p>人有工作记忆(刚才你说的话)和长时记忆(你是谁、你的口味),Agent 照搬这套二分。区别只在:LLM 本身是<strong>无状态</strong>的——每次调用都是一张白纸,它「记住」什么,完全取决于你在这一次 prompt 里塞了什么。所谓记忆系统,本质是<strong>决定「这一轮该把哪些历史信息重新拼回上下文」的工程</strong>。</p>
+
+<div class="trio">
+  <div class="cell"><strong>短期记忆</strong><br>当前会话状态<br><em>这单货怎么议价的、司机刚报了什么价</em></div>
+  <div class="cell"><strong>长期记忆</strong><br>跨会话沉淀<br><em>这个司机的车型、价格敏感度、历史偏好</em></div>
+  <div class="cell"><strong>共同约束</strong><br>上下文窗口有限<br><em>不能全塞进去,必须「选择性回忆」</em></div>
+</div>
+
+<h3>短期记忆:守住当前会话,别爆 token</h3>
+<p>短期记忆维护<strong>当前会话</strong>的状态——让 Agent 理解眼下这单货的议价背景、装货细节、司机的即时需求。核心矛盾是:对话越长,直接全量塞进上下文既贵又容易让模型「迷失中段」。三种常见做法:</p>
+<ul>
+<li><strong>滑动窗口(Sliding Window):</strong>只保留最近 $N$ 轮对话。高频沟通(反复议价)时能有效压 token 成本,也降低超长上下文带来的幻觉。代价:$N$ 轮之前的信息直接丢。</li>
+<li><strong>概要缓存(Summary Buffer):</strong>对更早的历史做分段摘要——把「司机已报底价、要求下午 3 点前装货」这类要点压成一句总结带进后续对话。用一点摘要开销,换更长的有效记忆跨度。</li>
+<li><strong>向量存储会话内容:</strong>把每轮回答/关键信息写进向量库,需要时按相似度检索回来,而不是无脑全带。</li>
+</ul>
+<p class="formula-note">滑动窗口和概要缓存常组合用:近 $N$ 轮保原文(精度),更早的走摘要(跨度),这就是常说的 summary + window buffer。</p>
+
+<h3>长期记忆:跨会话沉淀用户画像与业务知识</h3>
+<p>长期记忆用来沉淀<strong>用户画像、历史偏好、业务知识</strong>,是「个性化」的地基——下次这个司机再来,Agent 不用从零问起。以司机货主撮合场景为例,落地分三层存储:</p>
+<ul>
+<li><strong>结构化用户画像(Profile Store):</strong>关系型数据库(如 PostgreSQL)存静态属性(车型、吨位、证件状态),以及动态属性(如「经常接受低于市场价约 10% 的单」这类价格敏感度)。</li>
+<li><strong>向量记忆库:</strong>历史调研结果、过往对话要点做 embedding 存进向量库,用语义检索召回——这就是把 RAG 用在了「记忆」上。</li>
+<li><strong>知识图谱(Knowledge Graph):</strong>存复杂关系型知识,如某工业区禁行策略、常去装货点的排队规律。结构化关系用图谱比纯向量更好查。</li>
+</ul>
+<p>选型的判断轴很清楚:<strong>属性精确、要做条件过滤/统计 → 关系库;语义模糊、按「像不像」召回 → 向量库;实体间关系复杂、要多跳推理 → 知识图谱。</strong>三者常同时存在,不是二选一。</p>
+
+<h2>二、记忆的三个动作:写入、检索、更新</h2>
+<p>把记忆当成一个数据库,它就三件事——<strong>写(write)、读(retrieve)、改(update)</strong>。面试官爱在「读」和「改」上做文章,因为坑都在这。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">对话产生新信息</div>
+  <div class="node">写入<br>结构化 / 向量 / 图谱</div>
+  <div class="node">下轮按需检索<br>相似度 / 条件查询</div>
+  <div class="node">拼回上下文</div>
+  <div class="node good">冲突则更新<br>新覆盖旧 / 打时间戳</div>
+</div>
+<figcaption>记忆闭环:写入 → 检索 → 拼接 → 更新。难点全在「检索该拿哪些」和「新旧冲突怎么裁决」。</figcaption>
+</figure>
+
+<h3>写入:什么值得记?</h3>
+<p>不是每句话都往长期库里塞。通常靠一个「记忆抽取」步骤(可以是规则,也可以让 LLM 判断)筛出<strong>稳定、可复用</strong>的事实——「司机偏好短途」值得记,「今天天气冷」不值得。写太多会污染检索(噪声),写太少则个性化无从谈起。</p>
+
+<h3>检索:别把整个库都塞回去</h3>
+<p>上下文窗口有限,检索的本质是<strong>在有限预算里选最相关的几条</strong>。向量库按 query 语义 top-$k$ 召回,结构化库按用户 ID 精确查。检索质量直接决定 Agent 表现——召回不到关键画像,个性化就失效;召回一堆不相关记忆,反而挤占窗口、诱发幻觉。</p>
+
+<h3>更新与冲突:同一事实的新旧矛盾怎么办</h3>
+<p>这是最容易暴露深度的地方。司机上周说底价 800,今天说 750,记忆库里两条都在——检索回来 Agent 该信哪个?常见处理策略:</p>
+<ul>
+<li><strong>时间戳 / 版本:</strong>每条记忆带写入时间,冲突时<strong>新的覆盖旧的</strong>(recency 优先),或保留历史但标注「最新值」。</li>
+<li><strong>可信度加权:</strong>给记忆来源打置信度(用户明确声明 &gt; 模型推断),冲突时高可信度胜出。</li>
+<li><strong>写时合并(upsert):</strong>写入前先查同类记忆,存在则更新而非新增一条,从源头避免重复堆积。</li>
+<li><strong>主动遗忘(decay / TTL):</strong>给记忆设过期或衰减,老而不用的自然淡出——既控库大小,也避免陈旧信息误导。</li>
+</ul>
+<p>一句话:记忆冲突的处理核心是<strong>「以什么规则裁决新旧」</strong>——通常是 recency + 可信度的组合,再配 upsert 防重复、TTL 防陈旧。</p>
+
+<dl class="keydef">
+<dt>记忆(Agent Memory)</dt>
+<dd>在无状态 LLM 之外,为跨轮/跨会话保存并按需召回信息而设计的存储+检索系统。分短期(会话内,窗口/摘要)与长期(跨会话,结构化库/向量库/知识图谱)。</dd>
+<dt>记忆冲突(Memory Conflict)</dt>
+<dd>同一实体/事实存在互相矛盾的多条记忆。裁决策略常见:时间戳新覆盖旧、来源可信度加权、写时 upsert 合并、TTL/衰减主动遗忘。</dd>
+</dl>
+
+<h2>三、多智能体:角色分工 + 图式编排</h2>
+<p>单个 Agent 什么都干,prompt 会越堆越臃肿、越容易「走丢」。多智能体的思路是<strong>把一个复杂任务拆给几个专职角色</strong>,各自 prompt 精简、职责单一。以「调研分析型 Agent」为例,典型分工:</p>
+<ul>
+<li><strong>Planner:</strong>把主题拆成子任务(如把「固态电池行业研报」拆成政策、市场、竞争、技术四个维度)。</li>
+<li><strong>Researcher:</strong>调用搜索/浏览工具采集信息(Tavily 搜索、网页抓取)。</li>
+<li><strong>Analyzer:</strong>对采集到的信息做深度分析、交叉验证。</li>
+<li><strong>Synthesizer:</strong>合成最终报告,按格式输出(带引用、图表、SWOT)。</li>
+<li>常再加<strong>清洗节点</strong>(过滤无效信息)和<strong>反思节点</strong>(自查数据质量、要求「必须引用来源」)。</li>
+</ul>
+<p>但角色一多,立刻冒出上节课那个问题:<strong>谁下一步该动?上一步的产出怎么交给下一位?出错了从哪重来?</strong>这就要有一层「编排(Orchestration)」。</p>
+
+<h3>为什么用 LangGraph 编排</h3>
+<p>传统 LangChain 是<strong>链式</strong>的(Chain,一条道走到黑),表达不了「循环」和「条件分支」这类多智能体必需的控制流。LangGraph 把系统建成一张<strong>图</strong>:</p>
+<ul>
+<li><strong>节点(Node)= Agent 或一个处理步骤;</strong></li>
+<li><strong>边(Edge)= 控制流</strong>(谁交给谁),条件边可根据结果动态决定下一跳;</li>
+<li><strong>State(状态)= 在节点间流动的共享数据</strong>,信息靠它传递,而不是靠零散的消息拼接。</li>
+</ul>
+<p>用一句话答面试:<strong>LangChain 是「链」,LangGraph 是「网」——它用图+状态机的方式,显式解决了多智能体里「谁该下一步行动、状态怎么在角色间传递、失败怎么回到某个节点重来」的问题,天然支持循环与条件分支。</strong>这正是 ReAct、Reflexion、Plan-and-Execute 这些带循环/回退的范式落地时需要的底座。它不是唯一选择(MetaGPT、AutoGen、CrewAI 等也做多智能体),但它把「可观察、可干预、可回退」的图控制流做得直白,调试和加 human-in-the-loop 都方便。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">Planner<br>拆任务</div>
+  <div class="node">Researcher<br>采集</div>
+  <div class="node">Analyzer<br>分析</div>
+  <div class="node">条件边<br>质量够了吗?</div>
+  <div class="node good">Synthesizer<br>合成报告</div>
+</div>
+<figcaption>LangGraph 里每个角色是一个 node,条件边决定「质量不够 → 回 Researcher 补采集」还是「达标 → 进合成」。State 贯穿全图传递中间产物。</figcaption>
+</figure>
+
+<h3>项目框架:分层解耦</h3>
+<p>被追问「你的 Agent 项目怎么分层」时,一个稳妥的答法是按职责切成四层,把复杂业务逻辑解耦成<strong>可观察、可干预的原子节点</strong>:</p>
+<table>
+<thead><tr><th>层</th><th>职责</th></tr></thead>
+<tbody>
+<tr><td>编排层(graph/)</td><td>节点与边的拓扑、状态流转、条件路由</td></tr>
+<tr><td>能力层(tools/ &amp; knowledge/)</td><td>工具调用、RAG/知识库、记忆读写</td></tr>
+<tr><td>资源层(prompt/)</td><td>各角色系统提示词、模板</td></tr>
+<tr><td>评测层(evaluate/)</td><td>效果评估、数据飞轮、回归</td></tr>
+</tbody>
+</table>
+
+<h2>四、Human-in-the-loop:关键动作前踩一脚刹车</h2>
+<p>Agent 会犯错,而有些动作<strong>不可逆或代价高</strong>——发邮件、下单、真金白银的议价成交、删数据。这类节点不能让模型自己拍板,要在执行前<strong>暂停、交人工确认</strong>,这就是 human-in-the-loop(HITL)。</p>
+<p>在 LangGraph 里,HITL 的实现依赖两样东西:<strong>checkpointer(状态持久化)</strong>让图能在某个节点「冻结」并事后恢复;<strong>中断点(interrupt)</strong>指定在哪个节点前暂停。整个图运行到关键节点前停下,等人看过、批准(或给反馈修改)后,再从断点续跑。</p>
+
+<div class="implement">
+<p>LangGraph 的 HITL 骨架(锚定源材料,最小片段):</p>
+<pre><code>from langgraph.checkpoint.memory import MemorySaver
+
+memory = MemorySaver()
+# interrupt_before:运行到 human_review 节点「之前」暂停
+app = builder.compile(checkpointer=memory, interrupt_before=["human_review"])
+
+# thread_id 标识一条会话,checkpointer 靠它存/取状态 —— 也正是短期记忆的载体
+thread_config = {"configurable": {"thread_id": "user_123"}}
+
+# 首次调用:图跑到 human_review 前停住,不会真的发出邮件
+initial = app.invoke(
+    {"messages": [HumanMessage(content="请给客户写一封会议确认邮件")],
+     "approved": False, "human_feedback": ""},
+    config=thread_config,
+)
+# 人工看过后,更新状态(approved=True 或写入反馈)再从断点续跑
+# app.invoke(None, config=thread_config)  # 传 None 表示「接着上次的状态继续」</code></pre>
+<p class="formula-note">注意:同一个 <code>checkpointer + thread_id</code> 既撑起了 HITL 的「暂停/恢复」,也天然充当这条会话的<strong>短期记忆</strong>——这就是记忆与编排在工程上的交汇点。</p>
+</div>
+
+<h2>五、顺带厘清:Skill 与 MCP 一句话之别</h2>
+<p>这俩常被一起问,别混。<strong>Skill 是把「完成某类任务所需的领域知识、SOP 流程、提示词指令、可选脚本」打包成的一个可复用「能力包」(以 SKILL.md 为核心的文件夹),回答的是「Agent 该<em>怎么做</em>这件事」;MCP(Model Context Protocol)是模型接入外部工具/数据源的开放<em>协议</em>,回答的是「Agent 用<em>什么工具</em>去做」。</strong>二者互补:Skill 里可以声明并调用 MCP 工具(如读文件、跑分析脚本)。一句话——Skill 管「know-how 与流程」,MCP 管「工具接入的标准接口」。</p>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「你的 Agent 长期记忆、短期记忆分别怎么做的?」——短期:滑动窗口 + 概要缓存(近 $N$ 轮保原文、更早走摘要);长期:结构化画像(关系库)+ 向量记忆库(RAG 召回)+ 必要时知识图谱。落到你的业务举一个具体字段。</li>
+<li>「记忆冲突怎么处理?」——recency(时间戳新覆盖旧)+ 来源可信度加权,配 upsert 防重复、TTL/衰减主动遗忘。要能说出「为什么不能两条都留着不管」。</li>
+<li>「多 agent 怎么编排?为什么选 LangGraph?」——节点=Agent、边=控制流、State 传数据;它支持循环与条件分支,把「谁下一步、状态怎么传、失败怎么回退」显式化,链式的 LangChain 做不到。</li>
+<li>「LangGraph 的 human-in-the-loop 怎么设计?」——checkpointer 持久化状态 + interrupt_before 在关键节点前中断,人工确认后从断点续跑;强调用在不可逆动作(发邮件/成交/删数据)上。</li>
+<li>「Skill 和 MCP 有什么区别?」——Skill 是能力包(怎么做/流程),MCP 是工具接入协议(用什么工具),互补而非替代。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把「记忆」说成「模型自己记住了」——错。LLM 无状态,每轮都是白纸,记忆是<strong>外部存储 + 每轮把相关信息重新拼进 prompt</strong>。</li>
+<li>长期记忆无脑全塞向量库——结构化、可精确过滤的属性(车型、证件)用关系库更合适;向量库只擅长语义模糊召回。别一刀切。</li>
+<li>检索「越多越好」——召回过多不相关记忆会挤占上下文窗口、诱发幻觉;检索是<strong>有限预算下选最相关的几条</strong>。</li>
+<li>说 LangGraph 是「唯一能做多智能体的框架」——不对,AutoGen / CrewAI / MetaGPT 等也能;它的优势是图+状态机的可控编排,而非独此一家。</li>
+<li>HITL 只把它当「弹个窗」——关键在 checkpointer 能<strong>持久化并恢复状态</strong>,否则暂停后无法从断点续跑。</li>
+<li>混淆 Skill 与 MCP——一个是「怎么做的能力包」,一个是「工具接入协议」,方向不同。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>司机上周在记忆库里留下「底价 800」,今天对话中说「底价 750」,两条记忆都被检索回来。下面哪种处理最合理?</p>
+<details><summary>A. 两条都原样带进上下文,让模型自己猜该信哪个</summary>这正是记忆冲突没被处理的表现,会让模型行为不稳定甚至用错价。</details>
+<details><summary>B. 按时间戳让新值(750)覆盖或标注为最新,必要时结合来源可信度裁决 ✅</summary>正确。冲突裁决核心是 recency + 可信度,配 upsert 防重复、TTL 防陈旧。</details>
+<details><summary>C. 永远保留最早写入的那条,保证「初心不变」</summary>恰恰相反,记忆更新通常 recency 优先,旧值一般已失效。</details>
+<details><summary>D. 直接清空该司机所有记忆重新开始</summary>会丢掉全部有价值的长期画像,代价过大,不是冲突的正确处理方式。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>关于用 LangGraph 搭多智能体系统,下面哪个说法是对的?</p>
+<details><summary>A. 它是链式(Chain)结构,一条道走到黑,不支持循环</summary>那是传统 LangChain。LangGraph 恰恰是为循环/分支而生的图结构。</details>
+<details><summary>B. 节点是 Agent、边是控制流、State 在节点间传递信息,天然支持循环与条件分支 ✅</summary>正确。这正是它相比链式框架能编排复杂多智能体协作的原因。</details>
+<details><summary>C. 它是目前唯一能实现多智能体的框架</summary>绝对措辞不成立——AutoGen、CrewAI、MetaGPT 等同样可以,LangGraph 的优势在可控的图式编排。</details>
+<details><summary>D. 它靠零散的消息传递数据,没有统一的状态载体</summary>反了,LangGraph 的核心正是用统一的 State 在节点间流转数据。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>ReAct: Synergizing Reasoning and Acting in Language Models</strong>(Yao et al., 2022)——记忆循环里「Thought→Action→Observation」的思想源头,理解 Agent 为何需要跨轮状态。</li>
+<li><strong>Reflexion: Language Agents with Verbal Reinforcement Learning</strong>(Shinn et al., 2023)——反思机制把「自我批评」写回记忆再迭代,是长期记忆用于自我修正的代表。</li>
+<li><strong>Generative Agents: Interactive Simulacra of Human Behavior</strong>(Park et al., 2023)——记忆流(memory stream)+ recency/importance/relevance 检索评分,是「记忆写入-检索-更新」最经典的工程化范例。</li>
+<li>框架文档:LangGraph 官方文档的 persistence(checkpointer)与 human-in-the-loop 章节,对照本课 HITL 代码骨架读。</li>
+<li>相邻课:上一课 Agent 范式(第 0025 课)是本课多智能体的前置;编排落地后可回看 RAG 相关课理解「向量记忆库」这一环。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>记忆 = 无状态 LLM 外挂的「写-读-改」存储(短期靠窗口/摘要、长期靠结构化+向量+图谱,冲突按 recency+可信度裁决);多智能体 = 角色分工 + LangGraph 图式编排(节点/边/State),关键动作用 checkpointer+interrupt 留人工确认。</strong></p>
+<nav class="lesson-nav">
+<a href="0025-agent-paradigms.html">← 上一课:Agent 开发范式</a>
+<a href="0027-distributed-training.html">下一课:分布式训练 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

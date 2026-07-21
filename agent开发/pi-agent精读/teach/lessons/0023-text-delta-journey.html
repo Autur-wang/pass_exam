@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0023 · 追踪一个 text_delta 的完整旅程</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 7 章 · 事件驱动 ›
+  <a href="./0022-event-nesting-and-two-layers.html">上一课</a> ›
+  <strong>Lesson 0023</strong>
+</div>
+
+<p class="kicker">Lesson 0023 · 第 7 章 事件驱动</p>
+<h1>追踪一个 text_delta 的完整旅程</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课讲清了「10 种事件、4 层嵌套」和「内核 10 种 + Session 7 种」两层事件的划分。
+  这一课把它们串成<strong>一条真实的数据流</strong>——跟着<strong>一个字</strong>,看它怎么从 LLM 的网络响应,
+  一路跨过 5 层,最终出现在你的终端屏幕上。读完你会明白事件驱动架构真正厉害在哪:不是"通知",而是<strong>开放扩展</strong>。
+</div>
+
+<div class="recall">
+  🔁 <b>回忆上一课</b>:Agent 内核只定义 <strong>10 种</strong> `AgentEvent`(4 层生命周期嵌套);
+  AgentSession 又用联合类型加了 <strong>7 种</strong>产品级事件(队列、压缩、重试……)。
+  判断一个事件该放内核还是外层,标准是——去掉它内核还能不能正常跑。
+  今天要问的问题不一样:这些事件<strong>具体是怎么流动的</strong>?一个字从 LLM 嘴里"说"出来,
+  到你眼睛看见它,中间到底发生了什么?
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出并讲清一个 <span class="sys-pill">text_delta</span>
+  从 LLM SSE 流到终端屏幕的<strong>完整 5 步旅程</strong>,并说出为什么"层间只用事件通信"这条约束
+  能让"实时观测 / 工具拦截 / 上下文预处理 / 流式转发到 Web"这些功能<strong>零改 Agent 内核</strong>就能实现。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:一件包裹的 4 个中转站</b>
+  想象 LLM 正在生成"你好"两个字。其中一个"你"字,就像一件从工厂发出的包裹:
+  工厂(<b>LLM 的 SSE 网络流</b>)把它交给<b>中转1</b>(AI 层 <code>EventStream.push()</code>),
+  中转1 转手给<b>中转2</b>(Agent Loop 做事件转换),中转2 交给<b>中转3</b>
+  (<code>Agent.processEvents()</code> 的同步屏障),中转3 交给<b>中转4</b>
+  (<code>AgentSession</code> 分发与持久化),最后到<b>终点</b>(TUI)才被打开、显示在你眼前。
+  每一站只管自己那一道处理,不插手别的站在干什么。
+</div>
+
+<h2>1 · 一个"你"字的 5 步旅程</h2>
+<p>
+  假设 LLM 正在生成"你好"。一个"你"字从产生到你在终端看见它,精确地经过 5 步——
+  下面这张图逐字对应源码里真实存在的方法名和字段名:
+</p>
+<pre><span class="ln">1</span>触发端：LLM SSE 网络流
+<span class="ln">2</span>  │  data: {"type":"text_delta","delta":"你",...}
+<span class="ln">3</span>  │
+<span class="ln">4</span>  ▼ 中转1：AI 层 EventStream.push()
+<span class="ln">5</span>  │  异步队列，AssistantMessageEvent { type: "text_delta", delta: "你" }
+<span class="ln">6</span>  │  （第4章讲过的12种事件之一）
+<span class="ln">7</span>  │
+<span class="ln">8</span>  ▼ 中转2：Agent Loop 事件转换
+<span class="ln">9</span>  │  AI 层 text_delta → Agent 层 message_update
+<span class="ln">10</span>  │  原始事件通过 assistantMessageEvent 字段透传
+<span class="ln">11</span>  │
+<span class="ln">12</span>  ▼ 中转3：Agent.processEvents()（同步屏障）
+<span class="ln">13</span>  │  更新 streamingMessage 内部状态
+<span class="ln">14</span>  │  await 所有 listeners
+<span class="ln">15</span>  │
+<span class="ln">16</span>  ▼ 中转4：AgentSession._handleAgentEvent()
+<span class="ln">17</span>  │  通知扩展系统 → 分发给 Session 监听器 → 持久化
+<span class="ln">18</span>  │
+<span class="ln">19</span>  ▼ 终点：TUI 监听器
+<span class="ln">20</span>  │  提取 delta "你" → 渲染到终端
+<span class="ln">21</span>  │
+<span class="ln">22</span>  ▼
+<span class="ln">23</span>你看到了 "你" 字出现</pre>
+<p>
+  整条链路上,<strong>每一层只关心自己的转换</strong>:AI 层只管解析 SSE 和构建消息;
+  Agent Loop 只管 emit 事件和处理工具;Agent 只管更新状态和 await 监听器;
+  Session 只管分发和持久化;TUI 只管渲染。
+</p>
+<div class="why">
+  <b>为什么层间只能用事件通信,不能直接调用?</b> 源码里没有任何一层直接调用另一层的内部方法——
+  AI 层不知道 Agent Loop 怎么处理事件,Agent 不知道 TUI 长什么样,TUI 也不知道 Session 怎么持久化。
+  它们之间<strong>唯一的通信协议就是"事件"</strong>。这让 5 层各自独立演化、互不侵入:
+  你换掉 TUI 换成 Web 前端,AI 层、Agent Loop、Agent、Session 一行都不用改。
+</div>
+<cite>🔎 出处:教程第 7 章 §六「案例:追踪一个 text_delta 的完整旅程」(<code>第7章-事件驱动-Agent的神经系统.md</code>)。</cite>
+
+<h2>2 · 关键数据变换:统一映射 + 透传保留</h2>
+<p>
+  中转2(Agent Loop 事件转换)藏着这条旅程里最值得琢磨的一步。AI 层其实有好几种 delta 事件——
+  <code>text_delta</code>(正文文字)、<code>thinking_delta</code>(思考过程)、<code>toolcall_delta</code>(工具调用参数)——
+  但它们到了 Agent 层,<strong>全部被统一映射成同一个 <code>message_update</code></strong>:
+</p>
+<pre><span class="ln">1</span><span class="cm">// AI 层的三种 delta，到了 Agent 层统一变成同一个事件类型</span>
+<span class="ln">2</span><span class="key">export</span> <span class="key">type</span> <span class="type">AgentEvent</span> =
+<span class="ln">3</span>  <span class="cm">// ……（第3层：Message 生命周期）</span>
+<span class="ln">4</span>  | { type: <span class="str">"message_update"</span>; message: <span class="type">AgentMessage</span>; assistantMessageEvent: <span class="type">AssistantMessageEvent</span> }
+<span class="ln">5</span>  <span class="cm">//                                                    ^ 原始 delta（text_delta / thinking_delta / toolcall_delta）</span>
+<span class="ln">6</span>  <span class="cm">//                                                      通过这个字段透传保留，而不是被丢弃</span></pre>
+<p>
+  Agent Loop 拿到 AI 层的任何一种 delta,都只做一件事:「消息更新了」,打包成
+  <code>message_update</code> 往下传。它<strong>不关心</strong> delta 具体是文字、思考还是工具参数。
+</p>
+<div class="why">
+  <b>为什么要统一映射?</b> 因为 Agent Loop 只需要知道"消息更新了"这一件事就够了——
+  统一映射把"三种不同的东西"简化成"一种事件",大大简化了 Agent Loop 自己的逻辑。
+</div>
+<div class="tradeoff">
+  🔑 <b>但原始类型信息不能丢:</b> Agent Loop 不关心 delta 的具体类型,
+  <strong>但下游消费者可能关心</strong>——比如 TUI 要区分"思考过程"(灰色小字)和"正文"(正常显示)。
+  所以原始的 <code>AssistantMessageEvent</code> 被完整地挂在 <code>assistantMessageEvent</code> 字段上
+  <strong>透传保留</strong>,而不是在中转2 就地丢弃。这是"统一映射 + 透传保留"的典型取舍:
+  上层简化逻辑,细节留给真正需要它的人。
+</div>
+<cite>🔎 出处:教程第 7 章 §二「10 种事件,4 层嵌套」`AgentEvent` 类型定义 + §六 关于统一映射的说明(<code>第7章-事件驱动-Agent的神经系统.md</code>)。</cite>
+
+<h2>3 · 开放扩展:同一套机制能干什么</h2>
+<p>
+  理解了机制之后,真正有意思的问题是:你能拿这套事件系统做什么?下面两个场景,
+  都是<strong>只订阅、不改 Agent 内核一行代码</strong>就实现的:
+</p>
+<p><strong>场景1 · 实时观测 Agent 在干什么</strong>——监听工具执行的开始与结束:</p>
+<pre><span class="ln">1</span>session.<span class="fn">subscribe</span>((event) =&gt; {
+<span class="ln">2</span>    <span class="key">if</span> (event.type === <span class="str">"tool_execution_start"</span>) {
+<span class="ln">3</span>        console.<span class="fn">log</span>(`🔧 ${event.toolName}(${<span class="type">JSON</span>.<span class="fn">stringify</span>(event.args).<span class="fn">slice</span>(0, 50)})`);
+<span class="ln">4</span>    }
+<span class="ln">5</span>    <span class="key">if</span> (event.type === <span class="str">"tool_execution_end"</span>) {
+<span class="ln">6</span>        console.<span class="fn">log</span>(`   └─ ${event.isError ? <span class="str">"❌ 失败"</span> : <span class="str">"✅ 成功"</span>}`);
+<span class="ln">7</span>    }
+<span class="ln">8</span>});</pre>
+<p><strong>场景4 · 流式转发到 Web 前端</strong>——Agent 跑在服务器上,浏览器用户通过 SSE 看到实时输出:</p>
+<pre><span class="ln">1</span><span class="cm">// 服务端</span>
+<span class="ln">2</span>session.<span class="fn">subscribe</span>((event) =&gt; {
+<span class="ln">3</span>    <span class="key">if</span> (event.type === <span class="str">"message_update"</span>) {
+<span class="ln">4</span>        res.<span class="fn">write</span>(`data: ${<span class="type">JSON</span>.<span class="fn">stringify</span>({ type: <span class="str">"delta"</span>, text: <span class="fn">extractText</span>(event.message) })}\n\n`);
+<span class="ln">5</span>    }
+<span class="ln">6</span>    <span class="key">if</span> (event.type === <span class="str">"agent_end"</span>) {
+<span class="ln">7</span>        res.<span class="fn">end</span>();
+<span class="ln">8</span>    }
+<span class="ln">9</span>});</pre>
+<p>
+  除了这两个,教程还提到<strong>场景2 工具调用拦截</strong>(扩展在 <code>tool_call</code> 事件里返回
+  <code>{ block: true, reason: "…" }</code> 就能挡下危险操作)和<strong>场景3 上下文预处理</strong>
+  (<code>transformContext</code> 钩子在 LLM 调用前注入时间、Git 状态)。
+</p>
+<div class="why">
+  <b>为什么说这是"开放扩展"而不只是"通知"?</b> 观测、拦截、预处理、Web 转发——
+  这四个功能<strong>共同的特点</strong>是:新增任何一个,都不需要修改 Agent 内核一行代码,
+  只需要 <code>subscribe</code>。事件驱动架构真正的威力,不是"把消息传出去"这件小事,
+  而是给了外部世界一个<strong>随时插入新能力</strong>的开放接口。
+</div>
+<cite>🔎 出处:教程第 7 章 §五「你能用事件系统做什么」场景1、场景4(<code>第7章-事件驱动-Agent的神经系统.md</code>)。</cite>
+
+<div class="diagram">从"通知"到"开放扩展"—— 同一条事件流,不同的插入点
+
+  Agent 内核 ──emit(event)──→ 📡 事件流(唯一协议)
+                                 ├──→ 观测:打印工具调用日志
+                                 ├──→ 拦截:beforeToolCall 挡危险操作
+                                 ├──→ 预处理:transformContext 注入上下文
+                                 └──→ 转发:res.write 推给浏览器 SSE
+
+  共同点：Agent 内核代码一行没变，新增能力 = 新增一个 subscribe
+</div>
+
+<h2>4 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="0">
+    <p class="stem">① text_delta 从 LLM 一路到达终端,跨越了 5 层,这些层之间唯一的通信协议是什么?</p>
+    <button class="opt">事件——没有任何一层直接调用另一层的内部方法</button>
+    <button class="opt">一组共享的全局变量</button>
+    <button class="opt">一条直接的函数回调链</button>
+    <button class="opt">读写同一个数据库</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② AI 层的 text_delta、thinking_delta、toolcall_delta 到了 Agent 层都变成 message_update,那原始的类型信息怎么办?</p>
+    <button class="opt">直接丢弃,Agent 层不再需要它</button>
+    <button class="opt">分别转换成不同的 Agent 层事件类型</button>
+    <button class="opt">通过 message_update 上的 assistantMessageEvent 字段透传保留,给可能关心的消费者</button>
+    <button class="opt">写入数据库以备日后查询</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="3">
+    <p class="stem">③ 下列哪一项功能需要修改 Agent 内核才能实现?</p>
+    <button class="opt">实时观测工具调用</button>
+    <button class="opt">拦截危险的工具调用</button>
+    <button class="opt">流式转发到 Web 前端</button>
+    <button class="opt">以上都不需要——只要 subscribe,零改内核</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>中转3 的同步屏障(await 所有 listeners)会不会拖慢中转4 和 TUI 的响应速度?</em>」
+  「<em>如果我自己写一个监听器,该订阅哪一层的哪种事件——message_update 还是 turn_end?</em>」
+  「<em>transformContext 除了注入上下文,提到的"更激进的事"到底是什么?</em>」
+  ——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>5 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第7章-事件驱动-Agent的神经系统.md">第 7 章 · 事件驱动 —— Agent 的神经系统</a>——
+  原文 §七、§八 还讲了 Session 层如何扩展出 7 种产品级事件、以及"同步屏障 / 异常暴露 / 两层事件"三个设计决策的完整总结,值得通读。
+</p>
+<p class="next">
+  <strong>下一课预告:</strong> 本课结尾埋了一个钩子——<code>transformContext</code> 在
+  <code>convertToLlm</code> 之前执行,注入上下文只是它的一半工作。当对话越来越长、
+  终将超出模型的上下文窗口时,它要做一件更激进的事:<strong>压缩对话历史(compaction)</strong>。
+  下一课我们打开 Pi 的<strong>上下文工程全景</strong>——从工具输出截断、系统提示词组装,
+  到 Compaction 与分支摘要,看清 Pi 在多个环节布置的防线。
+</p>
+
+<footer>
+  Lesson 0023 · 第 7 章 事件驱动 ·
+  下一课:<a href="./0024-context-engineering-overview.html">0024 上下文工程全景 →</a> ·
+  上一课:<a href="./0022-event-nesting-and-two-layers.html">0022 10种事件与两层设计</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。每层只关心自己的转换、互不侵入,这就是彻底解耦。延伸:AI 层解析 SSE、Agent 层 emit、TUI 渲染,谁也不碰谁的内部方法。',
+               '✓ 对。Agent Loop 只关心"消息更新了",但原始事件被保留而非丢弃——因为下游消费者可能要区分 delta 类型。延伸:这是"统一映射 + 透传"的典型取舍。',
+               '✓ 对。事件驱动的真正威力是"开放扩展"而非"通知机制",所有这些都靠订阅。延伸:下一章的 transformContext 会做更激进的事——在上下文快满时压缩对话历史(compaction)。'];
+  var msgNo = ['回看旅程末尾那句话:"它们之间唯一的通信协议就是____"——答案就藏在那里。',
+               'Agent Loop 本身关心 delta 的具体类型吗?但终端渲染器可能要区分"思考"和"正文"——那原始信息该不该留下来?',
+               '回看第五节小结那句话:这些场景有一个共同特点——新增功能都不需要做什么?'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

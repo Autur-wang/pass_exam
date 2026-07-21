@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0013 · 哈希表(下):冲突与扩容</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0013 课 · 哈希与查找 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>哈希表(下):冲突与扩容</h1>
+
+<p class="lede">上一课我们说哈希表平均 O(1),但那句「平均」是有代价换来的。这节课攻的窄主题就是那个代价:<strong>两个键算到同一个桶怎么办(冲突),桶快装满了怎么办(扩容)</strong>。面试里手写哈希表,考的几乎全是这两件事——尤其是开放寻址的删除,一个坑能筛掉一半人。</p>
+
+<div class="recall">
+<p>先回忆:<a href="0012-hash-table-intro.html">哈希表(上)</a>里我们把哈希表拆成「哈希函数 + 一排桶(桶数组)」,并说它平均 O(1)、最坏 O(n)。请你先自己回答一句:<strong>那个「最坏 O(n)」到底是怎么发生的?</strong> 这节课就是答案。</p>
+</div>
+
+<h2>一、冲突不是意外,是必然</h2>
+
+<p>桶只有 <code>m</code> 个,而你可能往里塞 <code>n &gt; m</code> 个键。<strong>鸽巢原理</strong>(pigeonhole:n 只鸽子进 m 个巢,n&gt;m 时必有一个巢≥2 只)直接判了死刑:只要键比桶多,就一定有两个键落进同一个桶。就算 n≤m,好的哈希函数也只是让冲突「少」,不可能「无」。所以哈希表的设计不是「怎么避免冲突」,而是<strong>「冲突了怎么优雅地存下、还能查得回」</strong>。业界两条主线路:</p>
+
+<h2>二、链地址法:一个桶挂一条链</h2>
+
+<p><strong>链地址法</strong>(separate chaining,又叫拉链法)让每个桶不再只存一个值,而是存一条<strong>链表</strong>(冲突多时可换成树)。算到同一个桶的键,就串在这条链上;查找时先定位桶,再在链上顺序比对。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 470 210" role="img" aria-label="链地址法:桶数组每格挂一条链表,冲突的键串在同一条链上">
+  <defs>
+    <marker id="ah13" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" class="dgm-accent"/></marker>
+  </defs>
+  <text x="10" y="14" class="dgm-muted" font-size="12">桶数组(m=4)</text>
+  <!-- buckets -->
+  <rect x="20" y="24" width="46" height="30" rx="4" class="dgm-hub"/><text x="43" y="44" text-anchor="middle" class="dgm-text" font-size="13">0</text>
+  <rect x="20" y="66" width="46" height="30" rx="4" class="dgm-hub"/><text x="43" y="86" text-anchor="middle" class="dgm-text" font-size="13">1</text>
+  <rect x="20" y="108" width="46" height="30" rx="4" class="dgm-hub"/><text x="43" y="128" text-anchor="middle" class="dgm-text" font-size="13">2</text>
+  <rect x="20" y="150" width="46" height="30" rx="4" class="dgm-hub"/><text x="43" y="170" text-anchor="middle" class="dgm-text" font-size="13">3</text>
+  <!-- bucket 0 chain: 12 -> 36 -->
+  <line x1="66" y1="39" x2="94" y2="39" class="dgm-edge" marker-end="url(#ah13)"/>
+  <rect x="96" y="24" width="44" height="30" rx="4" class="dgm-node"/><text x="118" y="44" text-anchor="middle" class="dgm-text" font-size="12">12</text>
+  <line x1="140" y1="39" x2="168" y2="39" class="dgm-edge" marker-end="url(#ah13)"/>
+  <rect x="170" y="24" width="44" height="30" rx="4" class="dgm-node"/><text x="192" y="44" text-anchor="middle" class="dgm-text" font-size="12">36</text>
+  <!-- bucket 1 empty -->
+  <text x="96" y="86" class="dgm-muted" font-size="12">∅(空)</text>
+  <!-- bucket 2 chain: 7 -->
+  <line x1="66" y1="123" x2="94" y2="123" class="dgm-edge" marker-end="url(#ah13)"/>
+  <rect x="96" y="108" width="44" height="30" rx="4" class="dgm-node"/><text x="118" y="128" text-anchor="middle" class="dgm-text" font-size="12">7</text>
+  <!-- bucket 3 chain: 23 -> 11 -> 99 -->
+  <line x1="66" y1="165" x2="94" y2="165" class="dgm-edge" marker-end="url(#ah13)"/>
+  <rect x="96" y="150" width="44" height="30" rx="4" class="dgm-node"/><text x="118" y="170" text-anchor="middle" class="dgm-text" font-size="12">23</text>
+  <line x1="140" y1="165" x2="168" y2="165" class="dgm-edge" marker-end="url(#ah13)"/>
+  <rect x="170" y="150" width="44" height="30" rx="4" class="dgm-node"/><text x="192" y="170" text-anchor="middle" class="dgm-text" font-size="12">11</text>
+  <line x1="214" y1="165" x2="242" y2="165" class="dgm-edge" marker-end="url(#ah13)"/>
+  <rect x="244" y="150" width="44" height="30" rx="4" class="dgm-node"/><text x="266" y="170" text-anchor="middle" class="dgm-text" font-size="12">99</text>
+</svg>
+</div>
+<figcaption>桶 0 和桶 3 都发生了冲突,冲突的键排在同一条链上。查找 <code>99</code>:定位到桶 3,再沿链走 23→11→99。<strong>链越长,越接近 O(链长) 的顺序查找。</strong></figcaption>
+</figure>
+
+<h2>三、开放寻址:不挂链,顺着往后找空位</h2>
+
+<p><strong>开放寻址</strong>(open addressing)把所有键都存在<strong>桶数组本身</strong>里,不额外挂链表(README 里明确要你实现的正是「使用线性探测法的数组实现」)。冲突时按某种规则去探测(probe)下一个位置,最简单的是<strong>线性探测</strong>:占了就看下一格,直到找到空格。</p>
+
+<figure class="diagram">
+<div class="cells">
+  <div class="cell"><span class="idx">0</span></div>
+  <div class="cell on"><span class="idx">1</span>17</div>
+  <div class="cell"><span class="idx">2</span></div>
+  <div class="cell on"><span class="idx">3</span>11</div>
+  <div class="cell hi"><span class="idx">4</span>19</div>
+  <div class="cell"><span class="idx">5</span></div>
+  <div class="cell"><span class="idx">6</span></div>
+  <div class="cell"><span class="idx">7</span></div>
+</div>
+<figcaption>表大小 m=8。插入 19 时 <code>19 % 8 = 3</code>,但桶 3 已被 11 占用(冲突),线性探测到桶 4 落座(红格)。查找 19 也走同一条探测路径:桶 3 不是→桶 4 命中。</figcaption>
+</figure>
+
+<p>两条路线的性格差异很直白:<strong>链地址法</strong>结构简单、装载因子可以略高、删除干净利落(从链上摘一个节点即可);<strong>开放寻址</strong>数据全在连续数组里、缓存更友好、不需要额外指针,但对装载因子敏感,且——删除很麻烦(下面易错点专门讲)。</p>
+
+<h2>四、装载因子与扩容:哈希表的「动态数组时刻」</h2>
+
+<p><strong>装载因子</strong>(load factor)<code>α = n / m</code>,衡量桶被塞得多满。α 越大,链越长 / 探测越久,平均查找就从 O(1) 滑向 O(n)。所以哈希表设一个阈值(链地址法常用 0.75,开放寻址通常更低如 0.5):<strong>一旦 α 超过阈值,就申请一个更大的桶数组(通常翻倍),把所有键重新哈希(rehash)搬过去。</strong></p>
+
+<p>这一步和第 0007 课动态数组扩容是同一套逻辑:单次 rehash 是 O(n),但按倍数扩容让它<strong>摊还到 O(1)</strong>。所以哈希表的「平均 O(1)」其实是两层摊还叠加:哈希函数把键摊开到各桶,倍增扩容把重建代价摊到长序列上。补一句工程细节:Java 8 的 <code>HashMap</code> 在单桶链表过长(≥8)且表够大时,会把该桶从链表<strong>转成红黑树</strong>,把最坏情况从 O(n) 压到 O(log n),这是对恶意冲突的防御。</p>
+
+<h2>五、关键定义</h2>
+
+<dl class="keydef">
+<dt>冲突(Collision)</dt>
+<dd>两个不同的键被哈希到同一个桶。由鸽巢原理,键多于桶时必然发生。<em>避免</em>说「好的哈希函数能消除冲突」——只能减少。</dd>
+<dt>链地址法 / 开放寻址(Chaining / Open Addressing)</dt>
+<dd>两种冲突解决法:前者每桶挂一条链表(或树);后者冲突时在数组内探测下一个空位(如线性探测)。</dd>
+<dt>装载因子(Load Factor α)</dt>
+<dd>α = 元素数 n / 桶数 m。α 越高冲突越多、性能越退化;超过阈值触发扩容重哈希。</dd>
+<dt>墓碑(Tombstone)</dt>
+<dd>开放寻址中删除元素时留下的「已删」标记,用来避免探测链被截断。<em>避免</em>删除时直接把槽位置空。</dd>
+</dl>
+
+<h2>六、复杂度:一张必须背下来的表</h2>
+
+<table class="bigo">
+<thead><tr><th class="op">操作</th><th>平均 / 摊还</th><th>最坏</th></tr></thead>
+<tbody>
+<tr><td class="op">查找 <code>get</code> / <code>exists</code></td><td class="best">O(1)</td><td class="warn">O(n) <small>(全冲进一个桶 / 探测退化)</small></td></tr>
+<tr><td class="op">插入 <code>add</code></td><td class="best">O(1) <small>(摊还,含扩容)</small></td><td class="warn">O(n)</td></tr>
+<tr><td class="op">删除 <code>remove</code></td><td class="best">O(1)</td><td class="warn">O(n)</td></tr>
+<tr><td class="op">扩容重哈希 <code>rehash</code></td><td class="best">O(1) <small>(摊还到每次插入)</small></td><td class="warn">O(n) <small>(单次)</small></td></tr>
+</tbody>
+</table>
+<p>空间 <strong>O(n)</strong>(外加为把 α 压住而预留的常数倍空桶)。注意最坏列全是 O(n):当哈希函数极差或被攻击者构造出全冲突时,哈希表就退化成一条链/一次线性扫描——这正是上一课「最坏 O(n)」的来源,也是 Java 8 要把长链转树的原因。</p>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong>这个主题几乎总以「手写一个哈希表」出现,而且多半点名<strong>开放寻址 + 线性探测</strong>(README 要求实现 <code>hash</code>/<code>add</code>/<code>exists</code>/<code>get</code>/<code>remove</code>)。面试官会顺着追问三层:</p>
+<ul>
+<li><strong>「装载因子设多少、什么时候扩容?」</strong>——答:超过阈值(如 0.75)翻倍重哈希,理由是把平均链长/探测长度压在常数,代价摊还 O(1)。</li>
+<li><strong>「为什么容量常取 2 的幂?」</strong>——因为 <code>hash % m</code> 在 m 是 2 的幂时等价于 <code>hash &amp; (m - 1)</code>,位与比取模快得多。前提是哈希值本身分布要好,否则只用低位会更容易撞。</li>
+<li><strong>「删除怎么做?」</strong>——这是筛人题,见下方易错点。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>开放寻址的删除:直接置空会「断链」。</strong>假设 11 在桶 3、探测过来的 19 在桶 4。若你删掉 11 时把桶 3 直接清空,之后查找 19 会在桶 3 看到空格,误判「后面不可能有了」而提前放弃——19 明明还在桶 4,却查不到了。正确做法是给桶 3 打一个<strong>墓碑(tombstone)</strong>标记:查找遇到墓碑继续往后探,插入可以覆盖墓碑。墓碑攒多了也要靠重哈希清理。</p>
+<p>另一个坑:<strong>装载因子放太高图省内存。</strong>α 逼近 1 时,链地址法链变长、开放寻址更是探测到「几乎扫全表」,平均 O(1) 名存实亡。省的那点内存,换来的是查询整体变慢。</p>
+</div>
+
+<div class="implement">
+<p>照 README 大纲,徒手实现一个<strong>线性探测</strong>哈希表(定长数组起步,先不扩容也行,但要能说清怎么扩):</p>
+<p><code>hash(k, m)</code> · <code>add(key, value)</code>(键已存在则更新)· <code>exists(key)</code> · <code>get(key)</code> · <code>remove(key)</code>(用墓碑!)· 私有 <code>resize()</code>(α 超阈值时翻倍并重哈希)。</p>
+<p>验证实验:故意用一个烂哈希函数(如 <code>hash = 0</code> 恒返回同一桶),打印一次查找要探测几格——你会亲眼看到它退化成 O(n)。再换成 2 的幂容量 + 掩码,对比平均探测次数。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>哈希表的 O(1) 是「摊还 + 平均」——靠好的哈希函数把冲突压少、靠倍增重哈希把装载因子压住;一旦冲突失控或删除处理错(开放寻址不打墓碑),它就退化成 O(n)。</p>
+</div>
+
+<h2>七、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:用线性探测实现的哈希表,删除一个键时,下面哪种做法是对的?</summary>
+<div class="answer">
+<p><strong>给该槽位打上「墓碑」标记,而不是直接置空。</strong>因为其他键可能是冲突后探测到当前键之后的位置的;若直接清空,查找那些键时会在这个空槽提前中止,导致它们「查不到」(探测链被截断)。墓碑让查找遇到它继续往后探,同时允许后续插入覆盖它。直接置空是最经典的错误答案。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:哈希表容量常取 2 的幂(如 16、32),主要好处是下面哪一个?</summary>
+<div class="answer">
+<p><strong>可以用 <code>hash &amp; (m - 1)</code> 代替 <code>hash % m</code> 来求桶下标,位与比取模快。</strong>当 m = 2^k 时,<code>m - 1</code> 的低 k 位全 1,位与恰好取出哈希值的低 k 位,等价于对 m 取模。干扰项要警惕:它<em>不能</em>「消除冲突」,也<em>不会</em>让最坏情况变成 O(1);它只是让「定位桶」这一步更快,且要求哈希值本身分布均匀,否则只看低位反而更易撞。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:装载因子 α 从 0.5 升到 0.95,对一个线性探测哈希表意味着什么?</summary>
+<div class="answer">
+<p><strong>平均探测长度急剧变长,查找/插入从接近 O(1) 明显退化。</strong>开放寻址对 α 特别敏感:α 接近 1 时空位稀少,一次插入可能要探测很多格才找到空位,查找同理。这就是为什么开放寻址的扩容阈值通常比链地址法更低(约 0.5 vs 0.75)。省内存(让 α 更高)是用查询速度换的,不是免费的。</p>
+</div>
+</details>
+</div>
+
+<h2>八、主推资源</h2>
+
+<p>本主题在仓库大纲「数据结构 → 哈希表」小节。最贴合本课(冲突与扩容)的一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=BRO7mVIFt08&index=9&list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb">Table Doubling 和 Karp-Rabin(MIT 视频)</a> —— 把「表翻倍扩容为什么摊还 O(1)」讲透。</li>
+<li><a href="https://www.youtube.com/watch?v=rvdJDijO2Ro&index=10&list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb">Open Addressing 和密码型哈希(MIT 视频)</a> —— 开放寻址与探测的权威讲解。</li>
+<li><a href="https://www.youtube.com/watch?v=0M_kIqhwbFo&list=PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb&index=8">链式哈希表(MIT 视频)</a> —— 链地址法的对照。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「墓碑为什么必要」,或带你在纸上跑一遍:删掉一个键后不打墓碑,某次查找是怎么一步步走丢的。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0012-hash-table-intro.html"><span class="dir">← 上一课</span>哈希表(上):哈希函数与桶</a>
+  <a class="next" href="0014-binary-search.html"><span class="dir">下一课 →</span>二分查找:有序区间的对折</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

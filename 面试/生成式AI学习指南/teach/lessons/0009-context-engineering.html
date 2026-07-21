@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0009 · 上下文工程:context rot、lost-in-the-middle、compaction</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第三部分 Prompting 与上下文工程 · 第 0009 课</p>
+<h1>上下文工程:context rot、lost-in-the-middle、compaction</h1>
+<p class="lede">上一课讲的是「怎么把一句 prompt 写好」;这一课把镜头拉远——<strong>决定放进上下文窗口的到底是<em>哪些</em> token,以及它们怎么排</strong>。本节一次答清五道高频真题:<strong>「什么是 context engineering、为何常比措辞更重要?」「什么是 lost-in-the-middle、怎么规避?」「什么是 context rot、它如何改变长程 agent 的构建?」「什么是 context compaction、何时用?」「长对话里怎样管理历史而不爆预算?」</strong>(源:AI 工程师题库 Q17、Q20、Q23、Q24、Q25)。</p>
+
+<div class="recall">
+<p>第 0008 课我们打磨的是 prompt 里的<strong>措辞</strong>——few-shot、CoT、角色设定这些「怎么说」。<strong>先别往下看:如果一句话已经写得很清楚,但模型仍答错、答漏、答飘,你觉得问题更可能出在「话术」上,还是出在「你在这句话周围还塞了些什么」上?</strong>这个转念,就是从 prompt engineering 爬到 context engineering 的那一级台阶。</p>
+</div>
+
+<h2>一、context engineering:把上下文窗口当预算经营</h2>
+<p>先说直觉。上下文窗口不是一个「越大越好、能塞就塞」的垃圾桶,而是一份<strong>稀缺、要主动经营的预算</strong>。模型在每一步只能看见窗口里的东西——窗口外的一切对它都不存在。所以真正决定回答质量的,往往不是你把话说得多漂亮,而是<strong>你让它看见了什么、没看见什么、以及按什么顺序看见</strong>。</p>
+<p>这就是为什么这件事常常比措辞更重要:一句措辞完美的指令,如果被埋在几十段无关检索、陈旧工具输出、混乱历史之间,模型照样退化。上下文一旦<strong>臃肿、嘈杂、乱序</strong>,再好的话术也救不回来。领域里把能力分成三级台阶,层层包住:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">prompt engineering<br><em>你发的那句话</em></div>
+  <div class="arrow">⊂</div>
+  <div class="node good">context engineering<br><em>窗口里的全部 token</em></div>
+  <div class="arrow">⊂</div>
+  <div class="node">harness engineering<br><em>窗口之外的一切</em></div>
+</div>
+<figcaption>后一级包含前一级:context engineering 管的是「哪些 token 进窗口」,比单纯的措辞高一层。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>Context engineering(上下文工程)</dt>
+<dd>决定<strong>什么进入上下文窗口</strong>(指令、检索结果、工具返回、记忆、示例)、<strong>什么留在窗口外</strong>,以及<strong>怎么排序与格式化</strong>的工程实践。核心心法:把窗口当作要主动管理的稀缺预算,而不是能塞就塞的垃圾场。</dd>
+</dl>
+<p>在 agentic 系统里,这更是一条核心纪律:agent 每走一步都要<strong>重新拼装</strong>一次上下文——这一步真正需要哪几片信息,就只拼哪几片,而不是把历史全量拖过来。谁在管理这份预算,谁就决定了 agent 能不能撑住长任务。</p>
+
+<h2>二、lost-in-the-middle:模型偏爱首尾、冷落中间</h2>
+<p>假设你把 40 段检索 chunk 一股脑塞进窗口,以为「信息越多越保险」。研究给出的反直觉结论是:模型对上下文里<strong>开头和结尾</strong>的信息利用得最好,对<strong>正中间</strong>的信息利用得最差——哪怕正确答案就躺在中间某一段,它也很可能视而不见。</p>
+
+<dl class="keydef">
+<dt>Lost in the middle(中段迷失)</dt>
+<dd>当关键信息位于长上下文的中间位置时,模型的检索/利用能力显著下降,呈现「两端高、中间凹」的 U 形。所以「乱塞几十个 chunk」多半是浪费——真正相关的那一片,可能恰好被你埋在了模型最看不见的中段。</dd>
+</dl>
+<p>怎么在设计上规避?三条落地动作:</p>
+<ul>
+<li><strong>少而精地检索</strong>:与其召回 40 段,不如召回真正相关的 5 段。宁缺毋滥。</li>
+<li><strong>用 reranker 把最相关内容放到两端</strong>:排序后,让命中率最高的片段落在开头和结尾这两个「高利用区」。</li>
+<li><strong>让总上下文保持紧凑</strong>:上下文越短,「中间」这个坏区就越窄,信息越不容易掉进去。</li>
+</ul>
+<p>这也是那句面试金句「<strong>更多上下文 ≠ 更好答案</strong>」的一个根因:堆量不但不涨分,还会把好料稀释进中段迷失里。</p>
+
+<h2>三、context rot:长上下文不是免费升级</h2>
+<p>如果说 lost-in-the-middle 讲的是「位置」,context rot 讲的就是「长度」本身。</p>
+
+<dl class="keydef">
+<dt>Context rot(上下文腐化)</dt>
+<dd>来自 Chroma 的研究:随着输入变长,模型准确率会下降——<strong>即便相关事实全都在里面、窗口也远没塞满</strong>。换句话说,长上下文不是一次免费升级;窗口开到 200k 不等于你能把 200k 都填满还指望它照样聪明。(相关的姊妹现象是 context anxiety:模型逼近上限时会「赶工」、变毛躁。)</dd>
+</dl>
+<p>这一点直接改写了<strong>长程 agent(long-horizon agent)</strong>的构建方式。老思路是「窗口够大就把一切都塞进去」;context rot 把设计目标从<strong>「塞下一切」</strong>翻转成<strong>「让工作上下文保持小、相关、新鲜」</strong>。具体推向<strong>主动上下文管理</strong>:</p>
+<ul>
+<li><strong>压缩/摘要</strong>旧的对话轮次,别让它们原文堆着;</li>
+<li><strong>逐出(evict)陈旧的工具输出</strong>——上一步跑完的日志,下一步用不到就清掉;</li>
+<li><strong>把子任务隔离</strong>到独立的上下文里跑,别让互不相干的任务互相污染;</li>
+<li><strong>只检索这一步需要的那一片切片</strong>,而不是把整个知识库拖进来。</li>
+</ul>
+
+<h2>四、compaction 与长对话历史管理</h2>
+<p>把上面这些动作系统化,就得到两套面试常考的具体技术。先看压缩上下文的三种手法——注意它们<strong>代价不同,别混用</strong>:</p>
+
+<div class="trio">
+  <div class="cell"><strong>Clear(清理)</strong><br>删掉已完成的工具结果<br><em>安全、几乎无损</em></div>
+  <div class="cell"><strong>Compact(压缩)</strong><br>把历史摘要成短文<br><em>有损,压缩 ≠ 保真</em></div>
+  <div class="cell"><strong>Offload(卸载)</strong><br>把状态挪到文件/外部存储<br><em>要用时再拉回来</em></div>
+</div>
+
+<dl class="keydef">
+<dt>Context compaction(上下文压缩)</dt>
+<dd>定期把累积的长上下文(多轮消息 + 冗长工具结果)<strong>换成一份短摘要</strong>,只保留决策、关键事实和未竟目标。它是「三手法」里的 <em>compact</em>,本质是有损压缩。</dd>
+</dl>
+<p><strong>何时用?</strong>两类场景最典型:</p>
+<ul>
+<li>会耗尽窗口、或已经受 context rot 拖累的<strong>长程 agent 循环</strong>;</li>
+<li>旧细节不再影响下一步的<strong>多轮对话</strong>——早几十轮的寒暄,对当前决策早已无关。</li>
+</ul>
+<p>它的<strong>风险</strong>很直接:摘要有损,可能把要紧细节一并丢掉。所以稳妥的做法是分层对待:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">累积的长上下文<br>(多轮 + 冗长工具输出)</div>
+  <div class="arrow">→</div>
+  <div class="node good">近期轮次 + 关键 artifact<br><em>保留原文</em></div>
+  <div class="arrow">→</div>
+  <div class="node">其余历史<br><em>摘要成短文</em></div>
+  <div class="arrow">→</div>
+  <div class="node">持久事实(偏好/决策)<br><em>存外部记忆,可再检索</em></div>
+</div>
+<figcaption>近期与关键内容留原文,其余摘要,持久事实外置——这样压缩才不至于把命根子压没。</figcaption>
+</figure>
+
+<p>这套分层也正是<strong>长对话历史管理</strong>的答法。面试官问「一段很长的对话,历史怎么管才不爆预算?」——错误答案是「无限往后追加」。正确的运行策略是:</p>
+<ul>
+<li><strong>保留最近几轮原文</strong>——它们最可能改变下一次回复;</li>
+<li><strong>把更早的轮次摘要成「运行记忆」</strong>(running memory),用短文替代长历史;</li>
+<li><strong>把持久事实(用户偏好、已定的决策)存进结构化记忆</strong>,按需再检索,而不是一直挂在窗口里;</li>
+<li><strong>激进裁剪,并把最相关的近期内容放到末尾</strong>(呼应第二节:末尾是高利用区)。</li>
+</ul>
+<p>一句话收口:目标是保住「<strong>会改变下一次回复</strong>」的信息,而不是字面上的全量历史。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「context engineering 和 prompt engineering 差在哪?」——prompt 管「怎么说这一句」,context 管「窗口里放哪些 token、怎么排」;后者是更高一级台阶。</li>
+<li>「更大的窗口不就解决问题了吗?」——不。lost-in-the-middle(中段迷失)+ context rot(变长即掉分)说明大窗口不是免费升级,还是要主动管理。</li>
+<li>「lost-in-the-middle 具体怎么规避?」——少而精检索 + reranker 把最相关内容放两端 + 总上下文保持紧凑。</li>
+<li>「compaction 会不会丢信息?怎么办?」——会,它有损;所以近期轮次与关键 artifact 保留原文,其余摘要,持久事实存外部记忆可再检索。</li>
+<li>「clear、compact、offload 有什么区别?」——clear 删完成的工具结果(近乎无损);compact 摘要历史(有损);offload 把状态挪到外部存储(要用再拉回)。</li>
+<li>「这跟长程 agent 有什么关系?」——每步重新拼装上下文、逐出陈旧工具输出、隔离子任务、只取这一步要的切片——设计目标从『塞下一切』变成『保持工作上下文小、相关、新鲜』。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞几乎都是坑):</strong></p>
+<ul>
+<li>别说「上下文越多越好」——lost-in-the-middle 与 context rot 都是它的反例。堆量会稀释信号、把好料埋进中段。</li>
+<li>别说「窗口够大就不用管理」——context rot 表明:窗口没满、事实齐全,准确率照样随长度下降。</li>
+<li>别把 compaction 说成「无损压缩」——它有损,"压缩 ≠ 保真"。要说清用「近期原文 + 其余摘要 + 外部记忆」来兜底。</li>
+<li>别把 clear / compact / offload 混为一谈——代价不同:clear 近乎无损、compact 有损、offload 靠外部存储换窗口空间。</li>
+<li>别答「历史一律全部保留」或「一律激进删掉」——正确姿态是分层:留会改变下一步的,压掉不会的。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>一位候选人说「我们的模型支持 200k 窗口,所以直接把所有检索结果和完整历史都塞进去最保险」。这句话最主要错在哪?</p>
+<details><summary>A. 200k 窗口在技术上根本装不下这么多内容</summary>装得下不是重点;问题是装满之后模型用不好。</details>
+<details><summary>B. lost-in-the-middle 与 context rot 说明:窗口没满、事实齐全,准确率也会随长度下降,关键信息还会掉进中段 ✅</summary>正确。大窗口不是免费升级,堆量既会触发中段迷失,也会引发上下文腐化。</details>
+<details><summary>C. 塞满窗口会永久改变模型权重,造成过拟合</summary>推理时的上下文不改变权重,与过拟合无关。</details>
+<details><summary>D. 只要 prompt 措辞写得足够好,塞多少都不影响</summary>恰恰相反——臃肿嘈杂的上下文会让再好的措辞也退化,这正是 context engineering 常比措辞更重要的原因。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>一个长程 agent 的对话已经积累了几十轮消息和大量冗长工具日志,窗口快撑满。关于 compaction,下列哪句最准确?</p>
+<details><summary>A. compaction 就是把整段历史无损地压缩,信息不会丢</summary>不对。compaction 是有损摘要,"压缩 ≠ 保真"。</details>
+<details><summary>B. 定期把累积历史换成保留决策/事实/未竟目标的短摘要,但近期轮次与关键 artifact 保留原文、持久事实存外部记忆 ✅</summary>正确。这样既省预算又降低丢失要紧细节的风险。</details>
+<details><summary>C. 只要开更大的窗口,就完全不需要 compaction</summary>大窗口有 context rot,长程循环仍需主动管理,compaction 依然有用。</details>
+<details><summary>D. compaction 和 clear 是一回事,都只是删掉已完成的工具结果</summary>不是。clear 删完成的工具结果(近乎无损),compact 摘要历史(有损),两者代价不同。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Lost in the Middle: How Language Models Use Long Contexts</strong>(Liu et al., 2023)——「首尾高、中间凹」U 形利用曲线的原始实证,本课第二节即出自此。</li>
+<li><strong>Chroma 的 context rot 研究报告</strong>——输入变长即掉分(事实齐全、窗口未满也如此)的量化证据,是本课第三节的来源。</li>
+<li><strong>Anthropic 工程博客「Effective context engineering for AI agents」</strong>——把上下文当预算经营、以及压缩/记忆/隔离等主动管理手法的官方口径。</li>
+<li>本课配套资源 <code>resources/harness_engineering.md</code>——clear / compact / offload 三手法与 context rot / context anxiety 的整理来源;想接着往上爬到 harness 层可从这里读。</li>
+<li>下一步:把这些原则固化成可版本管理、可测试的工程资产(第 0010 课 Prompt 工程化)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>上下文窗口是预算不是垃圾桶——少而精、把最相关放两端(躲开中段迷失),别指望大窗口免费(context rot);长任务靠 clear/compact/offload 主动管理,compaction 是有损摘要,近期原文+外部记忆兜底。</strong></p>
+<nav class="lesson-nav">
+<a href="0008-prompting-techniques.html">← 上一课:Prompting 技术全景</a>
+<a class="next" href="0010-prompt-as-code.html">下一课:Prompt 工程化 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

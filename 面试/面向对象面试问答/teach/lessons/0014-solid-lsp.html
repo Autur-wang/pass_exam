@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>里氏替换原则 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第四部分 · SOLID · 第 0014 节</p>
+<h1>SOLID(二):里氏替换原则</h1>
+<p class="lede">SOLID 的 <strong>L</strong>:子类必须能顶替父类而不出事。这一节用"正方形不是矩形"这个最经典的反例,教你一眼看穿——"这个继承到底该不该存在"。</p>
+
+<div class="recall">
+<p>先想一个场景:你有个函数 <code>render(shape)</code>,里面调用 <code>shape.area()</code>,早就写好、测试也过了。某天同事加了一个 <code>Square(Rectangle)</code> 子类,一行父类代码都没动。为什么这个看起来人畜无害的继承,可能让那段老代码<strong>突然算错结果、甚至崩溃</strong>?先在心里给个答案,再往下看。</p>
+</div>
+
+<h2>一、直觉:替补上场,不能偷偷改比赛规则</h2>
+
+<p>里氏替换原则(Liskov Substitution Principle,LSP)说的是一件很朴素的事:<strong>凡是用父类对象的地方,都应该能换成任意一个子类对象,而程序照样正确运行。</strong>子类是父类的"替补队员"——替补上场天经地义,但它不能上场后<strong>偷偷改掉比赛规则</strong>(比如把"可以自由跑动"改成"只能站着")。一旦替补的行为超出了原队员的约定,依赖这套约定写的代码就会翻车。</p>
+
+<p>注意关键词是<strong>"替换"而不是"继承"</strong>。语言允许你 <code>class Square(Rectangle)</code>,编译/运行都不报错;但"语法上继承成立"和"行为上能安全替换"是两码事。LSP 关心的正是后者——它是判断"这个继承该不该存在"的<strong>试金石</strong>。</p>
+
+<div class="keydef">
+<dl>
+<dt>里氏替换原则 (Liskov Substitution Principle, LSP)</dt>
+<dd>若 <code>S</code> 是 <code>T</code> 的子类型,那么程序里所有用 <code>T</code> 对象的地方,都能用 <code>S</code> 对象替换而不破坏正确性。<br><em>换句话说:子类要能"透明顶替"父类。落到重写方法上,子类必须守住父类的"契约" ↓</em></dd>
+<dt>① 前置条件不能加强 (preconditions)</dt>
+<dd>子类不能要求"更多"。父类 <code>withdraw</code> 接受任意正数,子类却要求金额 ≥ 100——老代码传 50 就崩。</dd>
+<dt>② 后置条件不能减弱 (postconditions)</dt>
+<dd>子类不能保证"更少"。父类保证返回<strong>已排序</strong>的列表,子类返回乱序的——调用方依赖的承诺没了。</dd>
+<dt>③ 不变式必须保持 (invariants)</dt>
+<dd>父类对象始终为真的规则,子类不能打破。矩形的不变式:宽和高可以<strong>各自独立</strong>设置。</dd>
+<dt>④ 不抛父类没声明的异常</dt>
+<dd>子类重写不能凭空冒出新异常类型(把父类保证能成功的调用改成抛错)。</dd>
+</dl>
+</div>
+
+<h2>二、经典翻车现场:正方形 is-a 矩形</h2>
+
+<p>先写一个规规矩矩的矩形。它的<strong>隐含契约</strong>是:宽和高互相独立,改一个不影响另一个。</p>
+
+<pre><code>class Rectangle:
+    def __init__(self, width, height):
+        self._width = width
+        self._height = height
+
+    def set_width(self, w):
+        self._width = w              # 只改宽,不碰高
+
+    def set_height(self, h):
+        self._height = h             # 只改高,不碰宽
+
+    def area(self):
+        return self._width * self._height
+
+
+class Square(Rectangle):            # "语言上" Square is-a Rectangle,合法
+    # 正方形宽高必须相等,于是重写两个 setter,埋下地雷
+    def set_width(self, w):
+        self._width = w
+        self._height = w            # 副作用:偷偷把高也改了
+
+    def set_height(self, h):
+        self._width = h            # 副作用:偷偷把宽也改了
+        self._height = h
+</code></pre>
+
+<p>现在写一段<strong>只依赖"矩形契约"</strong>的通用代码。它不认识 <code>Square</code>,只知道"这是个矩形,宽高独立"——所以它有充分理由相信:设宽为 5、设高为 4,面积就该是 20。</p>
+
+<pre><code>def stretch_and_check(rect: Rectangle) -&gt; None:
+    rect.set_width(5)
+    rect.set_height(4)
+    # 对"矩形"这个抽象,调用方理所当然地认为:5 * 4 == 20
+    assert rect.area() == 20, f"期望面积 20,实际 {rect.area()}"
+
+stretch_and_check(Rectangle(0, 0))   # ✅ 通过:5 * 4 = 20
+stretch_and_check(Square(0, 0))      # ❌ AssertionError:set_height(4) 把宽也改成 4 → 面积 16
+</code></pre>
+
+<p>这就是 LSP 违约的现场:把父类对象换成子类对象,<strong>一段本来正确的代码开始出错</strong>。诊断一下——<code>Square</code> 破坏了矩形的<strong>不变式</strong>(宽高独立),等价于"偷偷加强了前置条件"(你不能自由设宽而不动高)。数学上正方形确实是矩形;但在"可变对象"的世界里,<code>Square</code> 不是 <code>Rectangle</code> 的合法替补。</p>
+
+<h2>三、另一个经典反例:企鹅是鸟,却不会飞</h2>
+
+<p>如果父类 <code>Bird</code> 承诺"所有鸟都能 <code>fly()</code>",企鹅就成了反例——它只能这样交差:</p>
+
+<pre><code>class Bird:
+    def fly(self):
+        print("flap flap, up we go")
+
+class Penguin(Bird):
+    def fly(self):
+        raise NotImplementedError("企鹅不会飞")   # ← 违反 LSP 的典型信号
+</code></pre>
+
+<p>任何写 <code>for bird in birds: bird.fly()</code> 的代码,遇到企鹅就炸(抛了父类没声明的异常,违反契约第 4 条)。请把两个<strong>违约信号</strong>刻进脑子:</p>
+<ul>
+<li>子类重写方法里出现 <code>raise NotImplementedError</code> / <code>pass</code> 空实现——说明这个方法根本不该在父类里。</li>
+<li>调用方必须先 <code>isinstance(x, Penguin)</code> 判断具体子类才能正确工作——说明子类无法"透明替换",抽象漏了。</li>
+</ul>
+
+<div class="interview">
+<p><strong>高频追问链(LSP 是 SOLID 里最爱考的一条):</strong></p>
+<ul>
+<li>"LSP 里的 <strong>L</strong> 是谁?" → <strong>Barbara Liskov</strong>,1987 年 OOPSLA 主题演讲提出这个替换思想(1994 年与 Jeannette Wing 形式化为"行为子类型"),后被 <strong>Robert C. Martin(Uncle Bob)</strong>收进 SOLID 五原则。</li>
+<li>"契约层面,子类到底不能做什么?" → 四条:前置条件不加强、后置条件不减弱、不变式保持、不抛父类没声明的异常。(进阶:参数可以更宽松=逆变,返回可以更具体=协变。)</li>
+<li>"数学上正方形明明是矩形,代码里为什么不行?" → 数学是<strong>不可变</strong>的静态分类;代码里 <code>Rectangle</code> 的隐含契约是"宽高可独立设置",<code>Square</code> 破坏了它。<code>is-a</code> 讲的是分类,LSP 讲的是<strong>可替换的行为</strong>——两者可以背离。</li>
+<li>"看到子类方法体里 <code>raise NotImplementedError</code> 意味着什么?" → 强烈的 LSP 违反信号,层级设计错了,该重构。</li>
+<li>"LSP 和多态(polymorphism)是什么关系?" → 多态是<strong>机制</strong>(用父类引用调子类);LSP 是让这个机制<strong>安全</strong>的前提。没有 LSP,多态就会在运行时给你惊喜。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>头号翻车点:把"<code>is-a</code> 在语言里成立"当成"满足 LSP"。</strong><code>class Square(Rectangle)</code> 编译通过、跑得起来,但一替换就崩。语言的继承关系<strong>不能</strong>自动保证可替换性——LSP 是设计契约,类型系统检查不出来,得靠你自己问一句"子类能无条件顶替父类吗"。</p>
+<p><strong>第二个坑:以为"抛异常就一定违反 LSP"——这话太绝对。</strong>抛父类<strong>已声明</strong>的异常是允许的;违反的是<strong>凭空抛出父类没声明的新异常</strong>,或把父类保证成功的调用改成失败。别把话说死,面试时讲清这个边界更显功底。</p>
+</div>
+
+<h2>四、怎么修?——重新设计层级,而不是打补丁</h2>
+
+<p>有人想给 <code>Square.set_height</code> 加校验、或直接抛异常"拦住"——但那只是把崩溃换个地方,契约照样被破坏。正解是<strong>动层级</strong>:</p>
+
+<pre><code>from abc import ABC, abstractmethod
+
+# 修法 A:让 Square 和 Rectangle 平级,都继承"不可变、只承诺 area()"的 Shape
+class Shape(ABC):
+    @abstractmethod
+    def area(self) -&gt; float: ...
+
+class Rectangle(Shape):
+    def __init__(self, w, h):
+        self._w, self._h = w, h
+    def area(self) -&gt; float:
+        return self._w * self._h
+
+class Square(Shape):               # 不再是 Rectangle 的子类,地雷消失
+    def __init__(self, side):
+        self._side = side
+    def area(self) -&gt; float:
+        return self._side ** 2
+
+
+# 修法 B(企鹅):把"会飞"从"是鸟"里拆出去
+class Bird:                        # 所有鸟的共性:eat / lay_egg……不含 fly
+    def eat(self): ...
+
+class FlyingBird(Bird):
+    def fly(self): ...
+
+class Penguin(Bird):              # 直接继承 Bird,天生不背"会飞"的契约
+    def swim(self): ...
+</code></pre>
+
+<p>三条通用修法,任选其一或组合:<strong>① 重新设计层级</strong>(把冲突的能力拆到不同分支,如 <code>Shape</code> / <code>FlyingBird</code>);<strong>② 改用组合</strong>(把"可变宽高""飞行能力"做成一个部件持有,而非继承来);<strong>③ 把破坏不变式的东西从抽象里拆掉</strong>(<code>Shape</code> 干脆不承诺"可独立改宽高")。</p>
+
+<div class="crosslang">
+<p><strong>LSP 与语言无关</strong>——任何支持继承 + 多态的语言(Python / Java / C++ / C#)都受它约束。区别在于"违约的气味"长什么样。<strong>静态类型语言</strong>里,违反 LSP 常表现为"<strong>向下转型(downcast)+ 类型判断</strong>":因为不能透明替换,只好在调用方掰开看具体类型。</p>
+<table>
+<tr><th>语言</th><th>违反 LSP 的典型"气味"</th></tr>
+<tr><td><strong>Python</strong></td><td>子类里 <code>raise NotImplementedError</code> / 空实现;调用方 <code>isinstance(x, Sub)</code> 分支</td></tr>
+<tr><td><strong>Java</strong></td><td><code>instanceof</code> + 向下转型 <code>((FlyingBird)b).fly()</code>;抛 <code>UnsupportedOperationException</code></td></tr>
+<tr><td><strong>C++</strong></td><td><code>dynamic_cast&lt;FlyingBird*&gt;(p)</code> 后判空再调用</td></tr>
+<tr><td><strong>C#</strong></td><td><code>if (x is Square sq)</code> 模式匹配后才敢调方法;<code>NotSupportedException</code></td></tr>
+</table>
+<p>一句话:<strong>编译器帮不了你</strong>——LSP 是行为契约,类型系统只查"类型对不对",查不了"行为守不守约"。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,亲手复现一次"违约 → 修复":</p>
+<ul>
+<li>写出上面的 <code>Bird</code> / <code>Penguin</code> 违约版,再写一个通用函数 <code>make_them_fly(birds)</code> 遍历调用 <code>fly()</code>,喂进一只企鹅,亲眼看它抛 <code>NotImplementedError</code>。</li>
+<li>把层级重构成 <code>Bird</code> → <code>FlyingBird</code> / <code>Penguin(Bird)</code>,让 <code>make_them_fly</code> 只接受 <code>FlyingBird</code> 列表。</li>
+</ul>
+<p>写完自测:重构后,<code>make_them_fly</code> 里还需要写 <code>isinstance</code> 判断吗?(<strong>不需要</strong>——不再需要掰开看类型,正是"修好了"的标志。)</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:以下哪种情况<strong>最能</strong>说明一个继承违反了 LSP?</summary>
+<div class="answer">
+<p><strong>答案:一段只依赖父类契约的代码,把父类对象换成子类对象后,产生了错误结果或抛出意外异常</strong>(如 <code>Square</code> 让"面积 == 20"的断言失败)。这正是"不可替换"的定义。</p>
+<p>干扰项:"子类新增了父类没有的方法"——那是<strong>正常的扩展</strong>,完全不违反 LSP;LSP 管的是"重写后能不能顶替父类",不管"多加了什么"。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:为了让 <code>Square</code> 和 <code>Rectangle</code> 共存又不违反 LSP,最好的办法是?</summary>
+<div class="answer">
+<p><strong>答案:别让 <code>Square</code> 继承 <code>Rectangle</code>。</strong>把两者都设计成不可变 <code>Shape</code> 的<strong>平级</strong>子类(各自实现 <code>area()</code>),或干脆不继承、用组合。</p>
+<p>为什么不是"在 <code>Square.set_height</code> 里加校验/抛异常"?因为那只是把崩溃换个地方:抛出父类没声明的异常本身就违反契约第 4 条,调用方依旧无法安全替换。<strong>LSP 问题几乎都是设计问题,要动层级,不是打补丁。</strong></p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>LSP = 子类必须能<strong>无条件顶替</strong>父类。要判断一个继承该不该存在,就问一句——"任何用父类的地方,换成这个子类还对吗?" 答不出干脆的"对",就别继承:改组合,或拆层级。看到子类里 <code>raise NotImplementedError</code>、或调用方靠 <code>isinstance</code> 分类,基本就是 LSP 在报警。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层(诚实标注):<strong>本节为 canon 层(权威锚定),概念不声称直接出自源题库原文</strong>,而是锚定 LSP 的一手/经典出处。</p>
+<ul>
+<li><strong>一手来源:</strong>Barbara Liskov & Jeannette Wing,<a href="https://dl.acm.org/doi/10.1145/197320.197383">《A Behavioral Notion of Subtyping》(1994)</a>——"行为子类型"的形式化定义,即前置/后置条件与不变式的约束由来。</li>
+<li><strong>SOLID 归纳:</strong>Robert C. Martin(Uncle Bob),<a href="https://en.wikipedia.org/wiki/Liskov_substitution_principle">Liskov Substitution Principle(概览与参考文献)</a>——把 LSP 收入 SOLID 五原则;正方形/矩形与"下转型即违约"的论述出自他的 SOLID 写作。</li>
+<li><strong>Python 机制:</strong><a href="https://docs.python.org/3/library/abc.html">Python 官方 <code>abc</code> 文档</a>——本节修法里 <code>ABC</code> / <code>@abstractmethod</code> 的准确用法。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"前置条件为什么不能加强"、或者拿你写的 <code>Bird</code>/<code>Penguin</code> 重构版来评,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>下一节收尾 SOLID —— 接口隔离(ISP)与依赖倒置(DIP),把"面向抽象而非实现"讲透。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0013-solid-srp-ocp.html"><span class="dir">← 上一课</span>0013 · SOLID(一):单一职责 SRP 与开闭 OCP</a>
+<a class="next" href="0015-solid-isp-dip.html"><span class="dir">下一课 →</span>0015 · SOLID(三):接口隔离 ISP 与依赖倒置 DIP</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

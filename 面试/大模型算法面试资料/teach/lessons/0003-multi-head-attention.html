@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0003 · 多头注意力:为什么要多头</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第一部分 Transformer 精讲 · 第 0003 课</p>
+<h1>多头注意力:为什么要多头</h1>
+<p class="lede">上一课你已经能空手写出单头注意力 <span class="nowrap">$\operatorname{softmax}(QK^\top/\sqrt{d_k})V$</span>。但真实的 Transformer 从不只用一个头。这节课回答面试官最爱追的三问:<strong>一个头到底差在哪、多头凭什么「几乎免费」地更强、拼接之后为什么还要挂一个 $W^O$</strong>。把这三点讲透,多头就不再是「照抄的结构」而是你能推导的设计。</p>
+
+<div class="recall">
+<p>上节课我们说,注意力就是「拿 Q 和每个 K 比相似度 → softmax 成权重 → 加权求和 V」。<strong>先别往下看,想一个问题:一句话里一个词往往同时和好几个词有关系——「它」既在语法上依附某个动词,又在语义上指代前文某个名词。可单头注意力一次只吐出<em>一组</em>权重。一组权重,能同时表达这么多种关系吗?</strong></p>
+</div>
+
+<h2>一、直觉:一个头只有「一种看法」</h2>
+<p>问题的根源在 softmax。它是一个「拉尖」的操作:输入里最大的那个分数会被放大成接近独占的权重,其余被压低。所以<strong>一次注意力最终只会强调一种最突出的相关模式</strong>——就像一个评审只从一个角度打分,分数一出,别的角度就被盖过去了。</p>
+<p>更本质地说:单头把 Q、K、V 都投影到<strong>同一个</strong> $d_{\text{model}}$ 维子空间里去比相似度。句法关系、指代关系、位置邻近关系……这些性质完全不同的信号,被迫挤在同一套投影里互相干扰。你没法用一组权重,既让「它」重点看它指代的名词,又同时让它重点看支配它的动词。</p>
+<p>多头的想法直白得像句废话:<strong>那就同时请 $h$ 个评审,每人在自己的一个小子空间里独立看一遍,最后把意见汇总。</strong>一个头擅长盯局部相邻,一个头擅长追长程指代,一个头擅长抓句法主谓——各看各的,互不挤占。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">输入 $X$</div>
+  <div class="node">切成 $h$ 份<br>各配 $W_i^Q,W_i^K,W_i^V$</div>
+  <div class="node">$h$ 组低维<br>$Q_i,K_i,V_i$</div>
+  <div class="node">每头各跑一次<br>$\operatorname{Attention}$</div>
+  <div class="node">拼接<br>$\operatorname{Concat}$</div>
+  <div class="node good">$\times\,W^O$<br>→ 输出</div>
+</div>
+<figcaption>同一个 $X$ 被切成 $h$ 份低维投影,各头独立算注意力,拼回来再用 $W^O$ 做一次混合投影。</figcaption>
+</figure>
+
+<h2>二、多头到底怎么切</h2>
+<p>不是把输入复制 $h$ 份分别做完整注意力(那样计算量真的会翻 $h$ 倍),而是<strong>把维度切开</strong>。每个头只在一个 $d_k=d_{\text{model}}/h$ 维的小空间里工作:</p>
+
+<dl class="keydef">
+<dt>多头注意力(Multi-Head Attention)</dt>
+<dd>$$\operatorname{MultiHead}(Q,K,V)=\operatorname{Concat}(\text{head}_1,\dots,\text{head}_h)\,W^O$$</dd>
+<dd>$$\text{head}_i=\operatorname{Attention}(QW_i^Q,\;KW_i^K,\;VW_i^V)$$</dd>
+<dd><em>其中 $W_i^Q\in\mathbb{R}^{d_{\text{model}}\times d_k}$、$W_i^K\in\mathbb{R}^{d_{\text{model}}\times d_k}$、$W_i^V\in\mathbb{R}^{d_{\text{model}}\times d_v}$,把输入投影到第 $i$ 个头的低维子空间;$W^O\in\mathbb{R}^{h d_v\times d_{\text{model}}}$ 是拼接后的输出投影。原始 Transformer 论文取 $d_{\text{model}}=512,\ h=8,\ d_k=d_v=64$。</em></dd>
+</dl>
+
+<p>三步走:<strong>投影 → 各头独立注意力 → 拼接后过 $W^O$</strong>。注意「拼接」是在<strong>特征维(最后一维)</strong>把 $h$ 个 $d_v$ 维的输出接成一个 $h d_v$ 维向量,不是在序列维上拼。</p>
+
+<h2>三、为什么说多头「几乎免费」</h2>
+<p>面试常追:多头是不是比单头贵 $h$ 倍?答案是<strong>基本不贵</strong>,关键就在 $d_k=d_{\text{model}}/h$ 这个切分。逐头看计算量,再求和:</p>
+$$\underbrace{h}_{\text{头数}}\times\underbrace{O(n^2 d_k)}_{\text{每头}}=h\cdot n^2\cdot\frac{d_{\text{model}}}{h}=O(n^2 d_{\text{model}})$$
+<p class="formula-note">和一个 $d_{\text{model}}$ 维单头的量级完全一致——头多了,但每头变瘦了,乘起来相互抵消。</p>
+<p>参数上也几乎持平:所有头的 $W_i^Q$ 摞起来正好是一个 $d_{\text{model}}\times d_{\text{model}}$ 的大矩阵(K、V 同理),外加一个 $d_{\text{model}}\times d_{\text{model}}$ 的 $W^O$。所以多头相比单头,几乎只是<strong>用同样的算力,换来了「把表示空间拆成多个独立子空间」这件事</strong>——这才是它的性价比所在。</p>
+
+<table>
+<thead><tr><th></th><th>放大的单头<br>(维度 $d_{\text{model}}$)</th><th>$h$ 头多头<br>(每头 $d_{\text{model}}/h$)</th></tr></thead>
+<tbody>
+<tr><td>注意力分布数</td><td>1 组</td><td>$h$ 组,各自独立</td></tr>
+<tr><td>能否并行抓多种关系</td><td>难,共用一套投影互相干扰</td><td>能,各头各占一个子空间</td></tr>
+<tr><td>计算量</td><td>$O(n^2 d_{\text{model}})$</td><td>$O(n^2 d_{\text{model}})$(相当)</td></tr>
+<tr><td>softmax 饱和风险</td><td>$d_k$ 更大,更易饱和</td><td>$d_k$ 更小,更温和</td></tr>
+</tbody>
+</table>
+
+<h2>四、面试爱追的两个「为什么」</h2>
+
+<h3>为什么多头比「把单头放大」更好?</h3>
+<p>直觉是「多组 vs 一组」。放大单头,你得到的仍然是<strong>一个</strong>更宽的子空间里的<strong>一组</strong>注意力权重;所有关系还是要在这一组权重里竞争同一份「注意力预算」,最强的信号一主导,次要关系就被 softmax 抹平了。多头则是 $h$ 组彼此独立的注意力分布,每组在自己的子空间里自由聚焦,天然支持「同一个词从不同角度各看一遍」。此外放大单头会把 $d_k$ 顶大,更靠近上一课讲的 softmax 饱和区。<strong>本质:多头买的不是更大的容量,而是表征的多样性。</strong></p>
+
+<h3>拼接之后,为什么还要乘一个 $W^O$?</h3>
+<p>因为 $\operatorname{Concat}$ 只是「码放」,不是「融合」。拼出来的向量里,第 $i$ 段完全来自第 $i$ 个头,各头之间井水不犯河水、彼此没有任何通信。若直接把它交给下一层,后续拿到的就是一串互不交互的分块表示。$W^O$ 这个 $h d_v\times d_{\text{model}}$ 的可学习矩阵做两件事:一是<strong>让各头的信息互相混合、组合</strong>(某个头查到的句法、另一个头查到的指代,在这里被线性交织成一个整体表示),二是把维度投影回 $d_{\text{model}}$ 以便接上残差连接。去掉 $W^O$,多头就退化成 $h$ 个互不通气的小注意力拼盘。</p>
+
+<div class="implement">
+<p>⌨️ 自己写一遍。核心是靠 reshape 把最后一维 $d_{\text{model}}$ 拆成 $(h,\,d_k)$,让 $h$ 个头在一次矩阵乘里并行算完:</p>
+<pre><code>import torch, torch.nn as nn, torch.nn.functional as F
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, h):
+        super().__init__()
+        assert d_model % h == 0          # 必须整除
+        self.h, self.d_k = h, d_model // h
+        self.W_q = nn.Linear(d_model, d_model)   # 合并了所有头的 W_i^Q
+        self.W_k = nn.Linear(d_model, d_model)
+        self.W_v = nn.Linear(d_model, d_model)
+        self.W_o = nn.Linear(d_model, d_model)   # 拼接后的输出投影
+
+    def forward(self, x, mask=None):             # x: [B, n, d_model]
+        B, n, _ = x.shape
+        # 投影后 reshape 成 [B, h, n, d_k],让 h 个头并行
+        def split(t):
+            return t.view(B, n, self.h, self.d_k).transpose(1, 2)
+        Q, K, V = split(self.W_q(x)), split(self.W_k(x)), split(self.W_v(x))
+
+        scores = Q @ K.transpose(-2, -1) / self.d_k ** 0.5   # 缩放用 d_k,不是 d_model
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+        out = F.softmax(scores, dim=-1) @ V                  # [B, h, n, d_k]
+
+        out = out.transpose(1, 2).contiguous().view(B, n, -1)  # 拼回 [B, n, d_model]
+        return self.W_o(out)                                   # 必须过 W_o 做混合</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「为什么要多头,不能只用一个头?」——单头一次只有一组权重,只能强调一种关系;多头让 $h$ 个子空间并行捕捉不同模式(局部/句法/指代)。</li>
+<li>「多头的计算量是单头的 $h$ 倍吗?」——不是。$d_k=d_{\text{model}}/h$,逐头求和后总量仍是 $O(n^2 d_{\text{model}})$,量级相当。</li>
+<li>「拼接后的 $W^O$ 有什么用,去掉行不行?」——不行。$\operatorname{Concat}$ 后各头互不通信,$W^O$ 负责混合各头信息并投影回 $d_{\text{model}}$。</li>
+<li>「不同的头到底学到了什么?」——可视化研究观察到不同头<em>倾向</em>不同模式(相邻词、句法依存、指代等),但别夸大成「每个头都清晰可解释」,实际上有相当比例的头是冗余的。</li>
+<li>「缩放因子用 $\sqrt{d_k}$ 还是 $\sqrt{d_{\text{model}}}$?」——每个头内部用 $\sqrt{d_k}$(呼应第 0002 课)。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>缩放仍是 $\sqrt{d_k}$(单头维度 $d_{\text{model}}/h$),<strong>不是</strong> $\sqrt{d_{\text{model}}}$。这是上一课埋的坑,多头场景最容易踩。</li>
+<li>多头是把维度<strong>切开</strong>,不是把输入<strong>复制</strong> $h$ 份做完整注意力——切开才有「总量不变」,复制会真的贵 $h$ 倍。</li>
+<li>别说「每个头都学到一种清晰可解释的模式」。研究表明不少头冗余、可剪枝而性能几乎不掉;表达力上限提高 ≠ 每个头都被用满。</li>
+<li>$\operatorname{Concat}$ 之后<strong>必须</strong>过 $W^O$,否则头间零交互,退化成拼盘。</li>
+<li>拼接发生在<strong>特征维(最后一维)</strong>,不是序列维;$d_{\text{model}}$ 要能被 $h$ 整除。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>相比把单头的维度直接放大到 $d_{\text{model}}$,多头注意力最核心的优势是什么?</p>
+<details><summary>A. 参数量显著减少,更省显存</summary>参数量与 $W^O$ 加起来其实与放大单头相当,省显存不是多头的卖点。</details>
+<details><summary>B. 提供了 $h$ 组彼此独立的注意力分布,能并行捕捉多种不同关系 ✅</summary>正确。多头买的是「表征多样性」——多组独立分布 vs 一组更宽的分布,而非更大的容量。</details>
+<details><summary>C. 让缩放因子从 $\sqrt{d_k}$ 变成 $\sqrt{d_{\text{model}}}$</summary>恰恰相反,每头内部缩放用的是更小的 $\sqrt{d_k}$。</details>
+<details><summary>D. 彻底消除了 softmax 饱和问题</summary>只是缓解(每头 $d_k$ 更小),并非消除。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>如果去掉多头注意力里拼接之后的输出投影 $W^O$,最主要会出现什么问题?</p>
+<details><summary>A. 各头输出只是被并排堆放、彼此无法混合交互,退化成互不通气的拼盘 ✅</summary>正确。$\operatorname{Concat}$ 只码放不融合,$W^O$ 负责跨头混合并投影回 $d_{\text{model}}$。</details>
+<details><summary>B. 计算量会翻 $h$ 倍</summary>计算量由切分与逐头注意力决定,和有没有 $W^O$ 无关。</details>
+<details><summary>C. 每个头都会关注同一个位置</summary>各头的聚焦由各自的 $W_i^Q,W_i^K$ 决定,与 $W^O$ 无关。</details>
+<details><summary>D. 缩放因子会失效</summary>缩放在每头内部完成,与 $W^O$ 无关。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Attention Is All You Need</strong>(Vaswani et al., 2017)——§3.2.2 就是多头注意力,本课两条公式与 $d_{\text{model}}=512,h=8,d_k=64$ 的配置均出自此。</li>
+<li><strong>What Does BERT Look At?</strong>(Clark et al., 2019)——注意力头的可视化分析,支持「不同头倾向不同语言学模式」这一观察。</li>
+<li><strong>Analyzing Multi-Head Self-Attention</strong>(Voita et al., 2019)——反面证据:大量头可被剪枝而性能几乎不降,提醒你别把「每头都有用」当结论。</li>
+<li>下一步:多头解决了「关系」,却仍看不见「顺序」——第 0004 课讲位置编码与 RoPE。推理时怎么缓存各头的 K、V(KV Cache)、以及 MQA/GQA/MLA 如何压缩它,见后续课。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>多头 = 把 $d_{\text{model}}$ 切成 $h$ 个 $d_k$ 维子空间各跑一次注意力,总量不变却买到多组独立视角;拼接后必须过 $W^O$ 才能让各头信息融合。</strong></p>
+<nav class="lesson-nav">
+<a href="0002-self-attention-qkv.html">← 上一课:自注意力与 QKV</a>
+<a href="0004-positional-encoding-rope.html">下一课:位置编码与 RoPE →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OOP vs 过程式 vs 函数式 · OOP 面试冲刺</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+
+<p class="meta">OOP 面试冲刺 · 第七部分 · 进阶工程 · 第 0025 节</p>
+<h1>OOP vs 过程式 vs 函数式</h1>
+<p class="lede">"过程式和 OOP 有什么区别?"是几乎每场面试都会出现的开场题。这一节的目标:让你把同一个任务用三种范式当场写出来,并且能讲清楚——它们不是好坏之争,而是三种组织"数据与行为关系"的方式。</p>
+
+<div class="recall">
+<p>先想一个具体任务:"给一个动物,让它叫一声"。如果让你分别用<strong>过程式</strong>和<strong>面向对象</strong>写,两版代码长得会有什么本质不同?数据放哪、行为放哪?先在心里各写一行,再往下看。</p>
+</div>
+
+<h2>一、直觉:三种范式,回答的是同一个问题</h2>
+
+<p>三种范式其实都在回答一个问题:<strong>"数据"和"操作数据的行为",这两者该怎么放?</strong></p>
+
+<ul>
+<li><strong>过程式(Procedural)</strong>:以<strong>任务</strong>为中心,代码是一条线——把大任务切成一串函数,函数<strong>作用于</strong>外部的数据。数据和函数是分开的两拨东西。</li>
+<li><strong>面向对象(OOP)</strong>:以<strong>对象</strong>为中心,把数据和操作它的行为<strong>捆</strong>进对象,对象之间通过方法互相协作——一个更"有机"的模型。</li>
+<li><strong>函数式(FP)</strong>:以<strong>变换</strong>为中心,把数据和变换<strong>分离</strong>,强调不可变数据、无副作用的纯函数,用<strong>组合</strong>而非继承来搭积木。</li>
+</ul>
+
+<p>注意:过程式和 FP 都把"数据"与"函数"分开,但 FP 多了两条硬约束——<strong>数据尽量不可变、函数尽量纯(无副作用)</strong>。OOP 则反过来,主动把状态和行为绑在一起。这就是三者最根本的分野。</p>
+
+<div class="trio">
+<div class="cell"><div class="role">以任务为中心</div><div class="head">过程式</div><div class="sub">函数作用于数据</div></div>
+<div class="cell"><div class="role">以对象为中心</div><div class="head">OOP</div><div class="sub">数据 + 行为捆一起</div></div>
+<div class="cell"><div class="role">以变换为中心</div><div class="head">函数式</div><div class="sub">纯函数变换不可变数据</div></div>
+</div>
+
+<div class="keydef">
+<dl>
+<dt>过程式编程 (Procedural Programming)</dt>
+<dd>把程序组织成一串<strong>过程 / 函数</strong>,函数对(常为共享的)数据进行操作。代表语言 <strong>C</strong>。</dd>
+<dt>面向对象编程 (Object-Oriented Programming)</dt>
+<dd>把数据(状态)和操作数据的方法(行为)<strong>封装</strong>进对象,靠<strong>继承</strong>复用、<strong>多态</strong>统一处理不同类型。代表语言 <strong>Java</strong>。</dd>
+<dt>函数式编程 (Functional Programming)</dt>
+<dd>强调<strong>不可变数据</strong>、<strong>纯函数</strong>(无副作用)、<strong>一等 / 高阶函数</strong>(函数可当参数和返回值),用<strong>组合</strong>取代继承。代表语言 <strong>Haskell</strong>。</dd>
+</dl>
+</div>
+
+<h2>二、过程式 vs OOP:源题的四条核心区别</h2>
+
+<p>面试里这道题的标准答案,基本围绕这四个维度展开:</p>
+
+<ol>
+<li><strong>数据与函数的管理</strong> —— 过程式:函数作用于数据,数据常是<strong>全局</strong>的,容易被到处修改、发生冲突;OOP:数据和函数被<strong>捆进对象</strong>,只能通过方法交互,从而守住数据完整性与封装。</li>
+<li><strong>抽象与复用</strong> —— 过程式:靠把代码切成函数来复用,但全局数据会<strong>损害</strong>复用(函数悄悄依赖外部状态);OOP:靠类与对象做抽象,封装出一个个<strong>离散、自包含</strong>的模块。</li>
+<li><strong>继承与多态</strong> —— 过程式:<strong>没有</strong>这两个机制;OOP:继承促进复用,多态让"不同类的对象被当作共享父类 / 接口的实例"来统一处理。</li>
+<li><strong>语言例子</strong> —— 过程式:C(以过程组织;可用 <code>struct</code> 把数据分组来模拟一部分 OOP,但不原生支持完整的继承 / 多态);OOP:Java(天生围绕 OOP 设计)。现代语言如 Python / JavaScript / C# 多为<strong>多范式</strong>,可按任务挑合适的方式。</li>
+</ol>
+
+<h2>三、把同一个任务写三遍</h2>
+
+<p>源题给的对照是:过程式写 <code>make_sound(animal)</code>,OOP 写 <code>animal.make_sound()</code>。我们把它补全成三种范式的完整 Python 版本,一眼看清"数据 / 行为放哪"。</p>
+
+<pre><code># ① 过程式:数据是数据,函数是函数,函数作用在外部数据上
+def make_sound(animal):
+    kind = animal["type"]
+    if kind == "dog":
+        return "Woof"
+    elif kind == "cat":
+        return "Meow"
+    return "..."
+
+dog = {"type": "dog", "name": "Rex"}   # 数据:一个裸 dict(类似 C 的 struct)
+print(make_sound(dog))                 # 函数作用于数据 → Woof
+</code></pre>
+
+<pre><code># ② OOP:数据 + 行为捆进对象,靠多态分发
+class Animal:
+    def make_sound(self):
+        raise NotImplementedError      # 抽象契约:子类各自实现
+
+class Dog(Animal):
+    def make_sound(self):
+        return "Woof"
+
+class Cat(Animal):
+    def make_sound(self):
+        return "Meow"
+
+for a in [Dog(), Cat()]:
+    print(a.make_sound())              # 同一句调用,不同对象各自响应 → 多态
+</code></pre>
+
+<pre><code># ③ 函数式:纯函数 + 不可变数据 + 高阶函数,用组合而非继承
+SOUNDS = {"dog": "Woof", "cat": "Meow"}    # 意图不可变的数据表
+
+def make_sound(kind):                       # 纯函数:同输入必同输出、无副作用
+    return SOUNDS.get(kind, "...")
+
+animals = ["dog", "cat", "dog"]
+print(list(map(make_sound, animals)))       # 高阶函数 map 把函数当参数 → ['Woof', 'Meow', 'Woof']
+</code></pre>
+
+<p>三段代码做的事一模一样,区别只在<strong>"数据和行为怎么摆"</strong>:过程式把行为(函数)摆在数据外面;OOP 把行为塞进对象、让对象自己会叫;FP 把行为写成纯函数,再把它<strong>喂给</strong> <code>map</code> 去变换一批数据。哪种"更好"?取决于问题——见下面易错点。</p>
+
+<div class="interview">
+<p><strong>高频追问链(这道题几乎是每场面试的热身):</strong></p>
+<ul>
+<li>"过程式和 OOP <strong>最本质</strong>的区别是一句话?" → 数据与行为的<strong>关系</strong>:过程式让函数<strong>作用于</strong>(常为共享的)数据;OOP 把数据和行为<strong>绑</strong>进对象。其余(继承、多态、封装)都是这条主线的展开。</li>
+<li>"那 OOP 和 FP 又怎么选?" → OOP 把"状态 + 行为"绑一起,适合<strong>领域建模</strong>(实体有状态又有行为)、需要多态扩展、要封装复杂状态;FP 把数据与变换分离、避开可变状态,适合<strong>无状态的数据转换 / 管道</strong>、纯计算。</li>
+<li>"C 到底算不算能写 OOP?" → 可以用 <code>struct</code> + 函数指针<strong>模拟</strong>一部分对象思想,但 C 不<strong>原生</strong>支持继承 / 多态,所以不算完整 OOP;它是过程式语言的代表。</li>
+<li>"什么是多范式语言?举例。" → 一门语言同时支持多种范式、可按任务混用,如 <strong>Python / JavaScript / C# / Scala</strong>。Python 里过程式脚本、类、<code>map</code>/推导式并存是常态。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>头号翻车点:认定"OOP 一定优于过程式 / FP"。</strong>这是错的。范式是<strong>工具</strong>,按问题选,而不是按"先进 / 落后"排座次。一个 20 行的数据清洗脚本硬套三层类继承,只会把简单问题搞复杂;反过来,一个有大量有状态实体、要多态扩展的业务领域,用纯过程式又会让全局数据满天飞。<strong>没有银弹范式,只有合不合适。</strong></p>
+<p><strong>第二个坑:把"用了 <code>class</code>"等同于"写了面向对象"。</strong>如果你的类只有一堆数据字段、行为却全写在外面的函数里,那本质上还是过程式,只是披了个 OOP 外衣(Martin Fowler 称之为 <em>Anemic Domain Model,贫血领域模型</em>)。OOP 的精髓是<strong>状态和行为住在一起</strong>。</p>
+<p><strong>第三个坑:以为 Python 逼你用 OOP。</strong>不是。Python 是多范式语言,<strong>不强制</strong>把一切包进类(不像早期 Java 那种"什么都得是某个类的方法"的风格)。写个纯函数、一个模块级脚本,在 Python 里完全正当。</p>
+</div>
+
+<div class="crosslang">
+<p>范式不是"阵营"而是一条<strong>谱系</strong>——同一门语言常横跨多档。记住这张定位表:</p>
+<table>
+<tr><th>语言</th><th>主范式</th><th>范式立场</th></tr>
+<tr><td><strong>C</strong></td><td>纯过程式</td><td><code>struct</code> 只分组数据、<strong>没有方法</strong>;无原生继承 / 多态</td></tr>
+<tr><td><strong>Java</strong></td><td>OOP 中心</td><td>长期"一切皆类";Java 8 起加入 lambda / Stream,引入 FP 元素</td></tr>
+<tr><td><strong>Haskell</strong></td><td>纯函数式</td><td>不可变、纯函数、无副作用是默认设定</td></tr>
+<tr><td><strong>Python / JS / Scala</strong></td><td>多范式</td><td>过程式 / OOP / FP 可按任务自由混用</td></tr>
+</table>
+<p>一句话:<strong>范式是谱系不是阵营。</strong>连"OOP 语言"的 Java 都在往里加函数式特性,现实工程里务实混用才是常态。</p>
+</div>
+
+<div class="implement">
+<p>合上讲义,用三种范式各写一遍"给一组价格算总价,再打九折":</p>
+<ul>
+<li><strong>过程式</strong>:写个 <code>discounted_total(prices)</code> 函数,内部遍历累加再乘 <code>0.9</code>。</li>
+<li><strong>OOP</strong>:写个 <code>Cart</code> 类,持有 <code>self._items</code>,提供 <code>add(price)</code> 和 <code>total()</code> 方法。</li>
+<li><strong>FP</strong>:用 <code>sum(...)</code> 配合 <code>map</code> 或生成器表达式,写成一个纯函数,不维护任何可变状态。</li>
+</ul>
+<p>写完问自己:如果需求只是"算一次总价",哪种最轻?如果购物车要能反复加减商品、记住状态,又该选哪种?(前者 FP / 过程式更贴,后者 OOP 的封装更值。)</p>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 1:下面哪种说法最准确地概括了"过程式 vs OOP"的核心区别?</summary>
+<div class="answer">
+<p><strong>答案:OOP 把数据与操作数据的行为捆进对象;过程式让函数作用于(常为共享 / 全局的)数据,二者是分开的。</strong></p>
+<p>常见的错误答案是"OOP 更快 / 更先进"或"过程式没有函数"——都不对。过程式当然有函数,它恰恰是<strong>以函数为组织单位</strong>;两者的分野在于<strong>数据与行为的绑定关系</strong>,以及由此衍生的封装、继承、多态是否存在。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>自测 2:一个"读 CSV → 过滤脏数据 → 汇总统计"的一次性数据管道,最适合哪种范式?为什么?</summary>
+<div class="answer">
+<p><strong>答案:偏 FP / 过程式更贴。</strong>这是一串<strong>无状态的纯变换</strong>,没有需要长期维护的对象状态,用 <code>map</code>/<code>filter</code>/推导式 + 纯函数把数据一层层变换过去,最直接、最好测试(纯函数同输入同输出)。硬套多层类继承只会平添样板。</p>
+<p><strong>但要留个分寸:</strong>如果过滤 / 汇总规则很复杂、需要<strong>可插拔的策略</strong>并在运行时切换,OOP 的多态(比如策略模式)也能帮上忙。这正说明——范式按问题选,不是非此即彼。</p>
+</div>
+</details>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>过程式(函数作用于数据)、OOP(数据 + 行为捆进对象、靠继承与多态)、FP(纯函数变换不可变数据、组合优于继承)是组织"数据与行为关系"的三种方式,不是好坏排名。有状态、要多态扩展的领域建模选 OOP;无状态的数据转换 / 纯计算选 FP / 过程式。Python 是多范式语言,务实混用才是工程常态。</p>
+</div>
+
+<div class="paper">
+<p>本节内容来源分层:</p>
+<ul>
+<li><strong>源(直接来源):</strong>README《OOP Interview Questions》Q2(What is the difference between procedural and Object-Oriented programming?)——过程式 vs OOP 的四条区别(数据 / 函数管理、抽象与复用、继承与多态、语言例子 C vs Java)、多范式语言的说法,以及 <code>make_sound(animal)</code> vs <code>animal.make_sound()</code> 的对照代码,均取自源题原文。</li>
+<li><strong>canon(补充锚定):</strong>函数式那一维为 canon 补充——<a href="https://docs.python.org/3/howto/functional.html">Python 官方 Functional Programming HOWTO</a>(纯函数、不可变、高阶函数);"组合优于继承"出自 GoF《Design Patterns》(<em>favor object composition over class inheritance</em>);"贫血领域模型"出自 <a href="https://martinfowler.com/bliki/AnemicDomainModel.html">Martin Fowler, <em>AnemicDomainModel</em></a>;Java 的 FP 元素见 <a href="https://docs.oracle.com/javase/tutorial/java/javaOO/lambdaexpressions.html">Oracle Java Tutorial · Lambda Expressions</a>。</li>
+</ul>
+<p>有疑问随时问我(我是你的老师):想让我用 ELI5 再讲一遍"纯函数为什么好测试",或者拿你写的三版"购物车总价"来点评、判断哪种范式更贴,都可以。</p>
+</div>
+
+<footer class="lesson-footer">
+<p>范式讲清楚了,下一节回到面试现场——一套能把任何 OOP 问题答漂亮的结构化答题法。</p>
+<nav class="lesson-nav">
+<a class="prev" href="0024-modern-python-class-tools.html"><span class="dir">← 上一课</span>0024 · 现代 Python 类工具</a>
+<a class="next" href="0026-interview-answer-method.html"><span class="dir">下一课 →</span>0026 · OOP 面试答题法</a>
+</nav>
+</footer>
+
+</main>
+</body>
+</html>

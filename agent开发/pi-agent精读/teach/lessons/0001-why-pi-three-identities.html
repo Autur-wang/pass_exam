@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0001 · 为什么 Pi 值得读:三重身份与减法哲学</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 1 章 · 开篇总览 ›
+  <strong>Lesson 0001</strong>
+</div>
+
+<p class="kicker">Lesson 0001 · 第 1 章 开篇总览</p>
+<h1>为什么 Pi 值得你花时间<br>—— 三重身份与「减法」哲学</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:这是整门课的<strong>第一课</strong>,不碰源码,只回答一个更根本的问题——
+  Pi 到底是什么、凭什么值得你逐行读它的源码?读完你会明白:我们接下来 30 多节要拆的,
+  是一个<strong>小到能被完整读完</strong>、且每一处「不做什么」都藏着设计智慧的生产级 Agent。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 向别人一句话讲清 Pi 的<span class="sys-pill">三重身份</span>
+  ——编码工具 / 学习教材 / 开发 SDK,并说出 Pi「刻意不做 MCP、不做子 Agent、不做权限弹窗」
+  背后的<strong>共同理由</strong>。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:从「满」开始,还是从「空」开始?</b>
+  想象两家搬家公司。一家(<b>Claude Code</b> 路线)把卡车塞满你可能用到的一切工具,
+  你上车先花半天<em>清空</em>用不上的;另一家(<b>Pi</b> 路线)给你一辆干净的车和一套挂载点,
+  你<em>按需</em>把工具装上去。前者从「满」开始做减法,后者从「空」开始做加法。
+  Pi 赌的是:<b>对于想搞懂「一次搬家到底需要哪几件工具」的人,从空开始才看得清。</b>
+</div>
+
+<h2>1 · 一句话定义 + 三重身份</h2>
+<p>
+  Pi 的官方定义是:<strong>一款极简、可扩展的终端编码 Agent 外壳(coding agent harness),
+  由 libGDX 作者 Mario Zechner 创建,全部用 TypeScript 编写,MIT 协议开源。</strong>
+  它住在终端里,没有 GUI、没有 IDE 插件——这个「终端外壳」的形态,决定了它后续的一切设计选择。
+</p>
+<p>你可能因为三种不同的原因点开这门课,而它们恰好对应 Pi 的<strong>三重身份</strong>:</p>
+<table class="bd">
+  <thead><tr><th>你的诉求</th><th>Pi 的身份</th><th>这门课怎么喂你</th></tr></thead>
+  <tbody>
+    <tr><td>想要个好用的编码 Agent</td><td>🛠️ <b>编码工具</b></td><td>本课讲清它的差异化(上下文干净、模型自由、树状会话)</td></tr>
+    <tr><td>想知道 Agent 到底怎么做的</td><td>📖 <b>学习教材</b></td><td>后续 30 节逐层拆源码——这是本课的主线</td></tr>
+    <tr><td>要做自己的 Agent</td><td>🧩 <b>开发 SDK</b></td><td>讲清三层堆栈怎么被你复用(0002 起)</td></tr>
+  </tbody>
+</table>
+<p>三个诉求指向<em>同一个项目</em>,这本身就值得好奇——一个东西怎么能同时把这三件事做好?答案在它的「小」。</p>
+
+<h2>2 · 关键数字:小到能被「读完」</h2>
+<p>
+  Pi 值得做教材的头号理由,是它<strong>足够小</strong>。很多 Agent 框架动辄几万行,
+  光搞清启动流程就要读几十个文件;Pi 的核心循环只有几百行。看几个数字(均按 <code>v0.80.2</code> 源码实际值):
+</p>
+<table class="bd">
+  <thead><tr><th>指标</th><th>数值</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td>GitHub Stars</td><td>64,000+</td><td>十个月增长,社区验证了需求</td></tr>
+    <tr><td>内置工具</td><td>4 核心 + 3 辅助</td><td>核心 read / write / edit / bash;辅助 grep / find / ls</td></tr>
+    <tr><td>系统提示词</td><td>静态模板 ~90 词</td><td>运行时拼接 tools/skills 后约 200–400 词;对比 Claude Code 的数万字</td></tr>
+    <tr><td>核心包</td><td>4 个</td><td>pi-ai / pi-agent-core / pi-tui / pi-coding-agent</td></tr>
+    <tr><td>供应商</td><td>30+ 家</td><td>源码 <code>KnownProvider</code> 枚举 35 个(含区域变体),独立品牌约 27 个</td></tr>
+    <tr><td>运行模式</td><td>4 种</td><td>交互 / print-JSON / RPC / SDK</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么「小」是一种功能,而不是缺陷?</b> 因为它让「真正读完一个高质量 Agent 的全部核心代码」
+  这件事第一次变得可能——这对 Claude Code、对 LangChain 都是做不到的。而且 Pi 的小不等于弱:
+  它在 TerminalBench 基准测试中排名<strong>第二</strong>(使用 Claude Opus 4.5),仅次于 Terminus,
+  尽管它缺少 MCP、子 Agent、计划模式。<em>小,是刻意设计出来的克制,不是没来得及做。</em>
+</div>
+
+<h2>3 · 减法哲学:Pi「不做什么」清单</h2>
+<p>
+  这是理解 Pi 最关键的一节。竞争对手在罗列<em>功能</em>,Pi 官网有一章叫
+  <strong>"What we didn't build"</strong>(我们没有构建什么)——一份倒过来的宣言。
+  每一次舍弃背后,都有清晰的工程理由:
+</p>
+<table class="bd">
+  <thead><tr><th>Pi 不做的</th><th>为什么不做</th><th>替代方案</th></tr></thead>
+  <tbody>
+    <tr><td>MCP 支持</td><td>MCP 服务器(如 Playwright MCP)会在会话开始灌入 13,700+ token 的工具描述</td><td>带 README 的 CLI 工具,Agent 按需读取</td></tr>
+    <tr><td>子 Agent</td><td>增加复杂度,降低可观察性</td><td>tmux 多实例,或专用扩展</td></tr>
+    <tr><td>权限弹窗</td><td>导致「弹窗疲劳」,沦为安全表演(security theater)</td><td>容器化隔离,或用扩展搭审批流程</td></tr>
+    <tr><td>计划模式</td><td>计划写进 markdown 文件更持久、可复用</td><td>写 plan.md 文件</td></tr>
+    <tr><td>后台 bash</td><td>tmux 已经解决了这个问题</td><td>用 tmux</td></tr>
+    <tr><td>内置待办</td><td>TODO.md 文件更灵活</td><td>用 markdown 文件或自建扩展</td></tr>
+  </tbody>
+</table>
+<div class="tradeoff">
+  🔑 <b>找出共同理由:</b> 把这六行读两遍,你会发现它们指向<em>同一条</em>原则——
+  <strong>凡是会污染上下文、降低可观察性、或制造虚假安全感的东西,都不进核心。</strong>
+  上下文窗口是 Agent 最稀缺的资源;可观察性是调试 Agent 的命脉;安全表演比没有安全更危险。
+  Pi 把这三条守得极死,缺的功能一律靠<em>扩展</em>补——这就是「从空开始」的落地方式。
+</div>
+
+<h2>4 · 尝一口代码:pi-ai 的极简调用</h2>
+<p>
+  后面每节都会读真实源码,这里先尝一口,建立「Pi 的 API 长什么样」的直觉。
+  最底层的 <code>pi-ai</code> 包只管一件事——调模型。它不依赖任何 Agent 概念:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// 入口在 compat 子模块(不在主入口)</span>
+<span class="ln">2</span><span class="key">import</span> { <span class="fn">getModel</span>, <span class="fn">stream</span> } <span class="key">from</span> <span class="str">'@earendil-works/pi-ai/compat'</span>;
+<span class="ln">3</span><span class="key">import</span> <span class="key">type</span> { <span class="type">Context</span> } <span class="key">from</span> <span class="str">'@earendil-works/pi-ai'</span>;
+<span class="ln">4</span>
+<span class="ln">5</span><span class="key">const</span> model = <span class="fn">getModel</span>(<span class="str">'anthropic'</span>, <span class="str">'claude-sonnet-4-5'</span>);
+<span class="cm"><span class="ln">6</span>// Context 是 interface(不是 class),用对象字面量构造</span>
+<span class="ln">7</span><span class="key">const</span> context: <span class="type">Context</span> = {
+<span class="ln">8</span>  systemPrompt: <span class="str">'You are helpful.'</span>,
+<span class="ln">9</span>  messages: [{ role: <span class="str">'user'</span>, content: <span class="str">'Hello!'</span> }],
+<span class="ln">10</span>};
+<span class="ln">11</span>
+<span class="hl"><span class="ln">12</span><span class="key">const</span> eventStream = <span class="fn">stream</span>(model, context);  <span class="cm">// ← 返回的是「事件流」,不是一坨字符串</span></span>
+<span class="ln">13</span><span class="key">for</span> <span class="key">await</span> (<span class="key">const</span> event <span class="key">of</span> eventStream) {
+<span class="ln">14</span>  <span class="key">if</span> (event.type === <span class="str">'text_delta'</span>) process.stdout.<span class="fn">write</span>(event.delta);
+<span class="ln">15</span>}
+</pre>
+<p>
+  注意第 12–14 行:调模型返回的是一个<strong>可以 <code>for await</code> 逐块消费的事件流</strong>,
+  而不是等它憋完一整段再返回。这个「流」的设计会一路贯穿到 Agent Loop、事件系统——记住这个画面。
+</p>
+<cite>🔎 出处:教程第 1 章 §5.1(<code>../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第1章-开篇-Pi-Agent框架总览.md</code>)。代码为教程示意,基于 pi <code>v0.80.2</code>。</cite>
+
+<div class="diagram">Pi 的三重身份 —— 一个项目,三种读法
+
+   🛠️ 编码工具            📖 学习教材            🧩 开发 SDK
+   「拿来即用」          「读懂它怎么做」        「基于它造自己的」
+        │                     │                     │
+        └─────────┬───────────┴──────────┬──────────┘
+                  ▼                       ▼
+          同一套极简核心            同一条三层堆栈
+       (4 工具 · ~90 词提示)   (pi-ai→agent-core→coding-agent)
+                  │
+        减法哲学:凡污染上下文 / 降可观察性 / 造安全表演者,不进核心
+</div>
+
+<h2>5 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="2">
+    <p class="stem">① 教程说「Pi 的小是一种功能而非缺陷」,最贴切的理由是?</p>
+    <button class="opt">因为代码少所以跑得快</button>
+    <button class="opt">因为小所以 bug 少</button>
+    <button class="opt">因为小到能被完整读完,才第一次让「读懂一个高质量 Agent 的全部核心」成为可能</button>
+    <button class="opt">因为小所以省内存</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② Pi 刻意<strong>不做</strong> MCP、子 Agent、权限弹窗,它们背后的<strong>共同</strong>理由是?</p>
+    <button class="opt">这些都会污染上下文、降低可观察性或制造虚假安全感——违背 Pi 的核心原则</button>
+    <button class="opt">这些功能技术上实现不了</button>
+    <button class="opt">这些功能有专利限制</button>
+    <button class="opt">作者没时间做</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">③ <code>pi-ai</code> 的 <code>stream(model, context)</code> 返回的是什么?</p>
+    <button class="opt">一整段拼好的最终字符串</button>
+    <button class="opt">一个可以 <code>for await</code> 逐块消费的事件流</button>
+    <button class="opt">一个 Promise&lt;void&gt;,结果写进全局变量</button>
+    <button class="opt">一个回调函数</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>『上下文窗口是最稀缺资源』具体稀缺在哪?</em>」「<em>『可观察性』对调 Agent 为什么是命脉?</em>」
+  「<em>四个核心包到底怎么分工、谁依赖谁?</em>」——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>6 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第1章-开篇-Pi-Agent框架总览.md">第 1 章 · 开篇总览</a>——
+  原文还讲了 models.json 接第三方模型、四种运行模式、pi-tui 正交 UI 库,值得通读一遍建立全局观。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0002):</strong> 我们把「四个核心包」这张架构图摊开——
+  <code>pi-ai → pi-agent-core → pi-coding-agent</code> 这条<strong>三层堆栈</strong>每层能独立复用,
+  而 <code>pi-tui</code> 为什么是「正交」的一根旁支?搞懂分层,才知道后面每节课在拆的是<em>哪一层</em>。
+</p>
+
+<footer>
+  Lesson 0001 · 第 1 章 开篇总览 ·
+  下一课:<a href="./0002-four-packages-three-layer-stack.html">0002 四包三层架构 →</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。核心论点是「可读完性」:核心循环仅几百行,你能在有限时间真正读完全部核心代码——这对 Claude Code / LangChain 都不可能。小是刻意的克制,而且它 TerminalBench 排名第二,并不弱。',
+               '✓ 对。六条「不做」指向同一原则:凡是会污染上下文(MCP 灌 13700+ token)、降低可观察性(子 Agent)、或制造安全表演(权限弹窗)的,都不进核心,改用扩展补。',
+               '✓ 对。stream() 返回可 for await 逐块消费的事件流(如 text_delta),而非等憋完整段。这个「流」的画面会贯穿 Agent Loop 与事件系统。'];
+  var msgNo = ['「快 / bug 少 / 省内存」都是副产品,不是教程强调的点。教程说的是:小到能被完整「读完」——可读完性本身就是教材价值。',
+               '想想那三条被反复提到的红线:上下文、可观察性、安全表演。六条「不做」是不是都能归到这三条里?',
+               '回看第 4 节代码第 12–14 行:为什么要用 for await 去循环它?因为它是逐块吐出来的……'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

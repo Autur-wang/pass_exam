@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0007 · 注意力变体:MHA / MQA / GQA / MLA</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第 2 部分 注意力与架构进阶 · 第 0007 课</p>
+<h1>注意力变体:MHA / MQA / GQA / MLA</h1>
+<p class="lede">上节课我们发现 KV Cache 是自回归生成的救命稻草,但它会随「层数 × 头数 × 序列长度」线性膨胀,成为长上下文推理的显存黑洞。这节课的四个名字——<strong>MHA、MQA、GQA、MLA</strong>——其实是同一场战争的四种打法:如何在<strong>省 KV Cache 显存</strong>和<strong>不掉效果</strong>之间找平衡。面试里这是「多头注意力」之后最高频的追问,几乎逢大模型岗必考。</p>
+
+<div class="recall">
+<p>上节课(KV Cache)我们算过一笔账:推理时每生成一个 token,都要缓存它在每一层、每个头上的 K 和 V,好让后面的 token 不必重算。<strong>先别往下看,试着回忆:这份缓存的大小和哪几个量成正比?如果显存快满了,你最想砍掉哪一项?</strong></p>
+</div>
+
+<h2>一、一根主线:所有变体都在和 KV Cache 讨价还价</h2>
+<p>先把要省的东西写清楚。一次推理里,KV Cache 的总大小大致是:</p>
+$$\text{KV Cache} \;=\; \underbrace{2}_{K,\,V}\times n_{\text{layer}}\times \underbrace{n_{kv}}_{\text{K/V 头数}}\times d_h \times L \times b$$
+<p class="formula-note">$n_{\text{layer}}$ 层数,$d_h$ 每头维度,$L$ 序列长度,$b$ 每个数的字节数。除了 $n_{kv}$,其余几项要么是模型定死的、要么是任务给定的——<strong>唯一好动手脚的,就是「每层要缓存几组 K/V」这个 $n_{kv}$</strong>。</p>
+<p>注意一个关键前提:<strong>Q 的头数 $n_h$ 从头到尾都不变</strong>。四种变体动的都是 <strong>K/V 的头数 $n_{kv}$</strong>,以及 K/V 到底以什么形式存进 cache。把这条主线记牢,四种方法就串成了一条从「不省」到「极省」的光谱:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">MHA<br>$n_{kv}=n_h$<br>cache 最大</div>
+  <div class="node">GQA<br>$1&lt;n_{kv}&lt;n_h$<br>折中</div>
+  <div class="node">MQA<br>$n_{kv}=1$<br>cache 极小</div>
+  <div class="node good">MLA<br>压成 latent $c_t$<br>小 cache + 高质量</div>
+</div>
+<figcaption>从左到右,缓存越省;但一味减少 $n_{kv}$ 会掉效果,MLA 换了个思路——不减头,而是把 K/V 联合压缩成低维隐向量。</figcaption>
+</figure>
+
+<h2>二、MHA:每头独立 K/V,cache 最大</h2>
+<p>Multi-Head Attention 就是原始 Transformer 的做法:有几个 Q 头,就配几个独立的 K 头和 V 头,一一对应。表达能力最强,但每个 token 每一层要缓存 $n_h$ 组 K 和 $n_h$ 组 V。</p>
+<figure class="diagram">
+<pre>[MHA: 每个 Q 对应独立的 K 和 V]
+
+Head 1:  Q1 ────────> K1, V1
+Head 2:  Q2 ────────> K2, V2
+Head 3:  Q3 ────────> K3, V3
+Head 4:  Q4 ────────> K4, V4</pre>
+<figcaption>4 个头 = 4 组独立 K/V。$n_{kv}=n_h$,KV Cache 达到上限。</figcaption>
+</figure>
+<p>问题正是那句「每头独立」:头越多、上下文越长,cache 越吃显存。这就是后面所有变体想解决的痛点。</p>
+
+<h2>三、MQA:所有头共享一组 K/V,省显存但质量降</h2>
+<p>Multi-Query Attention(Shazeer, 2019)把节流做到极致:<strong>Q 仍然是 $n_h$ 个头各自独立,但全部头共享同一组 K 和同一组 V</strong>。于是 $n_{kv}=1$,KV Cache 直接缩到 MHA 的 $1/n_h$。</p>
+<figure class="diagram">
+<pre>[MQA: 所有 Q 共享一组 K 和 V]
+
+Head 1:  Q1 ─┐
+Head 2:  Q2 ─┼──────> K_shared, V_shared
+Head 3:  Q3 ─┼
+Head 4:  Q4 ─┘</pre>
+<figcaption>4 个 Q 头查的是同一份 K/V。cache 从「4 组」压到「1 组」。</figcaption>
+</figure>
+<p>代价是什么?K/V 的表达自由度被砍到只剩一份,不同头再也无法「各看各的」,通常会带来一定的质量损失,长文推理时尤为明显。所以 MQA 是「省显存优先」的激进选择,常见于对推理吞吐极敏感的场景(如 PaLM、Falcon 等报告采用)。</p>
+
+<h2>四、GQA:分组共享,MHA 与 MQA 的折中</h2>
+<p>MHA 效果好但太耗显存,MQA 省显存但掉点——Grouped-Query Attention(Ainslie et al., 2023)干脆取中间值:把 $n_h$ 个 Q 头分成 $g$ 组,<strong>每组内部共享一组 K/V</strong>,组与组之间不共享。于是 $n_{kv}=g$,cache 是 MHA 的 $g/n_h$。</p>
+<figure class="diagram">
+<pre>[GQA: 组内共享 K 和 V]
+
+Group 1:
+  Head 1:  Q1 ─┐
+  Head 2:  Q2 ─┴────> K_group1, V_group1
+
+Group 2:
+  Head 3:  Q3 ─┐
+  Head 4:  Q4 ─┴────> K_group2, V_group2</pre>
+<figcaption>4 个 Q 头分成 2 组,每组共享一份 K/V。$g=2$ 时 cache 是 MHA 的一半。</figcaption>
+</figure>
+<p>GQA 的漂亮之处在于它是一根连续的「旋钮」:</p>
+<ul>
+<li>$g=n_h$(每头一组)→ 退化成 <strong>MHA</strong>;</li>
+<li>$g=1$(全体一组)→ 退化成 <strong>MQA</strong>;</li>
+<li>取中间(比如 8 组)→ 显存省了大半,质量却几乎追平 MHA。</li>
+</ul>
+<p>正因为这种「几乎不掉点又省显存」的性价比,GQA 成了当前开源大模型的主流做法——LLaMA 2 的大模型(如 70B)、LLaMA 3 系列、Mistral 等都采用它。GQA 论文还给了个实用点:可以从已训好的 MHA checkpoint 通过少量「uptraining」转成 GQA,不必从零重训。</p>
+
+<h2>五、MLA:把 K/V 压成低维 latent,只缓存 latent</h2>
+<p>MQA/GQA 是「减头数」——直接砍掉信息通道。DeepSeek-V2 提出的 Multi-head Latent Attention(MLA)换了个思路:<strong>头数一个不减,但把庞大的 K/V 信息联合压缩成一个极低维的隐向量(latent)$c_t$</strong>。推理时显存里只存这个小小的 $c_t$,真正算注意力时再把它动态「解压」回各个头的 K 和 V。</p>
+<figure class="diagram">
+<pre>[MLA: 缓存压缩的 Latent,计算时动态投影解压]
+
+                     ┌──> 动态解压(W_UK) ──> 多头 K (K1, K2 ... Kh)
+Input X ──> 投影压缩 ─┤
+           (W_DKV)   └──> 动态解压(W_UV) ──> 多头 V (V1, V2 ... Vh)
+
+       ▲
+       │
+【只有中间这个 c_t 被保存在 KV Cache 中,体积极小!】</pre>
+<figcaption>下投影 $W^{DKV}$ 把输入压成低维 $c_t$(进 cache);上投影 $W^{UK},W^{UV}$ 在计算时把 $c_t$ 解压回各头的 K/V。</figcaption>
+</figure>
+<p>用公式看得更清楚。设隐藏向量 $h_t$,压缩维度 $d_c \ll n_h d_h$:</p>
+$$c_t^{KV}=W^{DKV}h_t,\qquad k_t^{C}=W^{UK}c_t^{KV},\qquad v_t^{C}=W^{UV}c_t^{KV}$$
+<p class="formula-note">缓存里<strong>只存 $c_t^{KV}\in\mathbb{R}^{d_c}$</strong>,不存解压后的 $k_t,v_t$。原来要缓存 $2 n_h d_h$ 个数,现在只需 $d_c$ 个,显存大幅下降。</p>
+<p>为什么这比 GQA 更聪明?GQA 是「粗暴地让若干头共用一份」,信息瓶颈是硬约束;MLA 的压缩矩阵 $W^{DKV}$ 是<strong>可学习</strong>的,模型能自己学到「哪些信息该留在 latent 里」,理论上能在同等 cache 预算下保住更接近 MHA 的表达力。</p>
+
+<h3>MLA 的隐藏难点:和 RoPE 打架</h3>
+<p>这是面试的深水区。RoPE(旋转位置编码)要按位置 $m$ 给每个 K 施加一个旋转;而 MLA 想在推理时把上投影 $W^{UK}$ 「吸收」进 $W^Q$ 里、直接拿 latent 算注意力(这样才真省算力)。但旋转是位置相关的,夹在 $W^{UK}$ 中间就没法预先吸收——两者不兼容。DeepSeek 的解法是<strong>解耦 RoPE(decoupled RoPE)</strong>:额外拿出一小段专门承载位置信息的 key(所有头共享)去做旋转,其余部分走无位置的 latent 压缩。所以 MLA 的 cache 实际是「低维 latent + 一小段共享的 RoPE key」。</p>
+
+<dl class="keydef">
+<dt>KV Cache 头数 $n_{kv}$</dt>
+<dd>每层每 token 需要缓存的 K/V 组数。MHA:$n_{kv}=n_h$;GQA:$n_{kv}=g$($1&lt;g&lt;n_h$);MQA:$n_{kv}=1$。Q 的头数 $n_h$ 在所有变体里保持不变。</dd>
+<dt>MLA 的 latent $c_t$</dt>
+<dd>$$c_t^{KV}=W^{DKV}h_t\in\mathbb{R}^{d_c},\quad d_c\ll n_h d_h$$ 联合压缩后的低维隐向量,是 MLA 唯一进 KV Cache 的主体(外加一段共享 RoPE key)。K、V 由它经上投影动态还原,不进 cache。</dd>
+</dl>
+
+<h2>六、一张表对齐四者</h2>
+<table>
+<thead>
+<tr><th>变体</th><th>K/V 组数 $n_{kv}$</th><th>相对 MHA 的 KV Cache</th><th>特点</th><th>代表模型</th></tr>
+</thead>
+<tbody>
+<tr><td>MHA</td><td>$n_h$</td><td>$1\times$(基准)</td><td>每头独立,质量上限,最费显存</td><td>原始 Transformer、GPT、BERT、LLaMA 1</td></tr>
+<tr><td>MQA</td><td>$1$</td><td>$1/n_h$</td><td>全体共享一组,最省,质量偏降</td><td>PaLM、Falcon 等</td></tr>
+<tr><td>GQA</td><td>$g$</td><td>$g/n_h$</td><td>分组共享,质量与显存的折中旋钮</td><td>LLaMA 2(70B)、LLaMA 3、Mistral</td></tr>
+<tr><td>MLA</td><td>头不减,压成 $c_t$</td><td>由 $d_c$ 决定,远小于 MHA</td><td>可学习的低维联合压缩,小 cache 追高质量</td><td>DeepSeek-V2 / V3</td></tr>
+</tbody>
+</table>
+<p class="formula-note">数量级上 MHA > GQA > MQA;MLA 走的是另一条轴,用「压缩」而非「减头」达到接近 MQA/小组 GQA 的显存,同时力图保住 MHA 级的效果。</p>
+
+<div class="implement">
+<p>GQA 的实现核心只有一步:K/V 只算 $n_{kv}$ 个头,注意力前用 <code>repeat_interleave</code> 把它们「广播」到 $n_h$ 个 Q 头上。自己敲一遍就懂它省在哪:</p>
+<pre><code>import torch
+
+# Q:  [B, n_h,  T, d_h]   —— query 头数不变
+# K,V:[B, n_kv, T, d_h]   —— 只算/只缓存 n_kv 组 (MQA 时 n_kv=1)
+def expand_kv(K, V, n_h):
+    n_kv = K.size(1)
+    rep = n_h // n_kv                 # 每组要复制几份
+    K = K.repeat_interleave(rep, dim=1)  # -> [B, n_h, T, d_h]
+    V = V.repeat_interleave(rep, dim=1)
+    return K, V                        # 之后就是普通多头注意力
+
+# 关键:进 KV Cache 的是 [B, n_kv, T, d_h],省显存的正是这个 n_kv
+# repeat 只发生在计算时,不落进 cache</code></pre>
+<p>MLA 则把「省」放在缓存的形态上——缓存 latent,计算时才解压:</p>
+<pre><code># 预填充/解码时:只把 c_kv 存进 KV Cache
+c_kv = h @ W_DKV.T          # [B, T, d_c]   <- cache 里就存它
+# 算注意力时再动态解压回各头 K / V(推理可把 W_UK 吸收进 W_Q)
+K = (c_kv @ W_UK.T).view(B, T, n_h, d_h).transpose(1, 2)
+V = (c_kv @ W_UV.T).view(B, T, n_h, d_h).transpose(1, 2)</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「MHA / MQA / GQA 的 KV Cache 大小怎么比?」——写出 $2\,n_{\text{layer}}\,n_{kv}\,d_h\,L\,b$,指出差别全在 $n_{kv}$:$n_h$ vs $g$ vs $1$,量级 MHA > GQA > MQA。</li>
+<li>「GQA 为什么是折中?$g$ 怎么取?」——$g=n_h$ 是 MHA、$g=1$ 是 MQA,中间取值兼顾显存与质量;强调它是连续旋钮,还能从 MHA checkpoint uptraining 得到。</li>
+<li>「谁用哪种?」——原始 Transformer/GPT/LLaMA 1 用 MHA;PaLM、Falcon 等用 MQA;LLaMA 2(70B)/LLaMA 3、Mistral 用 GQA;DeepSeek-V2/V3 用 MLA。</li>
+<li>「MLA 缓存的到底是什么?比 GQA 强在哪?」——缓存低维 latent $c_t$(计算时解压),压缩矩阵可学习,能在小 cache 下逼近 MHA 质量。</li>
+<li>「MLA 和 RoPE 有什么冲突,怎么解决?」——旋转位置相关,无法预先吸收进上投影;用 decoupled RoPE,拿一小段共享 key 单独承载位置。答得出这个能拉开差距。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>四种变体动的都是 <strong>K/V 头数</strong>,<strong>Q 头数 $n_h$ 始终不变</strong>。说「MQA 减少了 Q 头」是错的。</li>
+<li>MQA/GQA 省的是 K/V 的<strong>缓存与参数</strong>,不是省注意力的头数——Q 仍是 $n_h$ 个头各自 attend,计算量的减少主要来自更小的 K/V 投影,而非更少的头。</li>
+<li>MLA 缓存的是<strong>压缩后的 latent</strong>,不是解压后的 K/V。如果把解压后的 K/V 也缓存下来,就一点没省。</li>
+<li>$g=1$ 时 GQA 就是 MQA,$g=n_h$ 时就是 MHA——别把 GQA 说成和它们「完全不同的第三种东西」。</li>
+<li>别忽略 MLA 里的 RoPE 处理:latent 不能直接旋转,需要解耦出共享 RoPE key,否则位置信息丢失。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>关于 MQA(Multi-Query Attention),下列哪项描述正确?</p>
+<details><summary>A. 所有注意力头共享同一组 K 和 V,而 Q 仍是各头独立 ✅</summary>正确。MQA 只把 K/V 缩成一组($n_{kv}=1$),Q 头数不变,cache 变成 MHA 的 $1/n_h$。</details>
+<details><summary>B. 所有头共享同一组 Q、K、V 三者</summary>错。Q 从不共享,各头独立;被共享的只有 K 和 V。</details>
+<details><summary>C. 通过减少 Q 头的数量来省显存</summary>错。省的是 K/V 头数,Q 头数保持 $n_h$。</details>
+<details><summary>D. 把 K、V 联合压缩成低维 latent 再缓存</summary>错,这是 MLA 的做法,不是 MQA。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>MLA 在 KV Cache 里实际缓存的主体是什么?</p>
+<details><summary>A. 每个头解压后的完整 K 和 V</summary>错。若缓存解压后的 K/V 就等于没压缩,失去 MLA 的意义。</details>
+<details><summary>B. 一个低维联合 latent $c_t$(计算时再解压回各头 K/V),外加一小段共享的 RoPE key ✅</summary>正确。只有小小的 $c_t$ 进 cache,K/V 由它动态还原;位置信息由解耦出的共享 RoPE key 承载。</details>
+<details><summary>C. 只缓存 K,不缓存 V</summary>错。K 和 V 都由同一个 latent 解压得到,缓存的是 latent 本身。</details>
+<details><summary>D. $g$ 组共享的 K/V</summary>错,这是 GQA 的分组共享,不是 MLA 的压缩思路。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Fast Transformer Decoding: One Write-Head is All You Need</strong>(Shazeer, 2019)——MQA 的原始论文。</li>
+<li><strong>GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</strong>(Ainslie et al., 2023)——GQA 提出与 uptraining 方案。</li>
+<li><strong>DeepSeek-V2</strong>(DeepSeek-AI, 2024)——MLA 的原始论文,含低维联合压缩与 decoupled RoPE 的完整推导;DeepSeek-V3 沿用。</li>
+<li>回顾:KV Cache 为何膨胀(第 0006 课);下一步:计算侧怎么再省——FlashAttention 与稀疏注意力(第 0008 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>MHA→MQA→GQA 是在「减 K/V 头数」这条轴上从不省到极省;MLA 换轴,把 K/V 压成可学习的低维 latent 只缓存它——全都在 KV Cache 显存与效果之间权衡。</strong></p>
+<nav class="lesson-nav">
+<a href="0006-kv-cache.html">← 上一课:KV Cache</a>
+<a href="0008-flash-attention-sparse.html">下一课:FlashAttention 与稀疏注意力 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

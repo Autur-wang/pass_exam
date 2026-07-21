@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0037 · 简历怎么写(前端向)</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">前端面试知识库 · 精读课 · 第 0037 课 · 7 简历与行为面试 · 预计 10~15 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>简历怎么写(前端向)</h1>
+
+<p class="lede">前面六个部分讲的都是"面试现场怎么答对";这一部分要往前退一步——先解决简历能不能让你走到面试现场这件事。这节课只回答一个问题:前端工程师的简历该突出什么、常见结构长什么样、技术关键词又该怎么挑,才能既过 ATS 这一关,又经得起面试官照着简历往下追问。</p>
+
+<div class="recall">
+<p>回忆一下:上一课你从头写了一个完整的注册表单案例,把状态设计、Hooks、事件处理、校验策略这几课的知识点串成了一件真正能跑起来的东西。这节课要做的,是把视角从"怎么写代码"切换到"怎么把写代码这件事讲给招聘方听"——同一份注册表单练习,写进简历里该强调什么、该用哪些技术关键词,正是接下来要拆开的问题。</p>
+</div>
+
+<h2>一、先过技术关卡:篇幅、格式、别用设计软件</h2>
+
+<p>前端工程师的简历首先要过的不是招聘经理的眼睛,是两道更机械的关卡。第一道是篇幅和格式:源材料给的基本要求很具体——工作经验少于 5 年,简历最好控制在一页以内,最多不超过两页;用 Microsoft Word、Google Docs、Pages 或 LaTeX 构建,这样申请人跟踪系统(ATS)才能正确解析内容,<strong>要避免用设计软件</strong>做排版;最终以 PDF 格式提交。这几条背后的逻辑是一致的——简历要先能被机器读懂,才轮到被人看懂。</p>
+
+<p>第二道关卡是格式与美学,这一条对前端工程师格外苛刻:源材料直接点出前端工程师经常处理用户界面,应该对设计有敏锐的意识,如果简历本身在美学上不令人满意,这会给你作为前端工程师的专业形象带来很负面的影响。具体建议是:用单列格式;字体选大多数操作系统上都有的常见字体,比如 Arial、Calibri 或 Garamond,避免花哨字体;最多坚持一到两种字体(标题一种、正文一种);正文最小字号 11px。源材料也补了一句分寸——简历不需要超级漂亮花哨,只需要整洁、赏心悦目;如果预算允许,<a href="https://www.faangtechleads.com/">FAANG Tech Leads</a> 有现成的、兼顾美观与 ATS 友好的简历模板可以直接买。</p>
+
+<h2>二、简历该突出什么:三个模块,分量不同</h2>
+
+<p>过了格式关卡之后,真正决定简历分量的是三个模块,但它们不是平分秋色的三份——源材料花在每一块上的篇幅,本身就说明了权重该怎么分配:</p>
+
+<div class="trio">
+  <div class="cell"><span class="role">分量最重</span><span class="head">工作经验</span><span class="sub">最重要的部分,该占据简历的大部分空间</span></div>
+  <div class="cell"><span class="role">快速摘要</span><span class="head">技能</span><span class="sub">给 ATS/招聘人员看的关键词清单,不是越长越好</span></div>
+  <div class="cell"><span class="role">加分证明</span><span class="head">项目</span><span class="sub">证明你在本职之外也在追前端新技术</span></div>
+</div>
+
+<p>接下来按这三块的分量,依次拆开——工作经验部分该怎么写才不空洞,技能部分的关键词怎么挑才不稀释重点,项目部分又能补上简历里证明不了的哪一块。</p>
+
+<h2>三、工作经验部分:写规模·复杂性·影响,不是写"用了什么技术"</h2>
+
+<p>源材料把这一节的定位说得很直白:工作经验部分是简历里最重要的部分,应该占据简历的大部分空间,核心任务是突出你对过去或当前雇主业务目标的贡献。这里还有一个容易被忽略的小技巧:如果你的官方头衔是"软件工程师",但实际做的是大量前端开发,可以考虑把头衔改成"前端工程师"/"前端软件工程师"/"软件工程师(前端)"——目的是让简历里尽可能多地出现"前端"这个词,提高 ATS 排名里的相关性。</p>
+
+<p>源材料点出的最常见错误,是没有提供足够多关于经验和成就的细节,导致读者判断不出贡献到底有多大。要脱颖而出,关键是把<strong>规模、复杂性和影响</strong>这三样信息写清楚,源材料给了一组直接对照:</p>
+
+<div class="codecompare">
+  <div class="side bad"><span class="label">错误 👎</span><pre><code>使用 HTML、CSS 和 JavaScript
+构建了一个网站</code></pre></div>
+  <div class="side good"><span class="label">更好 👍</span><pre><code>构建了一个高性能的电子商务网站,
+允许用户浏览数百个商品、加入购物车
+并通过 PayPal 结账。
+该网站有 20k MAU,加载时间不到 2 秒,
+Lighthouse 评分 98。
+使用的技术:Next.js、React、GraphQL、CSS 模块</code></pre></div>
+</div>
+
+<p>两段话描述的可能是同一份工作,但"更好"那一版补上了用户规模(20k MAU)、性能数据(加载时间、Lighthouse 评分)和具体技术栈(Next.js、React、GraphQL、CSS 模块)——规模、复杂性、影响三样都补齐了,面试官不用追问就能判断这份经历的分量。如果一时想不出该往哪个方向补细节,源材料给了一份"适合提及的前端相关技术成就"清单,可以当检查表用:</p>
+
+<table>
+<tr><th>类别</th><th>该写的是什么</th></tr>
+<tr><td>产品工作</td><td>详细说明在产品中构建的具体功能</td></tr>
+<tr><td>性能</td><td>做过的性能改进及带来的百分比增益,如页面加载大小、加载时间、Lighthouse 分数</td></tr>
+<tr><td>测试</td><td>写了多少测试、覆盖了多少关键流程、测试覆盖率提升了百分之多少</td></tr>
+<tr><td>SEO</td><td>SEO 错误/警告数量或百分比的减少(用 Ahrefs、Semrush 这类工具很容易拿到这个数字)</td></tr>
+<tr><td>可访问性(a11y)</td><td>修复的 a11y 错误数量、达到 WCAG AA/AAA 级一致性的流程数、做过 a11y 改进的组件数</td></tr>
+<tr><td>工具</td><td>代码库的技术现代化,比如把 jQuery 代码库迁移到 React、引入 TypeScript 提高类型安全,并给出规模(代码行数/工程师数量)</td></tr>
+</table>
+
+<h2>四、技能部分:关键词怎么选,不是列得越多越好</h2>
+
+<p>技能部分的性质和工作经验完全不同——它不是叙事,是给 ATS、招聘人员、招聘经理快速扫一眼的清单。源材料给的底线要求是:至少要为"语言"和"技术"两个类别各列出一份清单。</p>
+
+<p>真正的难点在于前端要用到的技术种类多到写不完,但源材料的态度很明确:不要把每一种都写上去——这会稀释真正重要技能的权重,让读者更难看出你的核心栈是什么。挑选时按四条标准排优先级:</p>
+
+<ol>
+<li><strong>出现在职位列表里</strong>——如果这项技能在招聘 JD 上出现过,并且你确实有相关经验,基本上应该写上。</li>
+<li><strong>只列会影响架构的关键技术</strong>——像 React 这样的库会牵动其他技术选型,值得写;像 Underscore/Lodash 这类和架构无关、随时可替换的小工具库,可以省略。</li>
+<li><strong>广为人知或正在迅速普及</strong>——说明你跟得上现代前端生态,如果公司也在考虑转向这项技术,这会是加分项。</li>
+<li><strong>展示广度,但不要堆同类</strong>——哪怕你同时熟悉 React、Angular、Vue,三个都写出来也是多余的;同一类别里最多列一到两个,列太多反而让读者更难抓住重点。</li>
+</ol>
+
+<p>落到具体类别,源材料给的参考表大致如下(每类挑一到两个写进简历就够,下面每类只列源材料给的部分选项):</p>
+
+<table>
+<tr><th>类别</th><th>举例(选 1~2 个即可)</th></tr>
+<tr><td>JavaScript 库</td><td><a href="https://react.dev/">React</a>、<a href="https://angular.io/">Angular</a></td></tr>
+<tr><td>元框架</td><td><a href="https://nextjs.org/">Next.js</a>、<a href="https://www.gatsbyjs.com/">Gatsby</a></td></tr>
+<tr><td>状态管理</td><td><a href="https://redux.js.org/">Redux</a>、<a href="https://github.com/pmndrs/zustand">Zustand</a></td></tr>
+<tr><td>CSS 方案</td><td><a href="https://tailwindcss.com/">Tailwind CSS</a>、<a href="https://sass-lang.com/">Sass</a></td></tr>
+<tr><td>CSS 框架</td><td><a href="https://getbootstrap.com/">Bootstrap</a>、<a href="https://mui.com/">MUI</a></td></tr>
+<tr><td>单元测试</td><td><a href="https://jestjs.io/">Jest</a>、<a href="https://vitest.dev/">Vitest</a></td></tr>
+<tr><td>数据获取</td><td><a href="https://graphql.org/">GraphQL</a>、<a href="https://tanstack.com/query/v3/">TanStack Query</a></td></tr>
+<tr><td>集成测试</td><td><a href="https://www.cypress.io/">Cypress</a>、<a href="https://playwright.dev/">Playwright</a></td></tr>
+<tr><td>语言工具</td><td><a href="https://www.typescriptlang.org/">TypeScript</a>、<a href="https://eslint.org/">ESLint</a></td></tr>
+<tr><td>构建工具(可选)</td><td><a href="https://webpack.js.org/">webpack</a>、<a href="https://vitejs.dev/">Vite</a></td></tr>
+<tr><td>包管理(可选)</td><td><a href="https://yarnpkg.com/">Yarn</a>、<a href="https://pnpm.io/">pnpm</a></td></tr>
+</table>
+
+<p>源材料自己给的完整范例是——语言:HTML、CSS、JavaScript、TypeScript;技术:React、Next.js、Tailwind CSS、Jest、Storybook、Cypress、React Query(即上表"数据获取"类别里的 TanStack Query)、Yarn、webpack。这九个词看起来不多,但源材料特意点出,这正是用来构建 GreatFrontEnd 网站本身的技术栈——每个类别只挑了一到两个代表,不是为了显得"会得多"而堆砌。</p>
+
+<h2>五、项目部分:证明你在本职之外也在追前端新技术</h2>
+
+<p>项目部分要补的,是工作经验和技能列表都补不上的那块信号——热情与主动性。源材料的说法是:前端领域发展很快,每年都有新框架和新的 CSS 方法出现,简历上有项目,说明你对这个领域有热情、愿意多花力气跟上最新技术,尤其是在本职工作没机会用到这些技术的情况下,这是一个很强的积极信号。</p>
+
+<p>具体怎么写:列出每个项目用到的技术,尤其是公司正在用的现代技术,这既帮 ATS 排名,也能在读者心里留下更深印象;如果可能,把代码放到 GitHub 上,用产品截图完善 README;把代码链接和线上网址都放进简历。源材料还专门提到一点——开源贡献,尤其是对复杂代码库做过非平凡(non-trivial)的修改,会被当成技术能力的信号;如果你创建或维护过开源项目,那还要更好。</p>
+
+<h2>六、这些技巧和"通用简历建议"是什么关系</h2>
+
+<p>源材料在开头和结尾各说了一遍同一件事:市面上帮软件工程师写简历的资源不少,但专门给前端工程师的很少;这些前端专属技巧不是要取代通用建议,通用的软件工程师简历建议(见文末链接)本身已经足够用了,这节课讲的内容,是在通用建议之上再往上垒一层——让一份及格的软件工程师简历,升级成一份经得起前端面试官细看的简历。</p>
+
+<h2>七、关键定义</h2>
+
+<dl class="keydef">
+<dt>ATS(申请人跟踪系统)</dt>
+<dd>招聘方用来自动解析、筛选简历的系统,决定一份简历能不能真正被人看到;源材料要求用 Word/Docs/Pages/LaTeX 构建并以 PDF 提交,正是为了让 ATS 能正确读出内容。<em>避免</em>把"简历排版好看"和"ATS 能读懂"当成一回事——用设计软件做的花哨排版,反而可能让 ATS 解析不出关键信息。</dd>
+<dt>影响架构的关键技术</dt>
+<dd>技能部分该优先列出的技术,是像 React 那样会牵动其他技术选型的库,而不是像 Underscore/Lodash 那样与架构无关、随时可替换的小工具。<em>避免</em>把"我用过的所有工具"都塞进技能列表——这会稀释真正重要技能的权重。</dd>
+<dt>规模·复杂性·影响</dt>
+<dd>描述一段工作经历时该覆盖的三个维度——服务的用户规模、实现的技术复杂度、以及可衡量的效果(如加载时间、评分提升);源材料的"更好"范例正是靠补齐这三样才立住的。<em>避免</em>只写"用某某技术做了某某东西"却不给出任何数字或结果,让面试官无从判断分量。</dd>
+</dl>
+
+<div class="apply">
+<p><strong>现实中怎么用。</strong>假设你想把上一课那个从头写的注册表单练习写进简历的项目部分:先按"规模·复杂性·影响"补细节——它处理了哪几层校验(即时反馈、提交拦截、错误展示)、用到了哪些技术;技能部分不要把练习里碰到的所有 API 都列进去,只挑真正影响你怎么搭这个表单的那一两项(比如状态管理方式、校验思路),按四条标准做一次减法;最后把代码放到 GitHub、补一张界面截图,项目部分就有了具体链接可以点开看,而不是一句"做过一个表单练习"。</p>
+</div>
+
+<div class="pitfall">
+<p><strong>一个容易踩的误区:把技能部分写成"我用过的所有东西"清单。</strong>前端要接触的技术种类多,很容易忍不住把学过的库、工具都列上去,觉得写得越多机会越大。源材料明确指出这个方向是反的——不加选择地堆砌,会稀释真正重要技能的权重,让招聘人员更难从一长串名词里看出你的核心栈是什么,甚至可能因为同类技术列了三四个(比如 React、Angular、Vue 全写上)显得对每一个都不够深入。挑选的标准应该是"这项技术是否出现在职位列表里"和"是否影响架构选型",不是"我是不是会"。</p>
+</div>
+
+<div class="practice">
+<p><strong>今天就做的一件事:</strong>翻出你现在的简历,盯着"技能"部分,对每一行技术问一遍四条标准里至少两条——它出现在你最近投的职位列表里吗?它是不是一个随时能被别的库替换掉、和架构无关的小工具?两条都答不上"是"的,先划掉,而不是急着往上加新的一行。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>前端简历不是拼技术名词数量的清单——工作经验部分靠"规模·复杂性·影响"讲清楚一段经历的分量,技能部分靠四条标准做减法而不是堆砌,项目部分负责补上本职工作证明不了的那份热情;三块各管一段,合起来才经得起面试官往下追问。</p>
+</div>
+
+<h2>自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:关于简历"技能"部分该怎么写,下面哪个说法最准确? (A) 尽可能列出你会的所有前端技术,越多越好,能提高 ATS 命中关键词的概率 (B) 只列"语言"类别,不列任何框架或工具,因为框架技术更新太快,写上去容易显得过时 (C) 优先列举职位列表里出现过的、会影响架构选型的关键技术,同一类别最多挑 1~2 个,其余同类可替代的小工具可以省略</summary>
+<div class="answer">
+<p>正确答案是 <strong>(C)</strong>。源材料明确给出四条优先级标准,核心是"职位列表里有没有"和"是否影响架构",并且同一类别最多写一到两个,不是照单全收。(A) 恰好说反了——源材料原话是不要添加每一种技术,这会稀释真正重要技能的权重;(B) 也不成立,源材料的底线要求是"语言"和"技术"两个类别都要给,只列语言反而漏掉了框架/工具这类招聘方同样会看的信息。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:源材料举了"错误 👎"和"更好 👍"一组对照例子,"更好"那一版比"错误"那一版多补上了什么关键信息? (A) 把"网站"换成了"平台"这类更专业的措辞,让描述听起来更高级 (B) 补充了用户规模、性能指标(加载时间、Lighthouse 评分)以及具体使用的技术栈,让规模、复杂性和影响都有据可查 (C) 删掉了所有具体技术名词,只强调业务成果,避免面试官追问技术细节</summary>
+<div class="answer">
+<p>正确答案是 <strong>(B)</strong>。"更好"那一版补上了 20k MAU、加载时间、Lighthouse 评分,以及 Next.js、React、GraphQL、CSS 模块这些具体技术,对应源材料强调的"规模、复杂性和影响"。(A) 只是表面换词,源材料的重点从来不是措辞是否"高级";(C) 与例子本身矛盾——"更好"那一版恰恰明确写出了用到的技术栈,不是删掉技术细节。</p>
+</div>
+</details>
+</div>
+
+<h2>主推资源</h2>
+
+<p>源材料在开头和结尾都指向同一份通用简历指南,并在"格式与美学"一节提到一个付费模板来源,建议先看这两个再动手改自己的简历:</p>
+<ul>
+<li><a href="https://www.techinterviewhandbook.org/resume/">Tech Interview Handbook · Resume</a> —— 面向所有软件工程师的通用简历建议,源材料把这节课讲的内容定位为在它之上再叠加的前端专属补充,不是替代品。</li>
+<li><a href="https://www.faangtechleads.com/">FAANG Tech Leads</a> —— 源材料在格式与美学一节提到的付费简历模板来源,如果预算允许,可以直接买一份兼顾美观与 ATS 友好的模板。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲清"为什么技能部分不能什么都写上去",也可以让老师拿你自己的一段真实工作经历,帮你现场套一遍"规模·复杂性·影响"改写一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0036-react-signup-form-worked-example.html"><span class="dir">← 上一课</span>案例实战:从头写一个注册表单</a>
+  <a class="next" href="0038-behavioral-interview-overview.html"><span class="dir">下一课 →</span>行为面试总览:面试官到底在考什么</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0043 · 并发原语:锁、信号量与死锁</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<p class="meta">编程面试大学 · 精读课 · 第 0043 课 · 工程与设计 · 预计 12 分钟 · <a href="../index.html">门户</a> · <a href="../MISSION.md">Mission</a> · <a href="../GLOSSARY.md">术语表</a></p>
+
+<h1>并发原语:锁、信号量与死锁</h1>
+
+<p class="lede">上一课留了个病:多个线程共享内存,同时改一份数据就会出错。这节课开药方——<strong>互斥锁、信号量、条件变量</strong>是并发编程的三味基础药材。但药也有副作用:用不好会得<strong>死锁</strong>。面试最爱考的两件事,就是「用这些原语实现生产者-消费者」和「说清死锁的四个条件、怎么破」。</p>
+
+<div class="recall">
+<p>先回忆 <a href="0042-process-thread.html">进程与线程</a>的结论:同一进程的线程<strong>共享堆和全局数据</strong>,通信快是它的红利,但我们当时做过一个实验——两个线程各给同一个计数器自增一百万次,结果<strong>小于</strong>两百万。先自己说清:<strong>那一百万次自增里,到底哪一步「丢」了?为什么是「共享」导致的?</strong>这节就从治这个病开始。</p>
+</div>
+
+<h2>一、病根:竞态条件与临界区</h2>
+
+<p>看似原子的 <code>count++</code>,其实是三步:<strong>读出 count → 加 1 → 写回</strong>。两个线程交错执行时,可能都读到同一个旧值 100,各自加到 101 写回——两次自增只涨了 1,另一次<strong>被覆盖丢失</strong>。这种「结果取决于线程执行的先后顺序」的 bug,叫<strong>竞态条件(race condition)</strong>。</p>
+
+<p>出问题的那段「同一时刻最多只能有一个线程进入」的代码,叫<strong>临界区(critical section)</strong>。解法的核心思想只有一句:<strong>给临界区上一把锁,保证互斥(mutual exclusion)</strong>——同一时刻只放一个线程进去,其余的排队等。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node"><span class="n-title">读 count=100</span><span class="n-sub">线程 A</span></div>
+  <div class="arrow">┊</div>
+  <div class="node"><span class="n-title">读 count=100</span><span class="n-sub">线程 B(插进来)</span></div>
+  <div class="arrow">→</div>
+  <div class="node bad"><span class="n-title">各写回 101</span><span class="n-sub">丢了一次自增</span></div>
+</div>
+<figcaption>没有互斥时,A 还没写回,B 就读到了旧值。加锁后 B 必须等 A 把整段「读-改-写」做完、放锁,才能进——竞态消失。</figcaption>
+</figure>
+
+<h2>二、三味基础药:锁、信号量、条件变量</h2>
+
+<table>
+<thead><tr><th>原语</th><th>解决什么</th><th>一句话</th></tr></thead>
+<tbody>
+<tr><td><strong>互斥锁 mutex</strong></td><td>互斥</td><td>只有 0/1 两态:一把钥匙,谁拿到谁进临界区,用完归还。</td></tr>
+<tr><td><strong>信号量 semaphore</strong></td><td>限量 / 计数</td><td>一个计数器 + 一队等待者;可允许最多 N 个线程同时进(N=1 时退化成互斥锁)。</td></tr>
+<tr><td><strong>条件变量 condvar</strong></td><td>等待某条件成立</td><td>让线程「睡下」直到被别人唤醒(如队列「非空」时才唤醒消费者),配合锁使用。</td></tr>
+<tr><td><strong>读写锁 rwlock</strong></td><td>读多写少</td><td>允许多个读者并行,但写者独占。读远多于写时比互斥锁并发更高。</td></tr>
+</tbody>
+</table>
+
+<p>它们的关系值得记牢:<strong>互斥锁是信号量在 N=1 时的特例</strong>;信号量既能做互斥(N=1),又能做「限量」(如连接池最多 10 个,初值 10);<strong>条件变量不解决互斥,它解决等待</strong>——线程在条件不满足时高效睡眠,不空转烧 CPU(否则就是浪费的「忙等」busy-waiting)。</p>
+
+<h2>三、副作用:死锁与它的四个条件</h2>
+
+<p>加锁能治竞态,但用力过猛会得<strong>死锁(deadlock)</strong>:两个及以上线程互相等着对方手里的锁,谁也不肯先松手,全体永久卡死。经典场景:线程 A 拿了锁 1 去抢锁 2,线程 B 恰好拿了锁 2 去抢锁 1。</p>
+
+<figure class="diagram">
+<div class="svg-wrap">
+<svg viewBox="0 0 400 330" role="img" aria-label="四个线程构成循环等待环,形成死锁">
+  <defs>
+    <marker id="dl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dgm-accent" d="M 0 0 L 10 5 L 0 10 z"></path>
+    </marker>
+  </defs>
+
+  <circle class="dgm-accent-node" cx="200" cy="55" r="38"></circle>
+  <circle class="dgm-accent-node" cx="315" cy="165" r="38"></circle>
+  <circle class="dgm-accent-node" cx="200" cy="275" r="38"></circle>
+  <circle class="dgm-accent-node" cx="85" cy="165" r="38"></circle>
+
+  <text class="dgm-text" x="200" y="52" text-anchor="middle" font-size="14">T1</text>
+  <text class="dgm-muted" x="200" y="70" text-anchor="middle" font-size="10">持锁A 等锁B</text>
+  <text class="dgm-text" x="315" y="162" text-anchor="middle" font-size="14">T2</text>
+  <text class="dgm-muted" x="315" y="180" text-anchor="middle" font-size="10">持锁B 等锁C</text>
+  <text class="dgm-text" x="200" y="272" text-anchor="middle" font-size="14">T3</text>
+  <text class="dgm-muted" x="200" y="290" text-anchor="middle" font-size="10">持锁C 等锁D</text>
+  <text class="dgm-text" x="85" y="162" text-anchor="middle" font-size="14">T4</text>
+  <text class="dgm-muted" x="85" y="180" text-anchor="middle" font-size="10">持锁D 等锁A</text>
+
+  <line class="dgm-edge" x1="227" y1="82" x2="288" y2="138" marker-end="url(#dl-arrow)"></line>
+  <line class="dgm-edge" x1="288" y1="192" x2="227" y2="248" marker-end="url(#dl-arrow)"></line>
+  <line class="dgm-edge" x1="173" y1="248" x2="112" y2="192" marker-end="url(#dl-arrow)"></line>
+  <line class="dgm-edge" x1="112" y1="138" x2="173" y2="82" marker-end="url(#dl-arrow)"></line>
+
+  <text class="dgm-accent-text" x="200" y="170" text-anchor="middle" font-size="13">循环等待环</text>
+</svg>
+</div>
+<figcaption>箭头表示「等待对方释放」。一旦等待关系成了<strong>闭环</strong>,任何一个都动不了。死锁的本质就是「等待图里出现了环」。</figcaption>
+</figure>
+
+<p>死锁成立必须<strong>同时</strong>满足四个条件(Coffman 条件),缺一即不会死锁——所以<strong>破坏任意一条</strong>就能预防:</p>
+<ol>
+<li><strong>互斥</strong>:资源同一时刻只能被一个线程占用。(锁的本性,通常不好破)</li>
+<li><strong>持有并等待</strong>:线程持有一个资源的同时,又去等另一个。→ 破法:一次性申请全部所需锁,拿不齐就不拿。</li>
+<li><strong>不可抢占</strong>:资源不能被强行夺走,只能自愿释放。→ 破法:抢不到就主动放掉已持有的,回退重试。</li>
+<li><strong>循环等待</strong>:存在一个首尾相接的等待环。→ 破法(最常用):<strong>给所有锁定义全局顺序,永远按同一顺序加锁</strong>,环就无法形成。</li>
+</ol>
+
+<dl class="keydef">
+<dt>竞态条件(Race Condition)</dt>
+<dd>程序结果依赖于多个线程执行的相对时序,导致不确定的错误。根因是对共享数据的非原子并发访问。</dd>
+<dt>临界区(Critical Section)</dt>
+<dd>访问共享资源、同一时刻只允许一个线程执行的代码段。用互斥保护它。</dd>
+<dt>互斥锁 / 信号量(Mutex / Semaphore)</dt>
+<dd>互斥锁是 0/1 的独占锁;信号量是带计数的许可,允许最多 N 个线程进入,N=1 时即互斥锁。</dd>
+<dt>条件变量(Condition Variable)</dt>
+<dd>让线程在某条件不满足时睡眠、待他人改变条件后被唤醒的机制;必须与锁配合,避免忙等。</dd>
+<dt>死锁(Deadlock)</dt>
+<dd>多个线程互相等待对方持有的资源而永久阻塞;当且仅当同时满足互斥、持有并等待、不可抢占、循环等待四条件。<em>避免</em>把死锁与「活锁」(不停重试却都不进展)混为一谈。</dd>
+</dl>
+
+<div class="interview">
+<p><strong>面试怎么考。</strong></p>
+<ul>
+<li><strong>「什么是死锁,怎么避免?」</strong>——先说四个条件同时成立才死锁,再说「破坏其一即可,工程上最常用的是按固定全局顺序加锁破坏循环等待」。能说出四条件 + 至少一种破法,就是满分答法。</li>
+<li><strong>用原语实现生产者-消费者</strong>:一个有界缓冲区,生产者满了要等、消费者空了要等。标准解是「互斥锁保护缓冲区 + 两个条件变量(非满/非空)」,或「两个信号量(空位数/产品数)+ 一个互斥锁」。手写时最容易错在唤醒和加锁的配合。</li>
+<li><strong>进阶概念</strong>:原子操作、CAS(compare-and-swap)、无锁数据结构、乐观锁 vs 悲观锁——问你除了加锁还有没有别的路子。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>死锁四条件是「必要条件的合取」——四条<em>同时</em>成立才死锁,破坏任意一条就不会死。</strong>常见错误是把它当成「充分条件」或漏掉「同时」,以及答不出具体破法。记住最实用的一招:<strong>所有线程按同一全局顺序加锁</strong>,循环等待就构造不出来。</p>
+<p>另一个坑:<strong>锁粒度不是越细越好,也不是越粗越好。</strong>粗锁(一把大锁锁住一切)简单、不易死锁,但并发度低,线程都在排队;细锁并发高,却更容易出现「多把锁的加锁顺序」问题而死锁,也更难写对。这是个工程权衡,面试答「视竞争程度取舍」比一口咬定某种好更稳。还要能区分死锁(都卡住不动)和活锁(都在动、都在退让重试却没人前进)。</p>
+</div>
+
+<div class="implement">
+<p>用锁 + 条件变量实现一个线程安全的<strong>有界阻塞队列</strong>(生产者-消费者的核心):</p>
+<p><code>put(x)</code> —— 加锁;当队列已满,在「非满」条件变量上等待(会自动放锁睡下);入队后唤醒「非空」;解锁。<br><code>take()</code> —— 加锁;当队列为空,在「非空」条件变量上等待;出队后唤醒「非满」;解锁返回。</p>
+<p>关键点:<strong>等待条件一定用 <code>while</code> 而非 <code>if</code> 复查</strong>(防止「虚假唤醒」和被唤醒后条件又被别人抢走)。写完开 3 个生产者 + 2 个消费者跑久一点,验证不丢数据、不越界、不死锁。有余力再用两个信号量重写一遍对比。</p>
+</div>
+
+<div class="good">
+<p><strong>带走这一条:</strong>共享内存的病是<strong>竞态</strong>,药是<strong>互斥</strong>(锁/信号量);但药过量会<strong>死锁</strong>——四个条件同时成立才发病,按<strong>固定全局顺序加锁</strong>破坏「循环等待」是最实用的解。条件变量管的是「等待」,不是「互斥」,记牢它俩分工不同。</p>
+</div>
+
+<h2>四、自测题</h2>
+
+<div class="quiz">
+<details>
+<summary>Q1:一个系统出现了死锁。下面哪种做法<strong>一定能</strong>预防这类死锁?<br>A. 把所有锁换成更快的自旋锁<br>B. 增大线程池,让线程更多<br>C. 规定所有线程都按同一个全局固定顺序申请锁<br>D. 给每把锁加更详细的日志</summary>
+<div class="answer">
+<p><strong>C。</strong>死锁需要四条件同时成立,破坏任意一条即可预防。C 破坏的是「循环等待」——所有线程按同一顺序加锁,等待关系就无法首尾相接成环,是工程上最常用、最可靠的一招。A(自旋锁)只改变等待方式,环照样成立,反而空转烧 CPU;B 加线程不减少锁的相互等待,可能更糟;D 只帮排查,不预防。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q2:实现生产者-消费者时,消费者从空队列取数据要等待。为什么等待条件必须写成 <code>while (队列为空) 等待</code> 而不是 <code>if (队列为空) 等待</code>?</summary>
+<div class="answer">
+<p><strong>因为线程被唤醒后,条件不一定还成立。</strong>两种情况:一是<strong>虚假唤醒</strong>(spurious wakeup),线程可能在没人真正通知时被唤醒;二是<strong>竞争</strong>,即便被正确唤醒,重新拿到锁之前,可能有另一个消费者抢先把那个数据取走了,队列又空了。用 <code>if</code> 只判一次就往下走,会在空队列上取数据出错;用 <code>while</code> 被唤醒后<strong>重新复查</strong>条件,不满足就继续等,才安全。这是并发编程的铁律:等条件用 while 循环复查。</p>
+</div>
+</details>
+</div>
+
+<div class="quiz">
+<details>
+<summary>Q3:互斥锁和信号量是什么关系?一个初值为 3 的信号量,用来做什么最合适?</summary>
+<div class="answer">
+<p><strong>互斥锁是信号量在计数为 1 时的特例。</strong>信号量维护一个计数(可用许可数)和一个等待队列:申请时计数减 1、为 0 则阻塞,释放时计数加 1 并唤醒等待者。计数=1 时,同一刻只放一个线程进,就等价于互斥锁。<strong>初值 3 的信号量适合「限量」场景</strong>——比如一个最多允许 3 个并发的资源池(数据库连接、下载线程配额),允许最多 3 个线程同时进入,第 4 个必须等有人释放。这正是信号量比互斥锁更通用之处:它能表达「最多 N 个」,而不只是「最多 1 个」。</p>
+</div>
+</details>
+</div>
+
+<h2>五、主推资源</h2>
+
+<p>本主题在仓库大纲的「进程和线程」小节,其中专门涵盖了锁、互斥、信号量、监控(监视器)、死锁、活锁。最值得先看的一手来源:</p>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=0zaPs8OtyKY">Python 中的互斥(视频)</a> —— 用最少代码看清「加锁前后」竞态的出现与消失。</li>
+<li><a href="https://www.youtube.com/playlist?list=PL5jc9xFGsL8E12so1wlMS0r0hTQoJL74M">C++ 的线程(系列,10 个视频)</a> —— 系统学 mutex、condition_variable、原子操作。</li>
+<li><a href="https://www.youtube.com/playlist?list=PLacuG5pysFbDQU8kKxbUh4K5c1iL5_k7k">UMass CS 377 · 操作系统(视频)</a> —— 想从操作系统层面理解同步与死锁,看这门课。</li>
+</ul>
+
+<footer class="lesson-footer">
+<p>有任何不清楚的,回到会话里问你的 AI 老师——可以让老师用 ELI5 讲「死锁为什么一定要四个条件同时成立」,或带你把生产者-消费者的加锁/等待/唤醒顺序在纸上按时间线跑一遍。</p>
+<nav class="lesson-nav">
+  <a class="prev" href="0042-process-thread.html"><span class="dir">← 上一课</span>进程与线程:并发的两种单位</a>
+  <a class="next" href="0044-string-search.html"><span class="dir">下一课 →</span>字符串搜索与匹配</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

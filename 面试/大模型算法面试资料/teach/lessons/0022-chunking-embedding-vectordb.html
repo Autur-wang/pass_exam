@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0022 · 分块、Embedding 与向量库</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第六部分 RAG 与知识库 · 第 0022 课</p>
+<h1>分块、Embedding 与向量库</h1>
+<p class="lede">RAG 效果的天花板,常常不在那个大模型,而在检索<strong>之前</strong>——文档怎么切、切完用什么模型编码成向量、向量又存进什么库、建什么索引。这三件事(Chunking → Embedding → Vector DB)决定了「含答案的那段话」到底能不能被召回。这节课把索引侧从头拆开,并落到面试最爱追的三问:chunk 大小怎么定、向量库怎么选、embedding 准不准怎么测。</p>
+
+<div class="recall">
+<p>上节课我们把 RAG 整条管线走通了:<em>检索 → 拼进 prompt → 生成</em>。留了个扣子——<strong>如果「检索」这一步永远拿不到含答案的那段文字,后面的 LLM 再强也是无米之炊。先别往下看,想一想:在「检索」发生之前,还有哪些更早的环节能悄悄决定它的上限?</strong></p>
+</div>
+
+<h2>一、索引侧的三级流水线</h2>
+<p>RAG 分两侧。<strong>离线索引侧</strong>把知识库灌进向量库;<strong>在线检索侧</strong>拿用户问题去查。二者共用同一个 embedding 模型和同一套向量空间——这是它们能对上话的前提。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">原始文档</div>
+  <div class="node">分块<br>Chunking</div>
+  <div class="node">Embedding<br>→ 向量</div>
+  <div class="node good">向量库<br>建 ANN 索引</div>
+</div>
+<figcaption>离线索引侧。在线检索侧则是:用户问题 → 同一个 Embedding → 在向量库里做近似最近邻(ANN)检索 → 取回 top-k 个 chunk。</figcaption>
+</figure>
+
+<p>三级里任何一级出问题,后面都救不回来:切错了,答案被劈成两半;编码模型选错,语义根本对不齐;索引参数太激进,该召回的漏掉了。逐级看。</p>
+
+<h2>二、分块:太大太小都是坑</h2>
+<p>为什么不能整篇文档当一块?因为检索的最小单位就是 chunk——你召回的是<strong>整块</strong>,也是拿<strong>整块</strong>去算一个向量。块的粒度,直接决定了「一个向量要概括多少信息」和「塞进上下文的东西有多干净」。</p>
+
+<div class="trio">
+  <div class="cell"><strong>块太大</strong><br>一个向量要概括好几个主题,语义被<em>平均稀释</em>;命中后塞进 prompt 的无关内容多,浪费上下文、还引噪声</div>
+  <div class="cell"><strong>块适中</strong><br>一块 = 一个相对完整的语义单元;向量表达聚焦,召回精准,喂给 LLM 的上下文干净</div>
+  <div class="cell"><strong>块太小</strong><br>上下文被切碎,一个完整答案可能横跨两块;块数暴涨,索引与存储成本上升</div>
+</div>
+
+<h3>常见的四类切法(从粗到细)</h3>
+<table>
+<thead><tr><th>策略</th><th>怎么切</th><th>优 / 劣</th></tr></thead>
+<tbody>
+<tr><td>固定大小 + 重叠<br>(Fixed-Size + Overlap)</td><td>按字符/词/Token 数均匀切(如 ~500 Token),相邻块保留 10%–20% 重叠</td><td>简单快;但易在句中、段中硬切,语义割裂。适合日志、代码这类结构混乱的数据</td></tr>
+<tr><td>按句 / 递归字符<br>(Recursive)</td><td>先按段落,不够再按换行、句子、空格逐层退让,尽量在自然边界断开</td><td>兼顾长度上限与自然边界,通用性强,是常用基线</td></tr>
+<tr><td>语义分块<br>(Semantic)</td><td>算相邻句子 embedding 的余弦相似度,低于阈值处判定「话题变了」再切</td><td>块内主题高度一致;但要额外算一遍 embedding,成本高。适合主题跳跃明显的文档</td></tr>
+<tr><td>按结构<br>(Structure-aware)</td><td>顺着 Markdown/HTML/PDF 的标题、章节、表格等原生结构切</td><td>保留层次信息,可把「所属章节标题」作为元数据带上;依赖文档本身结构规整</td></tr>
+</tbody>
+</table>
+<p>工程上一个稳妥的顺序:<strong>先用递归字符分块做基线</strong>,再在此之上叠语义判断——即在相邻切点处比较前后句的相似度,低于阈值才真正断块。重叠(overlap)的作用是让跨边界的上下文在两块里都出现一次,降低「答案正好被切在缝上」的概率;但重叠不是越大越好,冗余会推高存储和后续拼接的 token 成本。</p>
+
+<h2>三、Embedding:把文本压成一个可比较的向量</h2>
+<p>Embedding 模型把一段文本映射成定长稠密向量 $\mathbf{v}\in\mathbb{R}^{d}$,使得<strong>语义相近的文本,向量也相近</strong>。检索时最常用的「近」是<strong>余弦相似度</strong>:</p>
+<dl class="keydef">
+<dt>余弦相似度(Cosine Similarity)</dt>
+<dd>$$\cos(\mathbf{u},\mathbf{v})=\frac{\mathbf{u}\cdot\mathbf{v}}{\lVert\mathbf{u}\rVert\,\lVert\mathbf{v}\rVert}$$</dd>
+<dd><em>只看两个向量的<strong>方向</strong>夹角,不受模长影响,取值 $[-1,1]$。多数句向量模型正是按余弦目标训练的,所以检索时也该用余弦。</em></dd>
+</dl>
+<p>一个关键工程细节:如果先把向量做 L2 归一化($\lVert\mathbf{v}\rVert=1$),那么</p>
+$$\cos(\mathbf{u},\mathbf{v})=\mathbf{u}\cdot\mathbf{v}\quad(\text{当}\ \lVert\mathbf{u}\rVert=\lVert\mathbf{v}\rVert=1)$$
+<p class="formula-note">归一化之后,余弦就退化成内积——而内积有高度优化的矩阵乘实现,更快。所以很多向量库把「余弦度量」实现为「归一化 + 内积」。</p>
+
+<h3>选型看什么</h3>
+<ul>
+<li><strong>语言与领域</strong>:中文场景优先选中文/多语训练充分的模型(如 BGE 系列);跨语言检索要选多语模型。</li>
+<li><strong>维度 $d$</strong>:维度越高表达力通常越强,但存储与检索开销也越大(每个向量 $d$ 个 float)。是精度与成本的权衡,不是越高越好。</li>
+<li><strong>最大输入长度</strong>:必须能覆盖你的 chunk 长度,否则超出部分被截断,尾部信息丢失。这也反过来约束了 chunk 上限。</li>
+<li><strong>对称 vs 非对称检索</strong>:query 通常短、doc 通常长,分布不同。BGE 这类模型对 query 侧要求加一段任务指令前缀(instruction),query 和 passage 分别编码——忘了加指令会掉点。</li>
+</ul>
+
+<h2>四、向量库:库、库、库,定位差很多</h2>
+<p>面试常见的坑是把它们当成同一类东西。其实横跨了「一个库函数」到「一套分布式数据库」到「托管云服务」。看清定位再谈选型:</p>
+<table>
+<thead><tr><th>系统</th><th>定位</th><th>典型场景</th></tr></thead>
+<tbody>
+<tr><td><strong>Faiss</strong></td><td>相似度搜索<strong>库</strong>(C++/Python),不是完整数据库;持久化、分布式、元数据过滤这些要自己在外面补</td><td>把 ANN 能力嵌进自己的服务;研究、大规模离线检索</td></tr>
+<tr><td><strong>Milvus</strong></td><td>面向生产的<strong>分布式向量数据库</strong>,支持多种索引类型、数据分区与容错、内存+持久化结合</td><td>大规模、多模态检索,需要横向扩展与运维能力的生产系统</td></tr>
+<tr><td><strong>Chroma</strong></td><td>轻量、开发者友好,可嵌入/本地运行,API 简单</td><td>快速原型、中小规模、面向 LLM 应用的本地开发</td></tr>
+<tr><td><strong>Pinecone</strong></td><td>闭源<strong>托管 SaaS</strong>,免运维,按用量付费</td><td>不想自己维护基础设施、要快速上线的团队</td></tr>
+<tr><td><strong>LanceDB</strong></td><td>嵌入式、类似 SQLite,基于 Lance 列式存储;数据版本管理、零拷贝更新</td><td>桌面/边缘、数据隐私要求高、需要本地跑的场景</td></tr>
+</tbody>
+</table>
+<p>选型的第一刀不是比 QPS,而是<strong>问需求</strong>:要不要独立部署与横向扩展(Milvus)?想彻底免运维(Pinecone)?只是本地原型(Chroma / LanceDB)?还是只要一个能塞进现有服务的 ANN 内核(Faiss)?规模、运维成本、元数据过滤和更新频率,通常比单纯的检索速度更早地决定答案。</p>
+
+<h2>五、索引类型:为什么要「近似」</h2>
+<p>暴力法(Flat)是把 query 和库里<em>每一个</em>向量都算一遍距离,结果精确,但在千万级向量上太慢。所以生产上用<strong>近似最近邻(ANN)</strong>:牺牲一点点召回,换回巨大的速度。三种主流思路:</p>
+<table>
+<thead><tr><th>索引</th><th>一句话原理</th><th>取舍</th></tr></thead>
+<tbody>
+<tr><td><strong>IVF</strong><br>倒排文件</td><td>先把向量聚成若干簇(k-means 出中心点),查询时只搜最近的 <code>nprobe</code> 个簇——粗筛 + 细搜</td><td><code>nprobe</code> 越大越准越慢;对「先按元数据强过滤再搜」的场景友好</td></tr>
+<tr><td><strong>HNSW</strong><br>分层小世界图</td><td>把向量连成多层可导航图,从稀疏的高层入口逐层下沉贪心逼近最近邻</td><td>召回高、查询快;代价是构建慢、内存占用大</td></tr>
+<tr><td><strong>PQ</strong><br>乘积量化</td><td>把高维向量切成子段,各子段用码本量化压缩,大幅省内存(常与 IVF 组合成 IVF-PQ)</td><td>内存友好;量化有损,精度略降,常用于超大规模</td></tr>
+</tbody>
+</table>
+<p>粗略的决策直觉:<strong>要极致召回且内存够 → HNSW;要强过滤 / 稳定粗筛 → IVF 系列;内存 / 成本敏感 → 叠 PQ 压缩。</strong>注意这些是「典型倾向」,具体还要看数据规模和实测。</p>
+
+<h2>六、怎么量化「准不准」</h2>
+<p>面试问 embedding 或检索质量,你不能只说「感觉还行」。要能报出可量化的指标。检索最核心的是<strong>召回率 Recall@k</strong>:</p>
+<dl class="keydef">
+<dt>Recall@k</dt>
+<dd>$$\text{Recall@}k=\frac{\lvert\,\text{top-}k\ \text{命中的相关块}\,\rvert}{\lvert\,\text{全部相关块}\,\rvert}$$</dd>
+<dd><em>在一批标好「哪些块是相关的」的评测集上,看检索返回的前 $k$ 个里,盖住了多少应该被召回的块。RAG 里 Recall 常比 Precision 更受关注——只要含答案的块进了 top-k,后面的重排和 LLM 还有机会;漏掉了就彻底没机会。</em></dd>
+</dl>
+<p>此外常配合看排序质量,如 <strong>MRR</strong>(第一个相关结果排名倒数的均值)、<strong>nDCG</strong>(带位置折扣的增益)。评估 embedding 模型本身,则可以看它在公开基准(如 MTEB,涵盖检索、聚类、重排等多类任务)上的表现,再在<strong>自己业务数据</strong>上小规模标注一批 query→相关块,复算 Recall@k——公开榜单只是起点,业务分布才是终审。</p>
+
+<pre><code>def chunk_text(text, size=500, overlap=80):
+    # 定长切分 + 相邻块重叠,维持跨边界的上下文连续性
+    chunks, start = [], 0
+    while start &lt; len(text):
+        chunks.append(text[start:start + size])
+        start += size - overlap        # 回退 overlap,产生重叠
+    return chunks
+
+import numpy as np
+def l2_normalize(x):
+    return x / (np.linalg.norm(x, axis=-1, keepdims=True) + 1e-9)
+
+# 归一化后,余弦相似度 == 内积,可用一次矩阵乘批量打分
+q    = l2_normalize(embed(["中央处理器的作用是什么"]))   # [1, d] query 向量
+docs = l2_normalize(embed(chunk_list))                    # [N, d] 文档块向量
+scores = docs @ q.T                                       # [N, 1] 内积即余弦
+top_k  = scores.squeeze().argsort()[::-1][:5]             # 取 top-5</code></pre>
+
+<div class="implement">
+<p>把「量化召回」也写成代码——这是你回答「怎么测」时最有说服力的东西:</p>
+<pre><code>def recall_at_k(retrieved_ids, gold_ids, k):
+    # retrieved_ids: 检索返回的块 id(按相关度降序)
+    # gold_ids:      人工标注的相关块 id 集合
+    hit = len(set(retrieved_ids[:k]) & set(gold_ids))
+    return hit / len(gold_ids)          # 命中的相关块 / 全部相关块
+
+# 在整个评测集上取平均,得到该配置(某分块 + 某 embedding + 某索引)的 Recall@k
+avg = sum(recall_at_k(r, g, k=5) for r, g in eval_set) / len(eval_set)</code></pre>
+</div>
+
+<div class="interview">
+<p><strong>面试官会怎么问:</strong></p>
+<ul>
+<li>「chunk 大小怎么定?」——没有万能值。先说权衡(太大稀释语义+引噪声,太小切碎上下文+涨成本),再说方法:受 embedding 最大长度约束,用递归/语义分块 + 适度 overlap 做基线,最后<strong>用 Recall@k 在业务数据上调</strong>,而不是拍脑袋。</li>
+<li>「向量库怎么选?」——先分清定位(Faiss 是库不是库=数据库;Milvus 分布式;Chroma/LanceDB 轻量本地;Pinecone 托管),再按规模、运维、元数据过滤、更新频率来挑,别一上来比 QPS。</li>
+<li>「embedding 准不准怎么测?」——公开基准(如 MTEB)看通用能力,自己标注 query→相关块算 Recall@k / MRR / nDCG 看业务能力;强调业务分布优先。</li>
+<li>「为什么用余弦而不是欧氏距离?」——句向量多按余弦目标训练,只看方向不看模长;归一化后余弦等于内积,还能用高度优化的矩阵乘。</li>
+<li>「IVF 和 HNSW 区别?」——IVF 聚簇粗筛+细搜、靠 nprobe 调速度/召回、利于强过滤;HNSW 图结构、召回高查询快但内存大构建慢。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点:</strong></p>
+<ul>
+<li>把 <strong>Faiss 当成完整数据库</strong>——它是相似度搜索库,持久化、分布式、元数据过滤要自己补;别在面试里说「用 Faiss 存业务数据并做条件过滤」。</li>
+<li>模型按余弦训练,检索却<strong>用未归一化向量的内积</strong>排序:排序会被模长干扰,偏离余弦语义。要么先归一化,要么明确用库的 cosine 度量。</li>
+<li>索引侧和检索侧<strong>用了不同的 embedding 模型/版本</strong>——向量空间对不齐,检索结果全乱。二者必须严格一致。</li>
+<li>用 BGE 这类模型时<strong>忘了给 query 加指令前缀</strong>、或对 query 和 passage 用了不该用的处理,会平白掉点。</li>
+<li>overlap 不是越大越好:冗余推高存储和拼接 token 成本;chunk 也不是越小越精准,切碎会让完整答案跨块丢失。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>把 chunk 切得非常大(比如整篇长文档当作一块),最可能带来的问题是?</p>
+<details><summary>A. 分块数量太多,索引构建会变得很慢</summary>相反,块越大数量越少,索引反而更小;这是块太<em>小</em>才有的问题。</details>
+<details><summary>B. 无法为这一块计算 embedding</summary>只要不超模型最大长度就能编码;真超了是截断问题,不是「无法计算」。</details>
+<details><summary>C. 一个向量要概括多个主题,语义被平均稀释,检索精度下降,且命中后塞进上下文的无关内容变多 ✅</summary>正确。这正是「块太大」的核心代价:向量表达不聚焦 + 上下文引入噪声、浪费预算。</details>
+<details><summary>D. 一定会超出所有 embedding 模型的最大输入长度</summary>「所有」「一定」过绝对——不同模型上限不同,大块未必都超限。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>某 embedding 模型按余弦相似度训练。检索时你直接用<strong>未归一化</strong>向量的内积来排序,可能出现什么?</p>
+<details><summary>A. 内积和余弦完全等价,没有任何影响</summary>只有在向量都已 L2 归一化时二者才相等;未归一化时不成立。</details>
+<details><summary>B. 排序会被向量模长干扰,模长大的向量被系统性地排前,偏离余弦想表达的方向相似度 ✅</summary>正确。内积 = 余弦 × 两者模长,模长把方向信号污染了;先归一化即可让内积回到余弦。</details>
+<details><summary>C. 检索速度会显著变慢</summary>内积本身就是快的算子,速度不是这里的问题,受影响的是排序正确性。</details>
+<details><summary>D. 召回率一定会掉到 0</summary>「一定为 0」过绝对——排序会失真、召回可能下降,但通常不会归零。</details>
+</div>
+
+<div class="paper">
+<p>这节课的一手出处与深挖方向:</p>
+<ul>
+<li><strong>Sentence-BERT</strong>(Reimers &amp; Gurevych, 2019)——用双塔结构 + 余弦目标训练句向量的奠基工作,解释了「为什么检索用余弦」。</li>
+<li><strong>C-Pack / BGE</strong>(Xiao et al., 2023)——BGE 系列中文/通用 embedding 的资源与训练方法,含 query 指令前缀的用法。</li>
+<li><strong>MTEB: Massive Text Embedding Benchmark</strong>(Muennighoff et al., 2022)——评测 embedding 模型的综合基准,选型时的公开参照。</li>
+<li><strong>HNSW</strong>(Malkov &amp; Yashunin, 2018)与<strong>Product Quantization</strong>(Jégou, Douze &amp; Schmid, 2011)——两类 ANN 索引的原始论文。</li>
+<li>下一步:光靠向量召回不够,如何叠加 BM25 稀疏检索做<strong>混合检索</strong>,再用 Cross-Encoder <strong>重排</strong>(第 0023 课)。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>切得好、编得准、存得对,检索才有天花板——chunk 大小用 Recall@k 调,向量库先分清定位再选,embedding 准不准靠标注数据实测。</strong></p>
+<nav class="lesson-nav">
+<a href="0021-rag-pipeline.html">← 上一课:RAG 整体管线</a>
+<a href="0023-hybrid-retrieval-rerank.html">下一课:混合检索与重排 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

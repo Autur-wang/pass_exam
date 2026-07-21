@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0030 · 会话为什么是一棵树</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 10 章 · 会话管理 ›
+  <a href="./0029-structured-summary-and-rebuild.html">上一课</a> ›
+  <strong>Lesson 0030</strong>
+</div>
+
+<p class="kicker">Lesson 0030 · 第 10 章 会话管理</p>
+<h1>会话为什么是一棵树</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:第 9 章讲压缩时反复提到「Session Tree」,当时我们只是假设它存在。
+  这节课回答一个更基础的问题——<strong>会话数据到底怎么存</strong>?你会看到这个问题其实是两个正交的子问题,
+  以及 Pi 为什么在「长什么样」这一维选了<strong>树</strong>而不是数组。
+</div>
+
+<div class="recall">
+  🔁 <b>先回忆上一课</b>:0029 讲 <code>StructuredSummary</code> 怎么把旧对话压成结构化摘要、
+  再靠 <code>rebuildContext()</code> 拼回 LLM 能用的 messages 数组——但那时我们跳过了一个前提:
+  压缩结果到底存在哪、存成什么形状?这节课把这个地基补上。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 把「会话怎么存」拆成<span class="sys-pill">存哪里</span>和
+  <span class="sys-pill">长什么样</span>两个独立问题,并说清楚 Pi 为什么在结构这一维放弃线性数组、
+  改用 <strong>append-only 的 Session Tree</strong>——回退时只移一个指针,不删一个字节。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:走迷宫,退回岔路口</b>
+  走迷宫遇到死路时,你不会拿橡皮擦掉已经走过的路线——你只是退回岔路口,
+  把「我在哪」这个指针移回去。走错的那条死路仍然留在地图上,以后想回去看一眼,随时能找到。
+  Session Tree 的回退就是这个动作:<b>移指针,不删地图。</b>
+</div>
+
+<h2>1 · 两个正交维度:存哪里 / 长什么样</h2>
+<p>
+  前 8 章我们一直在跟 <code>context.messages</code> 打交道——它是个数组。但 Agent 重启后这个数组从哪来?
+  关闭后到哪去?这就是「会话数据怎么存」。这个问题其实包含<strong>两个独立的子问题</strong>:
+</p>
+<table class="bd">
+  <thead><tr><th>维度</th><th>回答什么</th><th>一般做法</th><th>Pi 的选择</th></tr></thead>
+  <tbody>
+    <tr><td>子问题 A · 存哪里</td><td>存储介质</td><td>mysql / postgres 等数据库</td><td>本地 JSONL 文件(接口允许换数据库)</td></tr>
+    <tr><td>子问题 B · 长什么样</td><td>数据结构</td><td>线性数组</td><td>树(Session Tree)</td></tr>
+  </tbody>
+</table>
+<p>
+  两个维度是<strong>正交的</strong>——你可以"用 mysql 存线性数组",也可以"用 JSONL 文件存一棵树"。
+  混淆它们会让讨论糊成一团:别把"用了文件"和"必须 append-only"粘成一团,它们是两次独立的选择。
+</p>
+<p>Pi 的 coding-agent 选本地 JSONL 文件,不是数据库,理由跟它的产品定位有关:</p>
+<ul>
+  <li><strong>单用户、本地运行</strong>:CLI 工具跑在自己机器上,没有"多用户并发""跨机器查询"的需求</li>
+  <li><strong>会话跟项目走</strong>:每个项目的 <code>.pi/sessions/</code> 就是那个项目的对话档案</li>
+  <li><strong>零依赖、零运维</strong>:不用装数据库、不用起服务</li>
+  <li><strong>可读、可调试</strong>:纯文本,可以 <code>cat</code> / <code>grep</code> 直接看</li>
+</ul>
+<pre><span class="cm"><span class="ln">1</span>// .jsonl 文件第一行是 Session Header,不是树节点,是文件元信息</span>
+<span class="ln">2</span>{<span class="str">"type"</span>:<span class="str">"session"</span>,<span class="str">"version"</span>:3,<span class="str">"id"</span>:<span class="str">"UUIDv7"</span>,<span class="str">"cwd"</span>:<span class="str">"/project"</span>,<span class="str">"timestamp"</span>:<span class="str">"2026-07-03T10:00:00Z"</span>}
+<span class="ln">3</span><span class="cm">// 后续每行是一个 Entry,一行一个,append-only</span>
+<span class="ln">4</span>{<span class="str">"type"</span>:<span class="str">"model_change"</span>,<span class="str">"id"</span>:<span class="str">"e1"</span>,<span class="str">"parentId"</span>:<span class="key">null</span>,...}
+</pre>
+<div class="why">
+  <b>为什么拆成两个维度?</b> 因为混在一起会压缩选择空间,让人误以为"用了文件就必须 append-only"。
+  实际上 agent-core 层还提供了一个 <code>SessionStorage</code> 接口,允许别的应用换成数据库版本——
+  但 coding-agent 自己的 <code>SessionManager</code> 是<strong>独立实现</strong>,直接读写 JSONL,
+  并未走这层抽象。「介质」和「结构」互不绑定,才是这一节真正的收获。
+</div>
+
+<h2>2 · 跟着一次真实会话,看树怎么长出来</h2>
+<p>
+  抽象讲"append-only 的树"没人能看懂。用一个具体场景:<strong>调试一个认证 bug</strong>,8 步操作。
+  前 5 步很朴素——切模型、提问、读文件、拿结果、给分析——全部挂在一条直线上:
+</p>
+<pre><span class="ln">1</span>e1: ModelChangeEntry
+<span class="ln">2</span>    parentId: <span class="key">null</span>  <span class="cm">// 根节点</span>
+<span class="ln">3</span>    payload: { model: <span class="str">"claude-sonnet-4-6"</span> }
+<span class="ln">4</span>
+<span class="ln">5</span>e2: MessageEntry
+<span class="ln">6</span>    parentId: <span class="str">"e1"</span>
+<span class="ln">7</span>    message: { role: <span class="str">"user"</span>, content: [...<span class="str">"salt 验证为什么失败?"</span>] }
+</pre>
+<p>树形长这样(第 5 步为止,5 个节点,一条直线,这是"主分支"):</p>
+<div class="diagram">e1 (model_change)
+ └── e2 (user: "salt 验证为什么失败?")
+      └── e3 (assistant: read auth.ts)
+           └── e4 (toolResult: auth.ts 内容)
+                └── e5 (assistant: "问题在 23 行")
+                      ↑
+                    leafId
+</div>
+<p>
+  每一步只做两件事:<strong>创建新节点(带 parentId)+ 移动 leafId</strong>。没有任何旧节点被修改——
+  这就是"追加操作"的直觉。
+</p>
+
+<h2>3 · 第 6 步的转折:回退不是删数据,是移指针</h2>
+<p>
+  你对"问题在 23 行"不满意,想换个思路。这时你执行<strong>回退</strong>——但没有删除任何节点:
+</p>
+<pre><span class="ln">1</span><span class="fn">branch</span>(branchFromId: <span class="str">"e2"</span>): <span class="key">void</span> {
+<span class="hl"><span class="ln">2</span>    <span class="sys">this</span>.leafId = <span class="str">"e2"</span>;   <span class="cm">// 只改这一行</span></span>
+<span class="ln">3</span>}
+</pre>
+<p>操作只有一行。回退后树变成:</p>
+<div class="diagram">e1 (model_change)
+ └── e2 (user: "salt 验证为什么失败?")
+      ├── e3 (assistant: read auth.ts)        ← 旧分支还在
+      │    └── e4 (toolResult)                     数据完整保留
+      │         └── e5 (assistant: "问题在 23 行")
+      │
+      ↑ leafId 现在指回 e2
+</div>
+<p>
+  <strong>e3、e4、e5 一个都没删</strong>——它们还在树上,只是不在"当前路径"上。
+  这就是 append-only 的核心:回退不是删数据,是移动指针,O(1)。
+</p>
+<div class="why">
+  <b>为什么要保留旧分支?</b> 因为你不知道以后会不会想回到它。新思路也许走半天没结果,
+  你想退回去看原来"问题在 23 行"的分析——如果回退时删了,就再也找不回来了。
+</div>
+<p>第 7 步,你从 e2 这个岔路口换了一个问题,产生新节点:</p>
+<pre><span class="ln">1</span>e6: MessageEntry
+<span class="ln">2</span>    parentId: <span class="str">"e2"</span>   <span class="cm">// 跟 e3 共享同一个父!</span>
+<span class="ln">3</span>    message: { role: <span class="str">"user"</span>, content: [...<span class="str">"先看 hash 函数的实现"</span>] }
+</pre>
+<p>e6 的 parentId 也是 e2,跟 e3 一样——分支的本质就在这一行:</p>
+<div class="diagram">e1 (model_change)
+ └── e2 (user: "salt 验证为什么失败?")
+      ├── e3 (assistant: read auth.ts)
+      │    └── e4 (toolResult)
+      │         └── e5 (assistant: "问题在 23 行")
+      │
+      └── e6 (user: "先看 hash 函数")    ← 新分支起点,与 e3 同父
+            ↑
+          leafId
+</div>
+<div class="tradeoff">
+  🔑 <b>为什么选树而不是线性数组:</b> 对话不总是线性的——重试、分支、回退都会发生。
+  如果用线性数组,这些操作意味着"删掉后面的消息再重写"。删了就没了——
+  如果你想留着两条分支对比(先试方案 A 走到底,再回头试方案 B,A 的记录还想留着),
+  数组做不到"分叉不丢数据"。<strong>两个节点共享同一个 parent,就是树上的两个分支</strong>——
+  这是 e6 和 e3 教给我们的全部道理。
+</div>
+
+<h2>4 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 本章把"会话数据怎么存"拆成了哪两个正交的子问题?</p>
+    <button class="opt">用文件还是数据库,以及用 JSON 还是 JSONL</button>
+    <button class="opt">存在哪里(介质),以及长什么样(数据结构)</button>
+    <button class="opt">会话存多久,以及单个会话能存多大</button>
+    <button class="opt">谁有权限读,以及谁有权限写</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">② 线性数组存对话最大的问题是什么,以至于 Pi 改用树?</p>
+    <button class="opt">数组太占内存</button>
+    <button class="opt">数组按会话 id 查询太慢</button>
+    <button class="opt">回退/分支时只能"删掉后面再重写",做不到"分叉不丢数据"</button>
+    <button class="opt">数组结构存不下 toolResult 这种消息</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="3">
+    <p class="stem">③ 在 Session Tree 里执行"回退到 e2",底层实际发生了什么?</p>
+    <button class="opt">删除 e3、e4、e5 三个节点腾出空间</button>
+    <button class="opt">把 e3-e5 标记为已删除但保留占位</button>
+    <button class="opt">复制 e2 的内容到一个新分支</button>
+    <button class="opt">只把 leafId 改成 "e2",e3-e5 一个都不删</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>如果父节点要维护 children 列表会怎样?为什么 Pi 偏偏选"认父不认子"?</em>」
+  「<em>被抛弃的旧分支(e3-e5)会不会让 .jsonl 文件无限膨胀?</em>」
+  「<em>树长成这样之后,LLM 到底看到的是哪几条消息、按什么顺序?</em>」——
+  最后这个问题,正好把我们带向<strong>下一课</strong>:一个节点(Entry)本身是怎么解剖的,
+  以及追加/回退/分支这三个核心操作的完整代码。
+</div>
+
+<h2>5 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第10章-会话管理-对话的存储恢复与分叉.md">第 10 章 · 会话管理——对话的存储、恢复与分叉</a>——
+  原文 §三 还讲了 9 种 Entry 类型怎么按"对 LLM 调用的影响"分三组,§五讲 <code>buildSessionContext</code>
+  怎么把树压扁成线性 messages 数组,值得通读。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0031):</strong> 拆开一个完整的 <code>MessageEntry</code> 长什么样
+  (<code>type</code> / <code>id</code> / <code>parentId</code> / <code>timestamp</code>),
+  以及追加、回退、分支这<strong>三个核心操作</strong>各自的完整实现——今天只看了 branch() 的一行,
+  下一课把 appendEntry 和分支摘要 branchWithSummary 也摊开讲。
+</p>
+
+<footer>
+  Lesson 0030 · 第 10 章 会话管理 ·
+  下一课:<a href="./0031-entry-anatomy-and-three-core-operations.html">0031 节点解剖与三个核心操作 →</a> ·
+  上一课:<a href="./0029-structured-summary-and-rebuild.html">0029 结构化摘要与重建</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。介质(mysql 还是本地文件)和结构(线性数组还是树)是正交的——你甚至能"用数据库存一棵树"。延伸:正因正交,别把"用了文件"和"必须 append-only"粘成一团。',
+               '✓ 对。对话不总是线性的(重试/分支/回退),线性数组一删就没了,保留不了两条并存的分支。延伸:代价是多占存储空间,但磁盘便宜、数据无价。',
+               '✓ 对。branch() 核心就一行 leafId="e2",O(1),旧分支完整留在树和 .jsonl 文件里。延伸:这正是 append-only 的铁律——回退是移指针,不是删数据。'];
+  var msgNo = ['回看 §一 开头——本章反复强调这两个维度"正交",一个回答"存在哪里",一个回答"逻辑形态是什么"。',
+               '想想第 6-7 步那个"先试方案 A 走到底,再回头试方案 B,还想留着 A 对比"的场景,线性数组能同时留住两条吗?',
+               '回看第 6 步的 branch() 代码,函数体真正改状态的只有一行,而且整段里"删"这个动作从未出现。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

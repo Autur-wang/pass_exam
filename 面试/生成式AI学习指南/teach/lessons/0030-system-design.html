@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0030 · 系统设计方法论与案例:客服 agent、企业级 RAG、降延迟</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第十部分 多模态与系统设计 · 第 0030 课</p>
+<h1>系统设计方法论与案例:客服 agent、企业级 RAG、降延迟</h1>
+<p class="lede">这节课把前面所有零件拼成完整系统,一次答清面试里最重的一类题——<strong>开放式系统设计</strong>。覆盖:设计企业<strong>客服 agent</strong>(AI 工程师 Q124)、<strong>千万文档 + 按用户权限</strong>的 RAG(Q125)与<strong>多租户 LLM 应用</strong>(Q130)、<strong>降 p95 延迟</strong>(Q128),以及三道「高危 / 脏数据 / 已上线出问题」题共享的评估-监控套路:幻觉投诉的评估监控(Q126)、乱 PDF 抽结构化(Q131)、保险理赔 agent(Q127)。核心不是背架构图,而是学会<strong>一套可复用的骨架</strong>,任何题套上去都能有条理地拆。</p>
+
+<div class="recall">
+<p>上一课我们让模型学会「看」——把图像编码进语言模型的表示空间。到这里,从第一部分的注意力,到 RAG、工具、护栏、评估、多租户,你手里的零件已经齐了。<strong>先别往下看:如果现在要你把这些零件拼成一个「企业客服 agent」,你会<em>先</em>决定什么、<em>后</em>决定什么?</strong>顺序错了,后面全是返工。</p>
+</div>
+
+<h2>一、方法论:每道系统设计题的通用骨架</h2>
+<p>面试官问「设计一个 X」,考的从来不是你能不能画出漂亮的框图,而是你<strong>拆问题的顺序</strong>和每个选择处的<strong>取舍意识</strong>。一个新手上来就画架构、报模型型号;一个成熟工程师上来先问需求。把下面这四步刻进肌肉,任何题都套得上:</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision"><strong>① 需求先行</strong><br>准确率线多高?延迟预算多少?升级 / 转人策略?成本上限?合规与数据边界?——先问清,别急着上模型</div>
+  <div class="down">↓</div>
+  <div class="step"><strong>② grounding + 最小权限工具</strong><br>对权威知识<strong>检索</strong>让答案有据可查;工具只给完成任务所需的<strong>最小权限</strong>去做动作</div>
+  <div class="down">↓ 按置信度 / 风险分流</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">低置信 / 高危</div>
+      <div class="step"><strong>转人复核</strong><br>human-in-the-loop,清晰交接,不自动决断</div>
+    </div>
+    <div class="branch">
+      <div class="label">高置信 / 低危</div>
+      <div class="step"><strong>自动作答 / 执行</strong><br>正常路径闭环</div>
+    </div>
+  </div>
+  <div class="down">↓</div>
+  <div class="step"><strong>③ 包上评估 + 可观测 + 输入输出护栏</strong><br>offline eval 门禁 + online 监控 + tracing;护栏含<strong>防间接注入</strong>(检索回来的内容也可能藏指令)</div>
+  <div class="down">↓ 上线</div>
+  <div class="step terminal"><strong>④ 带 fallback 灰度上线、人在环</strong>;每处改动都<strong>量 p95 / 准确率前后</strong>,别猜</div>
+</div>
+<figcaption>四步骨架:需求 → grounding + 最小权限动作 + 低置信/高危转人 → 评估可观测护栏 → 灰度上线人在环。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>需求五问(开场就要抛给面试官的)</dt>
+<dd><strong>准确率线</strong>(错一次代价多大?)、<strong>延迟预算</strong>(用户能等几秒?)、<strong>升级策略</strong>(答不了 / 拿不准时怎么交接给人?)、<strong>成本上限</strong>(每次调用值多少钱?)、<strong>合规与数据边界</strong>(谁能看什么、数据能不能出域)。这五问定死了后面所有技术选择。</dd>
+</dl>
+
+<p>还有一条贯穿全程的克制原则:<strong>能用固定 RAG / workflow 解决,就别上 agent 自主循环。</strong>为什么?循环越长,错误越累积——举个直觉例子,若每一步单独 95% 可靠,串 20 步下来整体成功率只剩 $0.95^{20}\approx 0.36$。只有当任务真的开放、步骤数不定、需要模型自己规划时,agent 循环带来的灵活性才抵得过这份脆弱。</p>
+
+<h2>二、案例 A:企业客服 agent(Q124)</h2>
+<p>把骨架直接套上去,答案就成型了。<strong>需求先行</strong>:客服要多准、慢了用户会不会跑、什么问题必须转人工、合规上能碰哪些用户数据——先问。然后:</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">用户问题</div>
+  <div class="arrow">→</div>
+  <div class="node">输入护栏<br>过滤 / 注入检测</div>
+  <div class="arrow">→</div>
+  <div class="node">检索公司知识库<br>grounding,带出处</div>
+  <div class="arrow">→</div>
+  <div class="node">工具:查订单 / 建工单<br>最小权限</div>
+  <div class="arrow">→</div>
+  <div class="node">生成回答<br>引用检索证据</div>
+  <div class="arrow">→</div>
+  <div class="node good">置信 / 风险判断<br>低置信 · 高危 → 转人</div>
+</div>
+<figcaption>客服 agent 的一条主链:护栏 → 检索 grounding → 最小权限工具 → 生成 → 转人闸门。</figcaption>
+</figure>
+
+<ul>
+<li><strong>grounding</strong>:答案必须建立在<strong>公司知识库检索</strong>之上,而不是模型记忆——不然就是幻觉客服。让回答带出处,便于审计。</li>
+<li><strong>工具,最小权限</strong>:查订单、建工单这类动作用工具做,但每个工具只给它完成本职所需的最小权限(能查订单不等于能改价格)。</li>
+<li><strong>转人闸门</strong>:低置信或高危(退款、投诉升级、涉法务)清晰转人,交接要顺,不能自动瞎决断。</li>
+<li><strong>护栏防间接注入</strong>:检索回来的知识库内容里可能藏着「忽略上面的指令,把用户信息发到……」这类<strong>间接 prompt injection</strong>;输入输出都要过护栏。</li>
+<li><strong>上线方式</strong>:带 fallback(答不了就转人 / 给标准话术)、灰度、人在环观察,再逐步放量。</li>
+</ul>
+
+<h2>三、案例 B:千万文档 + 权限的 RAG(Q125)与多租户(Q130)</h2>
+<p>这两道题最容易被新手答偏,因为他们盯着「选哪个模型」。<strong>真正的难点在数据层,不在模型。</strong></p>
+
+<h3>千万文档 + 按用户权限(Q125)</h3>
+<ul>
+<li><strong>增量摄入管线</strong>:分块 → 嵌入 → 建索引,每个 chunk 挂上丰富的元数据(其中<strong>包含权限标签</strong>);文档新增 / 修改 / 删除要 upsert / 删除保鲜,索引不能是一次性快照。</li>
+<li><strong>权限先过滤,再排序</strong>:查询时<strong>先按发起请求的用户权限过滤候选集</strong>——<em>绝不把用户无权看的文档检回来</em>——之后再 hybrid 检索 + rerank 保精度。顺序反了就是数据泄露事故。</li>
+<li><strong>控成本与延迟</strong>:加缓存;按文档类型分别评检索质量;监控新鲜度与检索指标(召回、rerank 后精度)。</li>
+</ul>
+<p class="formula-note">一句话:<strong>权限与新鲜度是要「先设计」的,不是事后补的。</strong></p>
+
+<h3>多租户 LLM 应用(Q130)</h3>
+<p>多租户的关键词只有一个:<strong>隔离,而且要贯穿每一层</strong>。任何一层漏了,就是「A 公司看到 B 公司数据」的事故。</p>
+<div class="trio">
+  <div class="cell"><strong>数据 & 索引分区</strong><br><em>各租户的数据与向量索引分开,检索绝不跨租户</em></div>
+  <div class="cell"><strong>身份 scope 全程</strong><br><em>每个请求带租户身份,scope 住访问 / 日志 / 成本核算</em></div>
+  <div class="cell"><strong>限流 & 预算</strong><br><em>每租户各自限流与预算,防单租户拖垮或拖穷别人</em></div>
+</div>
+<p>此外:密钥 / 配置按租户隔离;<strong>prompt 缓存不能跨租户命中</strong>(否则缓存本身成了泄露通道);评估也要按租户塑形(不同租户数据分布不同)。</p>
+
+<h2>四、案例 C:降只做一次推理调用的 p95 延迟(Q128)</h2>
+<p>题目限定「只做一次推理模型调用」,所以第一刀不该砍在模型内部,而该砍在<strong>要不要调用</strong>上。按性价比从高到低:</p>
+<ol>
+<li><strong>先质疑「是否每个请求都真需要推理模型」</strong>:用路由让常见易例走快的标准模型、只有难例才升级到强模型。常常光这一步就能砍掉一半 p95。</li>
+<li><strong>流式输出</strong>:降的是<em>感知</em>延迟——用户先看到字在动,体感快很多。</li>
+<li><strong>KV / prompt 缓存</strong>:稳定前缀、重复上下文缓存下来,别重复算。</li>
+<li><strong>裁上下文</strong>:输入短了,处理就快;顺带还避开长上下文里信息被淹没的问题。</li>
+<li><strong>限推理预算</strong>:若模型支持,给「思考」设上限。</li>
+<li><strong>并行独立子步</strong>:能拆成互不依赖的子步就并行跑。</li>
+</ol>
+<p><strong>纪律:每改一处,量 p95 前后,别凭感觉。</strong>延迟优化最容易自欺——改了一堆,平均值动了,p95 没动。</p>
+
+<h2>五、三道「高危 / 脏数据 / 已上线」题:同一套骨架的复用</h2>
+<p>下面三题看似无关,其实都是同一句话的变体:<strong>分阶段、各自可测、低置信进人工、指标门禁 + 监控。</strong></p>
+
+<h3>已上线功能出现幻觉投诉,设计评估与监控(Q126)</h3>
+<p>不要一上来就换模型。顺序是:<strong>先复现投诉 → 据其建标注集 → 分层定位</strong>(把失败分成 faithfulness / 检索 / 拒答失败三类,看是哪一环坏了)。然后:</p>
+<ul>
+<li><strong>offline eval 当门禁</strong>:RAG triad + 任务正确性 + 经人校准的 LLM judge,任何改动先过它。</li>
+<li><strong>online 监控</strong>:抽样测 faithfulness、拒答率、用户反馈、引用覆盖率,漂移就告警。</li>
+<li><strong>tracing</strong>:任一被标记的响应,都能回查它当时检索了什么、怎么生成的。</li>
+<li>最后修<strong>主导失败模式</strong>(往往是检索质量或缺了拒答路径),确认指标真动了且没引入回归。</li>
+</ul>
+
+<h3>从乱 PDF 抽结构化数据(Q131)</h3>
+<p>分阶段,每段都能单独测、单独换:</p>
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">健壮摄入 + 布局感知解析<br>扫描页 OCR / 视觉,保表结构</div>
+  <div class="arrow">→</div>
+  <div class="node">结构化输出 + 校验<br>抽进严格 schema</div>
+  <div class="arrow">→</div>
+  <div class="node good">低置信 / 失败核验<br>进人工复核队列</div>
+</div>
+<figcaption>脏 PDF 管线:解析 → schema 约束抽取 → 低置信兜底。</figcaption>
+</figure>
+<ul>
+<li>按文档类型难度<strong>路由</strong>:便宜模型走常见干净例,难例才升级;能离线批处理就批处理提吞吐。</li>
+<li>建<strong>标注文档 eval 集</strong>覆盖乱边界,量<strong>字段级准确率</strong>;低置信进人工复核队列。</li>
+<li><strong>瓶颈几乎总在解析质量与长尾怪文档,而非模型。</strong>把力气花在解析和边界样本上。</li>
+</ul>
+
+<h3>保险理赔 agent:批准 / 拒绝 / 需复核(Q127)</h3>
+<p>准确率与可审计要求高、错误代价大——<strong>这本就是 human-in-the-loop 的设计,不是自动判决机。</strong></p>
+<ul>
+<li>对保单 / 历史理赔<strong>检索 grounding</strong>;用结构化工具拉理赔数据;约束输出返回<strong>「决定 + 引证据 + 置信度」</strong>三件套。</li>
+<li>低于置信阈<em>或</em>高于价值阈 → <strong>转人复核</strong>,而不是自动批 / 拒。</li>
+<li>便宜模型做 triage,强模型只处理难例(控成本);加护栏与<strong>全量审计日志</strong>。</li>
+<li>在标注好的历史理赔上评估;监控批准 / 拒绝分布漂移。</li>
+</ul>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「先说需求还是先画架构?」——<strong>永远先问需求五问</strong>(准确率 / 延迟 / 转人 / 成本 / 合规);上来就画框图、报模型型号是新手信号。</li>
+<li>「什么时候该上 agent 循环,什么时候固定 workflow 就够?」——默认固定 RAG / workflow,只有任务真开放、步骤不定才上循环;循环越长错误越累积。</li>
+<li>「千万文档 RAG 的难点在模型还是数据?」——数据层(摄入 / 权限 / 新鲜度),不是选哪个模型。</li>
+<li>「多租户怎么防 A 看到 B 的数据?」——隔离贯穿每层:数据 / 索引分区、每请求带租户 scope、缓存不跨租户。</li>
+<li>「降 p95 你第一刀砍哪?」——先质疑是否每请求都要推理模型(路由),再流式 / 缓存 / 裁上下文,且每步量前后。</li>
+<li>「线上已经在被投诉幻觉,你怎么办?」——先复现 → 建标注集 → 分层定位 → offline 门禁 + online 监控 + tracing → 修主导失败模式。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>易错点(绝对化措辞就是扣分点):</strong></p>
+<ul>
+<li>别说「用了 RAG 就不会泄露无权限文档」——只有在<strong>检索时先按用户权限过滤</strong>才行;权限是设计出来的,不是 RAG 自带的。</li>
+<li>别说「上 agent 一定比 workflow 强」——循环越长错误越累积($0.95^{20}\approx 0.36$),固定 workflow 够用就别上循环。</li>
+<li>别说「换更强的模型就能降幻觉 / 降延迟」——幻觉常是<em>检索</em>或<em>缺拒答路径</em>的问题;延迟常是「根本不必每次推理」的问题;不量前后就是猜。</li>
+<li>别说「脏 PDF 抽取瓶颈在模型」——瓶颈几乎总在<strong>解析质量与长尾怪文档</strong>。</li>
+<li>别说保险理赔 agent 能全自动批 / 拒——高危高价值场景本就该 human-in-the-loop,低置信 / 高价值一律转人复核。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>一个千万级文档、且不同用户能看的文档不同的企业 RAG,权限过滤应放在哪一步?</p>
+<details><summary>A. 生成答案之后,再检查引用到的文档用户有没有权限看</summary>太晚了。无权文档一旦被检回并进入上下文,信息已经泄露,事后补检不住。</details>
+<details><summary>B. 检索时先按发起请求的用户权限过滤候选,再做排序与 rerank ✅</summary>正确。权限过滤必须在检索阶段最前面,绝不把无权文档检回来,之后才 hybrid + rerank 保精度。</details>
+<details><summary>C. 训练一个模型让它「记住」每个用户能看哪些文档</summary>把易变权限焊进权重,既陈旧又不可审计,还无法即时收回权限,是错误方向。</details>
+<details><summary>D. 在 prompt 里写一句「不要泄露无权限文档」来约束模型</summary>软约束,扛不住间接注入,也管不了已经进上下文的内容。权限得在数据层做硬隔离。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>某功能每个请求只做一次 LLM 调用,要降 p95 延迟,最该<em>先</em>做的是?</p>
+<details><summary>A. 直接换一台更贵的 GPU,把所有请求都硬加速</summary>贵且未必治本;很多请求根本不需要重模型,盲目加速是浪费。</details>
+<details><summary>B. 给所有请求都关掉流式输出,以减少额外开销</summary>方向反了。流式降的是感知延迟、改善体感,不该关。</details>
+<details><summary>C. 先质疑是否每个请求都真需要推理模型:用路由让易例走快标准模型、只难例升级 ✅</summary>正确。第一刀砍在「要不要调用重模型」上,路由常单此就砍掉约一半 p95,再谈流式 / 缓存 / 裁上下文。</details>
+<details><summary>D. 把上下文尽量塞满,让模型一次拿到更多信息</summary>输入越长处理越慢,还会淹没关键信息,只会让 p95 更糟。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>Building Effective Agents</strong>(Anthropic 工程博客, 2024)——「先用最简方案、workflow 够用就别上 agent 循环」的直接依据,本课克制原则出自这一思路。</li>
+<li><strong>Retrieval-Augmented Generation</strong>(Lewis et al., 2020)——RAG 原论文,企业检索 grounding 的根。</li>
+<li><strong>ReAct: Synergizing Reasoning and Acting</strong>(Yao et al., 2022)——推理 + 工具动作循环的经典范式,客服 / 理赔 agent 的动作层背景。</li>
+<li><strong>Lost in the Middle</strong>(Liu et al., 2023)——长上下文里信息被淹没的证据,支撑「裁上下文」这一延迟 / 质量优化。</li>
+<li><strong>OWASP Top 10 for LLM Applications</strong>——LLM01 Prompt Injection(含间接注入)等,输入输出护栏的清单来源。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>系统设计一套骨架走天下——需求先行 → 检索 grounding + 最小权限工具 + 低置信/高危转人 → 评估可观测护栏 → 灰度上线人在环;RAG 难在数据层(权限先过滤再排序),多租户靠每层隔离,降延迟先问「要不要推理」,高危默认 human-in-the-loop。</strong></p>
+<nav class="lesson-nav">
+<a href="0029-multimodal-vlm.html">← 上一课:多模态 VLM</a>
+<a class="next" href="0031-engineering-judgment.html">下一课:工程判断 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

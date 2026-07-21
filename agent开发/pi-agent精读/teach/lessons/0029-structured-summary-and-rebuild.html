@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0029 · 怎么压与如何生效:结构化摘要 + 上下文重建</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 9 章 · 上下文压缩 ›
+  <a href="./0028-cut-point-selection.html">上一课</a> ›
+  <strong>Lesson 0029</strong>
+</div>
+
+<p class="kicker">Lesson 0029 · 第 9 章 上下文压缩</p>
+<h1>怎么压与如何生效<br>—— 结构化摘要 + 上下文重建</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:上一课解决了「切哪里」——用向后遍历找到一个合法切割点,
+  把消息序列分成「被压缩」和「保留」两半。这一课接着讲<strong>被压缩的那一半去哪了</strong>:
+  它不是被扔掉,而是变成一段结构化摘要;以及这段摘要<strong>怎么在下一轮真正发挥作用</strong>。
+</div>
+
+<div class="recall">
+  🔁 <strong>先回忆上一课</strong>:切割点算法向后遍历、累积到 <code>keepRecentTokens</code>(20K)就停,
+  且只能切在 user 或 assistant 边界、绝不能切在 toolResult 后面——这是「切哪里」的答案。
+  但切完之后呢?切割点之前的那几十轮对话,总不能真的从内存里消失——LLM 还得知道「之前发生了什么」。
+  这节课就讲:那些消息被<strong>压成了什么</strong>,以及这个「压成的东西」怎么在下一轮对话里重新生效。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 说清 Pi 的摘要为什么是<span class="sys-pill">6 个固定 section</span>
+  而不是「随便写一段总结」,理解<span class="sys-pill">增量更新</span>和<span class="sys-pill">文件跟踪</span>
+  怎么解决多次压缩的漂移问题,并画出 <code>CompactionEntry</code> 如何被 <code>buildSessionContext()</code>
+  重建成下一轮 LLM 能看懂的上下文。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:填表 vs 凭记忆写会议纪要</b>
+  让 LLM「随便写段总结」,就像让人凭记忆写会议纪要——它容易被某个有趣的技术细节吸引,
+  写了一大段却忘了记用户最核心的需求。Pi 的做法是给它<b>一张固定表格</b>
+  (Goal / 约束 / 进度 / 决策 / 下一步 / 关键上下文),像填病历一样每一栏都必须填——
+  把「易遗漏」变成「必须填」。
+</div>
+
+<h2>1 · 摘要不是自由文本,是填表</h2>
+<p>
+  Pi 不是让 LLM「随便写一段总结」,而是要求它填一个固定格式的表格——
+  <code>SUMMARIZATION_PROMPT</code> 强制 LLM 覆盖 <strong>6 个固定 section</strong>:
+</p>
+<pre><span class="ln">1</span><span class="cm">## Goal                    ← 用户最初要做什么</span>
+<span class="ln">2</span><span class="cm">## Constraints &amp; Preferences  ← 有什么约束</span>
+<span class="ln">3</span><span class="cm">## Progress                ← 做了什么(Done / In Progress / Blocked)</span>
+<span class="ln">4</span><span class="cm">## Key Decisions           ← 关键决策</span>
+<span class="ln">5</span><span class="cm">## Next Steps              ← 下一步做什么</span>
+<span class="ln">6</span><span class="cm">## Critical Context        ← 不能忘记的关键信息</span>
+</pre>
+<cite>🔎 出处:教程第 9 章 §四「摘要的格式」/ <code>SUMMARIZATION_PROMPT</code>。代码为教程示意,基于 pi <code>v0.80.2</code>。</cite>
+
+<p>
+  注意第 3 行 <code>Progress</code> 里专门拆了三个子项——Done / In Progress / <strong>Blocked</strong>。
+  Blocked 是最容易被自由文本摘要漏掉的一类信息:「卡住的事」往往不体面、不显眼,
+  但恰恰是新一轮 Agent 最该优先处理的。
+</p>
+<div class="why">
+  <b>为什么用 6 section 结构化模板,而不是「请总结对话」?</b>
+  因为自由文本摘要有一个固定的失败模式:LLM 容易被「有趣的内容」吸引,
+  花大篇幅描述某个技术细节,却忘了记录用户的核心需求。固定 section 强制 LLM
+  在每个维度上至少扫一遍——这是<strong>用 prompt 设计对抗 LLM 认知偏差</strong>的一个范例。
+</div>
+
+<h2>2 · 生成流程:序列化 + 一次 LLM 调用</h2>
+<p>
+  被压缩的那批 <code>AgentMessage[]</code>,先被序列化成人类可读的文本
+  (<code>[User]</code> / <code>[Assistant tool calls]</code> / <code>[Tool result]</code> 这样的标注),
+  再调一次 LLM,用 <code>SUMMARIZATION_PROMPT</code> 让它生成结构化摘要:
+</p>
+<pre><span class="ln">1</span><span class="cm">原始消息(AgentMessage[])</span>
+<span class="ln">2</span>    │
+<span class="ln">3</span>    ▼ 序列化
+<span class="ln">4</span><span class="str">"[User]: 帮我修 auth.ts</span>
+<span class="ln">5</span><span class="str"> [Assistant tool calls]: read(path=\"auth.ts\")</span>
+<span class="ln">6</span><span class="str"> [Tool result]: export function authenticate() {...}</span>
+<span class="ln">7</span><span class="str"> [Assistant]: 找到问题了,缺少 salt..."</span>
+<span class="ln">8</span>    │
+<span class="ln">9</span>    ▼ LLM 调用(用摘要 prompt)
+<span class="ln">10</span>    │
+<span class="ln">11</span>结构化摘要
+<span class="ln">12</span>    ## Goal
+<span class="ln">13</span>    Fix authentication bug in auth.ts
+<span class="ln">14</span>    ## Progress
+<span class="ln">15</span>    ### Done
+<span class="ln">16</span>    - [x] Read auth.ts, identified missing salt
+<span class="ln">17</span>    ...
+</pre>
+<cite>🔎 出处:教程第 9 章 §四「摘要生成:一次 LLM 调用」。基于 pi <code>v0.80.2</code>。</cite>
+
+<h2>3 · 增量更新:更新而非重写</h2>
+<p>
+  一个长对话可能被压缩<strong>不止一次</strong>——比如第一次压缩第 1-30 轮,
+  第二次压缩第 31-50 轮。第二次压缩时,Pi 会把<strong>上一次的摘要</strong>作为
+  <code>previousSummary</code> 传进去:
+</p>
+<pre><span class="ln">1</span>第一次压缩:
+<span class="ln">2</span>  输入:第1-30轮原始消息
+<span class="ln">3</span>  输出:摘要 A
+<span class="ln">4</span>
+<span class="ln">5</span>第二次压缩:
+<span class="ln">6</span>  输入:摘要 A + 第31-50轮原始消息
+<span class="ln">7</span>  输出:摘要 B(在 A 的基础上合并新信息)
+</pre>
+<cite>🔎 出处:教程第 9 章 §四「增量更新:不是每次从零开始」/ <code>UPDATE_SUMMARIZATION_PROMPT</code>。基于 pi <code>v0.80.2</code>。</cite>
+<div class="tradeoff">
+  🔑 <b>为什么增量更新,而不是每次从零重写?</b>
+  多次压缩若每次都从零写,摘要会一点点漂移、累积误差;在旧摘要基础上「更新而非重写」,
+  能让已有的 Goal / Constraints 稳定保留,新增的 Progress 只是追加——比每次从零开始写更稳定。
+</div>
+
+<h2>4 · 文件跟踪:编码 Agent 的领域特定知识</h2>
+<p>
+  对编码 Agent 来说,「改了哪些文件」是至关重要的信息。Pi 在 6 section 摘要文字之外,
+  <strong>单独</strong>维护一份文件跟踪列表,用 <code>extractFileOperations</code> 从两处累积:
+  上一次压缩的 <code>details.readFiles</code> / <code>modifiedFiles</code>,
+  加上这次被压缩消息里工具调用涉及的文件。最终用 <code>formatFileOperations</code>
+  把它们附到摘要末尾:
+</p>
+<pre><span class="ln">1</span>&lt;read-files&gt;
+<span class="ln">2</span>src/auth.ts
+<span class="ln">3</span>src/utils/hash.ts
+<span class="ln">4</span>&lt;/read-files&gt;
+<span class="ln">5</span>
+<span class="ln">6</span>&lt;modified-files&gt;
+<span class="ln">7</span>src/auth.ts
+<span class="ln">8</span>&lt;/modified-files&gt;
+</pre>
+<cite>🔎 出处:教程第 9 章 §四「文件跟踪:压缩不只是摘要文字」/ <code>formatFileOperations</code>。基于 pi <code>v0.80.2</code>。</cite>
+<div class="why">
+  <b>为什么单独跟踪文件,而不是写进 6 section 文字里?</b>
+  「改过哪些文件」比「讨论过什么」更精确、可验证——这是把<strong>领域特定知识嵌入通用压缩机制</strong>:
+  压缩算法本身是通用的(适用于任何对话),而 <code>details</code> 字段承载了编码 Agent
+  特有的信息。这份列表跨压缩累积,即使经过多轮压缩,Agent 仍知道整个会话读过、改过哪些文件,
+  从而避免重复读、避免覆盖改动。
+</div>
+
+<h2>5 · 压缩结果的物理形态:CompactionEntry</h2>
+<p>
+  摘要生成后要落地成一个具体的数据结构,存进 Session Tree(下一课的主题):
+</p>
+<pre><span class="ln">1</span>{
+<span class="ln">2</span>    type: <span class="str">"compaction"</span>,
+<span class="ln">3</span>    summary: <span class="str">"## Goal\nFix auth.ts...\n## Progress\n..."</span>,   <span class="cm">// 摘要文本</span>
+<span class="ln">4</span>    tokensBefore: <span class="sys">185000</span>,              <span class="cm">// 压缩前 token 数(用于诊断和审计)</span>
+<span class="ln">5</span>    firstKeptEntryId: <span class="str">"e30"</span>,           <span class="cm">// 保留的起始 entry id(重建上下文时从这开始)</span>
+<span class="ln">6</span>    details: {                         <span class="cm">// 文件操作跟踪(来自 extractFileOperations)</span>
+<span class="ln">7</span>        readFiles: [<span class="str">"src/auth.ts"</span>, <span class="str">"src/utils/hash.ts"</span>],
+<span class="ln">8</span>        modifiedFiles: [<span class="str">"src/auth.ts"</span>],
+<span class="ln">9</span>    },
+<span class="ln">10</span>    <span class="cm">// ... 含 id/parentId/timestamp 等 SessionEntryBase 字段</span>
+<span class="ln">11</span>}
+</pre>
+<cite>🔎 出处:教程第 9 章 §六「CompactionEntry:压缩结果的物理形态」/ <code>session-manager.ts</code>。基于 pi <code>v0.80.2</code>。</cite>
+<div class="tradeoff">
+  🔑 <b>为什么用 CompactionEntry 存进 Session Tree,而不是直接替换消息数组?</b>
+  压缩发生在<strong>两轮之间</strong>(上一课回忆过这个时序),结果需要一个能被下一轮
+  <code>buildSessionContext()</code> 读取、重建的持久物——直接改消息数组会丢失原始历史、
+  也没法审计。这也自然引出下一课的主题:<strong>历史为什么是树而不是线性数组</strong>。
+</div>
+
+<h2>6 · 如何生效:下一轮的上下文重建</h2>
+<p>
+  下次 Agent 运行时,<code>buildSessionContext()</code> 会根据 <code>CompactionEntry</code>
+  重建上下文——摘要文本变成一条 <code>CompactionSummaryMessage</code>,
+  和 <code>firstKeptEntryId</code> 之后保留的原始消息拼在一起:
+</p>
+<div class="diagram">重建后的上下文
+
+├── CompactionSummaryMessage(role: "compactionSummary")
+│     content = 摘要文本
+│     (convertToLlm 把它翻译成 &lt;summary&gt; 包裹的 UserMessage)
+│
+├── 保留的原始消息(entry 30 之后的消息)
+│     ├── UserMessage: "继续修复"
+│     ├── AssistantMessage: ...
+│     └── ...
+│
+└── (新的消息会在运行中追加)</div>
+<cite>🔎 出处:教程第 9 章 §六「上下文重建」/ <code>buildSessionContext</code>。基于 pi <code>v0.80.2</code>。</cite>
+<p>
+  <code>CompactionSummaryMessage</code> 是 coding-agent 的自定义消息类型,
+  <code>convertToLlm</code> 会把它翻译成 <code>&lt;summary&gt;</code> 标签包裹的 UserMessage,
+  LLM 看到的是:「The conversation history before this point was compacted into the following summary: ...」。
+  对 LLM 来说,之前的几十轮对话变成了一个摘要——它不知道原始消息的细节,
+  但它知道目标、进度、决策和文件操作记录,这对继续工作来说通常够用。
+</p>
+
+<h2>7 · 集成点:压缩嵌在哪、发什么事件</h2>
+<p>
+  自动压缩嵌在 <code>AgentSession</code> 的 <code>agent_end</code> 事件处理里,
+  整个过程发出两种事件供 UI 显示进度:
+</p>
+<pre><span class="ln">1</span>Agent 运行结束(agent_end 事件)
+<span class="ln">2</span>    │
+<span class="ln">3</span>    ▼
+<span class="ln">4</span>检查 shouldCompact()?
+<span class="ln">5</span>    │
+<span class="ln">6</span>    ├── 不需要 → 结束
+<span class="ln">7</span>    │
+<span class="ln">8</span>    └── 需要 → 执行压缩
+<span class="ln">9</span>         ├── findCutPoint → 找切割点
+<span class="ln">10</span>         ├── 序列化 + LLM 调用 → 生成摘要
+<span class="ln">11</span>         ├── 追加 CompactionEntry 到 Session Tree
+<span class="ln">12</span>         └── 下次运行时 buildSessionContext 使用压缩后的上下文
+</pre>
+<p>
+  两种事件:<code>compaction_start</code>(<code>reason: "manual" | "threshold" | "overflow"</code>)
+  和 <code>compaction_end</code>(携带压缩结果或错误信息)。
+</p>
+
+<h2>8 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="3">
+    <p class="stem">① Pi 让 LLM 填 6 个固定 section(Goal/Constraints/Progress/...),而不是简单说「请总结这段对话」。这个设计主要对抗 LLM 的什么问题?</p>
+    <button class="opt">LLM 生成速度太慢</button>
+    <button class="opt">LLM 无法输出 Markdown 格式</button>
+    <button class="opt">LLM 摘要的 token 数不可控</button>
+    <button class="opt">自由文本时 LLM 容易被有趣的技术细节吸引,花大篇幅描述细节却漏记用户的核心需求</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="1">
+    <p class="stem">② 一个长对话被压缩多次时,第二次压缩会把上一次的摘要作为 previousSummary 传进去做增量更新。为什么不每次都从原始消息从零重写摘要?</p>
+    <button class="opt">因为原始消息在第一次压缩后就被删除了,无法重读</button>
+    <button class="opt">因为从零重写会让摘要每次漂移一点、累积误差;增量更新让 Goal/Constraints 稳定保留、新信息追加</button>
+    <button class="opt">因为增量更新消耗的 token 更少</button>
+    <button class="opt">因为 LLM 一次只能处理 30 轮对话</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">③ 压缩摘要末尾除了 6 section 文字,还用 &lt;read-files&gt;/&lt;modified-files&gt; 标签单独维护一份文件列表。为什么要给编码 Agent 单独做这件事?</p>
+    <button class="opt">因为「改过哪些文件」比「讨论过什么」更精确、可验证,能让 Agent 避免重复读、避免覆盖改动</button>
+    <button class="opt">因为文件路径无法放进 6 个 section 里</button>
+    <button class="opt">因为 API 要求摘要必须包含文件列表</button>
+    <button class="opt">因为文件列表比摘要文字占用更少 token</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>turnPrefix 摘要为什么要单独用一套更轻量的 3 段格式,而不是也套 6 section?</em>」
+  「<em>如果 previousSummary 本身错了(比如 LLM 幻觉出一个不存在的 Key Decision),
+  会不会被增量更新一直带下去、越滚越错?</em>」
+  「<em>CompactionEntry 存进 Session Tree——那 Session Tree 到底是什么形状、
+  为什么历史要建模成『树』而不是一个数组?</em>」——最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>9 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第9章-上下文压缩-当对话太长怎么办.md">第 9 章 · 上下文压缩:当对话太长怎么办</a>——
+  原文 §五还讲了 turnPrefix 机制(assistant 切点为什么会切断 Turn、怎么用并行生成的前缀摘要弥补),
+  值得通读一遍。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0030):</strong> 我们把 <code>CompactionEntry</code>「存进 Session Tree」
+  这句话拆开——Session 的历史为什么要建模成<strong>树</strong>而不是线性数组?
+  「两个维度」和「append-only」分别解决什么问题?
+</p>
+
+<footer>
+  Lesson 0029 · 第 9 章 上下文压缩 ·
+  下一课:<a href="./0030-session-tree-two-dimensions-and-append-only.html">0030 Session Tree:两个维度与 append-only →</a> ·
+  上一课:<a href="./0028-cut-point-selection.html">0028 切割点算法</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对,固定 section 把「易遗漏」变成「必须填」。延伸:Progress 里专门的 Blocked 子项就是这个思路的极致——强制 LLM 记下卡住的事,新一轮可优先解锁。',
+               '✓ 对,增量更新是「更新而非重写」,避免累积漂移。延伸:文件跟踪列表也是同样逻辑——跨压缩累积,previousSummary 里的文件列表会被合并进新摘要。',
+               '✓ 对,这是把领域特定知识嵌入通用压缩机制——算法通用,details 字段承载领域信息。延伸:这份列表跨压缩累积,即使经过多轮压缩 Agent 仍知道整个会话读过/改过哪些文件。'];
+  var msgNo = ['想想让人凭记忆写会议纪要会漏掉什么。第八节把这称为对抗 LLM「认知偏差」——它容易被什么吸引而忘了记什么?',
+               '第四节「增量更新」说这让 LLM 做的是「更新而非重写」。反复从零重写同一批信息,最担心的是稳定性还是速度?',
+               '对编码 Agent 来说,哪种信息更可靠:自然语言里「讨论过 auth」,还是一份明确的「修改过 src/auth.ts」清单?第八节称这是「领域知识嵌入通用机制」。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

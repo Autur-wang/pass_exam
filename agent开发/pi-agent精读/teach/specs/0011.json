@@ -1,0 +1,86 @@
+{
+ "num": "0011",
+ "slug": "translation-company-unified-entry",
+ "title": "翻译公司:一个入口消化30多家Provider",
+ "narrowTopic": "为什么 streamSimple 一行代码背后要建一个三层\"翻译公司\",以及第一层统一入口如何靠\"查表派活\"把所有 Provider 差异隔离掉。",
+ "analogySeed": "一家国际翻译公司:客户进门只跟前台打交道,前台查通讯录找到对应语种的翻译员派活;客户不懂外语,翻译员不懂公司流程,两者靠一份\"标准报告模板\"解耦。",
+ "keyPoints": [
+  "接住第3章的悬念:Agent Loop 里那行 streamSimple(model, context) 被一笔带过,但 packages/ai/src/api/ 下有 10 种 API 翻译器、每个上千行——简洁的一行背后是整个 AI 抽象层",
+  "问题的本质:市面上几十家 Provider(Anthropic/OpenAI/Google/Bedrock…)用不同字段名、不同结构描述同一件事,连最简单的一句纯文本消息都有四种写法",
+  "差异不止消息格式,而是四个维度全都不同:消息格式、流式传输、思考模式、缓存控制;四维度 × 30 多个 Provider,组合出的差异量是巨大的",
+  "解法是三层架构各管一件事:第一层统一入口(前台)、第二层事件协议(标准报告)、第三层翻译器(翻译员)",
+  "第一层 stream() 只做两件事——查表、派活:用 model.api 这个字符串当 key 到\"通讯录\"(BUILTIN_APIS)里查出对应翻译器,再把工作原样派给它",
+  "入口层不处理任何业务逻辑,是纯粹的路由器;Agent Loop 是\"客户\",永远只跟前台打交道,从不直接接触翻译员"
+ ],
+ "codeRefs": [
+  {
+   "desc": "同一条纯文本消息\"帮我读一下 main.ts\"在四家 Provider 下的真实长相对比:Anthropic 的 content 数组每项带 type、OpenAI 的字符串 content 加工具结果需独立 tool 消息的注释、Google 用 parts 替换 content、Bedrock 的 text 无 type 字段",
+   "cite": "教程第4章 §一 / provider 消息格式四写法"
+  },
+  {
+   "desc": "四个差异维度的对照表(维度 | 差在哪 | 举个例子):消息格式、流式传输、思考模式、缓存控制四行",
+   "cite": "教程第4章 §一 / 四维度差异表"
+  },
+  {
+   "desc": "compat.ts 里的 stream() 统一入口函数:resolveApiProvider(model.api) 查表 + provider.stream(...) 派活两行",
+   "cite": "教程第4章 §二 / compat.ts:237-247"
+  },
+  {
+   "desc": "BUILTIN_APIS \"通讯录\"数组:anthropic-messages / openai-completions / google-generative-ai / bedrock-converse-stream 四条 key→翻译器映射",
+   "cite": "教程第4章 §二 / compat.ts:172-206"
+  }
+ ],
+ "designRationale": [
+  "为什么拆三层而不是一坨:前台不需要懂外语、翻译员不需要懂公司流程,中间靠标准报告解耦——职责隔离让每层可以独立演化",
+  "为什么第一层只做查表派活、不含任何业务逻辑:入口保持极简才能让\"新增一个 Provider\"不牵动路由代码,复杂度全部沉到翻译器里",
+  "为什么用 model.api 字符串 key 查表而不是硬编码 if-else:注册表模式让新翻译器\"往通讯录加一条\"即可被路由发现,是开闭原则的体现",
+  "为什么 Agent Loop 被设计成永不直接接触翻译员:客户只认标准报告,底层换任何模型上层代码一行不改"
+ ],
+ "quiz": [
+  {
+   "stem": "三层架构里第一层 stream() 到底做了什么?",
+   "options": [
+    "把统一格式的消息翻译成各 Provider 的私有格式",
+    "定义并输出 12 种统一事件",
+    "用 model.api 当 key 到通讯录查出对应翻译器,再把工作派给它",
+    "逐行解析 Provider 返回的原始 SSE 文本流"
+   ],
+   "correctIndex": 2,
+   "okMsg": "对。第一层是纯路由器——查表 + 派活两步,不碰任何业务逻辑。延伸一下:正因为它这么\"薄\",接入新模型时它几乎不用改,只需往 BUILTIN_APIS 加一条。",
+   "noMsg": "回到\"三层各管一件事\"的分工:翻译私有格式、定义事件、解析 SSE 分别是哪一层干的?第一层的类比是\"前台\",前台会翻译外语吗?"
+  },
+  {
+   "stem": "Pi 为什么要引入统一入口,而不是让 Agent Loop 自己 if-else 判断是哪个 Provider?",
+   "options": [
+    "差异是四维度 × 30 多个 Provider 的组合,入口只做路由把复杂度隔离在翻译器里,Agent Loop 一行不改",
+    "因为 TypeScript 不支持 if-else 语句",
+    "因为所有 Provider 其实格式完全相同,不需要判断",
+    "单纯为了让代码看起来更长更复杂"
+   ],
+   "correctIndex": 0,
+   "okMsg": "对。四维度乘几十家 Provider 的差异量太大,塞进 Agent Loop 会让它每接一个模型就改一次。延伸:这正是\"复杂度封装在翻译器、外部接口保持简洁\"的核心价值。",
+   "noMsg": "想想本章开头说的\"四个维度 × 30 多个 Provider\"意味着多大的差异量,如果这些判断都写进 Agent Loop 会发生什么?"
+  },
+  {
+   "stem": "同一句纯文本消息,Google(Gemini)与 Anthropic 的关键格式差异是?",
+   "options": [
+    "两家写法完全一样",
+    "Google 需要独立的 role:tool 消息,Anthropic 不需要",
+    "Bedrock 的 text 带 type 字段而 Anthropic 不带",
+    "Anthropic 要求 content 是数组、每项带 type,Google 则把 content 换成 parts、结构更扁平"
+   ],
+   "correctIndex": 3,
+   "okMsg": "对。字段名(content vs parts)和结构(要不要 type)都不同,这就是\"连最简单的消息都有四种写法\"。延伸:独立 tool 消息是 OpenAI 的特点,无 type 的 text 是 Bedrock 的特点,别混淆。",
+   "noMsg": "回看四家消息格式对比:Google 那一行用的是 content 还是 parts?Anthropic 的 content 里每项有没有 type 字段?"
+  }
+ ],
+ "_chapter": "第4章",
+ "_chapterCN": "模型调用 —— 一行代码驾驭多个模型",
+ "prevFile": "0010-steering-vs-followup-and-hooks.html",
+ "prevNum": "0010",
+ "nextFile": "0012-translator-five-steps-and-event-protocol.html",
+ "nextNum": "0012",
+ "crumbLabel": "第 4 章 · 模型调用",
+ "chapterFile": "/Users/bytedance/pass_exam/agent开发/pi-agent精读/原始资料/dg-ai-notes/pi-agent/docs/typescript/第4章-模型调用-一行代码驾驭多个模型.md",
+ "filename": "0011-translation-company-unified-entry.html"
+}

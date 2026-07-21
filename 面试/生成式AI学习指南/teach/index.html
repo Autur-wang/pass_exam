@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生成式 AI / AI 工程师面试冲刺 · 精读课</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .hero { margin: 1rem 0 2rem; }
+  .hero .chain { font-family: "PingFang SC", sans-serif; font-weight: 700; color: var(--accent); font-size: 1.05rem; margin: .6rem 0; }
+  .toplinks { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.2rem 0 0; font-family: "PingFang SC", sans-serif; font-size: .85rem; }
+  .toplinks a { border: 1px solid var(--border); border-radius: 999px; padding: .35em .9em; text-decoration: none; color: var(--link); }
+  .pcard { border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem 1.3rem; margin: 1.4rem 0; background: var(--code-bg); }
+  .pcard h2 { margin-top: 0; font-size: 1.12rem; border: none; }
+  .pblurb { color: var(--muted); font-size: .9rem; margin: .2rem 0 .9rem; }
+  ol.plist { list-style: none; padding: 0; margin: 0; }
+  ol.plist li { margin: .3rem 0; }
+  ol.plist a { display: flex; align-items: baseline; gap: .7rem; text-decoration: none; color: var(--ink); border: 1px solid transparent; border-radius: 8px; padding: .45em .6em; }
+  ol.plist a:hover { border-color: var(--border); background: var(--paper); }
+  .lnum { font-family: "SF Mono", Menlo, monospace; font-size: .8rem; color: var(--muted); flex: 0 0 auto; }
+  .lname { font-family: "PingFang SC", sans-serif; font-weight: 600; flex: 0 0 auto; }
+  .lsub { color: var(--muted); font-size: .84rem; }
+  ol.plist li.miss { opacity: .45; }
+  ol.plist li.miss .lnum, ol.plist li.miss .lname, ol.plist li.miss .lsub { padding: .45em 0; }
+  .stat { font-family: "PingFang SC", sans-serif; font-size: .85rem; color: var(--muted); margin-top: 2rem; }
+</style>
+</head>
+<body>
+<main>
+<div class="hero">
+<h1>生成式 AI / AI 工程师面试冲刺 · 精读课</h1>
+<p class="lede">以两大真实题库为骨——<strong>60 道生成式 AI 通用题 + 145 道 AI 工程师岗位题</strong>——聚类成 31 节微课。每节攻一簇高频真题,答到面试级。</p>
+<p class="chain">读懂原理 → 讲清为什么 → 落到工程取舍 → 答得住追问</p>
+<nav class="toplinks">
+<a href="MISSION.md">🎯 Mission</a>
+<a href="GLOSSARY.md">📖 术语表</a>
+<a href="RESOURCES.md">🔗 资源与题库</a>
+<a href="reference/cheatsheet.html">🗂️ 打印速查表</a>
+</nav>
+</div>
+
+<section class="pcard">
+  <h2>第一部分 · 基础与 Transformer</h2>
+  <p class="pblurb">面试开场必答:自注意力、位置编码、预训练、token 与解码</p>
+  <ol class="plist">
+    <li><a href="lessons/0001-generative-vs-discriminative.html"><span class="lnum">0001</span> <span class="lname">生成式 vs 判别式</span><span class="lsub">GAN、VAE 与生成模型全景</span></a></li>
+    <li><a href="lessons/0002-self-attention-and-multi-head.html"><span class="lnum">0002</span> <span class="lname">自注意力与多头</span><span class="lsub">一行公式撑起整个大模型</span></a></li>
+    <li><a href="lessons/0003-positional-encoding-long-context.html"><span class="lnum">0003</span> <span class="lname">位置编码与长上下文</span><span class="lsub">RoPE、ALiBi 与 O(n²) 瓶颈</span></a></li>
+    <li><a href="lessons/0004-pretraining-and-model-types.html"><span class="lnum">0004</span> <span class="lname">预训练与模型类型</span><span class="lsub">MLM/CLM、GPT vs BERT、base/instruct/reasoning</span></a></li>
+    <li><a href="lessons/0005-tokenization-and-decoding.html"><span class="lnum">0005</span> <span class="lname">token 化与解码控制</span><span class="lsub">上下文窗口、temperature/top-p、KV cache</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第二部分 · Embedding 与向量检索</h2>
+  <p class="pblurb">语义表示与检索工程,RAG 的地基</p>
+  <ol class="plist">
+    <li><a href="lessons/0006-embeddings-explained.html"><span class="lnum">0006</span> <span class="lname">Embedding 本质</span><span class="lsub">词/句/上下文/跨模态嵌入与对比学习</span></a></li>
+    <li><a href="lessons/0007-vector-search-engineering.html"><span class="lnum">0007</span> <span class="lname">向量检索工程</span><span class="lsub">ANN、HNSW/IVF/flat 与检索质量评估</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第三部分 · Prompting 与上下文工程</h2>
+  <p class="pblurb">从 prompt 措辞到把窗口当稀缺预算来管理</p>
+  <ol class="plist">
+    <li><a href="lessons/0008-prompting-techniques.html"><span class="lnum">0008</span> <span class="lname">Prompting 技术全景</span><span class="lsub">zero/few-shot、CoT、结构化输出</span></a></li>
+    <li><a href="lessons/0009-context-engineering.html"><span class="lnum">0009</span> <span class="lname">上下文工程</span><span class="lsub">context rot、lost-in-the-middle、compaction</span></a></li>
+    <li><a href="lessons/0010-prompt-as-code.html"><span class="lnum">0010</span> <span class="lname">Prompt 工程化</span><span class="lsub">role 分离、versioning、注入边界、调 flaky</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第四部分 · 微调与对齐</h2>
+  <p class="pblurb">何时微调、怎么微调、如何对齐人类偏好</p>
+  <ol class="plist">
+    <li><a href="lessons/0011-fine-tuning-and-peft.html"><span class="lnum">0011</span> <span class="lname">微调与 PEFT</span><span class="lsub">SFT、LoRA/QLoRA、微调 vs RAG</span></a></li>
+    <li><a href="lessons/0012-alignment-rlhf-dpo.html"><span class="lnum">0012</span> <span class="lname">对齐:RLHF/DPO/GRPO</span><span class="lsub">偏好优化与灾难性遗忘</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第五部分 · RAG</h2>
+  <p class="pblurb">面经最高频主题:从基础管线到 agentic、到评估可信</p>
+  <ol class="plist">
+    <li><a href="lessons/0013-rag-vs-finetuning.html"><span class="lnum">0013</span> <span class="lname">RAG vs 微调 vs 长上下文</span><span class="lsub">何时用 RAG</span></a></li>
+    <li><a href="lessons/0014-rag-pipeline.html"><span class="lnum">0014</span> <span class="lname">RAG 基础管线</span><span class="lsub">分块、dense/sparse/hybrid、reranker</span></a></li>
+    <li><a href="lessons/0015-advanced-retrieval.html"><span class="lnum">0015</span> <span class="lname">进阶检索</span><span class="lsub">contextual retrieval、late chunking、HyDE、路由</span></a></li>
+    <li><a href="lessons/0016-agentic-rag-graphrag.html"><span class="lnum">0016</span> <span class="lname">Agentic RAG 与 GraphRAG</span><span class="lsub">多跳与迭代检索</span></a></li>
+    <li><a href="lessons/0017-rag-evaluation-trust.html"><span class="lnum">0017</span> <span class="lname">RAG 评估与可信</span><span class="lsub">三元评估、拒答、引用、企业级</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第六部分 · Agents</h2>
+  <p class="pblurb">agent vs workflow、ReAct/MCP、记忆编排与可靠性</p>
+  <ol class="plist">
+    <li><a href="lessons/0018-agent-fundamentals.html"><span class="lnum">0018</span> <span class="lname">Agent 本质</span><span class="lsub">agent vs workflow 与自主-控制权衡</span></a></li>
+    <li><a href="lessons/0019-agent-mechanics.html"><span class="lnum">0019</span> <span class="lname">Agent 机制</span><span class="lsub">ReAct、function calling、tool design、MCP</span></a></li>
+    <li><a href="lessons/0020-agent-memory-orchestration.html"><span class="lnum">0020</span> <span class="lname">Agent 记忆与编排</span><span class="lsub">long-horizon、orchestrator-worker、防循环</span></a></li>
+    <li><a href="lessons/0021-agent-reliability.html"><span class="lnum">0021</span> <span class="lname">Agent 可靠性</span><span class="lsub">误差累积、pass^k、反思与人机交接</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第七部分 · 推理模型</h2>
+  <p class="pblurb">test-time compute:何时用、怎么调、别过度思考</p>
+  <ol class="plist">
+    <li><a href="lessons/0022-reasoning-models.html"><span class="lnum">0022</span> <span class="lname">推理模型</span><span class="lsub">thinking budget、过度思考与自一致</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第八部分 · 评估</h2>
+  <p class="pblurb">从业者眼里最高杠杆的一环:judge 校准到 eval-driven CI</p>
+  <ol class="plist">
+    <li><a href="lessons/0023-evaluation-basics.html"><span class="lnum">0023</span> <span class="lname">评估基础</span><span class="lsub">LLM-as-judge 的偏差、校准与错因分析</span></a></li>
+    <li><a href="lessons/0024-evaluation-engineering.html"><span class="lnum">0024</span> <span class="lname">评估工程化</span><span class="lsub">offline/online、pass^k、eval-driven CI、drift</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第九部分 · 生产工程、幻觉与安全</h2>
+  <p class="pblurb">把 demo 变成扛得住生产的系统</p>
+  <ol class="plist">
+    <li><a href="lessons/0025-cost-latency-triangle.html"><span class="lnum">0025</span> <span class="lname">延迟-吞吐-成本三角</span><span class="lsub">缓存、投机解码、连续批处理</span></a></li>
+    <li><a href="lessons/0026-deployment-observability.html"><span class="lnum">0026</span> <span class="lname">部署决策与可观测</span><span class="lsub">model routing、self-host、fallback、监控</span></a></li>
+    <li><a href="lessons/0027-hallucination.html"><span class="lnum">0027</span> <span class="lname">幻觉</span><span class="lsub">为什么产生、如何评估与缓解</span></a></li>
+    <li><a href="lessons/0028-safety-and-security.html"><span class="lnum">0028</span> <span class="lname">安全与负责任 AI</span><span class="lsub">注入、tool poisoning、excessive agency、护栏</span></a></li>
+  </ol>
+</section>
+<section class="pcard">
+  <h2>第十部分 · 多模态与系统设计</h2>
+  <p class="pblurb">多模态基本功 + 现场拆系统设计题的方法论</p>
+  <ol class="plist">
+    <li><a href="lessons/0029-multimodal-vlm.html"><span class="lnum">0029</span> <span class="lname">多模态 VLM</span><span class="lsub">图像处理、CLIP/DALL-E 与架构</span></a></li>
+    <li><a href="lessons/0030-system-design.html"><span class="lnum">0030</span> <span class="lname">系统设计方法论与案例</span><span class="lsub">客服 agent、企业级 RAG、降延迟</span></a></li>
+    <li><a href="lessons/0031-engineering-judgment.html"><span class="lnum">0031</span> <span class="lname">工程判断</span><span class="lsub">四选一、何时别用 LLM、build vs buy、技术债</span></a></li>
+  </ol>
+</section>
+
+<p class="stat">共 31 节 · 10 部分 · 自包含 HTML,本地打开即可 · 数学由本地 KaTeX 离线渲染 · 零外部依赖</p>
+</main>
+</body>
+</html>

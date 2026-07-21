@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0016 · Agentic RAG 与 GraphRAG:多跳与迭代检索</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<script defer src="../assets/katex/katex.min.js"></script>
+<script defer src="../assets/katex/contrib/auto-render.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  renderMathInElement(document.body, {
+    delimiters: [
+      {left: "$$", right: "$$", display: true},
+      {left: "$", right: "$", display: false}
+    ],
+    throwOnError: false
+  });
+});
+</script>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../index.html">门户</a> · 第五部分 RAG · 第 0016 课</p>
+<h1>Agentic RAG 与 GraphRAG:多跳与迭代检索</h1>
+<p class="lede">这节课一次讲清 RAG 的两条「进化线」,答住三道高频题:<strong>「什么是 agentic RAG,何时需要?」「什么是 GraphRAG,解决什么问题?」「agentic RAG 有哪些能力、单/多/分层三种拓扑、有哪些挑战?」</strong>(源:AI 工程师题库 Q40、Q41;资源库 <code>agentic_rag_101</code>)。核心一句话先记住:<strong>agentic RAG 升级的是「控制流」——谁来决定怎么检索;GraphRAG 升级的是「数据结构」——在什么结构上检索。两者正交,可组合。</strong></p>
+
+<div class="recall">
+<p>上一课(0015)讲的 reranker、hybrid search、query 改写/HyDE,都是把<strong>「单次检索」</strong>这一枪打得更准。但有些问题,再准的一枪也打不下来。<strong>先别往下看:如果一个问题的证据散落在好几篇文档里,而且「该查哪一篇」得先查到前一篇才知道——再强的单次 top-k 检索,救得了吗?</strong></p>
+</div>
+
+<h2>一、Agentic RAG:把检索的「决定权」交给模型(Q40)</h2>
+<p>普通 RAG 是一条<strong>固定的直线管线</strong>:query 进来 → 向量检索 top-k → 拼进 prompt → 生成。检索发生一次、时机固定、查哪个源写死在代码里。它对「一段文档就能答」的问题又快又好。</p>
+
+<figure class="diagram">
+<div class="pipeline">
+  <div class="node">query</div>
+  <div class="arrow">→</div>
+  <div class="node">检索 top-k</div>
+  <div class="arrow">→</div>
+  <div class="node">拼进 prompt</div>
+  <div class="arrow">→</div>
+  <div class="node good">生成答案</div>
+</div>
+<figcaption>固定 RAG:一次检索,时机与数据源都写死——没有「要不要检索、查哪个源」的决策环节。</figcaption>
+</figure>
+
+<p>但遇到<strong>多跳问题</strong>(一次检索凑不齐所有事实)或<strong>「该用哪个源取决于问题本身」</strong>的场景,固定管线就卡壳了。<strong>Agentic RAG</strong> 的思路是:不再固定地 retrieve-then-generate,而是让一个 <strong>agent(由 LLM 驱动)主导整个检索过程</strong>——它自己决定要不要检索、怎么改写 query、要不要迭代多轮、跨多个源/工具里挑哪个,并对拿回来的结果做推理再决定下一步。</p>
+
+<figure class="diagram">
+<div class="flow">
+  <div class="step decision"><strong>问题进来 → agent 先判断</strong><br>这题需要外部知识吗?需要的话,该查哪个源?</div>
+  <div class="down">↓</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="label">够答 / 简单</div>
+      <div class="step">直接生成,不检索</div>
+    </div>
+    <div class="branch">
+      <div class="label">复杂 / 多跳</div>
+      <div class="step">改写 query → 选源检索 → 对结果推理</div>
+    </div>
+  </div>
+  <div class="down">↺ 信息还不够?带着新线索<strong>再来一轮</strong>(迭代检索)</div>
+  <div class="step terminal">综合多轮证据 → 生成答案</div>
+</div>
+<figcaption>Agentic RAG:检索次数、时机、数据源都变成<strong>模型的运行时决策</strong>,并可迭代循环。</figcaption>
+</figure>
+
+<dl class="keydef">
+<dt>Agentic RAG</dt>
+<dd>把「检索策略」从写死的管线变成 <strong>agent 的运行时决策</strong>:是否检索、如何改写 query、迭代多少轮、从哪个源/工具取数、如何对结果推理,都由模型动态决定。</dd>
+<dd><em>代价很实在:更多的模型调用、更高的延迟,以及一批新的失败模式——比如把 query 改写坏了、或陷入反复检索的<strong>死循环</strong>。所以原则是:<strong>固定 RAG 够用就用固定;只对确实需要多步收集证据的问题,才上 agentic。</strong></em></dd>
+</dl>
+
+<h2>二、能力清单与三种拓扑(agentic_rag_101)</h2>
+<p>面试若问「agentic RAG 有什么能力」,资源库给的标准清单是这七条,挑三四条讲透即可:<strong>动态检索</strong>(按问题实时选源取数)、<strong>自主决策</strong>(全流程无需人工干预)、<strong>上下文感知</strong>(按 query 语境调整检索)、<strong>可扩展</strong>(跨多源、多域调度负载)、<strong>降幻觉风险</strong>、<strong>可定制工作流</strong>(按业务调检索策略)、<strong>多步推理</strong>(把复杂问题拆成小步逐步求解)。</p>
+
+<p>问「有哪几种类型」,按 <strong>agent 之间怎么组织</strong>分三档,复杂度递增:</p>
+
+<div class="trio">
+  <div class="cell"><strong>① Single-Agent</strong><br>一个 agent 包办全部检索与生成<br><em>简单、常规查询</em></div>
+  <div class="cell"><strong>② Multi-Agent</strong><br>多个专职 agent 分工:有的负责某个源的检索,有的负责整合<br><em>需多源/可拆分的复杂任务</em></div>
+  <div class="cell"><strong>③ Hierarchical</strong><br>高层 agent 监督、调度低层 agent 执行<br><em>需多层决策、处理优先级冲突</em></div>
+</div>
+
+<p>选型逻辑很朴素:<strong>越简单的任务越该用越简单的拓扑</strong>。Single-Agent 处理路由清晰的常规问答;Multi-Agent 适合「不同类型数据要从不同源取、任务能拆成专门子块」;Hierarchical 适合「要在多个层级做战略决策、要给数据源排优先级或平衡相互竞争的目标」的高复杂场景。</p>
+
+<p>但能力越强,挑战越多。资源库列的四个挑战,正是面试想听你主动补的「阴影面」:</p>
+<ul>
+<li><strong>协调复杂度</strong>:agent 越多,彼此同步越难,不同优先级容易撞车、形成瓶颈,拖慢甚至答不全。</li>
+<li><strong>可扩展性</strong>:管理大量 agent 与数据源很吃资源,规模一大,实时性和准确性难两全。</li>
+<li><strong>数据质量与可靠性</strong>:agent 从<strong>不可靠的源</strong>取数,就会把错误信息喂进答案。</li>
+<li><strong>决策透明度</strong>:很难看清 agent「为什么这么决策」,容易变成难以调试的<strong>「黑箱」</strong>。</li>
+</ul>
+
+<h2>三、GraphRAG:换掉的是「数据结构」(Q41)</h2>
+<p>换个维度看问题。固定 RAG 把语料切成一堆<strong>扁平的文本块(chunk)</strong>,检索时靠向量相似度捞 top-k。这对「答案就在某一段里」的问题很好用,但对<strong>全局型 / 关系型 / 多跳</strong>的问题会失灵——因为相关事实<strong>散落在很多块里</strong>,任何单块都不完整,top-k 也拼不出全貌。</p>
+<p>典型问不出来的问题:「<em>这批文档共同讲了哪些主题?</em>」「<em>A 是经由 B 怎样关联到 C 的?</em>」——这类问题要的是「跨文档、把点连成线」的能力,而扁平块检索天生看不到这种结构。</p>
+
+<dl class="keydef">
+<dt>GraphRAG(微软研究院提出)</dt>
+<dd>先用 LLM 从语料里抽取<strong>实体与关系</strong>,建成一张<strong>知识图谱(knowledge graph)</strong>(有时再对图上的社区生成摘要);检索时在这张<strong>图结构</strong>上做,而不是只在扁平文本块上做。</dd>
+<dd><em>因为图里显式存了「谁和谁有什么关系」,它天然擅长<strong>全局问题和多跳关联</strong>——顺着边就能把散落各处的事实连起来。代价是:要一条<strong>更重、更贵的摄入(ingestion)管线</strong>去抽实体、建图、维护图。什么时候用?当问题是<strong>关系型 / 语料级</strong>、而不是「单段就能答」的时候。</em></dd>
+</dl>
+
+<h2>四、两条升级线正交,可组合</h2>
+<p>别把 agentic RAG 和 GraphRAG 摆成「二选一」——它们改的是完全不同的东西:</p>
+<table>
+<thead><tr><th></th><th>Agentic RAG</th><th>GraphRAG</th></tr></thead>
+<tbody>
+<tr><td>升级的是</td><td><strong>控制流</strong>(谁决定怎么检索)</td><td><strong>数据结构</strong>(在什么结构上检索)</td></tr>
+<tr><td>核心动作</td><td>模型运行时决定:是否/如何/迭代检索、选哪个源</td><td>把语料建成实体-关系图,在图上检索</td></tr>
+<tr><td>擅长</td><td>多步收集、按问题动态选源</td><td>全局/关系型/多跳、跨文档连线</td></tr>
+<tr><td>主要代价</td><td>更多调用/延迟、坏改写与死循环等新失败模式</td><td>更重更贵的建图/维护摄入管线</td></tr>
+</tbody>
+</table>
+<p>因为一个管「控制流」、一个管「数据结构」,两者<strong>可以叠着用</strong>:让一个 agent 主导流程,而它检索时面对的正是一张知识图谱——多跳问题里「先查 A 才知道该查 B」的迭代,和图上「顺边连线」的能力,恰好互补。</p>
+
+<div class="interview">
+<p><strong>面试官会顺着往下追(高频链):</strong></p>
+<ul>
+<li>「固定 RAG 和 agentic RAG 到底差在哪?」——一句点破:<strong>控制流</strong>。固定=一次写死的 retrieve-then-generate;agentic=模型运行时决定是否/如何/迭代检索、选哪个源。</li>
+<li>「什么时候才该上 agentic?不能一律用吗?」——只对<strong>多跳 / 该查哪个源取决于问题</strong>的复杂查询上;简单单跳别上,否则白白加延迟、加调用、加新失败模式。</li>
+<li>「agentic RAG 有哪几种拓扑?怎么选?」——Single / Multi / Hierarchical,按任务复杂度从低到高选。</li>
+<li>「agentic RAG 能降幻觉吗?」——能<strong>降低风险,但有条件</strong>:取决于源的质量。坏源照样喂出错答案,在医疗/金融这类场景尤其危险。别把它说成「消除幻觉」。</li>
+<li>「GraphRAG 解决了固定 RAG 的什么短板?代价是什么?」——短板:全局/关系型/多跳问题,事实散落多块、扁平检索拼不齐;代价:更重更贵的建图摄入管线。</li>
+<li>「agentic RAG 和 GraphRAG 冲突吗?」——不冲突,<strong>正交且可组合</strong>:一个升级控制流,一个升级数据结构。答出这句,层次立刻拉开。</li>
+</ul>
+</div>
+
+<div class="gotcha">
+<p><strong>面试易错点(绝对化说法都要给反例):</strong></p>
+<ul>
+<li>「agentic RAG 一定比固定 RAG 好」——<strong>错</strong>。对单段可答、追求低延迟的高频简单问答,agentic 只是白白多花调用与延迟,还引入坏改写、死循环等新失败模式。<strong>固定够用就别上。</strong></li>
+<li>「agentic RAG 能消除幻觉」——<strong>软化</strong>。它只是<strong>降低</strong>风险,且效果依赖源质量;源不可靠时照样出错。降幻觉是「有条件的」,不是「必然的」。</li>
+<li>「GraphRAG 总比向量检索强」——<strong>错</strong>。对单段就能答的事实型问题,扁平向量检索又快又准;GraphRAG 那条重摄入管线在这类问题上是白花钱。它赢在<strong>关系型 / 语料级</strong>问题,不是全能。</li>
+<li>「多 agent 一定比单 agent 强」——<strong>错</strong>。Single-Agent 处理常规任务更省更稳;多/分层拓扑换来的是协调复杂度、可扩展性压力和「黑箱」透明度问题。</li>
+</ul>
+</div>
+
+<div class="quiz">
+<p><strong>自测 1:</strong>下面哪种情况最适合把固定 RAG 升级成 agentic RAG?</p>
+<details><summary>A. 单段文档即可作答、只求最低延迟的高频简单问答</summary>恰恰相反。这种场景固定管线又快又好,上 agentic 只是白白加调用、加延迟、加新失败模式。</details>
+<details><summary>B. 语料完全静态、一次 top-k 就能凑齐全部证据的场景</summary>一枪就够的问题不需要 agent 迭代决策,固定 RAG 更合适。</details>
+<details><summary>C. 需要多跳收集、且「该查哪个源取决于问题本身」的复杂查询 ✅</summary>正确。一次检索凑不齐、数据源需按问题动态选择——这正是 agentic RAG 的主场。</details>
+<details><summary>D. 只需把已有答案重排成 JSON、不涉及新知识获取的任务</summary>这是格式化,不涉及检索决策,和 agentic RAG 无关。</details>
+</div>
+
+<div class="quiz">
+<p><strong>自测 2:</strong>GraphRAG 最擅长、而扁平文本块检索最吃力的是哪类问题?</p>
+<details><summary>A. 「把这一段翻译成英文」这类单段就能完成的改写任务</summary>不涉及跨文档关联,扁平检索甚至根本不需要检索。</details>
+<details><summary>B. 「这些文档共同指向哪些主题」「A 经 B 如何关联到 C」这类全局/多跳关系问题 ✅</summary>正确。相关事实散落多块、需要顺着实体关系连线,正是 GraphRAG 在图结构上的强项。</details>
+<details><summary>C. 「文档第 3 页第 2 段写了什么」这种能定位到单块的精确检索</summary>答案就在某一块里,扁平向量检索反而更直接高效。</details>
+<details><summary>D. 「今天天气如何」这类需要实时 API 而非语料库的查询</summary>这靠的是工具/API 调用,与在语料图上检索是两码事。</details>
+</div>
+
+<div class="paper">
+<p>一手出处与深挖方向:</p>
+<ul>
+<li><strong>From Local to Global: A Graph RAG Approach to Query-Focused Summarization</strong>(Edge et al., Microsoft Research, 2024)——GraphRAG 的原始论文,讲清「建实体-关系图 + 社区摘要」如何回答扁平检索答不好的全局问题。</li>
+<li><strong>Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection</strong>(Asai et al., 2023)——让模型<strong>自己决定何时检索、并对检索结果自评</strong>,是 agentic「模型主导检索」思想的代表作。</li>
+<li><strong>ReAct: Synergizing Reasoning and Acting in Language Models</strong>(Yao et al., 2022)——推理与行动交替的循环,是 agentic RAG 迭代检索环的底层范式。</li>
+<li><strong>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</strong>(Lewis et al., 2020)——固定 RAG 的原论文,理解「起点」才看得清这两条升级线在改什么。</li>
+<li>资源库 <code>agentic_rag_101</code>(awesome-generative-ai-guide)——本课的能力清单、三种拓扑与挑战即出自此。</li>
+</ul>
+</div>
+
+<footer class="lesson-footer">
+<p>一句话记忆:<strong>Agentic RAG 升级「控制流」(模型自己决定是否/如何/迭代检索、选哪个源,多跳才上);GraphRAG 升级「数据结构」(在实体-关系图上检索,专治全局/多跳);两者正交、可组合,降幻觉是有条件的。</strong></p>
+<nav class="lesson-nav">
+<a href="0015-advanced-retrieval.html">← 上一课:进阶检索技术</a>
+<a class="next" href="0017-rag-evaluation-trust.html">下一课:RAG 评估与可信 →</a>
+</nav>
+</footer>
+</main>
+</body>
+</html>

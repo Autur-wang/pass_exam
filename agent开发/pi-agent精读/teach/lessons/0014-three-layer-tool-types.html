@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Lesson 0014 · 工具的三层类型:名片、执行、展示</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<div class="crumbs">
+  <a href="../reference/chapter-map.html">章节地图</a> ›
+  第 5 章 · 工具系统 ›
+  <a href="./0013-thinking-levels-enum-and-map.html">上一课</a> ›
+  <strong>Lesson 0014</strong>
+</div>
+
+<p class="kicker">Lesson 0014 · 第 5 章 · 工具系统</p>
+<h1>工具的三层类型<br>—— 名片、执行、展示</h1>
+
+<div class="mission">
+  🎯 <strong>本课目标</strong>:第 3 章讲 Agent Loop 时,我们把"执行工具"当黑盒直接跳过了,
+  只说了"Loop 执行工具",没说具体怎么执行的。这一章开始打开这个黑盒——但在讲"怎么执行"之前,
+  得先搞清一个更基础的问题:<strong>工具到底是怎么定义的?</strong> 为什么 Pi 要把"一个工具"拆成三层类型来描述?
+</div>
+
+<div class="recall">
+  🔁 <b>回忆上一课:</b> 0013 讲的是 ThinkingLevel 枚举怎么用一张 Map 把"字符串档位"翻译成"模型能听懂的具体参数"——
+  同一份配置,分发给不同的执行细节。这一课的三层工具类型,其实是同一种"分层不越界"的设计哲学,
+  只是这次分的不是配置档位,而是<strong>不同代码层各自该知道多少</strong>。
+</div>
+
+<div class="win">
+  <strong>这节课你将能做到一件事:</strong> 画出 <span class="sys-pill">Tool → AgentTool → ToolDefinition</span>
+  三层类型各自新增了哪些字段、为什么必须分层而不能塞进一个接口,并说清
+  <code>wrapToolDefinition</code> 这个十几行的包装器,是怎么让 Agent Loop 永远不知道
+  <code>ExtensionContext</code> 存在的。
+</div>
+
+<div class="analogy">
+  🎯 <b>贯穿全课的类比:名片 → 员工 → 会汇报的员工</b>
+  想象同一个人在三个部门被逐层"加料"。人事部只需要一张<b>名片</b>——姓名、职位描述、能接的活;
+  用人部门要真正派活,得给这张名片配上工牌和干活的手(<b>能被执行</b>);
+  到了对外的产品部门,这个人还得能站到台前<b>做汇报演示</b>,面对客户展示成果。
+  三层加的是不同部门用得上的能力,人事部不该被要求懂 PPT 排版——这正是 Pi 不把这些字段都塞进一个接口的原因。
+</div>
+
+<h2>1 · 第一层 Tool:一张"名片"</h2>
+<p>
+  打开 <code>packages/ai/src/types.ts</code>,你会看到工具的最底层定义——只有三个字段:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// packages/ai/src/types.ts:433-437</span>
+<span class="ln">2</span><span class="key">export</span> <span class="key">interface</span> <span class="type">Tool</span>&lt;TParameters <span class="key">extends</span> <span class="type">TSchema</span> = <span class="type">TSchema</span>&gt; {
+<span class="ln">3</span>    name: <span class="type">string</span>;            <span class="cm">// 工具名,如 "read"、"bash"</span>
+<span class="ln">4</span>    description: <span class="type">string</span>;     <span class="cm">// 给 LLM 看的工具描述</span>
+<span class="ln">5</span>    parameters: TParameters; <span class="cm">// 参数的 JSON Schema(用 TypeBox 定义)</span>
+<span class="ln">6</span>}
+</pre>
+<p>
+  三个字段。工具就是一个有名字、有描述、有参数 Schema 的东西。这个接口住在 <code>pi-ai</code> 层——
+  纯模型适配层,它唯一关心的事情是:<strong>怎么把工具的信息告诉模型。</strong>
+  <code>name</code> 和 <code>description</code> 会出现在发给模型的 API 请求里,
+  <code>parameters</code> 告诉模型"你可以传哪些参数"。在这个层面,工具只是一张<strong>名片</strong>——
+  能描述自己,但不能执行任何操作。
+</p>
+<cite>🔎 出处:教程 §一 / <code>packages/ai/src/types.ts:433-437</code>。</cite>
+
+<h2>2 · 第二层 AgentTool:加上"执行能力"</h2>
+<p>
+  Agent Loop 要执行工具调用,光有名片不够——它需要知道<strong>怎么执行</strong>这个工具、
+  这个工具<strong>能不能并行执行</strong>、参数格式要不要<strong>预处理</strong>。
+  于是 <code>pi-agent-core</code> 层在 Tool 基础上扩展出 <code>AgentTool</code>:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// packages/agent/src/types.ts:371-394</span>
+<span class="ln">2</span><span class="key">export</span> <span class="key">interface</span> <span class="type">AgentTool</span>&lt;TParameters, TDetails&gt;
+<span class="ln">3</span>    <span class="key">extends</span> <span class="type">Tool</span>&lt;TParameters&gt;          <span class="cm">// 继承 Tool 的三个字段</span>
+<span class="ln">4</span>{
+<span class="ln">5</span>    label: <span class="type">string</span>;                     <span class="cm">// 给人看的标签(不同于给 LLM 的 description)</span>
+<span class="ln">6</span>    prepareArguments?: (args: <span class="type">unknown</span>) =&gt; <span class="type">Static</span>&lt;TParameters&gt;;  <span class="cm">// 兼容性垫片</span>
+<span class="ln">7</span>    execute: (                         <span class="cm">// 执行函数</span>
+<span class="ln">8</span>        toolCallId: <span class="type">string</span>,
+<span class="ln">9</span>        params: <span class="type">Static</span>&lt;TParameters&gt;,
+<span class="ln">10</span>        signal?: <span class="type">AbortSignal</span>,
+<span class="ln">11</span>        onUpdate?: <span class="type">AgentToolUpdateCallback</span>&lt;TDetails&gt;,
+<span class="ln">12</span>    ) =&gt; <span class="type">Promise</span>&lt;<span class="type">AgentToolResult</span>&lt;TDetails&gt;&gt;;
+<span class="ln">13</span>    executionMode?: <span class="str">"sequential"</span> | <span class="str">"parallel"</span>;  <span class="cm">// 执行模式</span>
+<span class="ln">14</span>}
+</pre>
+<p>从 Tool 到 AgentTool,新增了 4 个字段,每个都有明确用途:</p>
+<table class="bd">
+  <thead><tr><th>新增字段</th><th>用途</th></tr></thead>
+  <tbody>
+    <tr><td><code>label</code></td><td>模型看到的是 <code>name</code>("read"),UI 看到的是 <code>label</code>("读取文件")</td></tr>
+    <tr><td><code>prepareArguments</code></td><td>兼容层,处理不同模型输出的参数怪癖</td></tr>
+    <tr><td><code>execute</code></td><td>真正干活的函数——模型说"读文件",这个函数去读</td></tr>
+    <tr><td><code>executionMode</code></td><td>标记这个工具能否和其他工具并行执行</td></tr>
+  </tbody>
+</table>
+<div class="why">
+  <b>为什么 label 要和 name/description 分开?</b> 三者受众不同:<code>name</code> 是给模型看的标识
+  (进 API 请求),<code>description</code> 也是给 LLM 的描述,<code>label</code> 才是给人看的 UI 文案。
+  强行合并会让 UI 文案污染模型看到的工具名——这是 AgentTool 单独引入 <code>label</code> 的理由。
+</div>
+<cite>🔎 出处:教程 §一 / <code>packages/agent/src/types.ts:371-394</code>。</cite>
+
+<h2>3 · 第三层 ToolDefinition:产品层再加东西</h2>
+<p>
+  到了 <code>pi-coding-agent</code> 层(产品运行层),工具还需要更多能力:自定义渲染(read 工具在终端里怎么显示?
+  edit 工具怎么展示 diff?)、提示词注入(有些工具需要在系统提示词里加一段使用指南)。
+  于是出现了第三层 <code>ToolDefinition</code>。它的 <code>execute</code> 函数比 AgentTool 多了一个参数——
+  <code>ctx: ExtensionContext</code>,让工具执行时可以访问当前会话状态:
+</p>
+<pre><span class="ln">1</span><span class="type">AgentTool</span>.execute:     (toolCallId, params, signal, onUpdate) =&gt; ...
+<span class="hl"><span class="ln">2</span><span class="type">ToolDefinition</span>.execute: (toolCallId, params, signal, onUpdate, ctx) =&gt; ...
+<span class="ln">3</span>                                                                   ^^^
+<span class="ln">4</span>                                                    多了 <span class="type">ExtensionContext</span>(会话上下文)</span>
+</pre>
+<p>
+  ToolDefinition 还新增了 <code>promptSnippet</code>(系统提示词片段)、<code>renderCall</code>(调用时渲染)、
+  <code>renderResult</code>(结果时渲染)等 UI/扩展字段——管的是"能被展示和扩展"。
+</p>
+
+<h2>4 · 桥接两层:wrapToolDefinition</h2>
+<p>
+  Agent Loop 只认识 <code>AgentTool</code>,但产品层的工具都是 <code>ToolDefinition</code>。
+  谁来把 ToolDefinition 变成 AgentTool?答案是一个只有十几行的包装器函数:
+</p>
+<pre><span class="cm"><span class="ln">1</span>// packages/coding-agent/src/core/tools/tool-definition-wrapper.ts:5-18</span>
+<span class="ln">2</span><span class="key">export</span> <span class="key">function</span> <span class="fn">wrapToolDefinition</span>(definition, ctxFactory?) {
+<span class="ln">3</span>    <span class="key">return</span> {
+<span class="ln">4</span>        name: definition.name,
+<span class="ln">5</span>        label: definition.label,
+<span class="ln">6</span>        description: definition.description,
+<span class="ln">7</span>        parameters: definition.parameters,
+<span class="ln">8</span>        prepareArguments: definition.prepareArguments,
+<span class="ln">9</span>        executionMode: definition.executionMode,
+<span class="cm"><span class="ln">10</span>        // 关键:重写 execute,通过闭包注入 ExtensionContext</span>
+<span class="hl"><span class="ln">11</span>        execute: (toolCallId, params, signal, onUpdate) =&gt;
+<span class="ln">12</span>            definition.<span class="fn">execute</span>(toolCallId, params, signal, onUpdate, ctxFactory?.()),</span>
+<span class="ln">13</span>    };
+<span class="ln">14</span>}
+</pre>
+<p>
+  注意最后一行。AgentTool 的 <code>execute</code> 只有 4 个参数,但 ToolDefinition 的 <code>execute</code>
+  有 5 个。包装器通过闭包捕获了 <code>ctxFactory</code>,在调用时动态创建 <code>ExtensionContext</code>
+  并注入第 5 个参数。<strong>Agent Loop 永远不知道 ExtensionContext 的存在。</strong>
+</p>
+<cite>🔎 出处:教程 §一 / <code>packages/coding-agent/src/core/tools/tool-definition-wrapper.ts:5-18</code>。</cite>
+
+<h2>5 · 为什么非要分三层?</h2>
+<p>
+  把所有字段塞进一个 <code>Tool</code> 接口,加几个可选字段不就行了?不行。
+</p>
+<div class="tradeoff">
+  🔑 <b>原因是每层有独立的依赖范围。</b> <code>pi-ai</code> 层的 Tool 接口只依赖 TypeBox 的
+  <code>TSchema</code>。如果在这个接口里加了 <code>renderCall</code>(返回终端 UI 组件),
+  <code>pi-ai</code> 就得依赖终端 UI 渲染库——但 <code>pi-ai</code> 是纯模型适配层,它的工作只是
+  "把工具信息格式化成 API 请求",不应该知道终端 UI 长什么样。
+  三层递进的本质是:<strong>每一层只加自己这个层级需要的能力,不越界。</strong>
+  Tool 管"我能描述自己",AgentTool 管"我能被执行",ToolDefinition 管"我能被展示和扩展"。
+  用包装器而不是让 Agent Loop 直接吃 ToolDefinition,则是为了让内核与产品层的
+  ExtensionContext 彻底解耦——靠闭包在边界处悄悄注入。
+</div>
+
+<div class="diagram">工具的三层类型 —— 每层只加自己层级需要的能力
+
+  Tool(pi-ai)          AgentTool(pi-agent-core)      ToolDefinition(pi-coding-agent)
+  name                  ← 继承 Tool                    ← 继承/对应 AgentTool 字段
+  description           + label                        + promptSnippet
+  parameters            + prepareArguments              + renderCall
+  「一张名片」           + execute(4参数)                + renderResult
+                        + executionMode                 + execute(5参数,多 ctx)
+                        「能被执行」                     「能被展示和扩展」
+                              ▲                                │
+                              └──────── wrapToolDefinition ────┘
+                         闭包注入 ctxFactory?.() 作为第 5 个参数
+                    Agent Loop 只认 AgentTool,永远不知道 ExtensionContext 存在
+</div>
+
+<h2>6 · 立刻自测(答完即有反馈)</h2>
+<p>凭记忆作答——这种费力的回想,正是把今天的框架焊进长期记忆的方式。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q" data-correct="1">
+    <p class="stem">① 为什么不能把 renderCall 这样的 UI 字段直接加到最底层的 Tool 接口里?</p>
+    <button class="opt">因为 Tool 接口的字段数量有上限,加不下了</button>
+    <button class="opt">因为那会让纯模型适配层 pi-ai 被迫依赖终端 UI 渲染库,突破了它的依赖范围</button>
+    <button class="opt">因为 renderCall 必须是异步函数,而 Tool 只支持同步字段</button>
+    <button class="opt">因为模型 API 请求里不允许出现多于三个字段</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="0">
+    <p class="stem">② wrapToolDefinition 这个包装器解决的核心问题是什么?</p>
+    <button class="opt">把 ToolDefinition 的 5 参数 execute 适配成 AgentTool 的 4 参数 execute,用闭包注入 ExtensionContext</button>
+    <button class="opt">把 Tool 升级成 AgentTool,补上 execute 字段</button>
+    <button class="opt">验证工具参数的类型是否合法</button>
+    <button class="opt">决定一批工具是并行还是串行执行</button>
+    <p class="fb"></p>
+  </div>
+
+  <div class="q" data-correct="2">
+    <p class="stem">③ 模型在 API 请求里看到的工具标识,和 UI 上给人显示的标识,分别是哪个字段?</p>
+    <button class="opt">两者都是 description</button>
+    <button class="opt">模型看 label,UI 看 name</button>
+    <button class="opt">模型看 name,UI 看 label</button>
+    <button class="opt">两者都是 name,label 只是备注</button>
+    <p class="fb"></p>
+  </div>
+</div>
+
+<div class="ask">
+  💬 <b>卡住就问我。</b> 几个值得追问的好问题:
+  「<em>为什么 execute 直到 AgentTool 才出现,而不是在 Tool 就定义?</em>」
+  「<em>如果哪天要新增第 4 层,判断标准是什么——什么样的能力才够格单独成一层?</em>」
+  「<em>五步工具管道(参数预处理→Schema 验证→权限拦截→工具执行→结果后处理)分别作用在这三层的哪一层?</em>」——
+  最后这个问题,正好把我们带向<strong>下一课</strong>。
+</div>
+
+<h2>7 · 主资源 & 下一步</h2>
+<p class="next">
+  <strong>读一章(推荐):</strong> 本课改编自教程
+  <a href="../../原始资料/dg-ai-notes/pi-agent/docs/typescript/第5章-工具系统-Agent的手脚是怎么被管住的.md">第 5 章 · 工具系统——Agent 的手脚是怎么被管住的</a>——
+  原文紧接着这三层类型讲的就是五步管道,建议通读建立整章脉络。
+</p>
+<p class="next">
+  <strong>下一课预告(Lesson 0015):</strong> 我们打开五步工具管道——
+  参数预处理 → Schema 验证 → 权限拦截 → 工具执行 → 结果后处理,
+  看 Pi 怎么保证"模型传错参数""模型要求执行危险命令""工具执行抛异常"都不会炸掉整个 Agent Loop。
+</p>
+
+<footer>
+  Lesson 0014 · 第 5 章 工具系统 ·
+  下一课:<a href="./0015-five-step-tool-pipeline.html">0015 五步工具管道 →</a> ·
+  上一课:<a href="./0013-thinking-levels-enum-and-map.html">0013 思考档位枚举与映射</a> ·
+  关联:<a href="../reference/chapter-map.html">章节地图</a><br>
+  本课改编自冬瓜《Pi-Agent SDK 深度教程》(CC-BY-SA-4.0),基于 pi v0.80.2。忠实转译,不替代原文。
+</footer>
+
+</div>
+
+<script>
+  var qs = [...document.querySelectorAll('#quiz .q')];
+  var msgOk = ['✓ 对。三层的分界线其实是「依赖边界」——pi-ai 只该知道怎么把工具格式化成 API 请求,不该知道终端 UI 长什么样。延伸想:这也是为什么 execute 直到 AgentTool 才出现,因为「执行」需要依赖运行时能力。',
+               '✓ 对。AgentTool.execute 是 4 参数,ToolDefinition.execute 是 5 参数(多了 ctx),包装器通过闭包捕获 ctxFactory 在调用时补上第 5 个参数。妙处在于 Agent Loop 完全感知不到 ExtensionContext 的存在。',
+               '✓ 对。模型看到 name(如 read),UI 看到 label(如 读取文件),description 也是给 LLM 的描述。受众分离正是 AgentTool 要单独引入 label 的原因。'];
+  var msgNo = ['回看教程「为什么非要分三层」那段,关注每一层各自的「依赖范围」这个词。',
+               '数一下两层 execute 的参数个数各是几个,包装器补的是哪一个参数。',
+               '回看 label 那条要点——注意「模型看到的是…,UI 看到的是…」这句的主语对应关系。'];
+  qs.forEach(function(q, qi){
+    var correct = parseInt(q.dataset.correct, 10);
+    var opts = q.querySelectorAll('.opt');
+    var fb = q.querySelector('.fb');
+    opts.forEach(function(opt, idx){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        if(idx === correct){
+          opt.classList.add('correct'); fb.textContent = msgOk[qi]; fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong'); opts[correct].classList.add('correct');
+          fb.textContent = msgNo[qi]; fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>
