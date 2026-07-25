@@ -1,0 +1,38 @@
+# Trace Spec
+
+> 每个学习会话结束后记录 trace 到 `harness-records/traces/`。
+
+## 文件命名
+
+`YYYYMMDD-HHMMSS-topic-slug.md`
+
+## 内容格式
+
+```markdown
+## Session Info
+Date: YYYY-MM-DD HH:MM:SS
+Topic: <学习主题>
+Lane: <tiny|normal|high-risk>
+
+## What was done
+- <学到什么>
+- <做了什么练习>
+
+## Validation
+- [ ] <验证项1>
+- [ ] <验证项2>
+
+## Files read
+- file1
+- file2
+
+## Files updated
+- file1
+- file2
+
+## Friction (if any)
+<遇到什么摩擦>
+
+## Next step
+<下一步做什么>
+```
