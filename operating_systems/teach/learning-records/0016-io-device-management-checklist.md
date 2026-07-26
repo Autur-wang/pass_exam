@@ -1,7 +1,7 @@
 # I/O 与设备管理 · 理解清单(持续更新)
 
 > 接 [[0015-paging-vs-segmentation-checklist]]。Ch1-8 概念硬骨头的最后一块。偏好可视化。
-> 新建 `lessons/0020-io-device-management-visual.html`(四方式 tab 切换+干预条 / 缓冲 / SPOOLing)。
+> 新建 `../lessons/0020-io-device-management-visual.html`(四方式 tab 切换+干预条 / 缓冲 / SPOOLing)。
 
 ## A. 四种 I/O 控制方式(核心)
 - [ ] A1 演进主线:CPU 干预递减(字→完成→块→组块),并行度递增
@@ -25,3 +25,4 @@
 ## 里程碑
 - 完成本块后,Ch1-8 概念硬骨头全部覆盖:银行家/死锁/进程状态/进程vs线程/虚拟内存/分页vs分段/IO设备。
 - 下一步可转入 exams/ 限时刷题(阶段4),见 [[0010-session-end-coverage-and-next]]。
+

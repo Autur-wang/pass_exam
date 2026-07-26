@@ -17,7 +17,7 @@
 - [原始资料/习题/](../原始资料/习题/)
   题目合集、习题整理、历次小测（docx/pdf/pptx/jpg）。Use for: 出自测题、找练习素材。
 - 教材+答案（百度网盘）：`https://pan.baidu.com/s/1wqaIONvrgyUJtT-MnT6Rng?pwd=stcy`（提取码 `stcy`）
-  Use for: 需要教材原文时下载；见 [教材与答案.md](../原始资料/多媒体系统导论%20教材与答案.md)。
+  Use for: 需要教材原文时下载；见 [教材与答案.md](../原始资料/多媒体系统导论 教材与答案.md)。
 
 ## Wisdom (Communities)
 

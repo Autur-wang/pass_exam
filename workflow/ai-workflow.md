@@ -8,8 +8,8 @@
 
 1. `README.md`：确认项目结构和目标。
 2. `AGENTS.md`：确认行为规范。
-3. `operating_systems/MISSION.md`：确认考试目标和边界。
-4. `operating_systems/NOTES.md`：确认用户偏好和教学法。
+3. `<current-course>/teach/MISSION.md`：确认考试目标和边界。
+4. `<current-course>/teach/NOTES.md`：确认用户偏好和教学法。
 5. `operating_systems/learning-records/`：阅读最新 2–3 条学习记录。
 6. 按任务读取 `operating_systems/` 中的相关章节、术语表、算法速查表。
 
@@ -49,7 +49,7 @@
 处理流程：
 
 1. 先盘点现有 README、AGENTS、旧提示文件和 docs。
-2. 保持根目录文档简洁，详细流程放入 `docs/`。
+2. 保持根目录文档简洁，详细流程放入 `../docs/`。
 3. 不移动原始资料、不重命名课程文件，除非用户明确要求。
 4. 更新文档后检查链接和路径。
 
@@ -90,7 +90,7 @@
 - ...
 ```
 
-具体格式优先参考 `operating_systems/LEARNING-RECORD-FORMAT.md`。
+具体格式优先参考 `<current-course>/teach/LEARNING-RECORD-FORMAT.md`。
 
 ## 5. 常见误区
 

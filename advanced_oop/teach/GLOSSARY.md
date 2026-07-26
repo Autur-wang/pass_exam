@@ -8,7 +8,7 @@
 本工作区的最小教学单元，一个独立的 HTML 文件，教授一件与 mission 直接相关的事。
 _Avoid_: 课件、教程、章节
 
-**Learning Record (`./learning-records/0001-...md`)**:
+**Learning Record (`<learning-records/0001-*.md>`)**:
 教学场景的"架构决策记录（ADR）"——记下 user 真正理解（或被纠正）的非显然知识点。**不是**日志，**不是**错题本。
 _Avoid_: 错题集、笔记、上课记录
 

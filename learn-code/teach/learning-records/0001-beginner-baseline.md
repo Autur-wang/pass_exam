@@ -2,7 +2,7 @@
 
 用户自述操作系统**刚入门**:能读 C,但进程、虚拟内存、系统调用、陷阱等核心概念基本是新的。
 使命已确立(见 [[MISSION.md]]):老师要求**按操作系统教材章节划分讲解 xv6 代码**,
-因此本工作区以 xv6 官方书 (rev3) 的章节顺序为脊椎(见 `reference/chapter-map.html`)。
+因此本工作区以 xv6 官方书 (rev3) 的章节顺序为脊椎(见 `../reference/chapter-map.html`)。
 
 ## Implications
 - 第一节课的难度必须压到最低:从最小的用户程序(`echo.c`)切入,而非一上来读 `proc.c`/`vm.c`。

@@ -3,16 +3,16 @@
 ## Workspace setup
 - 教学 workspace 根: `/Users/wangzihao/Code/pass_exam/operating_systems/teach/`
 - 父目录 `/Users/wangzihao/Code/pass_exam/operating_systems/` 是学习上下文：
-  - `textbook/`: 主教材结构化整理 + 课件文本
+  - `../textbook/`: 主教材结构化整理 + 课件文本
   - `1_操作系统引论/ ~ 6_文件管理/`：各章节内容
   - `reference/egos-2000/`: 教学用小型 OS（清华）
   - `operating_systems_tangxiaodan/`: **教材内容技能**
     - `SKILL.md`: 12 章结构化索引
-    - `textbook/术语表.md`: 教材标准术语
-    - `textbook/算法速查表.md`: 调度/页面/磁盘/银行家/混合索引公式
-    - `textbook/考研高频考点汇总.md`: 408 视角的高频考点
-    - `textbook/《汤小丹操作系统第四版》全文结构化整理.md`: 教材全文结构化
-    - `textbook/ch0X_*.md`: 8 个章节文件（ch01-08 + ch09-12）
+    - `../textbook/术语表.md`: 教材标准术语
+    - `../textbook/算法速查表.md`: 调度/页面/磁盘/银行家/混合索引公式
+    - `../textbook/考研高频考点汇总.md`: 408 视角的高频考点
+    - `../textbook/《汤小丹操作系统第四版》全文结构化整理.md`: 教材全文结构化
+    - `../textbook/ch0X_*.md`: 8 个章节文件（ch01-08 + ch09-12）
 
 ## 双技能教学法（2026-06-10 起）
 **teach（方法）+ operating_systems_tangxiaodan（内容）**:
@@ -37,7 +37,7 @@
 
 ## Java 编程题精讲（2026-06-10，独立加餐）
 - 用户零基础 Java，需讲解 `/Users/wangzihao/Desktop/tmp/` 两道作业题（Stream + RaceTime + 骰子 + myFormat）
-- 课时：`../lessons/0013-java-two-exercises-zero-to-hero.html`（零基础逐行讲解 + 自测 5 题）
+- 课时：`../lessons/0013-exam-cheatsheet-map.html`（零基础逐行讲解 + 自测 5 题）
 - 与 OS mission 无关，属跨主题加餐；代码在 Desktop/tmp
 
 ## 源码精讲专题（2026-06-13，老师必讲算成绩）
@@ -47,3 +47,4 @@
 - 3 个必读文件：sched.h（task_struct）/ fork.c（copy_process）/ system_call.s（sys_fork 入口）
 - 使用顺序：Day 1-6 按序学完 → Day 7 找老师讲
 - 关键文档：Day 6 讲稿（lesson 0019）含 8 分钟逐字稿 + 6 张 PPT 大纲 + 5 个老师可能问的问题
+

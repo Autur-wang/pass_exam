@@ -1,7 +1,7 @@
 # 分页 vs 分段 vs 段页式 · 理解清单(持续更新)
 
 > 接 [[0014-virtual-memory-pitfalls-checklist]]。用户选/继续到本主题。偏好可视化。
-> 新建 `lessons/0019-paging-vs-segmentation-visual.html`(两种撕法并排 + 分段地址变换可输入 + 越界检查)。
+> 新建 `../lessons/0019-paging-vs-segmentation-visual.html`(两种撕法并排 + 分段地址变换可输入 + 越界检查)。
 
 ## A. 分页 vs 分段(核心,已口头验证)
 - [x] A1 三点区别:页=物理/固定/一维,段=逻辑/不固定/二维(用户独立选出完整选项,掌握)
@@ -20,3 +20,4 @@
 
 ## 教学法备注
 - 用户连续多课偏好"完整网页讲解",每个概念都做可交互 HTML,效果好。继续此模式。
+

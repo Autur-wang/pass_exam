@@ -12,7 +12,7 @@
 **Evidence**：独立 grep 磁盘复核——绝对措辞清零（仅剩 01 里的显式否定句）、55→54、08 无 `fill="#fff"` 且 RetryIf/ELI5/流程图三处一致、09 把无条件 `summarizeForce` 与 `IsBigContext` 判定线解绑；13 个文件首 `<!DOCTYPE html>`、尾 `</html>`、2 条样式链接、每节 2-4 幅图。
 
 **Implications（给未来会话）**：
-- 默认动作：用这两门课**交互式授课**，不要重建。入门从 `from-zero/index.html` 的 01 起，进阶见 [[0002-course-scaffolded-from-mino-server]]。
+- 默认动作：用这两门课**交互式授课**，不要重建。入门从 `../from-zero/index.html` 的 01 起，进阶见 [[0002-course-scaffolded-from-mino-server]]。
 - 两条方法论已沉淀为记忆：`workflow-schema-side-effect-skip`（schema 会让 agent 跳过写文件等副作用）与 `absolute-wording-hallucination-fingerprint`（「唯一/全部」是幻觉指纹）。
 - 代码坐标会漂移：认文件+符号名，不认死行号；数值常量（54 工具、5.5min/30min/10min 超时、0.6 阈值、读 0.1×/写 5m 1.25× / 写 1h 2×）已逐条回仓库核对。
 - 核验哲学：不信 agent 自我报告（「16 个全绿」是流程绿不是内容对），一切代码断言回仓库独立 grep。

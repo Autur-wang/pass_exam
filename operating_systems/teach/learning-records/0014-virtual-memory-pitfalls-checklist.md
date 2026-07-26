@@ -1,7 +1,7 @@
 # 虚拟内存坑概念 · 理解清单(持续更新)
 
 > 接 [[0013-process-thread-checklist]]。用户选"虚拟内存坑概念"。偏好可视化。
-> 新建 `lessons/0018-virtual-memory-pitfalls-visual.html`(局部性滑窗 + Belady 并排FIFO + 抖动滑块)。
+> 新建 `../lessons/0018-virtual-memory-pitfalls-visual.html`(局部性滑窗 + Belady 并排FIFO + 抖动滑块)。
 
 ## A. 局部性 + 请求分页(第一拍,已口头验证)
 - [x] A1 局部性原理:一段时间只用一小撮页 → 不必全装入(用户独立答对)
@@ -22,3 +22,4 @@
 ## 进度
 - 局部性已口头验证(A1)。可视化 0018 已交付,覆盖 A/B/C 全部。
 - 等用户玩完 0018 复述 B(Belady只FIFO) + C(抖动根因)验证。
+

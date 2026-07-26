@@ -15,8 +15,8 @@
 | `AGENTS.md` | Should | Must | Must |
 | `SOUL.md` | Should | Must | Must |
 | `RULES.md` | Skip | Should | Must |
-| `docs/FEATURE_INTAKE.md` | Skip | Must | Must |
-| `docs/HARNESS.md` | Skip | Should | Must |
+| `FEATURE_INTAKE.md` | Skip | Must | Must |
+| `HARNESS.md` | Skip | Should | Must |
 
 ### Planning Phase
 
@@ -57,7 +57,7 @@
 
 | Document | Tiny | Normal | High-Risk |
 |---|---|---|---|
-| `docs/TRACE_SPEC.md` | Should | Must | Must |
+| `TRACE_SPEC.md` | Should | Must | Must |
 | Changed-file list | Must | Must | Must |
 | Validation evidence | Should | Must | Must |
 
@@ -82,7 +82,7 @@
 ## Review Checklist
 
 学习任务结束前：
-- [ ] Lane 已从 `docs/FEATURE_INTAKE.md` 选择
+- [ ] Lane 已从 `FEATURE_INTAKE.md` 选择
 - [ ] 相关 docs 已识别
 - [ ] 验证已完成（做题或复述）
 - [ ] 学习记录已更新

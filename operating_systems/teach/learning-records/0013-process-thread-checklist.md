@@ -1,7 +1,7 @@
 # 进程 vs 线程 + 状态转换 · 理解清单(持续更新)
 
 > 接 [[0012-deadlock-overview-checklist]]。用户选"进程vs线程+状态转换"为下一硬骨头。
-> 用户偏好可视化 → 新建 `lessons/0017-process-state-transitions-visual.html`(可交互状态机)。
+> 用户偏好可视化 → 新建 `../lessons/0017-process-state-transitions-visual.html`(可交互状态机)。
 
 ## A. 进程三态 + 转换(第一拍,可视化中)
 - [ ] A1 三态:运行(占CPU)/就绪(只差CPU)/阻塞(等事件,给CPU也没用)
@@ -22,3 +22,4 @@
 
 ## 进度
 - 第一拍可视化已交付(0017)。等用户玩完复述 A3/A5 验证,再讲 B 段 进程vs线程。
+

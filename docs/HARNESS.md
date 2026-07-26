@@ -81,13 +81,13 @@ docs/decisions/*
 - 相关 docs、stories、test matrix 保持最新
 - 学习记录已更新（清单打勾）
 - trace 已记录到 `harness-records/traces/`
-- 遇到的教学摩擦记录到 `docs/HARNESS_BACKLOG.md`
+- 遇到的教学摩擦记录到 `HARNESS_BACKLOG.md`
 
 ## Growth Rule
 
 当 Agent 感到困惑、重复手动推理、需要新的验证方式、发现缺少规则、或看到反复失败模式时：
 - 直接改进 harness（如果修复简单）
-- 记录摩擦到 `docs/HARNESS_BACKLOG.md`（如果修复超出范围）
+- 记录摩擦到 `HARNESS_BACKLOG.md`（如果修复超出范围）
 
 ## 验证阶梯
 

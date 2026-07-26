@@ -10,5 +10,6 @@
 - 第一课只教"如何算磁头总移动距离"，用 FCFS + SSTF 两条最简单规则演示；SCAN/CSCAN 的"方向+折返"陷阱留第二课。
 - 通过条件沿用工作区惯例：她能用自己的话复述"总移动距离怎么算"。
 
-产出：`lessons/0001-disk-scheduling-head-movement.html` + `reference/0001-disk-scheduling-cheatsheet.html`。
+产出：`../lessons/0001-disk-scheduling-head-movement.html` + `../reference/0001-disk-scheduling-cheatsheet.html`。
 关联 [[MISSION.md]]（磁盘调度是自命题计算大题来源之一）。
+

@@ -5,7 +5,7 @@
 ## Knowledge
 
 ### 主源
-- [书] **《深入理解 AI Agent：设计原理与工程实践》— 李博杰**（开源）。正文：`原始资料/ai-agent-book/book/introduction.md`、`chapter1.md`–`chapter10.md`、`afterword.md`。Use for: 一切概念、图、实验编号的权威口径。
+- [书] **《深入理解 AI Agent：设计原理与工程实践》— 李博杰**（开源）。正文：`../原始资料/ai-agent-book/book/introduction.md`、`chapter1.md`–`chapter10.md`、`afterword.md`。Use for: 一切概念、图、实验编号的权威口径。
 - [仓库] **配套开源代码 — github.com/bojieli/ai-agent-book**。项目按章组织在 `chapterN/`，与书中「实验 X-Y」一一对应。Use for: 动手把实验跑一遍，把直觉从"读懂"升级到"做过"。
 - [补充读物] **《图解大模型》（图灵出版）**。Transformer / 预训练 / 微调的图解入门，与本书 Agent 工程视角互补。Use for: 补第 2、7 章的大模型底层基础。
 

@@ -9,7 +9,7 @@
 - 闭卷时能**复述**第 2–8 章约 20 条高频条款的**名称**和**核心反例**（反例 = 违反了这条会写出什么烂代码）
 - 看到一段 Java 代码，能用"条款 N"指认其中违反/遵守的条款
 - 在选择题 / 简答题题型上命中率 ≥ 60%（过线型档位，低于 v1 的 85%）
-- 完整体验过 1 份过线级条款速查表（`reference/cheatsheet.html`）
+- 完整体验过 1 份过线级条款速查表（`reference/<cheatsheet>.html`）
 
 ## Constraints
 - **时间：1 周内**——单 lesson 5–10 分钟
@@ -26,7 +26,7 @@
 - 长线掌握
 
 ## Schedule 思路（不锁死）
-- 第 1 天：词汇地基（Lesson 0002）+ 速查表（`reference/cheatsheet.html`）
+- 第 1 天：词汇地基（Lesson 0002）+ 速查表（`reference/<cheatsheet>.html`）
 - 第 2 天起：按高频条款分章短课，每章 ≤15 分钟
 - 每天 1 个 learning-record 收口
 - 第 6–7 天：模拟自测 + 错题回炉
